@@ -1,0 +1,37 @@
+{
+  final DeploymentService deploymentService=this.deploymentService;
+  final ServiceController<?> controller=context.getController();
+  final ServiceContainer serviceContainer=controller.getServiceContainer();
+  final String deploymentName=deploymentService.getDeploymentName();
+  final VirtualFile deploymentRoot=deploymentService.getDeploymentRoot();
+  final DeploymentUnitContextImpl deploymentContext=new DeploymentUnitContextImpl(deploymentName);
+  attachVirtualFile(deploymentContext,deploymentRoot);
+  final DeploymentChain deploymentChain=deploymentService.getDeploymentChain();
+  logger.debugf("Deployment processor starting with chain: %s",deploymentChain);
+  try {
+    deploymentChain.processDeployment(deploymentContext);
+  }
+ catch (  DeploymentUnitProcessingException e) {
+    throw new StartException("Failed to process deployment chain.",e);
+  }
+  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+  batchBuilder.addDependency(controller.getName());
+  final Module module;
+  try {
+    module=buildModule(deploymentContext);
+  }
+ catch (  Exception e) {
+    throw new StartException("Failed to build module for deployment [" + deploymentName + "]",e);
+  }
+  final DeploymentItemContext deploymentItemContext=new DeploymentItemContextImpl(module,batchBuilder);
+  final Collection<DeploymentItem> deploymentItems=deploymentContext.getDeploymentItems();
+  for (  DeploymentItem deploymentItem : deploymentItems) {
+    deploymentItem.install(deploymentItemContext);
+  }
+  try {
+    batchBuilder.install();
+  }
+ catch (  ServiceRegistryException e) {
+    throw new StartException("Failed to install deployment batch for " + deploymentName,e);
+  }
+}
