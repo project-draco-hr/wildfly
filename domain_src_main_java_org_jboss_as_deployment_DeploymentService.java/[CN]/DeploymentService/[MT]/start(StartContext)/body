@@ -1,4 +1,37 @@
 {
+  final ServiceController<?> serviceController=context.getController();
+  final ServiceName deploymentServiceName=serviceController.getName();
+  final String deploymentPath=deploymentRoot.getPathName();
   this.deploymentName=deploymentRoot.getPathName();
-  this.deploymentChain=determineDeploymentChain(deploymentRoot);
+  final DeploymentUnitContextImpl deploymentUnitContext=new DeploymentUnitContextImpl(deploymentName);
+  attachVirtualFile(deploymentUnitContext,deploymentRoot);
+  final DeploymentChain deploymentChain=this.deploymentChain;
+  logger.debugf("Deployment processor starting with chain: %s",deploymentChain);
+  try {
+    deploymentChain.processDeployment(deploymentUnitContext);
+  }
+ catch (  DeploymentUnitProcessingException e) {
+    throw new StartException("Failed to process deployment chain.",e);
+  }
+  final ServiceContainer serviceContainer=serviceController.getServiceContainer();
+  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+  batchBuilder.addDependency(deploymentServiceName);
+  final ModuleConfig moduleConfig=deploymentUnitContext.getAttachment(ModuleConfig.ATTACHMENT_KEY);
+  if (moduleConfig == null) {
+    throw new StartException("Failed to find attached moduleConfig");
+  }
+  final ServiceName deploymentModuleServiceName=DeploymentModuleService.SERVICE_NAME.append(deploymentPath);
+  final DeploymentModuleService deploymentModuleService=new DeploymentModuleService(deploymentModuleLoader,moduleConfig);
+  final BatchServiceBuilder<?> moduleServiceBuilder=batchBuilder.addService(deploymentModuleServiceName,deploymentModuleService);
+  for (  ModuleConfig.Dependency dependency : moduleConfig.getDependencies()) {
+  }
+  final ServiceName deploymentItemProcessorName=DeploymentItemProcessor.SERVICE_NAME.append(deploymentPath);
+  final DeploymentItemProcessor deploymentItemProcessor=new DeploymentItemProcessor(deploymentUnitContext);
+  batchBuilder.addService(deploymentItemProcessorName,deploymentItemProcessor).addDependency(deploymentModuleServiceName).toMethod(DeploymentItemProcessor.DEPLOYMENT_MODULE_SETTER,Collections.singletonList(deploymentModuleService));
+  try {
+    batchBuilder.install();
+  }
+ catch (  ServiceRegistryException e) {
+    throw new StartException("Failed to install deployment phase batch for " + deploymentName,e);
+  }
 }

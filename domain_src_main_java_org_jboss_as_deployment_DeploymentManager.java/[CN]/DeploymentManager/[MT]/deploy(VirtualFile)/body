@@ -6,12 +6,14 @@
     final ServiceName mountServiceName=MOUNT_SERVICE_NAME.append(deploymentPath);
     final VFSMountService vfsMountService=new VFSMountService(deploymentRoot.getPathName(),tempFileProvider,false);
     batchBuilder.addServiceValueIfNotExist(mountServiceName,Values.immediateValue(vfsMountService)).setInitialMode(ServiceController.Mode.ON_DEMAND);
-    final ServiceName deploymentServiceName=DeploymentService.DEPLOYMENT_SERVICE_NAME.append(deploymentPath);
+    final ServiceName deploymentChainServiceName=determineDeploymentChain();
+    final ServiceName deploymentModuleLoaderServiceName=determineDeploymentModuleLoader();
+    final ServiceName deploymentServiceName=DeploymentService.SERVICE_NAME.append(deploymentPath);
     final DeploymentService deploymentService=new DeploymentService();
-    batchBuilder.addService(deploymentServiceName,deploymentService).addDependency(mountServiceName).toMethod(DeploymentService.DEPLOYMENT_ROOT_SETTER,Arrays.asList(vfsMountService));
-    final ServiceName deploymentServiceProcessorName=DeploymentProcessorService.DEPLOYMENT_PROCESSOR_SERVICE_NAME.append(deploymentPath);
-    final DeploymentProcessorService deploymentProcessorService=new DeploymentProcessorService();
-    batchBuilder.addService(deploymentServiceProcessorName,deploymentProcessorService).addDependency(deploymentServiceName).toMethod(DeploymentProcessorService.DEPLOYMENT_SERVICE_SETTER,Arrays.asList(deploymentService));
+    final BatchServiceBuilder<?> deploymentServiceBuilder=batchBuilder.addService(deploymentServiceName,deploymentService);
+    deploymentServiceBuilder.addDependency(mountServiceName).toMethod(DeploymentService.DEPLOYMENT_ROOT_SETTER,Collections.singletonList(Values.injectedValue()));
+    deploymentServiceBuilder.addDependency(deploymentChainServiceName).toMethod(DeploymentService.DEPLOYMENT_CHAIN_SETTER,Collections.singletonList(Values.injectedValue()));
+    deploymentServiceBuilder.addDependency(deploymentModuleLoaderServiceName).toMethod(DeploymentService.DEPLOYMENT_MODULE_LOADER_SETTER,Collections.singletonList(Values.injectedValue()));
     batchBuilder.install();
   }
  catch (  Throwable t) {
