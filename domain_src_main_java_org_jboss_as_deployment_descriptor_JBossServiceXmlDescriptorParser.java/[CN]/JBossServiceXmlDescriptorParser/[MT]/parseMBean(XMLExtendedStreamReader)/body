@@ -1,0 +1,63 @@
+{
+  final JBossServiceConfig serviceConfig=new JBossServiceConfig();
+  final int count=reader.getAttributeCount();
+  final Set<Attribute> required=EnumSet.of(Attribute.NAME,Attribute.CODE);
+  for (int i=0; i < count; i++) {
+    final Attribute attribute=Attribute.of(reader.getAttributeName(i));
+    required.remove(attribute);
+    final String attributeValue=reader.getAttributeValue(i);
+switch (attribute) {
+case NAME:
+      serviceConfig.setName(attributeValue);
+    break;
+case CODE:
+  serviceConfig.setCode(attributeValue);
+break;
+default :
+throw unexpectedContent(reader);
+}
+}
+if (!required.isEmpty()) {
+throw missingAttributes(reader.getLocation(),required);
+}
+final List<JBossServiceDependencyConfig> dependencyConfigs=new ArrayList<JBossServiceDependencyConfig>();
+final List<JBossServiceAttributeConfig> attributes=new ArrayList<JBossServiceAttributeConfig>();
+final List<String> aliases=new ArrayList<String>();
+final List<String> annotations=new ArrayList<String>();
+while (reader.hasNext()) {
+switch (reader.nextTag()) {
+case END_ELEMENT:
+serviceConfig.setDependencyConfigs(dependencyConfigs.toArray(new JBossServiceDependencyConfig[dependencyConfigs.size()]));
+serviceConfig.setAliases(aliases.toArray(new String[aliases.size()]));
+serviceConfig.setAnnotations(annotations.toArray(new String[annotations.size()]));
+serviceConfig.setAttributeConfigs(attributes.toArray(new JBossServiceAttributeConfig[attributes.size()]));
+return serviceConfig;
+case START_ELEMENT:
+switch (Element.of(reader.getName())) {
+case CONSTRUCTOR:
+serviceConfig.setConstructorConfig(parseConstructor(reader));
+break;
+case DEPENDS:
+dependencyConfigs.add(parseDepends(reader));
+break;
+case DEPENDS_LIST:
+dependencyConfigs.addAll(parseDependsList(reader));
+break;
+case ALIAS:
+aliases.add(parseTextElement(reader));
+break;
+case ANNOTATION:
+annotations.add(parseTextElement(reader));
+break;
+case ATTRIBUTE:
+attributes.add(parseAttribute(reader));
+break;
+case UNKNOWN:
+unexpectedContent(reader);
+break;
+}
+break;
+}
+}
+throw unexpectedContent(reader);
+}

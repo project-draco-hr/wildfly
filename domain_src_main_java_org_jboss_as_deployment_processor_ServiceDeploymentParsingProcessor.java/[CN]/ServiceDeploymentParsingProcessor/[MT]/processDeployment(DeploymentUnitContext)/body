@@ -1,0 +1,29 @@
+{
+  final VirtualFile deploymentRoot=getVirtualFileAttachment(context);
+  if (deploymentRoot == null || !deploymentRoot.exists())   return;
+  final String deploymentRootName=deploymentRoot.getName();
+  VirtualFile serviceXmlFile=null;
+  if (deploymentRootName.endsWith(".jar") || deploymentRootName.endsWith(".sar")) {
+    serviceXmlFile=deploymentRoot.getChild("META-INF/jboss-service.xml");
+  }
+ else   if (deploymentRootName.endsWith("-service.xml")) {
+    serviceXmlFile=deploymentRoot;
+  }
+  if (serviceXmlFile == null || !serviceXmlFile.exists())   return;
+  InputStream xmlStream=null;
+  try {
+    xmlStream=serviceXmlFile.openStream();
+    final XMLStreamReader reader=inputFactory.createXMLStreamReader(xmlStream);
+    final ParseResult<JBossServiceXmlDescriptor> result=new ParseResult<JBossServiceXmlDescriptor>();
+    xmlMapper.parseDocument(result,reader);
+    final JBossServiceXmlDescriptor xmlDescriptor=result.getResult();
+    if (xmlDescriptor != null)     context.putAttachment(DESCRIPTOR_ATTACHMENT_KEY,xmlDescriptor);
+ else     throw new DeploymentUnitProcessingException("Failed to parse service xml [" + serviceXmlFile + "]",null);
+  }
+ catch (  Exception e) {
+    throw new DeploymentUnitProcessingException("Failed to parse service xml [" + serviceXmlFile + "]",e,new Location(e.getStackTrace()[0].getFileName(),e.getStackTrace()[0].getLineNumber(),-1,null));
+  }
+ finally {
+    VFSUtils.safeClose(xmlStream);
+  }
+}
