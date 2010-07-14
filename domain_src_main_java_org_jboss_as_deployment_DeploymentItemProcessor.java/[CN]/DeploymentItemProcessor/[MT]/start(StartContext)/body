@@ -5,9 +5,22 @@
   final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
   batchBuilder.addDependency(controller.getName());
   final DeploymentItemContext deploymentItemContext=new DeploymentItemContextImpl(module,batchBuilder);
-  final Collection<DeploymentItem> deploymentItems=deploymentUnitContext.getDeploymentItems();
-  for (  DeploymentItem deploymentItem : deploymentItems) {
-    deploymentItem.install(deploymentItemContext);
+  final ClassLoader currentCl=getContextClassLoader();
+  setContextClassLoader(module.getClassLoader());
+  try {
+    DeploymentModuleLoaderSelector.CURRENT_MODULE_LOADER.set(module.getModuleLoader());
+    try {
+      final Collection<DeploymentItem> deploymentItems=deploymentUnitContext.getDeploymentItems();
+      for (      DeploymentItem deploymentItem : deploymentItems) {
+        deploymentItem.install(deploymentItemContext);
+      }
+    }
+  finally {
+      DeploymentModuleLoaderSelector.CURRENT_MODULE_LOADER.set(null);
+    }
+  }
+  finally {
+    setContextClassLoader(currentCl);
   }
   try {
     batchBuilder.install();
