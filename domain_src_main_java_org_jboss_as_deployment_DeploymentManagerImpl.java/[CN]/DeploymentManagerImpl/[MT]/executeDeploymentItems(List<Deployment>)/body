@@ -1,0 +1,45 @@
+{
+  final ServiceContainer serviceContainer=this.serviceContainer;
+  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+  final DeploymentServiceListener deploymentServiceListener=new DeploymentServiceListener();
+  batchBuilder.addListener(deploymentServiceListener);
+  for (  Deployment deployment : deployments) {
+    final DeploymentUnitContextImpl deploymentUnitContext=deployment.deploymentUnitContext;
+    final DeploymentModuleLoader deploymentModuleLoader=determineDeploymentModuleLoader(deployment.deploymentRoot);
+    Module module=null;
+    final ModuleConfig moduleConfig=deploymentUnitContext.getAttachment(ModuleConfig.ATTACHMENT_KEY);
+    if (moduleConfig != null) {
+      try {
+        module=deploymentModuleLoader.loadModule(moduleConfig.getIdentifier());
+      }
+ catch (      ModuleLoadException e) {
+        throw new DeploymentException("Faild to load deployment module.  The module spec was likely not added to the deployment module loader",e);
+      }
+    }
+    final BatchBuilder subBatchBuilder=batchBuilder.subBatchBuilder();
+    subBatchBuilder.addDependency(deployment.deploymentServiceName);
+    final ClassLoader currentCl=getContextClassLoader();
+    try {
+      if (module != null) {
+        setContextClassLoader(module.getClassLoader());
+      }
+      DeploymentModuleLoaderSelector.CURRENT_MODULE_LOADER.set(deploymentModuleLoader);
+      final DeploymentItemContext deploymentItemContext=new DeploymentItemContextImpl(module,subBatchBuilder);
+      final Collection<DeploymentItem> deploymentItems=deploymentUnitContext.getDeploymentItems();
+      for (      DeploymentItem deploymentItem : deploymentItems) {
+        deploymentItem.install(deploymentItemContext);
+      }
+    }
+  finally {
+      setContextClassLoader(currentCl);
+      DeploymentModuleLoaderSelector.CURRENT_MODULE_LOADER.set(null);
+    }
+  }
+  try {
+    batchBuilder.install();
+    deploymentServiceListener.waitForCompletion();
+  }
+ catch (  ServiceRegistryException e) {
+    throw new DeploymentException(e);
+  }
+}

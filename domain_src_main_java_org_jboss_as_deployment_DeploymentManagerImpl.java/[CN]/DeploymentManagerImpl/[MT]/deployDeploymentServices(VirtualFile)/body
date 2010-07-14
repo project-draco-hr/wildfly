@@ -1,0 +1,32 @@
+{
+  final List<Deployment> deployments=new ArrayList<Deployment>(deploymentRoots.length);
+  final ServiceContainer serviceContainer=this.serviceContainer;
+  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+  final DeploymentServiceListener deploymentServiceListener=new DeploymentServiceListener();
+  batchBuilder.addListener(deploymentServiceListener);
+  try {
+    for (    VirtualFile deploymentRoot : deploymentRoots) {
+      final String deploymentName=deploymentRoot.getName();
+      if (!deploymentRoot.exists())       throw new DeploymentException("Deployment root does not exist." + deploymentRoot);
+      final DeploymentUnitContextImpl deploymentUnitContext=new DeploymentUnitContextImpl(deploymentName);
+      attachVirtualFile(deploymentUnitContext,deploymentRoot);
+      final ServiceName mountServiceName=MOUNT_SERVICE_NAME.append(deploymentName);
+      final VFSMountService vfsMountService=new VFSMountService(deploymentRoot.getPathName(),tempFileProvider,false);
+      batchBuilder.addService(mountServiceName,vfsMountService).setInitialMode(ServiceController.Mode.ON_DEMAND);
+      final ServiceName deploymentServiceName=DeploymentService.SERVICE_NAME.append(deploymentName);
+      batchBuilder.addService(deploymentServiceName,new DeploymentService(deploymentName)).setInitialMode(ServiceController.Mode.IMMEDIATE).addDependency(mountServiceName);
+      final Deployment deployment=new Deployment(deploymentName,deploymentRoot,deploymentServiceName,deploymentUnitContext);
+      if (deploymentMap.putIfAbsent(deploymentRoot,deployment) != null)       throw new DeploymentException("Deployment already exists for deployment root: " + deploymentRoot);
+      deployments.add(deployment);
+    }
+    batchBuilder.install();
+    deploymentServiceListener.waitForCompletion();
+  }
+ catch (  DeploymentException e) {
+    throw e;
+  }
+catch (  Throwable t) {
+    throw new DeploymentException(t);
+  }
+  return deployments;
+}
