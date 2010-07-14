@@ -1,0 +1,32 @@
+{
+  final ServiceContainer serviceContainer=this.serviceContainer;
+  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+  final DeploymentServiceListener deploymentServiceListener=new DeploymentServiceListener();
+  batchBuilder.addListener(deploymentServiceListener);
+  for (  VirtualFile deploymentRoot : deploymentRoots) {
+    final String deploymentPath=deploymentRoot.getPathName();
+    final ServiceName deploymentServiceName=DeploymentService.SERVICE_NAME.append(deploymentPath);
+    if (deploymentMap.putIfAbsent(deploymentRoot,deploymentServiceName) != null)     throw new DeploymentException("Deployment already exists for deployment root: " + deploymentRoot);
+    try {
+      final ServiceName mountServiceName=MOUNT_SERVICE_NAME.append(deploymentPath);
+      final VFSMountService vfsMountService=new VFSMountService(deploymentRoot.getPathName(),tempFileProvider,false);
+      batchBuilder.addService(mountServiceName,vfsMountService);
+      final ServiceName deploymentChainServiceName=determineDeploymentChain();
+      final ServiceName deploymentModuleLoaderServiceName=determineDeploymentModuleLoader();
+      final DeploymentService deploymentService=new DeploymentService(deploymentPath);
+      deploymentService.setDeploymentListener(deploymentServiceListener);
+      final BatchServiceBuilder<?> deploymentServiceBuilder=batchBuilder.addService(deploymentServiceName,deploymentService);
+      deploymentServiceBuilder.addDependency(mountServiceName).toMethod(DeploymentService.DEPLOYMENT_ROOT_SETTER,Collections.singletonList(Values.immediateValue(deploymentRoot)));
+      deploymentServiceBuilder.addDependency(deploymentChainServiceName).toMethod(DeploymentService.DEPLOYMENT_CHAIN_SETTER,Collections.singletonList(Values.injectedValue()));
+      deploymentServiceBuilder.addDependency(deploymentModuleLoaderServiceName).toMethod(DeploymentService.DEPLOYMENT_MODULE_LOADER_SETTER,Collections.singletonList(Values.injectedValue()));
+      batchBuilder.install();
+      deploymentServiceListener.waitForCompletion();
+    }
+ catch (    DeploymentException e) {
+      throw e;
+    }
+catch (    Throwable t) {
+      throw new DeploymentException(t);
+    }
+  }
+}
