@@ -1,0 +1,44 @@
+{
+  final String deploymentPath=deploymentRoot.getPathName();
+  final ServiceName deploymentServiceName=DeploymentService.SERVICE_NAME.append(deploymentPath);
+  if (deploymentMap.putIfAbsent(deploymentRoot,deploymentServiceName) != null)   throw new DeploymentException("Deployment already exists for deployment root: " + deploymentRoot);
+  final BatchBuilder subBatchBuilder=batchBuilder.subBatchBuilder();
+  final DeploymentChain deploymentChain=determineDeploymentChain(deploymentRoot);
+  final DeploymentModuleLoader deploymentModuleLoader=determineDeploymentModuleLoader(deploymentRoot);
+  DeploymentModuleLoaderSelector.CURRENT_MODULE_LOADER.set(deploymentModuleLoader);
+  subBatchBuilder.addService(deploymentServiceName,new DeploymentService(deploymentPath));
+  subBatchBuilder.addDependency(deploymentServiceName);
+  final DeploymentUnitContextImpl deploymentUnitContext=new DeploymentUnitContextImpl(deploymentPath);
+  attachVirtualFile(deploymentUnitContext,deploymentRoot);
+  logger.debugf("Deployment processor starting with chain: %s",deploymentChain);
+  try {
+    deploymentChain.processDeployment(deploymentUnitContext);
+  }
+ catch (  DeploymentUnitProcessingException e) {
+    throw new DeploymentException("Failed to process deployment chain.",e);
+  }
+  Module module=null;
+  final ModuleConfig moduleConfig=deploymentUnitContext.getAttachment(ModuleConfig.ATTACHMENT_KEY);
+  if (moduleConfig != null) {
+    try {
+      module=deploymentModuleLoader.loadModule(moduleConfig.getIdentifier());
+    }
+ catch (    ModuleLoadException e) {
+      throw new DeploymentException("Faild to load deployment module.  The module spec was likely not added to the deployment module loader",e);
+    }
+  }
+  final ClassLoader currentCl=getContextClassLoader();
+  if (module != null) {
+    setContextClassLoader(module.getClassLoader());
+  }
+  try {
+    final DeploymentItemContext deploymentItemContext=new DeploymentItemContextImpl(module,subBatchBuilder);
+    final Collection<DeploymentItem> deploymentItems=deploymentUnitContext.getDeploymentItems();
+    for (    DeploymentItem deploymentItem : deploymentItems) {
+      deploymentItem.install(deploymentItemContext);
+    }
+  }
+  finally {
+    setContextClassLoader(currentCl);
+  }
+}
