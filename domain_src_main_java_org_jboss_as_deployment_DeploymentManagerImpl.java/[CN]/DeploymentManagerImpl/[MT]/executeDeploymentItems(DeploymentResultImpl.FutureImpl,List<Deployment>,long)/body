@@ -1,7 +1,18 @@
 {
   final ServiceContainer serviceContainer=this.serviceContainer;
   final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
-  final DeploymentServiceListener deploymentServiceListener=new DeploymentServiceListener();
+  final DeploymentServiceListener deploymentServiceListener=new DeploymentServiceListener(new DeploymentServiceListener.Callback(){
+    @Override public void run(    Map<ServiceName,StartException> serviceFailures,    long elapsedTime){
+      DeploymentResult.Result result=DeploymentResult.Result.SUCCESS;
+      DeploymentException deploymentException=null;
+      if (serviceFailures.size() > 0) {
+        result=DeploymentResult.Result.FAILURE;
+        deploymentException=new DeploymentException("Failed to execute deployments.  Not all services started cleanly.");
+      }
+      future.setDeploymentResult(new DeploymentResultImpl(result,deploymentException,serviceFailures,elapsedTime + currentElapsedTime));
+    }
+  }
+);
   batchBuilder.addListener(deploymentServiceListener);
   for (  Deployment deployment : deployments) {
     final DeploymentUnitContextImpl deploymentUnitContext=deployment.deploymentUnitContext;
@@ -13,7 +24,7 @@
         module=deploymentModuleLoader.loadModule(moduleConfig.getIdentifier());
       }
  catch (      ModuleLoadException e) {
-        throw new DeploymentException("Faild to load deployment module.  The module spec was likely not added to the deployment module loader",e);
+        throw new DeploymentException("Failed to load deployment module.  The module spec was likely not added to the deployment module loader",e);
       }
     }
     final BatchBuilder subBatchBuilder=batchBuilder.subBatchBuilder();
@@ -37,7 +48,7 @@
   }
   try {
     batchBuilder.install();
-    deploymentServiceListener.waitForCompletion();
+    deploymentServiceListener.finishBatch();
   }
  catch (  ServiceRegistryException e) {
     throw new DeploymentException(e);

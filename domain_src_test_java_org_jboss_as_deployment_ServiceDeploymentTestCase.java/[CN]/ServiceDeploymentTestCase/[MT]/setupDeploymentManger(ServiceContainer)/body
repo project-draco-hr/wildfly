@@ -11,7 +11,13 @@
   }
 ;
   final BatchBuilder builder=serviceContainer.batchBuilder();
-  final DeploymentServiceListener listener=new DeploymentServiceListener();
+  final CountDownLatch latch=new CountDownLatch(1);
+  final TimingServiceListener listener=new TimingServiceListener(new Runnable(){
+    @Override public void run(){
+      latch.countDown();
+    }
+  }
+);
   builder.addListener(listener);
   builder.addService(CHAIN_SERVICE_NAME,new DeploymentChainService(deploymentChain));
   builder.addService(DEPLOYMENT_MODULE_LOADER_SERVICE_NAME,new PassthroughService(deploymentModuleLoader));
@@ -19,7 +25,10 @@
   deploymentManagerServiceBuilder.addDependency(CHAIN_SERVICE_NAME);
   deploymentManagerServiceBuilder.addDependency(DEPLOYMENT_MODULE_LOADER_SERVICE_NAME);
   builder.install();
-  listener.waitForCompletion();
+  listener.finishBatch();
+  latch.await(1L,TimeUnit.SECONDS);
+  if (!listener.finished())   fail("Did not install deployment manager within 1 second.");
+  if (!ServiceController.State.UP.equals(serviceContainer.getService(DEPLOYMENT_MANAGER_NAME).getState()))   Thread.sleep(100L);
   assertEquals(ServiceController.State.UP,serviceContainer.getService(DEPLOYMENT_MANAGER_NAME).getState());
   return deploymentManager;
 }

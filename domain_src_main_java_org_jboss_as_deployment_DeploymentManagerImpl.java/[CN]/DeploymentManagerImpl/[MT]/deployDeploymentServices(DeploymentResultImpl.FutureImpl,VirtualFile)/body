@@ -2,7 +2,28 @@
   final List<Deployment> deployments=new ArrayList<Deployment>(deploymentRoots.length);
   final ServiceContainer serviceContainer=this.serviceContainer;
   final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
-  final DeploymentServiceListener deploymentServiceListener=new DeploymentServiceListener();
+  final DeploymentServiceListener deploymentServiceListener=new DeploymentServiceListener(new DeploymentServiceListener.Callback(){
+    @Override public void run(    Map<ServiceName,StartException> serviceFailures,    long elapsedTime){
+      if (serviceFailures.size() > 0) {
+        future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,new DeploymentException("Failed to execute deployments.  Not all services started cleanly."),serviceFailures,elapsedTime));
+        return;
+      }
+      try {
+        executeDeploymentProcessors(deployments);
+      }
+ catch (      DeploymentException e) {
+        future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),elapsedTime));
+        return;
+      }
+      try {
+        executeDeploymentItems(future,deployments,elapsedTime);
+      }
+ catch (      DeploymentException e) {
+        future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),elapsedTime));
+      }
+    }
+  }
+);
   batchBuilder.addListener(deploymentServiceListener);
   try {
     for (    VirtualFile deploymentRoot : deploymentRoots) {
@@ -20,13 +41,12 @@
       deployments.add(deployment);
     }
     batchBuilder.install();
-    deploymentServiceListener.waitForCompletion();
+    deploymentServiceListener.finishBatch();
   }
  catch (  DeploymentException e) {
-    throw e;
+    future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),0L));
   }
 catch (  Throwable t) {
-    throw new DeploymentException(t);
+    future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,new DeploymentException(t),Collections.<ServiceName,StartException>emptyMap(),0L));
   }
-  return deployments;
 }
