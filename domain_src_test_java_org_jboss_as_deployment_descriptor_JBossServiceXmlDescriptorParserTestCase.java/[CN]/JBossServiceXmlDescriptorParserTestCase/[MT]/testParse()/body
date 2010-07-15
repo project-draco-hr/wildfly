@@ -1,0 +1,62 @@
+{
+  final File testXmlFile=getResourceFile("/test/serviceXmlDeployment.jar/META-INF/jboss-service.xml");
+  final ParseResult<JBossServiceXmlDescriptor> jBossServiceXmlDescriptorParseResult=new ParseResult<JBossServiceXmlDescriptor>();
+  InputStream inputStream=null;
+  try {
+    inputStream=new FileInputStream(testXmlFile);
+    final XMLStreamReader reader=inputFactory.createXMLStreamReader(inputStream);
+    xmlMapper.parseDocument(jBossServiceXmlDescriptorParseResult,reader);
+  }
+  finally {
+    if (inputStream != null)     inputStream.close();
+  }
+  final JBossServiceXmlDescriptor xmlDescriptor=jBossServiceXmlDescriptorParseResult.getResult();
+  assertNotNull(xmlDescriptor);
+  final List<JBossServiceConfig> serviceConfigs=xmlDescriptor.getServiceConfigs();
+  assertEquals(3,serviceConfigs.size());
+  for (  JBossServiceConfig jBossServiceConfig : serviceConfigs) {
+    assertEquals(LegacyService.class.getName(),jBossServiceConfig.getCode());
+    if (jBossServiceConfig.getName().equals("jboss.test.service")) {
+      final JBossServiceConstructorConfig constructorConfig=jBossServiceConfig.getConstructorConfig();
+      assertNotNull(constructorConfig);
+      final JBossServiceConstructorConfig.Argument[] arguments=constructorConfig.getArguments();
+      assertEquals(1,arguments.length);
+      assertEquals(String.class.getName(),arguments[0].getType());
+      assertEquals("Test Value",arguments[0].getValue());
+    }
+ else     if (jBossServiceConfig.getName().equals("jboss.test.service.second")) {
+      assertNull(jBossServiceConfig.getConstructorConfig());
+      final JBossServiceDependencyConfig[] dependencyConfigs=jBossServiceConfig.getDependencyConfigs();
+      assertEquals(1,dependencyConfigs.length);
+      assertEquals("jboss.test.service",dependencyConfigs[0].getDependencyName());
+      assertEquals("other",dependencyConfigs[0].getOptionalAttributeName());
+      final JBossServiceAttributeConfig[] attributeConfigs=jBossServiceConfig.getAttributeConfigs();
+      assertEquals(1,attributeConfigs.length);
+      assertEquals("somethingElse",attributeConfigs[0].getName());
+      assertNull(attributeConfigs[0].getInject());
+      final JBossServiceAttributeConfig.ValueFactory valueFactory=attributeConfigs[0].getValueFactory();
+      assertNotNull(valueFactory);
+      assertEquals("jboss.test.service",valueFactory.getBeanName());
+      assertEquals("appendSomethingElse",valueFactory.getMethodName());
+      final JBossServiceAttributeConfig.ValueFactoryParameter[] parameters=valueFactory.getParameters();
+      assertEquals(1,parameters.length);
+      assertEquals("java.lang.String",parameters[0].getType());
+      assertEquals("more value",parameters[0].getValue());
+    }
+ else     if (jBossServiceConfig.getName().equals("jboss.test.service.third")) {
+      assertNull(jBossServiceConfig.getConstructorConfig());
+      final JBossServiceAttributeConfig[] attributeConfigs=jBossServiceConfig.getAttributeConfigs();
+      assertEquals(2,attributeConfigs.length);
+      assertEquals("other",attributeConfigs[0].getName());
+      assertNull(attributeConfigs[0].getValueFactory());
+      final JBossServiceAttributeConfig.Inject inject=attributeConfigs[0].getInject();
+      assertNotNull(inject);
+      assertEquals("jboss.test.service.second",inject.getBeanName());
+      assertEquals("other",inject.getPropertyName());
+      assertEquals("somethingElse",attributeConfigs[1].getName());
+      assertNull(attributeConfigs[1].getValueFactory());
+      assertNull(attributeConfigs[1].getInject());
+      assertEquals("Another test value",attributeConfigs[1].getValue());
+    }
+  }
+}
