@@ -1,0 +1,74 @@
+{
+  super(reader);
+  String name=null;
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (reader.getAttributeNamespace(i) != null) {
+      throw unexpectedAttribute(reader,i);
+    }
+ else {
+      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+          name=value;
+          break;
+        }
+default :
+      throw unexpectedAttribute(reader,i);
+  }
+}
+}
+if (name == null) {
+throw missingRequired(reader,Collections.singleton(Attribute.NAME));
+}
+this.name=name;
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case DOMAIN_1_0:
+{
+    final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case INET_ADDRESS:
+{
+        if (address != null) {
+          throw new XMLStreamException("inet-address already set",reader.getLocation());
+        }
+ else         if (!interfaceCriteria.isEmpty()) {
+          throw new XMLStreamException("Cannot use element inet-address in combination with other interface criteria elements",reader.getLocation());
+        }
+        address=readStringAttributeElement(reader,Attribute.VALUE.getLocalName());
+        break;
+      }
+case ANY:
+{
+      requireNoAddress(reader,element);
+      AnyCriteriaElement criteria=new AnyCriteriaElement(reader);
+      interfaceCriteria.put(criteria.getElement(),criteria);
+      break;
+    }
+case NOT:
+{
+    requireNoAddress(reader,element);
+    NotCriteriaElement criteria=new NotCriteriaElement(reader);
+    interfaceCriteria.put(criteria.getElement(),criteria);
+  }
+default :
+{
+  requireNoAddress(reader,element);
+  AbstractInterfaceCriteriaElement<?> criteria=ParsingUtil.parseSimpleInterfaceCriteria(reader,element);
+  interfaceCriteria.put(criteria.getElement(),criteria);
+  break;
+}
+}
+break;
+}
+default :
+throw unexpectedElement(reader);
+}
+}
+if (criteriaRequired && address == null && interfaceCriteria.isEmpty()) {
+throw new XMLStreamException("Either an inet-address element or some interface criteria element is required",reader.getLocation());
+}
+}
