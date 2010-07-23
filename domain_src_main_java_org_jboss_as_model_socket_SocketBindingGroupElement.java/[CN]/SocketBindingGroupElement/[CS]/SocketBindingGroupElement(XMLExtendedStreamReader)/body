@@ -1,7 +1,7 @@
 {
   super(reader);
   String name=null;
-  String profile=null;
+  String defIntf=null;
   final int count=reader.getAttributeCount();
   for (int i=0; i < count; i++) {
     final String value=reader.getAttributeValue(i);
@@ -16,9 +16,9 @@ case NAME:
           name=value;
           break;
         }
-case PROFILE:
+case DEFAULT_INTERFACE:
 {
-        profile=value;
+        defIntf=value;
         break;
       }
 default :
@@ -29,38 +29,35 @@ default :
 if (name == null) {
 throw missingRequired(reader,Collections.singleton(Attribute.NAME));
 }
-if (profile == null) {
-throw missingRequired(reader,Collections.singleton(Attribute.PROFILE));
+if (defIntf == null) {
+throw missingRequired(reader,Collections.singleton(Attribute.DEFAULT_INTERFACE));
 }
 this.name=name;
-this.profile=profile;
+this.defaultInterface=defIntf;
 while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
 case DOMAIN_1_0:
 {
   final Element element=Element.forName(reader.getLocalName());
 switch (element) {
-case JVM:
+case INCLUDE:
 {
-      throw new UnsupportedOperationException("implement jvm");
+      final SocketBindingGroupIncludeElement include=new SocketBindingGroupIncludeElement(reader);
+      if (includedGroups.containsKey(include.getGroupName())) {
+        throw new XMLStreamException("Included socket-binding-group " + include.getGroupName() + " already declared",reader.getLocation());
+      }
+      includedGroups.put(include.getGroupName(),include);
+      break;
     }
-case SOCKET_BINDING_GROUP:
+case SOCKET_BINDING:
 {
-    if (bindingGroup != null) {
-      throw new XMLStreamException(element.getLocalName() + " already defined",reader.getLocation());
+    final SocketBindingElement include=new SocketBindingElement(reader);
+    if (socketBindings.containsKey(include.getName())) {
+      throw new XMLStreamException("socket-binding " + include.getName() + " already declared",reader.getLocation());
     }
-    bindingGroup=new SocketBindingGroupRefElement(reader);
+    socketBindings.put(include.getName(),include);
     break;
   }
-case DEPLOYMENTS:
-{
-  parseDeployments(reader);
-  break;
-}
-case SYSTEM_PROPERTIES:
-{
-throw new UnsupportedOperationException("implement system-properties");
-}
 default :
 throw unexpectedElement(reader);
 }
