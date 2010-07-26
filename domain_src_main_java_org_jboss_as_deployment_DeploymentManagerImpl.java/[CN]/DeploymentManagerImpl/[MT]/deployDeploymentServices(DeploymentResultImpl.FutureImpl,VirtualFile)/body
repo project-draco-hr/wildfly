@@ -4,23 +4,13 @@
   final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
   final DeploymentServiceListener deploymentServiceListener=new DeploymentServiceListener(new DeploymentServiceListener.Callback(){
     @Override public void run(    Map<ServiceName,StartException> serviceFailures,    long elapsedTime,    int numServices){
+      DeploymentResult.Result result=DeploymentResult.Result.SUCCESS;
+      DeploymentException deploymentException=null;
       if (serviceFailures.size() > 0) {
-        future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,new DeploymentException("Failed to execute deployments.  Not all services started cleanly."),serviceFailures,elapsedTime,numServices));
-        return;
+        result=DeploymentResult.Result.FAILURE;
+        deploymentException=new DeploymentException("Failed to execute deployments.  Not all services started cleanly.");
       }
-      try {
-        executeDeploymentProcessors(deployments);
-      }
- catch (      DeploymentException e) {
-        future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),elapsedTime,numServices));
-        return;
-      }
-      try {
-        executeDeploymentItems(future,deployments,elapsedTime,numServices);
-      }
- catch (      DeploymentException e) {
-        future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),elapsedTime,numServices));
-      }
+      future.setDeploymentResult(new DeploymentResultImpl(result,deploymentException,serviceFailures,elapsedTime,numServices));
     }
   }
 );
@@ -40,6 +30,24 @@
       if (deploymentMap.putIfAbsent(deploymentRoot,deployment) != null)       throw new DeploymentException("Deployment already exists for deployment root: " + deploymentRoot);
       deployments.add(deployment);
     }
+    deploymentServiceListener.startBatch(new Runnable(){
+      public void run(){
+        try {
+          executeDeploymentProcessors(deployments);
+        }
+ catch (        DeploymentException e) {
+          future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),0L,0));
+          return;
+        }
+        try {
+          executeDeploymentItems(future,deployments,deploymentServiceListener);
+        }
+ catch (        DeploymentException e) {
+          future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),0L,0));
+        }
+      }
+    }
+);
     batchBuilder.install();
     deploymentServiceListener.finishBatch();
   }
