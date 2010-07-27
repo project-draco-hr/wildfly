@@ -1,15 +1,7 @@
 {
   final DeploymentChain deploymentChain=new DeploymentChainImpl("deployment.chain.service");
   final DeploymentModuleLoader deploymentModuleLoader=new DeploymentModuleLoaderImpl(ModuleLoaderSelector.DEFAULT.getCurrentLoader());
-  final DeploymentManagerImpl deploymentManager=new DeploymentManagerImpl(serviceContainer){
-    @Override protected DeploymentChain determineDeploymentChain(    VirtualFile deploymentRoo){
-      return deploymentChain;
-    }
-    @Override protected DeploymentModuleLoader determineDeploymentModuleLoader(    VirtualFile deploymentRoo){
-      return deploymentModuleLoader;
-    }
-  }
-;
+  final DeploymentManagerImpl deploymentManager=new DeploymentManagerImpl(serviceContainer);
   final BatchBuilder builder=serviceContainer.batchBuilder();
   final CountDownLatch latch=new CountDownLatch(1);
   final TimingServiceListener listener=new TimingServiceListener(new Runnable(){
@@ -19,8 +11,22 @@
   }
 );
   builder.addListener(listener);
-  builder.addService(CHAIN_SERVICE_NAME,new DeploymentChainService(deploymentChain));
-  builder.addService(DEPLOYMENT_MODULE_LOADER_SERVICE_NAME,new PassthroughService(deploymentModuleLoader));
+  builder.addService(DeploymentChainProvider.SERVICE_NAME,new DeploymentChainProvider());
+  final DeploymentChainService deploymentChainService=new DeploymentChainService(deploymentChain);
+  builder.addService(CHAIN_SERVICE_NAME,deploymentChainService).addDependency(DeploymentChainProvider.SERVICE_NAME).toInjector(new DeploymentChainProvider.SelectorInjector(deploymentChainService,Values.immediateValue(new DeploymentChainProvider.Selector(){
+    public boolean supports(    VirtualFile root){
+      return true;
+    }
+  }
+),0));
+  builder.addService(DeploymentModuleLoaderProvider.SERVICE_NAME,new DeploymentModuleLoaderProvider());
+  final Service<DeploymentModuleLoader> deploymentModuleLoaderService=new PassthroughService(deploymentModuleLoader);
+  builder.addService(DEPLOYMENT_MODULE_LOADER_SERVICE_NAME,deploymentModuleLoaderService).addDependency(DeploymentModuleLoaderProvider.SERVICE_NAME).toInjector(new DeploymentModuleLoaderProvider.SelectorInjector(deploymentModuleLoaderService,Values.immediateValue(new DeploymentModuleLoaderProvider.Selector(){
+    public boolean supports(    VirtualFile root){
+      return true;
+    }
+  }
+),0));
   final BatchServiceBuilder deploymentManagerServiceBuilder=builder.addService(DEPLOYMENT_MANAGER_NAME,deploymentManager);
   deploymentManagerServiceBuilder.addDependency(CHAIN_SERVICE_NAME);
   deploymentManagerServiceBuilder.addDependency(DEPLOYMENT_MODULE_LOADER_SERVICE_NAME);

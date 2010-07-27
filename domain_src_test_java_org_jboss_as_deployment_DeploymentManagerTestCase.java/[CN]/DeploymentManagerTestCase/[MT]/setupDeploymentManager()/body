@@ -2,17 +2,23 @@
   serviceContainer=ServiceContainer.Factory.create();
   final ServiceName chainServiceName=ServiceName.JBOSS.append("deployment","chain");
   final ServiceName moduleLoaderServiceName=ServiceName.JBOSS.append("deployment","module","loader");
-  deploymentManager=new DeploymentManagerImpl(serviceContainer){
-    @Override protected DeploymentChain determineDeploymentChain(    final VirtualFile deploymentRoot){
-      return deploymentChain;
-    }
-    @Override protected DeploymentModuleLoader determineDeploymentModuleLoader(    final VirtualFile deploymentRoot){
-      return deploymentModuleLoader;
+  deploymentManager=new DeploymentManagerImpl(serviceContainer);
+  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+  batchBuilder.addService(DeploymentChainProvider.SERVICE_NAME,new DeploymentChainProvider());
+  final DeploymentChainService deploymentChainService=new DeploymentChainService(deploymentChain);
+  batchBuilder.addService(chainServiceName,deploymentChainService).addDependency(DeploymentChainProvider.SERVICE_NAME).toInjector(new DeploymentChainProvider.SelectorInjector(deploymentChainService,Values.immediateValue(new DeploymentChainProvider.Selector(){
+    public boolean supports(    VirtualFile root){
+      return true;
     }
   }
-;
-  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
-  batchBuilder.addService(chainServiceName,new PassthroughService(deploymentChain));
-  batchBuilder.addService(moduleLoaderServiceName,new PassthroughService(deploymentModuleLoader));
+),0));
+  batchBuilder.addService(DeploymentModuleLoaderProvider.SERVICE_NAME,new DeploymentModuleLoaderProvider());
+  final Service<DeploymentModuleLoader> deploymentModuleLoaderService=new PassthroughService(deploymentModuleLoader);
+  batchBuilder.addService(moduleLoaderServiceName,deploymentModuleLoaderService).addDependency(DeploymentModuleLoaderProvider.SERVICE_NAME).toInjector(new DeploymentModuleLoaderProvider.SelectorInjector(deploymentModuleLoaderService,Values.immediateValue(new DeploymentModuleLoaderProvider.Selector(){
+    public boolean supports(    VirtualFile root){
+      return true;
+    }
+  }
+),0));
   batchBuilder.install();
 }
