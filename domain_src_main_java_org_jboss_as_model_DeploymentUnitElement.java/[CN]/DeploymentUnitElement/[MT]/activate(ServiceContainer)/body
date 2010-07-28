@@ -1,60 +1,63 @@
 {
   final DeploymentResultImpl.FutureImpl future=new DeploymentResultImpl.FutureImpl();
-  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
-  final DeploymentServiceListener deploymentServiceListener=new DeploymentServiceListener(new DeploymentServiceListener.Callback(){
-    @Override public void run(    Map<ServiceName,StartException> serviceFailures,    long elapsedTime,    int numServices){
-      DeploymentResult.Result result=DeploymentResult.Result.SUCCESS;
-      DeploymentException deploymentException=null;
-      if (serviceFailures.size() > 0) {
-        result=DeploymentResult.Result.FAILURE;
-        deploymentException=new DeploymentException("Failed to execute deployments.  Not all services started cleanly.");
-      }
-      future.setDeploymentResult(new DeploymentResultImpl(result,deploymentException,serviceFailures,elapsedTime,numServices));
-    }
-  }
-);
-  batchBuilder.addListener(deploymentServiceListener);
-  final DeploymentUnitKey key=this.key;
-  final VirtualFile deploymentRoot=VFS.getChild(key.getName());
-  if (!deploymentRoot.exists())   throw new DeploymentException("Deployment root does not exist." + deploymentRoot);
-  final String deploymentName=key.getName() + ":" + key.getSha1HashAsHexString();
-  final DeploymentUnitContextImpl deploymentUnitContext=new DeploymentUnitContextImpl(deploymentName);
-  attachVirtualFile(deploymentUnitContext,deploymentRoot);
-  final ServiceName mountServiceName=MOUNT_SERVICE_NAME.append(deploymentName);
-  final VFSMountService vfsMountService=new VFSMountService(deploymentRoot.getPathName(),null,false);
-  batchBuilder.addService(mountServiceName,vfsMountService).setInitialMode(ServiceController.Mode.ON_DEMAND);
-  final ServiceName deploymentServiceName=DeploymentService.SERVICE_NAME.append(deploymentName);
-  final DeploymentService deploymentService=new DeploymentService(deploymentName);
-  final BatchServiceBuilder deploymentServiceBuilder=batchBuilder.addService(deploymentServiceName,deploymentService).setInitialMode(start ? ServiceController.Mode.IMMEDIATE : ServiceController.Mode.NEVER);
-  deploymentServiceBuilder.addDependency(mountServiceName);
-  deploymentServiceBuilder.addDependency(DeploymentChainProvider.SERVICE_NAME).toInjector(new TranslatingInjector<DeploymentChainProvider,DeploymentChain>(new DeploymentChainProviderTranslator(deploymentRoot),new PropertyInjector(DeploymentService.DEPLOYMENT_CHAIN_PROPERTY,Values.immediateValue(deploymentService))));
-  deploymentServiceBuilder.addDependency(DeploymentModuleLoaderProvider.SERVICE_NAME).toInjector(new TranslatingInjector<DeploymentModuleLoaderProvider,DeploymentModuleLoader>(new DeploymentModuleLoaderProviderTranslator(deploymentRoot),new PropertyInjector(DeploymentService.MODULE_LOADER_PROPERTY,Values.immediateValue(deploymentService))));
-  deploymentServiceListener.startBatch(new Runnable(){
-    public void run(){
-      try {
-        if (deploymentService.getDeploymentChain() == null)         throw new DeploymentException("Unable to determine deployment chain for deployment: " + deploymentName);
-        if (deploymentService.getModuleLoader() == null)         throw new DeploymentException("Unable to determine deployment module loader for deployment: " + deploymentName);
-        executeDeploymentProcessors(deploymentRoot,deploymentUnitContext,deploymentService);
-      }
- catch (      DeploymentException e) {
-        future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),0L,0));
-        return;
-      }
-      try {
-        executeDeploymentItems(future,serviceContainer,deploymentRoot,deploymentUnitContext,deploymentServiceName,deploymentService,deploymentServiceListener);
-      }
- catch (      DeploymentException e) {
-        future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),0L,0));
-      }
-    }
-  }
-);
   try {
+    final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+    final DeploymentServiceListener deploymentServiceListener=new DeploymentServiceListener(new DeploymentServiceListener.Callback(){
+      @Override public void run(      Map<ServiceName,StartException> serviceFailures,      long elapsedTime,      int numServices){
+        DeploymentResult.Result result=DeploymentResult.Result.SUCCESS;
+        DeploymentException deploymentException=null;
+        if (serviceFailures.size() > 0) {
+          result=DeploymentResult.Result.FAILURE;
+          deploymentException=new DeploymentException("Failed to execute deployments.  Not all services started cleanly.");
+        }
+        future.setDeploymentResult(new DeploymentResultImpl(result,deploymentException,serviceFailures,elapsedTime,numServices));
+      }
+    }
+);
+    batchBuilder.addListener(deploymentServiceListener);
+    final DeploymentUnitKey key=this.key;
+    final VirtualFile deploymentRoot=VFS.getChild(key.getName());
+    if (!deploymentRoot.exists())     throw new DeploymentException("Deployment root does not exist." + deploymentRoot);
+    final String deploymentName=key.getName() + ":" + key.getSha1HashAsHexString();
+    final DeploymentUnitContextImpl deploymentUnitContext=new DeploymentUnitContextImpl(deploymentName);
+    attachVirtualFile(deploymentUnitContext,deploymentRoot);
+    final ServiceName mountServiceName=MOUNT_SERVICE_NAME.append(deploymentName);
+    final VFSMountService vfsMountService=new VFSMountService(deploymentRoot.getPathName());
+    batchBuilder.addService(mountServiceName,vfsMountService).setInitialMode(ServiceController.Mode.ON_DEMAND).addDependency(TempFileProviderService.SERVICE_NAME).toMethod(VFSMountService.TEMP_FILE_PROVIDER_SETTER,Collections.singletonList(Values.injectedValue()));
+    final ServiceName deploymentServiceName=DeploymentService.SERVICE_NAME.append(deploymentName);
+    final DeploymentService deploymentService=new DeploymentService(deploymentName);
+    final BatchServiceBuilder deploymentServiceBuilder=batchBuilder.addService(deploymentServiceName,deploymentService).setInitialMode(start ? ServiceController.Mode.IMMEDIATE : ServiceController.Mode.NEVER);
+    deploymentServiceBuilder.addDependency(mountServiceName);
+    deploymentServiceBuilder.addDependency(DeploymentChainProvider.SERVICE_NAME).toInjector(new TranslatingInjector<DeploymentChainProvider,DeploymentChain>(new DeploymentChainProviderTranslator(deploymentRoot),new PropertyInjector(DeploymentService.DEPLOYMENT_CHAIN_PROPERTY,Values.immediateValue(deploymentService))));
+    deploymentServiceBuilder.addDependency(DeploymentModuleLoaderProvider.SERVICE_NAME).toInjector(new TranslatingInjector<DeploymentModuleLoaderProvider,DeploymentModuleLoader>(new DeploymentModuleLoaderProviderTranslator(deploymentRoot),new PropertyInjector(DeploymentService.MODULE_LOADER_PROPERTY,Values.immediateValue(deploymentService))));
+    deploymentServiceListener.startBatch(new Runnable(){
+      public void run(){
+        try {
+          if (deploymentService.getDeploymentChain() == null)           throw new DeploymentException("Unable to determine deployment chain for deployment: " + deploymentName);
+          if (deploymentService.getModuleLoader() == null)           throw new DeploymentException("Unable to determine deployment module loader for deployment: " + deploymentName);
+          executeDeploymentProcessors(deploymentUnitContext,deploymentService);
+        }
+ catch (        DeploymentException e) {
+          future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),0L,0));
+          return;
+        }
+        try {
+          executeDeploymentItems(serviceContainer,deploymentUnitContext,deploymentServiceName,deploymentService,deploymentServiceListener);
+        }
+ catch (        DeploymentException e) {
+          future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),0L,0));
+        }
+      }
+    }
+);
     batchBuilder.install();
     deploymentServiceListener.finishBatch();
   }
- catch (  ServiceRegistryException e) {
-    throw new DeploymentException(e);
+ catch (  DeploymentException e) {
+    future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,e,Collections.<ServiceName,StartException>emptyMap(),0L,0));
+  }
+catch (  Throwable t) {
+    future.setDeploymentResult(new DeploymentResultImpl(DeploymentResult.Result.FAILURE,new DeploymentException(t),Collections.<ServiceName,StartException>emptyMap(),0L,0));
   }
   return future;
 }

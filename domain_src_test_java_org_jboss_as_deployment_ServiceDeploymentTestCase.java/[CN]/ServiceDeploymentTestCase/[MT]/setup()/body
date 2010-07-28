@@ -1,0 +1,27 @@
+{
+  Module.setModuleLoaderSelector(new DeploymentModuleLoaderSelector());
+  serviceContainer=ServiceContainer.Factory.create();
+  final DeploymentChain deploymentChain=new DeploymentChainImpl("deployment.chain.service");
+  final BatchBuilder builder=serviceContainer.batchBuilder();
+  final CountDownLatch latch=new CountDownLatch(1);
+  final TimingServiceListener listener=new TimingServiceListener(new Runnable(){
+    @Override public void run(){
+      latch.countDown();
+    }
+  }
+);
+  builder.addListener(listener);
+  new DeploymentActivator().activate(serviceContainer,builder);
+  final DeploymentChainService deploymentChainService=new DeploymentChainService(deploymentChain);
+  builder.addService(CHAIN_SERVICE_NAME,deploymentChainService).addDependency(DeploymentChainProvider.SERVICE_NAME).toInjector(new DeploymentChainProvider.SelectorInjector(deploymentChainService,Values.immediateValue(new DeploymentChainProvider.Selector(){
+    public boolean supports(    VirtualFile root){
+      return true;
+    }
+  }
+),0));
+  builder.install();
+  listener.finishBatch();
+  latch.await(1L,TimeUnit.SECONDS);
+  if (!listener.finished())   fail("Did not install deployment manager within 1 second.");
+  setupProcessors(serviceContainer);
+}
