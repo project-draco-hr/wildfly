@@ -12,16 +12,11 @@
 );
   builder.addListener(listener);
   new DeploymentActivator().activate(serviceContainer,builder);
-  final DeploymentChainService deploymentChainService=new DeploymentChainService(deploymentChain);
-  builder.addService(CHAIN_SERVICE_NAME,deploymentChainService).addDependency(DeploymentChainProvider.SERVICE_NAME).toInjector(new DeploymentChainProvider.SelectorInjector(deploymentChainService,Values.immediateValue(new DeploymentChainProvider.Selector(){
-    public boolean supports(    VirtualFile root){
-      return true;
-    }
-  }
-),0));
+  new ServiceDeploymentActivator().activate(serviceContainer,builder);
+  final DeploymentUnitProcessorService<TestModuleDependencyProcessor> deploymentUnitProcessorService=new DeploymentUnitProcessorService<TestModuleDependencyProcessor>(new TestModuleDependencyProcessor());
+  builder.addService(ServiceName.JBOSS.append("deployment","processor","module","dependency","test"),deploymentUnitProcessorService).addDependency(ServiceDeploymentActivator.SERVICE_DEPLOYMENT_CHAIN_NAME).toInjector(new DeploymentChainProcessorInjector<TestModuleDependencyProcessor>(deploymentUnitProcessorService,TestModuleDependencyProcessor.PRIORITY));
   builder.install();
   listener.finishBatch();
   latch.await(1L,TimeUnit.SECONDS);
-  if (!listener.finished())   fail("Did not install deployment manager within 1 second.");
-  setupProcessors(serviceContainer);
+  if (!listener.finished())   fail("Did not install service deployment components within 1 second.");
 }
