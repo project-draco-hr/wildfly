@@ -1,4 +1,12 @@
 {
+  RefResolver<String,ProfileElement> resolver=new RefResolver<String,ProfileElement>(){
+    private static final long serialVersionUID=8976121114197265586L;
+    @Override public ProfileElement resolveRef(    String ref){
+      if (ref == null)       throw new IllegalArgumentException("ref is null");
+      return profiles.get(ref);
+    }
+  }
+;
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
 case DOMAIN_1_0:
@@ -7,7 +15,7 @@ case DOMAIN_1_0:
 switch (element) {
 case PROFILE:
 {
-            final ProfileElement profile=new ProfileElement(reader);
+            final ProfileElement profile=new ProfileElement(reader,resolver);
             if (profiles.containsKey(profile.getName())) {
               throw new XMLStreamException("Profile " + profile.getName() + " already declared",reader.getLocation());
             }
@@ -20,6 +28,15 @@ default :
   }
 default :
 throw unexpectedElement(reader);
+}
+}
+for (ProfileElement profile : profiles.values()) {
+for (ProfileIncludeElement include : profile.getIncludedProfiles()) {
+ProfileElement included=profiles.get(include.getProfile());
+if (included == null) {
+Location loc=include.getLocation();
+throw new XMLStreamException("ParseError at [row,col]:[" + loc.getLineNumber() + ","+ loc.getColumnNumber()+ " Message: Included profile "+ include.getProfile()+ " not found");
+}
 }
 }
 }
