@@ -1,4 +1,20 @@
 {
+  RefResolver<String,SocketBindingGroupElement> groupResolver=new RefResolver<String,SocketBindingGroupElement>(){
+    private static final long serialVersionUID=8976121114197265586L;
+    @Override public SocketBindingGroupElement resolveRef(    String ref){
+      if (ref == null)       throw new IllegalArgumentException("ref is null");
+      return bindingGroups.get(ref);
+    }
+  }
+;
+  RefResolver<String,InterfaceElement> intfResolver=new RefResolver<String,InterfaceElement>(){
+    private static final long serialVersionUID=8976121114197265586L;
+    @Override public InterfaceElement resolveRef(    String ref){
+      if (ref == null)       throw new IllegalArgumentException("ref is null");
+      return interfaces.get(ref);
+    }
+  }
+;
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
 case DOMAIN_1_0:
@@ -7,9 +23,9 @@ case DOMAIN_1_0:
 switch (element) {
 case SOCKET_BINDING_GROUP:
 {
-            SocketBindingGroupElement group=new SocketBindingGroupElement(reader);
+            SocketBindingGroupElement group=new SocketBindingGroupElement(reader,intfResolver,groupResolver);
             if (bindingGroups.containsKey(group.getName())) {
-              throw new XMLStreamException("socket-binding-group with name " + group.getName() + " already declared",reader.getLocation());
+              throw new XMLStreamException(element.getLocalName() + " with name " + group.getName()+ " already declared",reader.getLocation());
             }
             bindingGroups.put(group.getName(),group);
             break;
@@ -20,6 +36,15 @@ default :
   }
 default :
 throw unexpectedElement(reader);
+}
+}
+for (SocketBindingGroupElement group : bindingGroups.values()) {
+for (SocketBindingGroupIncludeElement include : group.getIncludedSocketBindingGroups()) {
+SocketBindingGroupElement included=bindingGroups.get(include.getGroupName());
+if (included == null) {
+Location loc=include.getLocation();
+throw new XMLStreamException("ParseError at [row,col]:[" + loc.getLineNumber() + ","+ loc.getColumnNumber()+ " Message: Included "+ Element.SOCKET_BINDING_GROUP.getLocalName()+ " "+ include.getGroupName()+ " not found");
+}
 }
 }
 }

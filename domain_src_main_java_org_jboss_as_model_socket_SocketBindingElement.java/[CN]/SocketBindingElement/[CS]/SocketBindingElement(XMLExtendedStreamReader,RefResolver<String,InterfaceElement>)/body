@@ -1,0 +1,78 @@
+{
+  super(reader);
+  if (interfaceResolver == null)   throw new IllegalArgumentException("interfaceResolver is null");
+  this.interfaceResolver=interfaceResolver;
+  String name=null;
+  String intf=null;
+  Integer port=null;
+  Boolean fixPort=null;
+  InetAddress mcastAddr=null;
+  Integer mcastPort=null;
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (reader.getAttributeNamespace(i) != null) {
+      throw unexpectedAttribute(reader,i);
+    }
+ else {
+      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+          name=value;
+          break;
+        }
+case INTERFACE:
+{
+        if (this.interfaceResolver.resolveRef(value) == null) {
+          throw new XMLStreamException("Unknown interface " + value + " "+ attribute.getLocalName()+ " must be declared in element "+ Element.INTERFACES.getLocalName(),reader.getLocation());
+        }
+        intf=value;
+        break;
+      }
+case PORT:
+{
+      port=Integer.valueOf(parsePort(value,attribute,reader,true));
+      break;
+    }
+case FIXED_PORT:
+{
+    fixPort=Boolean.valueOf(value);
+    break;
+  }
+case MULTICAST_ADDRESS:
+{
+  try {
+    mcastAddr=InetAddress.getByName(value);
+    if (!mcastAddr.isMulticastAddress()) {
+      throw new XMLStreamException("Value " + value + " for attribute "+ attribute.getLocalName()+ " is not a valid multicast address",reader.getLocation());
+    }
+  }
+ catch (  UnknownHostException e) {
+    throw new XMLStreamException("Value " + value + " for attribute "+ attribute.getLocalName()+ " is not a valid multicast address",reader.getLocation(),e);
+  }
+}
+case MULTICAST_PORT:
+{
+mcastPort=Integer.valueOf(parsePort(value,attribute,reader,false));
+break;
+}
+default :
+throw unexpectedAttribute(reader,i);
+}
+}
+}
+if (name == null) {
+throw missingRequired(reader,Collections.singleton(Attribute.NAME));
+}
+this.name=name;
+this.interfaceName=intf;
+this.port=port == null ? 0 : port;
+this.fixedPort=fixPort == null ? false : fixPort.booleanValue();
+this.multicastAddress=mcastAddr;
+this.multicastPort=mcastAddr == null ? -1 : mcastPort != null ? mcastPort.intValue() : -1;
+if (this.multicastPort == -1 && this.multicastAddress != null) {
+throw new XMLStreamException("Must configure " + Attribute.MULTICAST_PORT + " if "+ Attribute.MULTICAST_ADDRESS+ " is configured",reader.getLocation());
+}
+requireNoContent(reader);
+}

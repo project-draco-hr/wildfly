@@ -9,4 +9,60 @@
   if (serverName == null) {
     throw new IllegalArgumentException("serverName is null");
   }
+  ServerElement server=host.getServer(serverName);
+  if (server == null)   throw new IllegalStateException("Server " + serverName + " is not listed in Host");
+  this.serverName=serverName;
+  String serverGroupName=server.getServerGroup();
+  ServerGroupElement serverGroup=domain.getServerGroup(serverGroupName);
+  if (serverGroup == null)   throw new IllegalStateException("Server group" + serverGroupName + " is not listed in Domain");
+  String profileName=serverGroup.getProfileName();
+  this.profile=domain.getProfile(profileName);
+  if (profile == null)   throw new IllegalStateException("Profile" + profileName + " is not listed in Domain");
+  Set<ServerGroupDeploymentElement> groupDeployments=serverGroup.getDeployments();
+  for (  ServerGroupDeploymentElement dep : groupDeployments) {
+    deployments.put(dep.getKey(),dep);
+  }
+  SocketBindingGroupRefElement bindingRef=server.getSocketBindingGroup();
+  if (bindingRef == null) {
+    bindingRef=serverGroup.getSocketBindingGroup();
+  }
+  this.socketBindings=domain.getSocketBindingGroup(bindingRef.getRef());
+  this.portOffset=bindingRef.getPortOffset();
+  this.systemProperties=new PropertiesElement(Element.SYSTEM_PROPERTIES,true,domain.getSystemProperties(),serverGroup.getSystemProperties(),host.getSystemProperties(),server.getSystemProperties());
+  Set<String> unspecifiedInterfaces=new HashSet<String>();
+  for (  InterfaceElement ie : domain.getInterfaces()) {
+    if (ie.isFullySpecified())     interfaces.put(ie.getName(),ie);
+ else     unspecifiedInterfaces.add(ie.getName());
+  }
+  for (  ServerInterfaceElement ie : host.getInterfaces()) {
+    interfaces.put(ie.getName(),ie);
+    unspecifiedInterfaces.remove(ie.getName());
+  }
+  for (  ServerInterfaceElement ie : server.getInterfaces()) {
+    interfaces.put(ie.getName(),ie);
+    unspecifiedInterfaces.remove(ie.getName());
+  }
+  if (unspecifiedInterfaces.size() > 0) {
+    if (unspecifiedInterfaces.contains(this.socketBindings.getDefaultInterface())) {
+      throw new IllegalStateException("The default interface for socket binding group " + this.socketBindings.getName() + " references interface "+ this.socketBindings.getDefaultInterface()+ " but the Server and Host configurations do not specify how to assign an IP address to that interface");
+    }
+    for (    SocketBindingElement binding : this.socketBindings.getAllSocketBindings()) {
+      if (unspecifiedInterfaces.contains(binding.getInterfaceName())) {
+        throw new IllegalStateException("Socket binding " + binding.getName() + " references interface "+ binding.getInterfaceName()+ " but the Server and Host configurations do not specify how to assign an IP address to that interface");
+      }
+    }
+  }
+  JvmElement serverVM=server.getJvm();
+  String serverVMName=serverVM != null ? serverVM.getName() : null;
+  JvmElement groupVM=serverGroup.getJvm();
+  String groupVMName=groupVM != null ? groupVM.getName() : null;
+  String ourVMName=serverVMName != null ? serverVMName : groupVMName;
+  if (ourVMName == null) {
+    throw new IllegalStateException("Neither " + Element.SERVER_GROUP.getLocalName() + " nor "+ Element.SERVER.getLocalName()+ " has declared a JVM configuration; one or the other must");
+  }
+  if (!ourVMName.equals(groupVMName)) {
+    groupVM=null;
+  }
+  JvmElement hostVM=host.getJvm(ourVMName);
+  this.jvm=new JvmElement(groupVM,hostVM,serverVM);
 }
