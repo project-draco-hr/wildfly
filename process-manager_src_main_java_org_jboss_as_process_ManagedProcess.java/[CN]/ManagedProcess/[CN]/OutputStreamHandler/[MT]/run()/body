@@ -4,7 +4,6 @@
   try {
     for (; ; ) {
       Status status=StreamUtils.readWord(inputStream,b);
-      System.err.println("Status is " + status);
       if (status == Status.END_OF_STREAM) {
         return;
       }
@@ -116,27 +115,31 @@ case SEND:
       break;
     }
     status=StreamUtils.readWord(inputStream,b);
-    final String name=b.toString();
+    final String recipient=b.toString();
     final List<String> msg=new ArrayList<String>(0);
     while (status == Status.MORE) {
       status=StreamUtils.readWord(inputStream,b);
       msg.add(b.toString());
     }
-    master.sendMessage(name,msg);
+    master.sendMessage(processName,recipient,msg);
     break;
   }
 case SEND_BYTES:
 {
   if (status != Status.MORE) {
+    System.err.println("Status after command is " + status);
     break;
   }
   status=StreamUtils.readWord(inputStream,b);
   if (status == Status.MORE) {
-    final String name=b.toString();
+    final String recipient=b.toString();
+    System.err.println("Reading CheckedBytes");
     CheckedBytes cb=StreamUtils.readCheckedBytes(inputStream);
-    if (cb.getChecksum() != cb.getExpectedChecksum()) {
-    }
-    master.sendMessage(name,cb.getBytes(),cb.getExpectedChecksum());
+    System.err.println("Asked to send " + cb.getExpectedLength() + " bytes from "+ processName+ " to "+ recipient);
+    master.sendMessage(processName,recipient,cb.getBytes(),cb.getExpectedChecksum());
+  }
+ else {
+    System.err.println("Status after recipient is " + status);
   }
   break;
 }
@@ -147,7 +150,7 @@ while (status == Status.MORE) {
   status=StreamUtils.readWord(inputStream,b);
   msg.add(b.toString());
 }
-master.broadcastMessage(msg);
+master.broadcastMessage(processName,msg);
 break;
 }
 case BROADCAST_BYTES:
@@ -161,7 +164,9 @@ final String name=b.toString();
 CheckedBytes cb=StreamUtils.readCheckedBytes(inputStream);
 if (cb.getChecksum() != cb.getExpectedChecksum()) {
 }
-master.broadcastMessage(cb.getBytes(),cb.getExpectedChecksum());
+ else {
+  master.broadcastMessage(processName,cb.getBytes(),cb.getExpectedChecksum());
+}
 }
 break;
 }
