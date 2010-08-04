@@ -1,0 +1,26 @@
+{
+  long lastRespawn=0;
+  Object lastId=getProcessId("KillMe",CrashingProcess.class);
+  for (int i=0; i < 3; i++) {
+    ProcessExitCodeAndShutDownLatch stopLatch=getStopTestProcessListenerLatch("KillMe");
+    detachTestProcessListener("KillMe");
+    long killStart=System.currentTimeMillis();
+    killProcess("KillMe",CrashingProcess.class);
+    assertTrue("Failed for " + i,stopLatch.await(1000,TimeUnit.MILLISECONDS));
+    assertTrue(0 != stopLatch.getExitCode());
+    listener.shutdown();
+    listener=getTestProcessListener("KillMe",1000);
+    if (i == 2) {
+      assertNull(listener);
+    }
+ else {
+      assertNotNull(listener);
+      long respawn=System.currentTimeMillis() - killStart;
+      assertTrue(respawn + "<" + lastRespawn,respawn >= lastRespawn);
+      lastRespawn=respawn;
+      Object id=getProcessId("KillMe",CrashingProcess.class);
+      assertFalse(lastId.equals(id));
+      lastId=id;
+    }
+  }
+}
