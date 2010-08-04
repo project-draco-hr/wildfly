@@ -4,10 +4,12 @@
   try {
     for (; ; ) {
       Status status=StreamUtils.readWord(inputStream,b);
+      System.err.println("Status is " + status);
       if (status == Status.END_OF_STREAM) {
         return;
       }
       try {
+        System.err.println("Received command " + b.toString());
         final Command command=Command.valueOf(b.toString());
         OUT: switch (command) {
 case ADD:
@@ -35,6 +37,7 @@ case ADD:
               size=Integer.parseInt(sizeString,10);
             }
  catch (            NumberFormatException e) {
+              e.printStackTrace(System.err);
               break;
             }
             final List<String> execCmd=new ArrayList<String>();
@@ -50,11 +53,13 @@ case ADD:
               break;
             }
             final String mapSizeString=b.toString();
-            final int mapSize;
+            final int mapSize, lastEntry;
             try {
               mapSize=Integer.parseInt(mapSizeString,10);
+              lastEntry=mapSize - 1;
             }
  catch (            NumberFormatException e) {
+              e.printStackTrace(System.err);
               break;
             }
             final Map<String,String> env=new HashMap<String,String>();
@@ -65,10 +70,12 @@ case ADD:
               }
               final String key=b.toString();
               status=StreamUtils.readWord(inputStream,b);
-              if (status != Status.MORE) {
+              if (status == Status.MORE || (i == lastEntry && status == Status.END_OF_LINE)) {
+                env.put(key,b.toString());
+              }
+ else {
                 break OUT;
               }
-              env.put(key,b.toString());
             }
             master.addProcess(name,execCmd,env,workingDirectory);
             break;
@@ -161,11 +168,13 @@ break;
 }
 }
  catch (IllegalArgumentException e) {
+e.printStackTrace(System.err);
 }
 if (status == Status.MORE) StreamUtils.readToEol(inputStream);
 }
 }
- catch (IOException e) {
+ catch (Exception e) {
+e.printStackTrace(System.err);
 }
  finally {
 safeClose(inputStream);
