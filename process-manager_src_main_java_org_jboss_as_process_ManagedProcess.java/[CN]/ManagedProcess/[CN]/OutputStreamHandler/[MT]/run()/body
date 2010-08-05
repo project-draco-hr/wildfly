@@ -5,6 +5,7 @@
     for (; ; ) {
       Status status=StreamUtils.readWord(inputStream,b);
       if (status == Status.END_OF_STREAM) {
+        log.info("Received end of stream, shutting down");
         return;
       }
       try {
@@ -132,7 +133,13 @@ case SEND_BYTES:
   if (status == Status.MORE) {
     final String recipient=b.toString();
     CheckedBytes cb=StreamUtils.readCheckedBytes(inputStream);
-    master.sendMessage(processName,recipient,cb.getBytes(),cb.getExpectedChecksum());
+    status=cb.getStatus();
+    if (cb.getChecksum() != cb.getExpectedChecksum()) {
+      log.error("Incorrect checksum on message for " + recipient);
+    }
+ else {
+      master.sendMessage(processName,recipient,cb.getBytes(),cb.getExpectedChecksum());
+    }
   }
   break;
 }
@@ -148,13 +155,9 @@ break;
 }
 case BROADCAST_BYTES:
 {
-if (status != Status.MORE) {
-break;
-}
-status=StreamUtils.readWord(inputStream,b);
 if (status == Status.MORE) {
-final String name=b.toString();
 CheckedBytes cb=StreamUtils.readCheckedBytes(inputStream);
+status=cb.getStatus();
 if (cb.getChecksum() != cb.getExpectedChecksum()) {
 }
  else {
@@ -166,13 +169,13 @@ break;
 }
 }
  catch (IllegalArgumentException e) {
-e.printStackTrace(System.err);
+log.error("Received unknown command",e);
 }
 if (status == Status.MORE) StreamUtils.readToEol(inputStream);
 }
 }
  catch (Exception e) {
-e.printStackTrace(System.err);
+log.error("Output stream handler for process " + processName + " caught an exception; shutting down",e);
 }
  finally {
 safeClose(inputStream);
