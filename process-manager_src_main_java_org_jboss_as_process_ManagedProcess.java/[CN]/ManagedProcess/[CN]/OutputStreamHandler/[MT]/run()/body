@@ -35,6 +35,7 @@ case ADD:
               size=Integer.parseInt(sizeString,10);
             }
  catch (            NumberFormatException e) {
+              e.printStackTrace(System.err);
               break;
             }
             final List<String> execCmd=new ArrayList<String>();
@@ -50,11 +51,13 @@ case ADD:
               break;
             }
             final String mapSizeString=b.toString();
-            final int mapSize;
+            final int mapSize, lastEntry;
             try {
               mapSize=Integer.parseInt(mapSizeString,10);
+              lastEntry=mapSize - 1;
             }
  catch (            NumberFormatException e) {
+              e.printStackTrace(System.err);
               break;
             }
             final Map<String,String> env=new HashMap<String,String>();
@@ -65,10 +68,12 @@ case ADD:
               }
               final String key=b.toString();
               status=StreamUtils.readWord(inputStream,b);
-              if (status != Status.MORE) {
+              if (status == Status.MORE || (i == lastEntry && status == Status.END_OF_LINE)) {
+                env.put(key,b.toString());
+              }
+ else {
                 break OUT;
               }
-              env.put(key,b.toString());
             }
             master.addProcess(name,execCmd,env,workingDirectory);
             break;
@@ -109,33 +114,65 @@ case SEND:
       break;
     }
     status=StreamUtils.readWord(inputStream,b);
-    final String name=b.toString();
+    final String recipient=b.toString();
     final List<String> msg=new ArrayList<String>(0);
     while (status == Status.MORE) {
       status=StreamUtils.readWord(inputStream,b);
       msg.add(b.toString());
     }
-    master.sendMessage(name,msg);
+    master.sendMessage(processName,recipient,msg);
     break;
   }
+case SEND_BYTES:
+{
+  if (status != Status.MORE) {
+    break;
+  }
+  status=StreamUtils.readWord(inputStream,b);
+  if (status == Status.MORE) {
+    final String recipient=b.toString();
+    CheckedBytes cb=StreamUtils.readCheckedBytes(inputStream);
+    master.sendMessage(processName,recipient,cb.getBytes(),cb.getExpectedChecksum());
+  }
+  break;
+}
 case BROADCAST:
 {
-  final List<String> msg=new ArrayList<String>(0);
-  while (status == Status.MORE) {
-    status=StreamUtils.readWord(inputStream,b);
-    msg.add(b.toString());
-  }
-  master.broadcastMessage(msg);
-  break;
+final List<String> msg=new ArrayList<String>(0);
+while (status == Status.MORE) {
+  status=StreamUtils.readWord(inputStream,b);
+  msg.add(b.toString());
+}
+master.broadcastMessage(processName,msg);
+break;
+}
+case BROADCAST_BYTES:
+{
+if (status != Status.MORE) {
+break;
+}
+status=StreamUtils.readWord(inputStream,b);
+if (status == Status.MORE) {
+final String name=b.toString();
+CheckedBytes cb=StreamUtils.readCheckedBytes(inputStream);
+if (cb.getChecksum() != cb.getExpectedChecksum()) {
+}
+ else {
+  master.broadcastMessage(processName,cb.getBytes(),cb.getExpectedChecksum());
+}
+}
+break;
 }
 }
 }
  catch (IllegalArgumentException e) {
+e.printStackTrace(System.err);
 }
 if (status == Status.MORE) StreamUtils.readToEol(inputStream);
 }
 }
- catch (IOException e) {
+ catch (Exception e) {
+e.printStackTrace(System.err);
 }
  finally {
 safeClose(inputStream);
