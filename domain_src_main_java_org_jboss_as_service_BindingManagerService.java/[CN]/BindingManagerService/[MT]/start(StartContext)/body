@@ -1,0 +1,45 @@
+{
+  final HashMap<String,InetAddress> networkAddresses=new HashMap<String,InetAddress>();
+  final List<InterfaceElement> elements=new ArrayList<InterfaceElement>(server.getInterfaces());
+  try {
+    final Iterator<InterfaceElement> elementsIterator=elements.iterator();
+    INTERFACES_LOOP:     while (elementsIterator.hasNext()) {
+      final InterfaceElement element=elementsIterator.next();
+      final String interfaceName=element.getName();
+      if (element.getAddress() != null) {
+        final InetAddress address=InetAddress.getByName(element.getAddress());
+        networkAddresses.put(interfaceName,address);
+        elementsIterator.remove();
+        continue;
+      }
+ else {
+        final Enumeration<NetworkInterface> networkInterfaces=NetworkInterface.getNetworkInterfaces();
+        while (networkInterfaces.hasMoreElements()) {
+          final NetworkInterface networkInterface=networkInterfaces.nextElement();
+          while (elementsIterator.hasNext()) {
+            final Enumeration<InetAddress> interfaceAddresses=networkInterface.getInetAddresses();
+            while (interfaceAddresses.hasMoreElements()) {
+              final InetAddress address=interfaceAddresses.nextElement();
+              if (element.getInterfaceCriteria().isAcceptable(networkInterface,address)) {
+                networkAddresses.put(interfaceName,address);
+                elementsIterator.remove();
+                continue INTERFACES_LOOP;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+ catch (  Exception e) {
+    throw new StartException(e);
+  }
+  if (!elements.isEmpty()) {
+    throw new StartException("failed to resolved interfaces " + elements);
+  }
+  final HashMap<String,SocketBindingElement> bindings=new HashMap<String,SocketBindingElement>();
+  for (  final SocketBindingElement binding : server.getSocketBindings().getAllSocketBindings()) {
+    bindings.put(binding.getName(),binding);
+  }
+  this.manager=new ServiceBindingManager(bindings,networkAddresses,server.getPortOffset());
+}
