@@ -1,0 +1,23 @@
+{
+  final VirtualFile virtualFile=VFS.getChild(getResource("/test/serviceXmlDeployment.jar"));
+  final String expectedDeploymentName=virtualFile.getPathName() + ":";
+  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+  final CountDownLatch latch=new CountDownLatch(1);
+  final TimingServiceListener listener=new TimingServiceListener(new Runnable(){
+    @Override public void run(){
+      latch.countDown();
+    }
+  }
+);
+  batchBuilder.addListener(listener);
+  final DomainDeploymentUnitUpdate update=new DomainDeploymentUnitUpdate(virtualFile.getPathName(),new byte[0]);
+  executeUpdate(update);
+  new DeploymentUnitElement(null,virtualFile.getPathName(),new byte[0],true,true).activate(new ServiceActivatorContextImpl(batchBuilder));
+  batchBuilder.install();
+  listener.finishBatch();
+  latch.await(1L,TimeUnit.SECONDS);
+  if (!listener.finished())   fail("Did not install deployment within 1 second.");
+  final ServiceController<?> serviceController=serviceContainer.getService(DeploymentService.SERVICE_NAME.append(expectedDeploymentName));
+  assertNotNull(serviceController);
+  assertEquals(ServiceController.State.UP,serviceController.getState());
+}

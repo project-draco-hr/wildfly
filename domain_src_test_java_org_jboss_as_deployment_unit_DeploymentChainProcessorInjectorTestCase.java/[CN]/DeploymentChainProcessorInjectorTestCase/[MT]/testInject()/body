@@ -1,0 +1,31 @@
+{
+  final ServiceContainer serviceContainer=ServiceContainer.Factory.create();
+  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+  final CountDownLatch latch=new CountDownLatch(1);
+  final TimingServiceListener listener=new TimingServiceListener(new Runnable(){
+    public void run(){
+      latch.countDown();
+    }
+  }
+);
+  batchBuilder.addListener(listener);
+  final ServiceName chainServiceName=ServiceName.of("deployment","chain");
+  batchBuilder.addService(chainServiceName,new DeploymentChainService(Values.immediateValue((DeploymentChain)new DeploymentChainImpl("test.chain"))));
+  final ServiceName processorServiceName=ServiceName.of("deployment","processor");
+  final DeploymentUnitProcessorService<MockProcessor> deploymentUnitProcessorService=new DeploymentUnitProcessorService<MockProcessor>(Values.immediateValue(new MockProcessor()));
+  batchBuilder.addService(processorServiceName,deploymentUnitProcessorService).addDependency(chainServiceName,DeploymentChain.class,new DeploymentChainProcessorInjector<MockProcessor>(deploymentUnitProcessorService,100L));
+  batchBuilder.install();
+  listener.finishBatch();
+  latch.await(1L,TimeUnit.SECONDS);
+  if (!listener.finished())   fail("Did not install batch within 1 second.");
+  assertNotNull(serviceContainer.getService(processorServiceName));
+  final ServiceController<?> serviceController=serviceContainer.getService(chainServiceName);
+  assertNotNull(serviceController);
+  final DeploymentChain deploymentChain=(DeploymentChain)serviceController.getValue();
+  assertNotNull(deploymentChain);
+  final Field processorsField=DeploymentChainImpl.class.getDeclaredField("orderedProcessors");
+  processorsField.setAccessible(true);
+  final Set<Object> processors=(Set<Object>)processorsField.get(deploymentChain);
+  assertNotNull(processors);
+  assertEquals(1,processors.size());
+}
