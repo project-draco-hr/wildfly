@@ -1,0 +1,27 @@
+{
+  ManagedBeanConfigurations managedBeanConfigurations=context.getAttachment(ManagedBeanConfigurations.ATTACHMENT_KEY);
+  if (managedBeanConfigurations != null) {
+    return;
+  }
+  final Index index=context.getAttachment(AnnotationIndexProcessor.ATTACHMENT_KEY);
+  if (index == null) {
+    return;
+  }
+  final List<AnnotationTarget> targets=index.getAnnotationTargets(MANAGED_BEAN_ANNOTATION_NAME);
+  if (targets == null) {
+    return;
+  }
+  managedBeanConfigurations=new ManagedBeanConfigurations();
+  context.putAttachment(ManagedBeanConfigurations.ATTACHMENT_KEY,managedBeanConfigurations);
+  for (  AnnotationTarget target : targets) {
+    if (!(target instanceof ClassInfo)) {
+      throw new DeploymentUnitProcessingException("The ManagedBean annotation is only allowed at the class level: " + target,null);
+    }
+    final ClassInfo classInfo=ClassInfo.class.cast(target);
+    final ManagedBeanConfiguration managedBeanConfiguration=new ManagedBeanConfiguration(classInfo.name().toString());
+    final Map<DotName,List<AnnotationTarget>> classAnnotations=classInfo.annotations();
+    processLifecycleMethods(managedBeanConfiguration,classAnnotations);
+    processResourceInjections(managedBeanConfiguration,classAnnotations);
+    managedBeanConfigurations.add(managedBeanConfiguration);
+  }
+}
