@@ -1,4 +1,93 @@
 {
   super(reader);
-  throw new UnsupportedOperationException("implement me");
+  this.portOffset=0;
+  this.jvm=null;
+  namespaces.putAll(readNamespaces(reader));
+  schemaLocation=readSchemaLocation(reader);
+  String name=null;
+  ProfileElement profileElement=null;
+  SocketBindingGroupElement bindingGroup=null;
+  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case DOMAIN_1_0:
+{
+        final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case NAME:
+{
+            if (name != null) {
+              throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+            }
+            name=reader.getElementText();
+            break;
+          }
+case EXTENSIONS:
+{
+          parseExtensions(reader);
+          break;
+        }
+case SYSTEM_PROPERTIES:
+{
+        if (systemProperties != null) {
+          throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+        }
+        this.systemProperties=new PropertiesElement(reader);
+        break;
+      }
+case INTERFACES:
+{
+      parseInterfaces(reader);
+      break;
+    }
+case PROFILE:
+{
+    if (profileElement != null) {
+      throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+    }
+    profileElement=new ProfileElement(reader,null);
+    break;
+  }
+case DEPLOYMENTS:
+{
+  parseDeployments(reader);
+  break;
+}
+case SOCKET_BINDING_GROUP:
+{
+if (bindingGroup != null) {
+  throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+}
+RefResolver<String,InterfaceElement> intfResolver=new RefResolver<String,InterfaceElement>(){
+  private static final long serialVersionUID=8976121114197265586L;
+  @Override public InterfaceElement resolveRef(  String ref){
+    if (ref == null)     throw new IllegalArgumentException("ref is null");
+    return interfaces.get(ref);
+  }
+}
+;
+bindingGroup=new SocketBindingGroupElement(reader,intfResolver,null);
+break;
+}
+case SSLS:
+{
+throw new UnsupportedOperationException("implement parsing of " + element.getLocalName());
+}
+default :
+throw unexpectedElement(reader);
+}
+break;
+}
+default :
+throw unexpectedElement(reader);
+}
+}
+if (name == null) {
+throw missingRequired(reader,Collections.singleton(Element.NAME));
+}
+this.serverName=name;
+if (profileElement == null) {
+throw missingRequired(reader,Collections.singleton(Element.PROFILE));
+}
+this.profile=profileElement;
+this.socketBindings=bindingGroup;
 }
