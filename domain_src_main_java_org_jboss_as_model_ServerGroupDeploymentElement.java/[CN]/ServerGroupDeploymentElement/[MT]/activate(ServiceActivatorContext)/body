@@ -1,18 +1,35 @@
 {
   final String deploymentName=key.getName() + ":" + key.getSha1HashAsHexString();
   log.info("Activating server group deployment: " + deploymentName);
-  final Collection<DeploymentItem> deploymentItems=this.deploymentItems;
-  if (deploymentItems == null) {
-    log.warnf("No deployment items found for deployment: %s",deploymentName);
-    return;
+  final VirtualFile deploymentRoot=VFS.getChild(getFullyQualifiedDeploymentPath(key.getName()));
+  if (!deploymentRoot.exists())   throw new RuntimeException("Deployment root does not exist." + deploymentRoot);
+  Closeable handle=null;
+  try {
+    try {
+      if (deploymentRoot.isFile())       handle=VFS.mountZip(deploymentRoot,deploymentRoot,TempFileProviderService.provider());
+    }
+ catch (    IOException e) {
+      throw new RuntimeException("Failed to mount deployment archive",e);
+    }
+    final BatchBuilder batchBuilder=context.getBatchBuilder();
+    final ServiceName deploymentServiceName=DeploymentService.SERVICE_NAME.append(deploymentName);
+    batchBuilder.addService(deploymentServiceName,new DeploymentService(deploymentName,deploymentRoot,handle));
+    final BatchBuilder deploymentSubBatch=batchBuilder.subBatchBuilder();
+    deploymentSubBatch.addDependency(deploymentServiceName);
+    final DeploymentUnitContextImpl deploymentUnitContext=new DeploymentUnitContextImpl(deploymentName,deploymentSubBatch);
+    attachVirtualFile(deploymentUnitContext,deploymentRoot);
+    final DeploymentChainProvider deploymentChainProvider=DeploymentChainProvider.INSTANCE;
+    final DeploymentChain deploymentChain=deploymentChainProvider.determineDeploymentChain(deploymentRoot);
+    if (deploymentChain == null)     throw new RuntimeException("Failed determine the deployment chain for deployment root: " + deploymentRoot);
+    try {
+      deploymentChain.processDeployment(deploymentUnitContext);
+    }
+ catch (    DeploymentUnitProcessingException e) {
+      throw new RuntimeException("Failed to process deployment chain.",e);
+    }
   }
-  final BatchBuilder batchBuilder=context.getBatchBuilder();
-  final ServiceName deploymentServiceName=DeploymentService.SERVICE_NAME.append(deploymentName);
-  batchBuilder.addService(deploymentServiceName,new DeploymentService(deploymentName));
-  final BatchBuilder deploymentSubBatch=batchBuilder.subBatchBuilder();
-  deploymentSubBatch.addDependency(deploymentServiceName);
-  final DeploymentItemContext deploymentItemContext=new DeploymentItemContextImpl(deploymentSubBatch);
-  for (  DeploymentItem deploymentItem : deploymentItems) {
-    deploymentItem.install(deploymentItemContext);
+ catch (  Throwable t) {
+    VFSUtils.safeClose(handle);
+    throw new RuntimeException("Failed to activate deployment unit " + key.getName(),t);
   }
 }
