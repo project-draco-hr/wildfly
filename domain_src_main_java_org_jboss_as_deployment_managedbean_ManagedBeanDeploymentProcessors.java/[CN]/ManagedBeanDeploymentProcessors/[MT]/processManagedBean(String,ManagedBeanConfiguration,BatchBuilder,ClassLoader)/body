@@ -1,5 +1,37 @@
 {
-  final ManagedBeanService<Object> managedBeanService=new ManagedBeanService<Object>(managedBeanConfiguration);
+  final String beanClassName=managedBeanConfiguration.getType();
+  final Class<Object> beanClass;
+  try {
+    beanClass=(Class<Object>)classLoader.loadClass(beanClassName);
+  }
+ catch (  ClassNotFoundException e) {
+    throw new DeploymentUnitProcessingException("Failed to load managed bean class: " + beanClassName,null);
+  }
+  final ManagedBean managedBeanAnnotation=beanClass.getAnnotation(ManagedBean.class);
+  if (managedBeanAnnotation == null)   throw new DeploymentUnitProcessingException("Can not find the @MangedBean annotation for class " + beanClass,null);
+  final String name=managedBeanAnnotation.value() != null ? managedBeanAnnotation.value() : beanClass.getName();
+  final String postConstructMethodName=managedBeanConfiguration.getPostConstructMethod();
+  Method postConstructMethod=null;
+  try {
+    if (postConstructMethodName != null) {
+      postConstructMethod=beanClass.getMethod(postConstructMethodName);
+    }
+  }
+ catch (  NoSuchMethodException e) {
+    throw new DeploymentUnitProcessingException("Failed to get PostConstruct method '" + postConstructMethodName + "' for managed bean type: "+ beanClass.getName(),e,null);
+  }
+  final String preDestroyMethodName=managedBeanConfiguration.getPreDestroyMethod();
+  Method preDestroyMethod=null;
+  try {
+    if (preDestroyMethodName != null) {
+      preDestroyMethod=beanClass.getMethod(preDestroyMethodName);
+    }
+  }
+ catch (  NoSuchMethodException e) {
+    throw new DeploymentUnitProcessingException("Failed to get PreDestroy method '" + preDestroyMethodName + "' for managed bean type: "+ beanClass.getName(),e,null);
+  }
+  final List<ResourceInjection<?>> resourceInjections=new ArrayList<ResourceInjection<?>>();
+  final ManagedBeanService<Object> managedBeanService=new ManagedBeanService<Object>(beanClass,postConstructMethod,preDestroyMethod,resourceInjections);
   final Class<?> managedBeanClass;
   try {
     managedBeanClass=classLoader.loadClass(managedBeanConfiguration.getType());
@@ -7,9 +39,6 @@
  catch (  ClassNotFoundException e) {
     throw new RuntimeException("Failed to load managed bean class",e);
   }
-  final ManagedBean managedBeanAnnotation=managedBeanClass.getAnnotation(ManagedBean.class);
-  final String name=managedBeanAnnotation.value();
-  managedBeanConfiguration.setName(name);
   final BatchServiceBuilder<?> serviceBuilder=batchBuilder.addService(ManagedBeanService.SERVICE_NAME.append(deploymentName,name),managedBeanService);
   for (  ResourceInjectionConfiguration resourceInjectionConfiguration : managedBeanConfiguration.getResourceInjectionConfigurations()) {
     final String targetName=resourceInjectionConfiguration.getName();
@@ -46,6 +75,6 @@
     }
     final String contextName=!"".equals(resource.name()) ? resource.name() : managedBeanClass.getName() + "/" + contextNameSuffix;
     serviceBuilder.addDependency(ResourceBinder.MODULE_SERVICE_NAME.append(deploymentName,contextName),resourceInjection.getValueInjector());
-    managedBeanService.addResourceInjection(resourceInjection);
+    resourceInjections.add(resourceInjection);
   }
 }
