@@ -1,0 +1,51 @@
+{
+  commonPropertyManager.getLoggingEnvironmentBean().setLoggingFactory("com.arjuna.common.internal.util.logging.jakarta.JakartaRelevelingLogFactory;com.arjuna.common.internal.util.logging.jakarta.Log4JLogger");
+  final RecoveryEnvironmentBean recoveryEnvironmentBean=recoveryPropertyManager.getRecoveryEnvironmentBean();
+  recoveryEnvironmentBean.setRecoveryInetAddress(null);
+  recoveryEnvironmentBean.setRecoveryPort(0);
+  recoveryEnvironmentBean.setTransactionStatusManagerInetAddress(null);
+  recoveryEnvironmentBean.setTransactionStatusManagerPort(0);
+  final List<String> recoveryExtensions=new ArrayList<String>();
+  final ORB orb=orbInjector.getValue();
+  if (orb != null) {
+    final com.arjuna.ats.jbossatx.jts.TransactionManagerService service=new com.arjuna.ats.jbossatx.jts.TransactionManagerService();
+    service.setJbossXATerminator(xaTerminatorInjector.getValue());
+    service.setTransactionSynchronizationRegistry(registryInjector.getValue());
+    recoveryExtensions.add("com.arjuna.ats.internal.arjuna.recovery.AtomicActionRecoveryModule");
+    recoveryExtensions.add("com.arjuna.ats.internal.txoj.recovery.TORecoveryModule");
+    recoveryExtensions.add("com.arjuna.ats.internal.jts.recovery.transactions.TopLevelTransactionRecoveryModule");
+    recoveryExtensions.add("com.arjuna.ats.internal.jts.recovery.transactions.ServerTransactionRecoveryModule");
+    recoveryExtensions.add("com.arjuna.ats.internal.jta.recovery.jts.XARecoveryModule");
+    recoveryEnvironmentBean.setRecoveryExtensions(recoveryExtensions);
+    try {
+      service.create();
+    }
+ catch (    Exception e) {
+      throw new StartException("Create failed",e);
+    }
+    try {
+      service.start(orb);
+    }
+ catch (    Exception e) {
+      throw new StartException("Start failed",e);
+    }
+    value=service;
+  }
+ else {
+    final com.arjuna.ats.jbossatx.jta.TransactionManagerService service=new com.arjuna.ats.jbossatx.jta.TransactionManagerService();
+    service.setJbossXATerminator(xaTerminatorInjector.getValue());
+    service.setTransactionSynchronizationRegistry(registryInjector.getValue());
+    recoveryExtensions.add("com.arjuna.ats.internal.arjuna.recovery.AtomicActionRecoveryModule");
+    recoveryExtensions.add("com.arjuna.ats.internal.txoj.recovery.TORecoveryModule");
+    recoveryExtensions.add("com.arjuna.ats.internal.jta.recovery.arjunacore.XARecoveryModule");
+    recoveryEnvironmentBean.setRecoveryExtensions(recoveryExtensions);
+    try {
+      service.create();
+    }
+ catch (    Exception e) {
+      throw new StartException("Create failed",e);
+    }
+    service.start();
+    value=service;
+  }
+}
