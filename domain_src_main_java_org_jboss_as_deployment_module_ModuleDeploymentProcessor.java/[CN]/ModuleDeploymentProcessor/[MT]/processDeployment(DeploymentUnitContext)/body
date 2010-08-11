@@ -1,0 +1,29 @@
+{
+  if (context.getAttachment(MODULE_ATTACHMENT_KEY) != null)   return;
+  final ModuleConfig moduleConfig=context.getAttachment(ModuleConfig.ATTACHMENT_KEY);
+  if (moduleConfig == null)   return;
+  final ModuleIdentifier moduleIdentifier=moduleConfig.getIdentifier();
+  final ModuleSpec.Builder specBuilder=ModuleSpec.build(moduleIdentifier);
+  for (  ModuleConfig.ResourceRoot resource : moduleConfig.getResources()) {
+    try {
+      specBuilder.addResourceRoot(new VFSResourceLoader(specBuilder.getIdentifier(),resource.getRoot(),resource.getRootName()));
+    }
+ catch (    IOException e) {
+      throw new DeploymentUnitProcessingException("Failed to create VFSResourceLoader for root [" + resource.getRootName() + "]",e,null);
+    }
+  }
+  final ModuleConfig.Dependency[] dependencies=moduleConfig.getDependencies();
+  for (  ModuleConfig.Dependency dependency : dependencies) {
+    specBuilder.addModuleDependency(ModuleDependencySpec.build(dependency.getIdentifier()).setExportFilter(dependency.isExport() ? PathFilters.acceptAll() : PathFilters.rejectAll()).setOptional(dependency.isOptional()).create());
+  }
+  final ModuleSpec moduleSpec=specBuilder.create();
+  final DeploymentModuleLoader deploymentModuleLoader=DeploymentModuleLoader.DEFAULT;
+  deploymentModuleLoader.addModuleSpec(moduleSpec);
+  try {
+    final Module module=deploymentModuleLoader.loadModule(moduleIdentifier);
+    context.putAttachment(MODULE_ATTACHMENT_KEY,module);
+  }
+ catch (  ModuleLoadException e) {
+    throw new DeploymentUnitProcessingException("Failed to load module: " + moduleIdentifier,e,null);
+  }
+}
