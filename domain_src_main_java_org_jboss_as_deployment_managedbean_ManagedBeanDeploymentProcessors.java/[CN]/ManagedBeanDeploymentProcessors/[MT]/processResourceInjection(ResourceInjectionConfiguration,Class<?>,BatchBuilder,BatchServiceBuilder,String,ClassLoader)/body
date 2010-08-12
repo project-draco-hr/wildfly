@@ -1,0 +1,64 @@
+{
+  final String targetName=resourceInjectionConfiguration.getName();
+  final String contextNameSuffix;
+  final Resource resource;
+  final ResourceInjection<Object> resourceInjection;
+  if (ResourceInjectionConfiguration.TargetType.FIELD.equals(resourceInjectionConfiguration.getTargetType())) {
+    final Field field;
+    try {
+      field=managedBeanClass.getDeclaredField(targetName);
+    }
+ catch (    NoSuchFieldException e) {
+      throw new RuntimeException("Failed to get field '" + targetName + "' from class '"+ managedBeanClass+ "'",e);
+    }
+    resource=field.getAnnotation(Resource.class);
+    contextNameSuffix=field.getName();
+    resourceInjection=new FieldResourceInjection<Object>(targetName);
+  }
+ else {
+    final Method method;
+    try {
+      method=managedBeanClass.getMethod(targetName);
+    }
+ catch (    NoSuchMethodException e) {
+      throw new RuntimeException("Failed to get method '" + targetName + "' from class '"+ managedBeanClass+ "'",e);
+    }
+    resource=method.getAnnotation(Resource.class);
+    final String methodName=method.getName();
+    contextNameSuffix=methodName.substring(3,4).toLowerCase() + methodName.substring(4);
+    resourceInjection=new MethodResourceInjection<Object>(targetName,resourceInjectionConfiguration.getInjectedType());
+  }
+  if (!resource.type().equals(Object.class)) {
+    resourceInjectionConfiguration.setInjectedType(resource.type().getName());
+  }
+  final String contextName=!"".equals(resource.name()) ? resource.name() : managedBeanClass.getName() + "/" + contextNameSuffix;
+  final ServiceName resourceBinderBaseName=ResourceBinder.MODULE_BINDER.append(deploymentName);
+  final ServiceName binderName=resourceBinderBaseName.append(contextName);
+  serviceBuilder.addDependency(binderName,resourceInjection.getValueInjector());
+  String mappedName=resource.mappedName();
+  if (mappedName == null || "".equals(mappedName)) {
+    final Class<?> type;
+    try {
+      type=classLoader.loadClass(resourceInjectionConfiguration.getInjectedType());
+    }
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException("Failed to load injection target class: " + resourceInjectionConfiguration.getInjectedType(),e,null);
+    }
+    if (isEnvironmentEntryType(type)) {
+      mappedName=contextNameSuffix;
+    }
+ else     if (type.isAnnotationPresent(ManagedBean.class)) {
+      final ManagedBean managedBean=type.getAnnotation(ManagedBean.class);
+      mappedName=!"".equals(managedBean.value()) ? managedBean.value() : type.getName();
+    }
+ else {
+      throw new DeploymentUnitProcessingException("Unable to determine mapped name for @Resource injection.",null);
+    }
+  }
+  final OptionalNamingLookupValue<Object> bindValue=new OptionalNamingLookupValue<Object>(mappedName);
+  final ResourceBinder<Object> resourceBinder=new ResourceBinder<Object>(contextName,bindValue);
+  final BatchServiceBuilder<Object> binderServiceBuilder=batchBuilder.addService(binderName,resourceBinder);
+  binderServiceBuilder.addDependency(ContextNames.MODULE.append(deploymentName),Context.class,resourceBinder.getContextInjector());
+  binderServiceBuilder.addOptionalDependency(resourceBinderBaseName.append(mappedName),bindValue.getValueInjector());
+  return resourceInjection;
+}
