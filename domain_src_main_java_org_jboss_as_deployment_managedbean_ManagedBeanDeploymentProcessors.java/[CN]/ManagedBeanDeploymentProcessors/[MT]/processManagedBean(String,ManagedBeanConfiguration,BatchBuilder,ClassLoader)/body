@@ -39,9 +39,13 @@
  catch (  ClassNotFoundException e) {
     throw new RuntimeException("Failed to load managed bean class",e);
   }
-  final BatchServiceBuilder<?> serviceBuilder=batchBuilder.addService(ManagedBeanService.SERVICE_NAME.append(deploymentName,name),managedBeanService);
+  final ServiceName managedBeanServiceName=ManagedBeanService.SERVICE_NAME.append(deploymentName,name);
+  final BatchServiceBuilder<?> serviceBuilder=batchBuilder.addService(managedBeanServiceName,managedBeanService);
   for (  ResourceInjectionConfiguration resourceInjectionConfiguration : managedBeanConfiguration.getResourceInjectionConfigurations()) {
     final ResourceInjection<Object> resourceInjection=processResourceInjection(resourceInjectionConfiguration,managedBeanClass,batchBuilder,serviceBuilder,deploymentName,classLoader);
     resourceInjections.add(resourceInjection);
   }
+  final Reference managedBeanFactoryReference=ManagedBeanObjectFactory.createReference(beanClass,managedBeanServiceName);
+  final ResourceBinder<Reference> managedBeanFactoryBinder=new ResourceBinder<Reference>("global/" + deploymentName + "/"+ name,Values.immediateValue(managedBeanFactoryReference));
+  batchBuilder.addService(managedBeanServiceName.append("factorybinder"),managedBeanFactoryBinder).addDependency(ContextNames.JAVA,Context.class,managedBeanFactoryBinder.getContextInjector()).addDependency(managedBeanServiceName);
 }
