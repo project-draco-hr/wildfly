@@ -1,0 +1,38 @@
+{
+  if (name.isEmpty())   return new NamingContext(prefix,namingStore,environment);
+  final Name absoluteName=getAbsoluteName(name);
+  Object result=null;
+  try {
+    result=namingStore.lookup(absoluteName);
+  }
+ catch (  CannotProceedException cpe) {
+    final Context continuationContext=NamingManager.getContinuationContext(cpe);
+    result=continuationContext.lookup(cpe.getRemainingName());
+  }
+  if (result instanceof ResolveResult) {
+    final ResolveResult resolveResult=ResolveResult.class.cast(result);
+    final Object resolvedObject=resolveResult.getResolvedObj();
+    Object context;
+    if (resolvedObject instanceof LinkRef) {
+      context=resolveLink(resolvedObject);
+    }
+ else {
+      context=getObjectInstance(resolvedObject,absoluteName,environment);
+    }
+    if ((context instanceof Context) == false) {
+      throw new NotContextException(context + " is not a Context");
+    }
+    final Context namingContext=Context.class.cast(context);
+    return namingContext.lookup(resolveResult.getRemainingName());
+  }
+ else   if (result instanceof LinkRef) {
+    result=resolveLink(result);
+  }
+ else   if (result instanceof Reference) {
+    result=getObjectInstance(result,absoluteName,environment);
+    if (result instanceof LinkRef) {
+      result=resolveLink(result);
+    }
+  }
+  return result;
+}
