@@ -1,0 +1,37 @@
+{
+  if (modCount != expectedCount)   throw new ConcurrentModificationException();
+  int current=this.current;
+  int delete=current;
+  if (current == -1)   throw new IllegalStateException();
+  this.current=-1;
+  next=delete;
+  Entry<K,V>[] table=this.table;
+  if (table != FastCopyHashMap.this.table) {
+    FastCopyHashMap.this.remove(table[delete].key);
+    table[delete]=null;
+    expectedCount=modCount;
+    return;
+  }
+  int length=table.length;
+  int i=delete;
+  table[delete]=null;
+  size--;
+  for (; ; ) {
+    i=nextIndex(i,length);
+    Entry<K,V> e=table[i];
+    if (e == null)     break;
+    int prefer=index(e.hash,length);
+    if ((i < prefer && (prefer <= delete || delete <= i)) || (prefer <= delete && delete <= i)) {
+      if (i < current && current <= delete && table == FastCopyHashMap.this.table) {
+        int remaining=length - current;
+        Entry<K,V>[] newTable=(Entry<K,V>[])new Entry[remaining];
+        System.arraycopy(table,current,newTable,0,remaining);
+        this.table=newTable;
+        next=0;
+      }
+      table[delete]=e;
+      table[i]=null;
+      delete=i;
+    }
+  }
+}
