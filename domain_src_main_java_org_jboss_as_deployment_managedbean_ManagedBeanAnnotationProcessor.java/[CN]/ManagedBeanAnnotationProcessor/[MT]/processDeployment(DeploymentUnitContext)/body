@@ -10,6 +10,9 @@
   if (targets == null) {
     return;
   }
+  final Module module=context.getAttachment(ModuleDeploymentProcessor.MODULE_ATTACHMENT_KEY);
+  if (module == null)   throw new DeploymentUnitProcessingException("Manged bean annotation processing requires a module.",null);
+  final ClassLoader classLoader=module.getClassLoader();
   final ManagedBeanConfigurations managedBeanConfigurations=new ManagedBeanConfigurations();
   context.putAttachment(ManagedBeanConfigurations.ATTACHMENT_KEY,managedBeanConfigurations);
   for (  AnnotationTarget target : targets) {
@@ -17,10 +20,20 @@
       throw new DeploymentUnitProcessingException("The ManagedBean annotation is only allowed at the class level: " + target,null);
     }
     final ClassInfo classInfo=ClassInfo.class.cast(target);
-    final ManagedBeanConfiguration managedBeanConfiguration=new ManagedBeanConfiguration(classInfo.name().toString());
+    final String beanClassName=classInfo.name().toString();
+    final Class<?> beanCass;
+    try {
+      beanCass=classLoader.loadClass(beanClassName);
+    }
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException("Failed to load managed bean class: " + beanClassName,null);
+    }
+    final ManagedBean managedBeanAnnotation=beanCass.getAnnotation(ManagedBean.class);
+    final String beanName="".equals(managedBeanAnnotation.value()) ? beanClassName : managedBeanAnnotation.value();
+    final ManagedBeanConfiguration managedBeanConfiguration=new ManagedBeanConfiguration(beanName,beanCass);
     final Map<DotName,List<AnnotationTarget>> classAnnotations=classInfo.annotations();
-    processLifecycleMethods(managedBeanConfiguration,classAnnotations);
-    processResourceInjections(managedBeanConfiguration,classAnnotations);
+    processLifecycleMethods(managedBeanConfiguration,classAnnotations,beanCass);
+    processResourceInjections(managedBeanConfiguration,classAnnotations,beanCass);
     managedBeanConfigurations.add(managedBeanConfiguration);
   }
 }
