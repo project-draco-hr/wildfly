@@ -3,18 +3,18 @@
   final String managedBeanName=managedBeanConfiguration.getName();
   final List<ResourceInjection<?>> resourceInjections=new ArrayList<ResourceInjection<?>>();
   final ManagedBeanService<Object> managedBeanService=new ManagedBeanService<Object>(beanClass,managedBeanConfiguration.getPostConstructMethod(),managedBeanConfiguration.getPreDestroyMethod(),resourceInjections);
-  final ServiceName binderBase=ResourceBinder.MODULE_BINDER.append(deploymentName);
   final ServiceName moduleContextServiceName=ContextNames.GLOBAL_CONTEXT_SERVICE_NAME.append(deploymentName);
   final ServiceName managedBeanServiceName=ManagedBeanService.SERVICE_NAME.append(deploymentName,managedBeanName);
   final BatchServiceBuilder<?> serviceBuilder=batchBuilder.addService(managedBeanServiceName,managedBeanService);
   final ServiceName managedBeanContextName=moduleContextServiceName.append(managedBeanName,"ctx");
   for (  ResourceInjectionConfiguration resourceInjectionConfiguration : managedBeanConfiguration.getResourceInjectionConfigurations()) {
-    final ResourceInjection<Object> resourceInjection=processResourceInjection(resourceInjectionConfiguration,managedBeanName,batchBuilder,serviceBuilder,deploymentName,moduleContextServiceName);
+    final ResourceInjection<Object> resourceInjection=processResourceInjection(resourceInjectionConfiguration,batchBuilder,serviceBuilder,moduleContextServiceName,managedBeanContextName);
     resourceInjections.add(resourceInjection);
   }
-  final ContextService actualBeanContext=new ContextService(managedBeanName + "_ctx");
+  final ContextService actualBeanContext=new ContextService(managedBeanName + "-ctx");
   batchBuilder.addService(managedBeanContextName,actualBeanContext).addDependency(moduleContextServiceName,Context.class,actualBeanContext.getParentContextInjector());
   final Reference managedBeanFactoryReference=ManagedBeanObjectFactory.createReference(beanClass,managedBeanServiceName);
   final ResourceBinder<Reference> managedBeanFactoryBinder=new ResourceBinder<Reference>(managedBeanName,Values.immediateValue(managedBeanFactoryReference));
-  batchBuilder.addService(binderBase.append(managedBeanName),managedBeanFactoryBinder).addDependency(moduleContextServiceName,Context.class,managedBeanFactoryBinder.getContextInjector());
+  final ServiceName referenceBinderName=moduleContextServiceName.append(managedBeanName);
+  batchBuilder.addService(referenceBinderName,managedBeanFactoryBinder).addDependency(moduleContextServiceName,Context.class,managedBeanFactoryBinder.getContextInjector()).addDependency(managedBeanServiceName);
 }
