@@ -1,0 +1,38 @@
+{
+  if (name.isEmpty())   return new MockContext(prefix);
+  final Name absoluteName=getAbsoluteName(name);
+  Object result=entries.get(absoluteName.toString());
+  if (result == null) {
+    Name current=absoluteName;
+    while (!current.isEmpty()) {
+      current=current.getPrefix(current.size() - 1);
+      Object parent=entries.get(current.toString());
+      if (parent != null && parent instanceof Reference) {
+        final Object context;
+        if (parent instanceof LinkRef) {
+          context=resolveLink(LinkRef.class.cast(parent));
+        }
+ else {
+          context=getObjectInstance(parent,current,null);
+        }
+        if (context instanceof Context) {
+          final Name remaining=absoluteName.getSuffix(current.size());
+          result=Context.class.cast(context).lookup(remaining);
+        }
+ else {
+          throw new NotContextException(current.toString());
+        }
+      }
+    }
+    if (result == null) {
+      throw new NameNotFoundException(absoluteName.toString());
+    }
+  }
+  if (result instanceof Reference) {
+    if (result instanceof LinkRef) {
+      return resolveLink(LinkRef.class.cast(result));
+    }
+    return getObjectInstance(result,absoluteName,null);
+  }
+  return result;
+}
