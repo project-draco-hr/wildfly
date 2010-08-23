@@ -5,7 +5,8 @@
     for (; ; ) {
       Status status=StreamUtils.readWord(inputStream,b);
       if (status == Status.END_OF_STREAM) {
-        log.info("Received end of stream, shutting down");
+        log.info("Received end of stream, shutting down " + processName);
+        commandStream.closeSocketOutputStream();
         return;
       }
       try {
@@ -178,18 +179,20 @@ if (status == Status.MORE) StreamUtils.readToEol(inputStream);
 log.error("Output stream handler for process " + processName + " caught an exception; shutting down",e);
 }
  finally {
+boolean respawn=false;
 safeClose(inputStream);
+int exitCode=0;
 for (; ; ) try {
-invokeStopProcessListeners(process.waitFor());
+exitCode=process.waitFor();
+synchronized (ManagedProcess.this) {
+start=false;
+if (exitCode != 0) respawn=!stopped;
+}
+invokeStopProcessListeners(exitCode);
+if (respawn) respawn();
 break;
 }
  catch (InterruptedException e) {
 }
-boolean respawn=false;
-synchronized (ManagedProcess.this) {
-start=false;
-respawn=!stopped;
-}
-if (respawn) respawn();
 }
 }
