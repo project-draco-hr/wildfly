@@ -1,0 +1,65 @@
+{
+  Method method=null;
+  if (classInfo != null) {
+    final Map<DotName,List<AnnotationTarget>> classAnnotations=classInfo.annotations();
+    final List<AnnotationTarget> targets=classAnnotations.get(DotName.createSimple(annotationType.toString()));
+    if (targets == null || targets.isEmpty()) {
+      return null;
+    }
+    if (targets.size() > 1) {
+      throw new DeploymentUnitProcessingException("Only one method may be annotated with " + annotationType + " per managed bean.");
+    }
+    final AnnotationTarget target=targets.get(0);
+    if (!(target instanceof MethodInfo)) {
+      throw new DeploymentUnitProcessingException(annotationType + " is only valid on method targets.");
+    }
+    final MethodInfo methodInfo=MethodInfo.class.cast(target);
+    final Type[] args=methodInfo.args();
+    try {
+switch (args.length) {
+case 0:
+        if (requireInvocationContext) {
+          throw new DeploymentUnitProcessingException("Missing argument.  Methods annotated with " + annotationType + " must have either single InvocationContext argument.");
+        }
+      method=type.getDeclaredMethod(methodInfo.name());
+    break;
+case 1:
+  if (!InvocationContext.class.getName().equals(args[0].name().toString())) {
+    throw new DeploymentUnitProcessingException("Invalid argument type.  Methods annotated with " + annotationType + " must have either single InvocationContext argument.");
+  }
+method=type.getDeclaredMethod(methodInfo.name(),InvocationContext.class);
+break;
+default :
+throw new DeploymentUnitProcessingException("Invalid number of arguments for method " + methodInfo.name() + " annotated with "+ annotationType+ " on class "+ type.getName());
+}
+}
+ catch (NoSuchMethodException e) {
+throw new DeploymentUnitProcessingException("Failed to get " + annotationType + " method for type: "+ type.getName(),e);
+}
+}
+ else {
+for (Method typeMethod : type.getDeclaredMethods()) {
+if (method.isAnnotationPresent(annotationType)) {
+method=typeMethod;
+switch (method.getParameterTypes().length) {
+case 0:
+if (requireInvocationContext) {
+throw new DeploymentUnitProcessingException("Method " + method.getName() + " annotated with "+ annotationType+ " must have a single InvocationContext parameter");
+}
+break;
+case 1:
+if (!InvocationContext.class.equals(method.getParameterTypes()[0])) {
+throw new DeploymentUnitProcessingException("Method " + method.getName() + " annotated with "+ annotationType+ " must have a single InvocationContext parameter.");
+}
+default :
+throw new DeploymentUnitProcessingException("Methods " + method.getName() + " annotated with "+ annotationType+ " can only have a single InvocationContext parameter.");
+}
+break;
+}
+}
+}
+if (method != null) {
+method.setAccessible(true);
+}
+return method;
+}

@@ -2,16 +2,20 @@
   final Class<Object> beanClass=(Class<Object>)managedBeanConfiguration.getType();
   final String managedBeanName=managedBeanConfiguration.getName();
   final List<ResourceInjection<?>> resourceInjections=new ArrayList<ResourceInjection<?>>();
-  final ManagedBeanService<Object> managedBeanService=new ManagedBeanService<Object>(beanClass,managedBeanConfiguration.getPostConstructMethod(),managedBeanConfiguration.getPreDestroyMethod(),resourceInjections);
+  final List<ManagedBeanInterceptor> interceptors=new ArrayList<ManagedBeanInterceptor>();
+  final ManagedBeanService<Object> managedBeanService=new ManagedBeanService<Object>(new ManagedBeanContainer<Object>(beanClass,managedBeanConfiguration.getPostConstructMethods(),managedBeanConfiguration.getPreDestroyMethods(),resourceInjections,interceptors));
   final ServiceName moduleContextServiceName=moduleContext.getContextServiceName();
   final ServiceName managedBeanServiceName=ManagedBeanService.SERVICE_NAME.append(deploymentContext.getName(),managedBeanName);
   final BatchServiceBuilder<?> serviceBuilder=batchBuilder.addService(managedBeanServiceName,managedBeanService);
   final ServiceName managedBeanContextName=moduleContextServiceName.append(managedBeanName,"context");
-  for (  ResourceConfiguration resourceConfiguration : managedBeanConfiguration.getResourceInjectionConfigurations()) {
+  for (  ResourceConfiguration resourceConfiguration : managedBeanConfiguration.getResourceConfigurations()) {
     final ResourceInjection<Object> resourceInjection=processResource(moduleContext,resourceConfiguration,batchBuilder,serviceBuilder,managedBeanContextName);
     if (resourceInjection != null) {
       resourceInjections.add(resourceInjection);
     }
+  }
+  for (  InterceptorConfiguration interceptorConfiguration : managedBeanConfiguration.getInterceptorConfigurations()) {
+    interceptors.add(processInterceptor(moduleContext,interceptorConfiguration,batchBuilder,serviceBuilder,managedBeanContextName));
   }
   final ContextService actualBeanContext=new ContextService(managedBeanName + "-context");
   batchBuilder.addService(managedBeanContextName,actualBeanContext).addDependency(moduleContextServiceName,Context.class,actualBeanContext.getParentContextInjector());
