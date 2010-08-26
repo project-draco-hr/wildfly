@@ -1,24 +1,34 @@
 {
-  final ServerCommand serverCommand;
+  Command cmd=null;
   try {
-    serverCommand=readServerCommand(message);
+    cmd=ServerManagerProtocolCommand.readCommand(message);
+  }
+ catch (  IOException e) {
+    logger.error("Error reading command",e);
+    return;
+  }
+switch (cmd.getCommand()) {
+case START_SERVER:
+    Standalone standalone=null;
+  try {
+    standalone=ServerManagerProtocolUtils.unmarshallCommandData(Standalone.class,cmd);
   }
  catch (  Exception e) {
-    throw new RuntimeException("Failed to read server command",e);
+    logger.error("Error reading standalone",e);
+    return;
   }
-  if (serverCommand == null)   throw new RuntimeException("Server command is null");
-switch (serverCommand.getCommand()) {
-case START:
-    final Standalone standalone=(Standalone)serverCommand.getArgs()[0];
-  try {
-    server.start(standalone);
-  }
- catch (  ServerStartException e) {
-    logger.error("Failed to start server",e);
-  }
+try {
+  server.start(standalone);
+}
+ catch (ServerStartException e) {
+  logger.error("Error starting server",e);
+  return;
+}
 break;
-case STOP:
+case STOP_SERVER:
 server.stop();
 break;
+default :
+throw new IllegalArgumentException("Unknown command " + cmd.getCommand());
 }
 }
