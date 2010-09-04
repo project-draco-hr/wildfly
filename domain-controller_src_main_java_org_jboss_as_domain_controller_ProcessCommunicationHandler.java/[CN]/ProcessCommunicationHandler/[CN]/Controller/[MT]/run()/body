@@ -1,0 +1,68 @@
+{
+  final InputStream input=ProcessCommunicationHandler.this.input;
+  final StringBuilder b=new StringBuilder();
+  try {
+    for (; ; ) {
+      Status status=StreamUtils.readWord(input,b);
+      if (status == Status.END_OF_STREAM) {
+        shutdown();
+        break;
+      }
+      try {
+        final Command command=Command.valueOf(b.toString());
+switch (command) {
+case SHUTDOWN:
+{
+            shutdown();
+            break;
+          }
+case MSG:
+{
+          if (status == Status.MORE) {
+            status=StreamUtils.readWord(input,b);
+            final String sourceProcess=b.toString();
+            final List<String> msg=new ArrayList<String>();
+            while (status == Status.MORE) {
+              status=StreamUtils.readWord(input,b);
+              msg.add(b.toString());
+            }
+            if (status == Status.END_OF_LINE) {
+              try {
+                handler.handleMessage(msg);
+              }
+ catch (              Throwable t) {
+                logger.error("Caught exception handling message from " + sourceProcess,t);
+              }
+            }
+          }
+          break;
+        }
+case MSG_BYTES:
+{
+        if (status == Status.MORE) {
+          status=StreamUtils.readWord(input,b);
+          final String sourceProcess=b.toString();
+          if (status == Status.MORE) {
+            try {
+              handler.handleMessage(StreamUtils.readBytesWithLength(input));
+            }
+ catch (            Throwable t) {
+              logger.error("Caught exception handling message from " + sourceProcess,t);
+            }
+            status=StreamUtils.readStatus(input);
+          }
+        }
+        break;
+      }
+  }
+}
+ catch (IllegalArgumentException e) {
+  logger.error("Received unknown command: " + b.toString());
+}
+if (status == Status.MORE) StreamUtils.readToEol(input);
+}
+}
+ catch (IOException e) {
+shutdown();
+}
+}
