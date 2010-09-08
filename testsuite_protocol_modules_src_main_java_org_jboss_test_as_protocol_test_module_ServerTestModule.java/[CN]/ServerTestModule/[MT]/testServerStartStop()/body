@@ -1,0 +1,26 @@
+{
+  MockProcessManager pm=MockProcessManager.create(1);
+  Standalone cfg=getServer("standard","server-one");
+  MockServerManager serverManager=MockServerManager.create();
+  MockServerManagerMessageHandler managerMessageHandler=new MockServerManagerMessageHandler();
+  MockDirectServerManagerCommunicationListener managerListener=MockDirectServerManagerCommunicationListener.create(serverManager,InetAddress.getLocalHost(),0,10,managerMessageHandler);
+  QueuedNewConnectionListener newConnectionListener=new QueuedNewConnectionListener();
+  pm.setNewConnectionListener(newConnectionListener);
+  AbstractServer server=ServerStarter.createServer("Server:server-one",pm,managerListener.getSmPort());
+  ConnectionData connectionData=newConnectionListener.waitForConnection();
+  Assert.assertNotNull(connectionData);
+  byte[] sent=managerMessageHandler.awaitAndReadMessage();
+  Command cmd=ServerManagerProtocolCommand.readCommand(sent);
+  Assert.assertEquals(ServerManagerProtocolCommand.SERVER_AVAILABLE,cmd.getCommand());
+  MockDirectServerManagerCommunicationHandler handler=managerListener.getManagerHandler("Server:server-one");
+  Assert.assertNotNull(handler);
+  handler.sendMessage(ServerManagerProtocolUtils.createCommandBytes(ServerManagerProtocolCommand.START_SERVER,cfg));
+  sent=managerMessageHandler.awaitAndReadMessage();
+  cmd=ServerManagerProtocolCommand.readCommand(sent);
+  Assert.assertEquals(ServerManagerProtocolCommand.SERVER_STARTED,cmd.getCommand());
+  handler.sendMessage(ServerManagerProtocolCommand.STOP_SERVER.createCommandBytes(null));
+  sent=managerMessageHandler.awaitAndReadMessage();
+  cmd=ServerManagerProtocolCommand.readCommand(sent);
+  Assert.assertEquals(ServerManagerProtocolCommand.SERVER_STOPPED,cmd.getCommand());
+  waitForClose(handler,5000);
+}

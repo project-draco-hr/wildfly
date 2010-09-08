@@ -1,0 +1,23 @@
+{
+  InputStream in=socket.getInputStream();
+  StringBuilder sb=new StringBuilder();
+  Status status=StreamUtils.readWord(in,sb);
+  if (status != Status.MORE) {
+    throw new InitialSocketRequestException("Server acceptor: received '" + sb.toString() + "' but no more");
+  }
+  if (!sb.toString().equals("CONNECTED")) {
+    throw new InitialSocketRequestException("Server acceptor: received unknown connect command '" + sb.toString() + "'");
+  }
+  sb=new StringBuilder();
+  while (status == Status.MORE) {
+    status=StreamUtils.readWord(in,sb);
+  }
+  String processName=sb.toString();
+  Server server=serverManager.getServer(processName);
+  if (server == null) {
+    throw new InitialSocketRequestException("Server acceptor: received connect command for unknown process '" + sb.toString() + "'");
+  }
+  log.infof("Server acceptor: connected server %s",processName);
+  DirectServerCommunicationHandler handler=DirectServerCommunicationHandler.create(SocketConnection.accepted(socket),processName,new MessageHandler(serverManager));
+  server.setCommunicationHandler(handler);
+}

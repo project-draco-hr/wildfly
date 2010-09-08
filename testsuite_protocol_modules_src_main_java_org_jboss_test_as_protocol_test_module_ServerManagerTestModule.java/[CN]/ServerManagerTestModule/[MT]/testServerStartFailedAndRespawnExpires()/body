@@ -1,0 +1,45 @@
+{
+  MockProcessManager pm=MockProcessManager.create(2);
+  setDomainConfigDir("standard");
+  ServerManagerStarter.createServerManager(pm);
+  pm.waitForServerManager();
+  checkProcessManagerConnection(pm,"ServerManager",true);
+  pm.waitForAddedProcesses();
+  MockManagedProcess svr1=pm.getProcess("Server:server-one");
+  Assert.assertNotNull(svr1);
+  MockManagedProcess svr2=pm.getProcess("Server:server-two");
+  Assert.assertNotNull(svr2);
+  svr1.waitForStart();
+  svr2.waitForStart();
+  Standalone cfg1=readStartCommand(svr1.getMessageHandler());
+  Assert.assertEquals("server-one",cfg1.getServerName());
+  Standalone cfg2=readStartCommand(svr2.getMessageHandler());
+  Assert.assertEquals("server-two",cfg2.getServerName());
+  Assert.assertTrue(managerAlive(svr1.getSmAddress(),svr1.getSmPort()));
+  svr2.getCommunicationHandler().sendMessage(ServerManagerProtocolCommand.SERVER_STARTED.createCommandBytes(null));
+  final int addCount=pm.getAddCount();
+  final int removeCount=pm.getRemoveCount();
+  int stopCount=pm.getStopCount();
+  int startCount=pm.getStartCount();
+  for (int i=0; i <= 14; i++) {
+    pm.resetStopLatch(1);
+    pm.resetStartLatch(1);
+    pm.resetRemoveLatch(1);
+    svr1.resetStartLatch();
+    svr1.getCommunicationHandler().sendMessage(ServerManagerProtocolCommand.SERVER_START_FAILED.createCommandBytes(null));
+    pm.waitForStoppedProcesses();
+    Assert.assertEquals(++stopCount,pm.getStopCount());
+    if (i < 14) {
+      pm.waitForStartedProcesses();
+      Assert.assertEquals(++startCount,pm.getStartCount());
+      svr1=pm.getProcess("Server:server-one");
+      svr1.waitForStart();
+      cfg1=readStartCommand(svr1.getMessageHandler());
+      Assert.assertEquals("server-one",cfg1.getServerName());
+      Assert.assertEquals(addCount,pm.getAddCount());
+      Assert.assertEquals(removeCount,pm.getRemoveCount());
+    }
+  }
+  pm.waitForRemovedProcesses();
+  Assert.assertEquals(removeCount + 1,pm.getRemoveCount());
+}
