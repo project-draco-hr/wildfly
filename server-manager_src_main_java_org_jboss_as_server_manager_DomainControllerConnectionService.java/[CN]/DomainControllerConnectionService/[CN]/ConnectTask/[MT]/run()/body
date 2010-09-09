@@ -1,0 +1,29 @@
+{
+  if (connected.compareAndSet(false,true)) {
+    for (; ; ) {
+      try {
+        InetAddress dcAddress=domainControllerAddress.getValue();
+        if (dcAddress.isAnyLocalAddress() || dcAddress.isSiteLocalAddress()) {
+          dcAddress=InetAddress.getLocalHost();
+        }
+        DomainControllerConnectionService.this.socket=new Socket(dcAddress,domainControllerPort.getValue());
+        DomainControllerConnectionService.this.socketIn=new BufferedInputStream(socket.getInputStream());
+        DomainControllerConnectionService.this.socketOut=new BufferedOutputStream(socket.getOutputStream());
+        log.infof("Connected to domain controller [%s:%d]",dcAddress.getHostAddress(),domainControllerPort.getValue());
+        executor.execute(new ListenerTask());
+        serverManager.setDomainControllerConnection(new RemoteDomainControllerConnection(DomainControllerConnectionService.this));
+        break;
+      }
+ catch (      IOException e) {
+        log.info("Unable to connect to domain controller.  Will retry.");
+        log.trace("Unable to connect to domain controller.",e);
+      }
+      try {
+        Thread.sleep(POLLING_INTERVAL);
+      }
+ catch (      InterruptedException e) {
+        throw new RuntimeException("Domain controller connection polling was interrupted.",e);
+      }
+    }
+  }
+}

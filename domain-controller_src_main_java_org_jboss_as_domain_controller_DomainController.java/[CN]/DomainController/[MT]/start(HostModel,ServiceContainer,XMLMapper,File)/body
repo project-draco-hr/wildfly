@@ -1,0 +1,39 @@
+{
+  if (started.compareAndSet(false,true)) {
+    log.info("Starting Domain Controller");
+    log.info("Parsing Domain Configuration");
+    domainConfig=parseDomain(xmlMapper,domainConfigDir);
+    final LocalDomainControllerElement localDomainControllerElement=hostConfig.getLocalDomainControllerElement();
+    final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+    final ServiceActivatorContext serviceActivatorContext=new ServiceActivatorContextImpl(batchBuilder);
+    final Map<String,ServerInterfaceElement> interfaces=new HashMap<String,ServerInterfaceElement>();
+    final Set<ServerInterfaceElement> hostInterfaces=hostConfig.getInterfaces();
+    if (hostInterfaces != null) {
+      for (      ServerInterfaceElement interfaceElement : hostInterfaces) {
+        interfaces.put(interfaceElement.getName(),interfaceElement);
+      }
+    }
+    final Set<ServerInterfaceElement> dcInterfaces=localDomainControllerElement.getInterfaces();
+    if (dcInterfaces != null) {
+      for (      ServerInterfaceElement interfaceElement : dcInterfaces) {
+        interfaces.put(interfaceElement.getName(),interfaceElement);
+      }
+    }
+    for (    ServerInterfaceElement interfaceElement : interfaces.values()) {
+      interfaceElement.activate(serviceActivatorContext);
+    }
+    final ServiceName threadFactoryServiceName=SERVICE_NAME_BASE.append("thread-factory");
+    batchBuilder.addService(threadFactoryServiceName,new ThreadFactoryService());
+    final ServiceName executorServiceName=SERVICE_NAME_BASE.append("executor");
+    final ThreadFactoryExecutorService executorService=new ThreadFactoryExecutorService(localDomainControllerElement.getMaxThreads(),false);
+    batchBuilder.addService(executorServiceName,executorService).addDependency(threadFactoryServiceName,ThreadFactory.class,executorService.getThreadFactoryInjector());
+    final ServerManagerCommunicationService serverManagerCommunicationService=new ServerManagerCommunicationService(this,localDomainControllerElement);
+    batchBuilder.addService(ServerManagerCommunicationService.SERVICE_NAME,serverManagerCommunicationService).addListener(new DomainControllerStartupListener()).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(localDomainControllerElement.getInterfaceName()),NetworkInterfaceBinding.class,serverManagerCommunicationService.getInterfaceInjector()).addDependency(executorServiceName,ExecutorService.class,serverManagerCommunicationService.getExecutorServiceInjector()).setInitialMode(ServiceController.Mode.IMMEDIATE);
+    try {
+      batchBuilder.install();
+    }
+ catch (    ServiceRegistryException e) {
+      throw new RuntimeException(e);
+    }
+  }
+}
