@@ -7,13 +7,19 @@
   QueuedNewConnectionListener newConnectionListener=new QueuedNewConnectionListener();
   pm.setNewConnectionListener(newConnectionListener);
   ServerStarter.createServer("Server:server-one",pm,managerListener.getSmPort());
-  newConnectionListener.assertWaitForConnection("Server:server-one");
+  SocketConnection pmServerconnection=newConnectionListener.assertWaitForConnection("Server:server-one");
   assertReadCommand(managerMessageHandler,ServerManagerProtocolCommand.SERVER_AVAILABLE);
   MockDirectServerManagerCommunicationHandler managerHandler=managerListener.getManagerHandler("Server:server-one");
   Assert.assertNotNull(managerHandler);
   managerHandler.sendMessage(ServerManagerProtocolUtils.createCommandBytes(ServerManagerProtocolCommand.START_SERVER,cfg));
   assertReadCommand(managerMessageHandler,ServerManagerProtocolCommand.SERVER_STARTED);
-  managerHandler.sendMessage(ServerManagerProtocolCommand.STOP_SERVER.createCommandBytes(null));
-  assertReadCommand(managerMessageHandler,ServerManagerProtocolCommand.SERVER_STOPPED);
-  waitForClose(managerHandler,5000);
+  managerHandler.shutdown();
+  managerListener.shutdown();
+  managerListener=MockDirectServerManagerCommunicationListener.create(serverManager,InetAddress.getLocalHost(),0,10,managerMessageHandler);
+  Assert.assertTrue(pmServerconnection.isOpen());
+  managerListener.resetNewConnectionLatch(1);
+  reconnectServerToServerManager(pmServerconnection,InetAddress.getLocalHost(),managerListener.getSmPort());
+  MockDirectServerManagerCommunicationHandler handler2=managerListener.getManagerHandler("Server:server-one");
+  managerListener.waitForNewConnection();
+  Assert.assertNotSame(managerHandler,handler2);
 }
