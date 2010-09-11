@@ -1,0 +1,22 @@
+{
+  JavaArchive archive=getBundleArchive();
+  Bundle bundle=executeDeploy(archive);
+  assertNotNull("Bundle not null",bundle);
+  assertBundleState(Bundle.INSTALLED,bundle.getState());
+  final CountDownLatch latch=new CountDownLatch(1);
+  AbstractServiceListener<Object> serviceListener=new AbstractServiceListener<Object>(){
+    @Override public void serviceRemoved(    ServiceController<?> controller){
+      latch.countDown();
+    }
+  }
+;
+  ServiceName serviceName=DeploymentService.SERVICE_NAME.append(archive.getName());
+  ServiceController<?> controller=getServiceContainer().getRequiredService(serviceName);
+  controller.addListener(serviceListener);
+  bundle.uninstall();
+  assertBundleState(Bundle.UNINSTALLED,bundle.getState());
+  latch.await(5L,TimeUnit.SECONDS);
+  if (latch.getCount() != 0)   fail("Did not remove service within 5 seconds.");
+  assertServiceDown(DeploymentService.SERVICE_NAME.append(archive.getName()));
+  assertServiceDown(OSGiDeploymentService.SERVICE_NAME.append(archive.getName()));
+}

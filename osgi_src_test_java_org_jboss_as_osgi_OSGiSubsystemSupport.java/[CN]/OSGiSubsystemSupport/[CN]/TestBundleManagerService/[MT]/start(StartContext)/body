@@ -1,0 +1,23 @@
+{
+  log.debugf("Starting OSGi BundleManager");
+  try {
+    Configuration config=injectedConfig.getValue();
+    ServiceContainer serviceContainer=context.getController().getServiceContainer();
+    ModuleLoader classifyingModuleLoader=injectedModuleLoader.getValue().getModuleLoader();
+    final Map<String,Object> props=new HashMap<String,Object>(config.getProperties());
+    props.put(IntegrationMode.class.getName(),IntegrationMode.STANDALONE);
+    props.put(ModuleLoader.class.getName(),classifyingModuleLoader);
+    props.put(ServiceContainer.class.getName(),serviceContainer);
+    bundleManager=new BundleManager(props);
+    ModuleManagerPlugin plugin=bundleManager.getPlugin(ModuleManagerPlugin.class);
+    ModuleLoader moduleLoader=plugin.getModuleLoader();
+    ServiceController<?> controller=serviceContainer.getRequiredService(ClassifyingModuleLoaderService.SERVICE_NAME);
+    ClassifyingModuleLoaderService moduleLoaderService=(ClassifyingModuleLoaderService)controller.getValue();
+    Value<ModuleLoader> value=new ImmediateValue<ModuleLoader>(moduleLoader);
+    moduleLoaderInjector=new ClassifyingModuleLoaderInjector(Constants.JBOSGI_PREFIX,value);
+    moduleLoaderInjector.inject(moduleLoaderService);
+  }
+ catch (  Throwable t) {
+    throw new StartException("Failed to create BundleManager",t);
+  }
+}

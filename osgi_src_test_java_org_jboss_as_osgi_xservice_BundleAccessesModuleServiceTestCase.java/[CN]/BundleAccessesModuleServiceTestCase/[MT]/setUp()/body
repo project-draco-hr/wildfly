@@ -1,0 +1,25 @@
+{
+  support=new OSGiSubsystemSupport();
+  DeploymentChain deploymentChain=support.getDeploymentChain();
+  DeploymentUnitProcessor processor=new DeploymentUnitProcessor(){
+    @Override public void processDeployment(    DeploymentUnitContext context) throws DeploymentUnitProcessingException {
+      if (context.getName().contains("module")) {
+        ModuleIdentifier identifier=ModuleIdentifier.create("test." + context.getName());
+        ModuleSpec.Builder specBuilder=ModuleSpec.build(identifier);
+        VirtualFile virtualFile=VirtualFileAttachment.getVirtualFileAttachment(context);
+        specBuilder.addResourceRoot(new VirtualFileResourceLoader(AbstractVFS.adapt(virtualFile)));
+        Set<String> paths=new HashSet<String>();
+        paths.add("org/jboss/msc/service");
+        paths.add("org/osgi/framework");
+        SystemLocalLoader sysLoader=new SystemLocalLoader(paths);
+        specBuilder.addDependency(DependencySpec.createLocalDependencySpec(sysLoader,sysLoader.getExportedPaths(),true));
+        specBuilder.addDependency(DependencySpec.createLocalDependencySpec());
+        getTestModuleLoader().addModuleSpec(specBuilder.create());
+      }
+    }
+  }
+;
+  deploymentChain.addProcessor(processor,10);
+  deploymentChain.addProcessor(new OSGiManifestDeploymentProcessor(),20);
+  deploymentChain.addProcessor(new OSGiAttachmentsDeploymentProcessor(),Integer.MAX_VALUE);
+}
