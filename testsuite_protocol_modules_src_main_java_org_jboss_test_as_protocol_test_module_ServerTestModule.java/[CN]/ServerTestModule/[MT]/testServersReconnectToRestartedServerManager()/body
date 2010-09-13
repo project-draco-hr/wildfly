@@ -15,6 +15,8 @@
   assertReadCommand(managerMessageHandler,ServerManagerProtocolCommand.SERVER_STARTED);
   managerHandler.shutdown();
   managerListener.shutdown();
+  serverManager=MockServerManager.create();
+  managerMessageHandler=new MockServerManagerMessageHandler();
   managerListener=MockDirectServerManagerCommunicationListener.create(serverManager,InetAddress.getLocalHost(),0,10,managerMessageHandler);
   Assert.assertTrue(pmServerconnection.isOpen());
   managerListener.resetNewConnectionLatch(1);
@@ -22,4 +24,12 @@
   MockDirectServerManagerCommunicationHandler handler2=managerListener.getManagerHandler("Server:server-one");
   managerListener.waitForNewConnection();
   Assert.assertNotSame(managerHandler,handler2);
+  ServerManagerProtocolCommand.Command cmd=assertReadCommand(managerMessageHandler,ServerManagerProtocolCommand.SERVER_RECONNECT_STATUS);
+  ServerState state=ServerManagerProtocolUtils.unmarshallCommandData(ServerState.class,cmd);
+  Assert.assertSame(ServerState.STARTED,state);
+  managerHandler=managerListener.getManagerHandler("Server:server-one");
+  Assert.assertNotNull(managerHandler);
+  managerHandler.sendMessage(ServerManagerProtocolCommand.STOP_SERVER.createCommandBytes(null));
+  assertReadCommand(managerMessageHandler,ServerManagerProtocolCommand.SERVER_STOPPED);
+  waitForClose(managerHandler,5000);
 }
