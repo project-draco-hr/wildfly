@@ -1,0 +1,36 @@
+{
+  String name=e.getAttribute("name");
+  String address=XMLConfigurationUtil.getString(e,"address",null,Validators.NOT_NULL_OR_EMPTY);
+  boolean duplicateDetection=XMLConfigurationUtil.getBoolean(e,"use-duplicate-detection",ConfigurationImpl.DEFAULT_CLUSTER_DUPLICATE_DETECTION);
+  boolean forwardWhenNoConsumers=XMLConfigurationUtil.getBoolean(e,"forward-when-no-consumers",ConfigurationImpl.DEFAULT_CLUSTER_FORWARD_WHEN_NO_CONSUMERS);
+  int maxHops=XMLConfigurationUtil.getInteger(e,"max-hops",ConfigurationImpl.DEFAULT_CLUSTER_MAX_HOPS,Validators.GE_ZERO);
+  long retryInterval=XMLConfigurationUtil.getLong(e,"retry-interval",ConfigurationImpl.DEFAULT_CLUSTER_RETRY_INTERVAL,Validators.GT_ZERO);
+  int confirmationWindowSize=XMLConfigurationUtil.getInteger(e,"confirmation-window-size",FileConfiguration.DEFAULT_CONFIRMATION_WINDOW_SIZE,Validators.GT_ZERO);
+  String discoveryGroupName=null;
+  List<Pair<String,String>> connectorPairs=new ArrayList<Pair<String,String>>();
+  NodeList children=e.getChildNodes();
+  for (int j=0; j < children.getLength(); j++) {
+    Node child=children.item(j);
+    if (child.getNodeName().equals("discovery-group-ref")) {
+      discoveryGroupName=child.getAttributes().getNamedItem("discovery-group-name").getNodeValue();
+    }
+ else     if (child.getNodeName().equals("connector-ref")) {
+      String connectorName=child.getAttributes().getNamedItem("connector-name").getNodeValue();
+      Node backupNode=child.getAttributes().getNamedItem("backup-connector-name");
+      String backupConnectorName=null;
+      if (backupNode != null) {
+        backupConnectorName=backupNode.getNodeValue();
+      }
+      Pair<String,String> connectorPair=new Pair<String,String>(connectorName,backupConnectorName);
+      connectorPairs.add(connectorPair);
+    }
+  }
+  ClusterConnectionConfiguration config;
+  if (discoveryGroupName == null) {
+    config=new ClusterConnectionConfiguration(name,address,retryInterval,duplicateDetection,forwardWhenNoConsumers,maxHops,confirmationWindowSize,connectorPairs);
+  }
+ else {
+    config=new ClusterConnectionConfiguration(name,address,retryInterval,duplicateDetection,forwardWhenNoConsumers,maxHops,confirmationWindowSize,discoveryGroupName);
+  }
+  mainConfig.getClusterConfigurations().add(config);
+}

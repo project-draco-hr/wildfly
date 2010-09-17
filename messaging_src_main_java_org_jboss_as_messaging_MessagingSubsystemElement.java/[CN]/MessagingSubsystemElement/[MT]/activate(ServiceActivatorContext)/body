@@ -1,10 +1,26 @@
 {
   log.info("Activating Messaging Subsystem");
   HornetQService hqservice=new HornetQService();
-  Configuration hqConfig=this.configuration.getConfiguration();
+  Configuration hqConfig=configuration.getConfiguration();
   hqservice.setConfiguration(hqConfig);
   final BatchBuilder batchBuilder=context.getBatchBuilder();
   final BatchServiceBuilder<HornetQServer> serviceBuilder=batchBuilder.addService(JBOSS_MESSAGING,hqservice);
+  Collection<TransportConfiguration> acceptors=hqConfig.getAcceptorConfigurations();
+  Collection<TransportConfiguration> connectors=hqConfig.getConnectorConfigurations().values();
+  if (connectors != null) {
+    for (    TransportConfiguration tc : connectors) {
+      String name=tc.getName();
+      ServiceName connectorSocketName=SocketBinding.JBOSS_BINDING_NAME.append();
+      serviceBuilder.addDependency(connectorSocketName,SocketBinding.class,hqservice.getSocketBindingInjector(name));
+    }
+  }
+  if (acceptors != null) {
+    for (    TransportConfiguration tc : acceptors) {
+      String name=tc.getName();
+      ServiceName connectorSocketName=SocketBinding.JBOSS_BINDING_NAME.append();
+      serviceBuilder.addDependency(connectorSocketName,SocketBinding.class,hqservice.getSocketBindingInjector(name));
+    }
+  }
   serviceBuilder.setLocation(getLocation());
-  serviceBuilder.setInitialMode(ServiceController.Mode.ON_DEMAND);
+  serviceBuilder.setInitialMode(ServiceController.Mode.IMMEDIATE);
 }
