@@ -1,0 +1,47 @@
+{
+  try {
+    scanLock.lockInterruptibly();
+  }
+ catch (  InterruptedException ie) {
+    Thread.currentThread().interrupt();
+    return;
+  }
+  try {
+    if (scanEnabled) {
+      log.tracef("Scanning directory %s for deployment content changes",deploymentDir.getAbsolutePath());
+      DeploymentPlanBuilder builder=injectedDeploymentManager.getValue().newDeploymentPlan();
+      Map<String,File> foundDeployed=new HashMap<String,File>();
+      Set<String> newlyAdded=new HashSet<String>();
+      builder=scanDirectory(deploymentDir,builder,foundDeployed,newlyAdded);
+      Set<String> toRemove=new HashSet<String>(deployed);
+      toRemove.removeAll(foundDeployed.keySet());
+      for (      String missing : toRemove) {
+        builder=builder.undeploy(missing).andRemoveUndeployed();
+      }
+      Set<String> validFinds=cleanSpuriousMarkerFiles(foundDeployed);
+      validFinds.addAll(newlyAdded);
+      this.deployed=validFinds;
+      DeploymentPlan plan=builder.build();
+      if (plan.getDeploymentActions().size() > 0) {
+        if (log.isDebugEnabled()) {
+          for (          DeploymentAction action : plan.getDeploymentActions()) {
+            log.debugf("Deployment plan %s includes action of type %s affecting deployment %s",plan.getId(),action.getType(),action.getDeploymentUnitUniqueName());
+          }
+        }
+        Future<ServerDeploymentPlanResult> future=injectedDeploymentManager.getValue().execute(plan);
+        ServerDeploymentPlanResult result=future.get();
+      }
+      log.tracef("Scan complete");
+    }
+  }
+ catch (  InterruptedException e) {
+    log.warn("Interrupted waiting on completion of deployment plan");
+    Thread.currentThread().interrupt();
+  }
+catch (  ExecutionException e) {
+    log.error("Retrieval of " + ServerDeploymentPlanResult.class.getName() + " threw an exception.",e);
+  }
+ finally {
+    scanLock.unlock();
+  }
+}

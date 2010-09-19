@@ -1,0 +1,49 @@
+{
+  if (updates.size() == 0) {
+    transition(false);
+    return;
+  }
+  for (  ServerModelUpdateTuple<?,?> update : updates) {
+    logger.debugf("Applying update %s",update.getUpdate().toString());
+    if (status != Status.ACTIVE) {
+      update.handleCancellation();
+      continue;
+    }
+    boolean appliedToModel=false;
+    ServerModelUpdateTuple<Object,?> rollbackTuple=null;
+    try {
+      rollbackTuple=update.getRollbackTuple(serverModel);
+      update.getUpdate().applyUpdate(serverModel);
+      appliedToModel=true;
+      if (allowRuntimeUpdates) {
+        update.applyUpdate(serviceContainer);
+      }
+ else {
+        updateComplete();
+      }
+      if (allowOverallRollback) {
+        rollbacks.add(0,rollbackTuple);
+      }
+    }
+ catch (    Exception e) {
+      logger.errorf(e,"Caught exception applying update %s",update.getUpdate().toString());
+      update.handleFailure(e);
+      if (rollbackTuple != null) {
+        if (appliedToModel) {
+          rollbackTuple.applyUpdate(serviceContainer);
+        }
+        if (appliedToModel) {
+          try {
+            rollbackTuple.getUpdate().applyUpdate(serverModel);
+          }
+ catch (          UpdateFailedException e1) {
+            rollbackTuple.handleFailure(e1);
+          }
+        }
+      }
+    }
+  }
+  if (logger.isDebugEnabled()) {
+    logger.debugf("%s update(s) applied",updates.size());
+  }
+}
