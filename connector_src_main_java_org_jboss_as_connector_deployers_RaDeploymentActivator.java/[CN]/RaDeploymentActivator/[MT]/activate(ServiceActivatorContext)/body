@@ -1,0 +1,16 @@
+{
+  final BatchBuilder batchBuilder=context.getBatchBuilder();
+  batchBuilder.addServiceValueIfNotExist(DeploymentChainProviderService.SERVICE_NAME,new DeploymentChainProviderService());
+  final Value<DeploymentChain> deploymentChainValue=Values.immediateValue((DeploymentChain)new DeploymentChainImpl(RAR_DEPLOYMENT_CHAIN_SERVICE_NAME.toString()));
+  final DeploymentChainService deploymentChainService=new DeploymentChainService(deploymentChainValue);
+  batchBuilder.addService(RAR_DEPLOYMENT_CHAIN_SERVICE_NAME,deploymentChainService).addDependency(DeploymentChainProviderService.SERVICE_NAME,DeploymentChainProvider.class,new DeploymentChainProviderInjector<DeploymentChain>(deploymentChainValue,new RaDeploymentChainSelector(),RAR_DEPLOYMENT_CHAIN_PRIORITY));
+  addDeploymentProcessor(batchBuilder,new AnnotationIndexProcessor(),AnnotationIndexProcessor.PRIORITY);
+  addDeploymentProcessor(batchBuilder,new ModuleDependencyProcessor(),ModuleDependencyProcessor.PRIORITY);
+  addDeploymentProcessor(batchBuilder,new ModuleConfigProcessor(),ModuleConfigProcessor.PRIORITY);
+  final InjectedValue<MetadataRepository> mdrInjector=new InjectedValue<MetadataRepository>();
+  addDeploymentProcessor(batchBuilder,new RaDeploymentParsingProcessor(mdrInjector),RaDeploymentParsingProcessor.PRIORITY).addDependency(MdrServices.IRONJACAMAR_MDR,MetadataRepository.class,mdrInjector);
+  addDeploymentProcessor(batchBuilder,new IronJacamarDeploymentParsingProcessor(mdrInjector),IronJacamarDeploymentParsingProcessor.PRIORITY).addDependency(MdrServices.IRONJACAMAR_MDR,MetadataRepository.class,mdrInjector);
+  final InjectedValue<TransactionManager> txmInjector=new InjectedValue<TransactionManager>();
+  final InjectedValue<ConnectorSubsystemConfiguration> configInjector=new InjectedValue<ConnectorSubsystemConfiguration>();
+  addDeploymentProcessor(batchBuilder,new ParsedRaDeploymentProcessor(mdrInjector,txmInjector,configInjector),ParsedRaDeploymentProcessor.PRIORITY).addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,txmInjector).addDependency(MdrServices.IRONJACAMAR_MDR,MetadataRepository.class,mdrInjector).addDependency(ConnectorServices.CONNECTOR_CONFIG_SERVICE,ConnectorSubsystemConfiguration.class,configInjector);
+}

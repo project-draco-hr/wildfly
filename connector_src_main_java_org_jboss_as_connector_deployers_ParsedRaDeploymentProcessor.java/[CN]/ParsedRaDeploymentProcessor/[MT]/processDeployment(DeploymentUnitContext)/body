@@ -1,0 +1,22 @@
+{
+  final ConnectorXmlDescriptor connectorXmlDescriptor=context.getAttachment(ConnectorXmlDescriptor.ATTACHMENT_KEY);
+  final IronJacamarXmlDescriptor ironJacamarXmlDescriptor=context.getAttachment(IronJacamarXmlDescriptor.ATTACHMENT_KEY);
+  if (connectorXmlDescriptor == null)   return;
+  final Module module=context.getAttachment(ModuleDeploymentProcessor.MODULE_ATTACHMENT_KEY);
+  if (module == null)   throw new DeploymentUnitProcessingException("Failed to get module attachment for deployment: " + context.getName());
+  final ClassLoader classLoader=module.getClassLoader();
+  Connector cmd=connectorXmlDescriptor.getConnector();
+  final IronJacamar ijmd=ironJacamarXmlDescriptor.getIronJacamar();
+  try {
+    Annotations annotator=new Annotations();
+    AnnotationRepository repository=new JandexAnnotationRepositoryImpl(context.getAttachment(AnnotationIndexProcessor.ATTACHMENT_KEY),classLoader);
+    cmd=annotator.merge(cmd,repository);
+    cmd.validate();
+    cmd=(new Merger()).mergeConnectorWithCommonIronJacamar(ijmd,cmd);
+    AS7RaDeployer raDeployer=new AS7RaDeployer();
+    ResourceAdapter ra=raDeployer.doDeploy(connectorXmlDescriptor.getUrl(),connectorXmlDescriptor.getDeploymentName(),connectorXmlDescriptor.getRoot(),classLoader,cmd,ijmd);
+  }
+ catch (  Throwable t) {
+    throw new DeploymentUnitProcessingException(t);
+  }
+}

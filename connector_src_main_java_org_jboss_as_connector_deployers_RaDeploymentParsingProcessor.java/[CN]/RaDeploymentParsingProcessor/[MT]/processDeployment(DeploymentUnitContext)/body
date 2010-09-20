@@ -1,0 +1,30 @@
+{
+  final VirtualFile deploymentRoot=getVirtualFileAttachment(context);
+  if (deploymentRoot == null || !deploymentRoot.exists())   return;
+  final String deploymentRootName=deploymentRoot.getName();
+  VirtualFile serviceXmlFile=null;
+  if (deploymentRootName.endsWith(".rar")) {
+    serviceXmlFile=deploymentRoot.getChild("/META-INF/ra.xml");
+  }
+  if (serviceXmlFile == null || !serviceXmlFile.exists())   return;
+  InputStream xmlStream=null;
+  Connector result=null;
+  try {
+    xmlStream=serviceXmlFile.openStream();
+    result=(new RaParser()).parse(xmlStream);
+    File root=new File(deploymentRoot.asDirectoryURI());
+    URL url=deploymentRoot.asFileURL();
+    String deploymentName=deploymentRoot.getName().substring(0,deploymentRoot.getName().indexOf(".rar"));
+    if (result != null) {
+      ConnectorXmlDescriptor xmlDescriptor=new ConnectorXmlDescriptor(result,root,url,deploymentName);
+      context.putAttachment(ConnectorXmlDescriptor.ATTACHMENT_KEY,xmlDescriptor);
+    }
+ else     throw new DeploymentUnitProcessingException("Failed to parse service xml [" + serviceXmlFile + "]");
+  }
+ catch (  Exception e) {
+    throw new DeploymentUnitProcessingException("Failed to parse service xml [" + serviceXmlFile + "]",e);
+  }
+ finally {
+    VFSUtils.safeClose(xmlStream);
+  }
+}
