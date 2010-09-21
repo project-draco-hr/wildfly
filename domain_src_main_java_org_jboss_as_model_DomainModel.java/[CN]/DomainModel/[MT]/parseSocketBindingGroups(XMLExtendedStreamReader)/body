@@ -1,6 +1,7 @@
 {
   RefResolver<String,SocketBindingGroupElement> groupResolver=new SimpleRefResolver<String,SocketBindingGroupElement>(bindingGroups);
   RefResolver<String,InterfaceElement> intfResolver=new SimpleRefResolver<String,InterfaceElement>(interfaces);
+  Map<String,Location> locations=new HashMap<String,Location>();
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
 case DOMAIN_1_0:
@@ -9,11 +10,14 @@ case DOMAIN_1_0:
 switch (element) {
 case SOCKET_BINDING_GROUP:
 {
+            final Location location=reader.getLocation();
             SocketBindingGroupElement group=new SocketBindingGroupElement(reader,intfResolver,groupResolver);
-            if (bindingGroups.containsKey(group.getName())) {
-              throw new XMLStreamException(element.getLocalName() + " with name " + group.getName()+ " already declared",reader.getLocation());
+            final String name=group.getName();
+            if (bindingGroups.containsKey(name)) {
+              throw new XMLStreamException(element.getLocalName() + " with name " + name+ " already declared",location);
             }
-            bindingGroups.put(group.getName(),group);
+            bindingGroups.put(name,group);
+            locations.put(name,location);
             break;
           }
 default :
@@ -29,8 +33,7 @@ for (SocketBindingGroupElement group : bindingGroups.values()) {
 for (SocketBindingGroupIncludeElement include : group.getIncludedSocketBindingGroups()) {
 SocketBindingGroupElement included=bindingGroups.get(include.getGroupName());
 if (included == null) {
-Location loc=include.getLocation();
-throw new XMLStreamException("ParseError at [row,col]:[" + loc.getLineNumber() + ","+ loc.getColumnNumber()+ " Message: Included "+ Element.SOCKET_BINDING_GROUP.getLocalName()+ " "+ include.getGroupName()+ " not found");
+throw new XMLStreamException("Included " + Element.SOCKET_BINDING_GROUP.getLocalName() + " "+ include.getGroupName()+ " not found",locations.get(group.getName()));
 }
 }
 }
