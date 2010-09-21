@@ -1,0 +1,98 @@
+{
+  ClassLoader loader=Thread.currentThread().getContextClassLoader();
+  try {
+    NamingEnumeration<?> ne=ctx.list("");
+    while (ne.hasMore()) {
+      NameClassPair pair=(NameClassPair)ne.next();
+      log.trace("pair: " + pair);
+      String name=pair.getName();
+      String className=pair.getClassName();
+      boolean recursive=false;
+      boolean isLinkRef=false;
+      boolean isProxy=false;
+      Class<?> c=null;
+      try {
+        c=loader.loadClass(className);
+        log.trace("type: " + c);
+        if (Context.class.isAssignableFrom(c))         recursive=true;
+        if (LinkRef.class.isAssignableFrom(c))         isLinkRef=true;
+        isProxy=Proxy.isProxyClass(c);
+      }
+ catch (      ClassNotFoundException cnfe) {
+        if (className.startsWith("$Proxy")) {
+          isProxy=true;
+          try {
+            Object p=ctx.lookup(name);
+            c=p.getClass();
+          }
+ catch (          NamingException e) {
+            Throwable t=e.getRootCause();
+            if (t instanceof ClassNotFoundException) {
+              String msg=t.getMessage();
+              if (msg != null) {
+                className=msg;
+              }
+            }
+          }
+        }
+      }
+      buffer.append(indent).append(" +- ").append(name);
+      if (isLinkRef) {
+        try {
+          log.trace("looking up LinkRef; name=" + name);
+          Object obj=ctx.lookupLink(name);
+          log.trace("Object type: " + obj.getClass());
+          LinkRef link=(LinkRef)obj;
+          buffer.append("[link -> ");
+          buffer.append(link.getLinkName());
+          buffer.append(']');
+        }
+ catch (        Throwable t) {
+          log.debug("Invalid LinkRef for: " + name,t);
+          buffer.append("invalid]");
+        }
+      }
+      if (isProxy) {
+        buffer.append(" (proxy: ").append(pair.getClassName());
+        if (c != null) {
+          Class<?>[] ifaces=c.getInterfaces();
+          buffer.append(" implements ");
+          for (          Class<?> iface : ifaces) {
+            buffer.append(iface);
+            buffer.append(',');
+          }
+          buffer.setCharAt(buffer.length() - 1,')');
+        }
+ else {
+          buffer.append(" implements ").append(className).append(")");
+        }
+      }
+ else       if (verbose) {
+        buffer.append(" (class: ").append(pair.getClassName()).append(")");
+      }
+      buffer.append('\n');
+      if (recursive) {
+        try {
+          Object value=ctx.lookup(name);
+          if (value instanceof Context) {
+            Context subctx=(Context)value;
+            list(subctx,indent + " |  ",buffer,verbose);
+          }
+ else {
+            buffer.append(indent).append(" |   NonContext: ").append(value);
+            buffer.append('\n');
+          }
+        }
+ catch (        Throwable t) {
+          buffer.append("Failed to lookup: ").append(name).append(", errmsg=").append(t.getMessage());
+          buffer.append('\n');
+        }
+      }
+    }
+    ne.close();
+  }
+ catch (  NamingException ne) {
+    buffer.append("error while listing context ").append(ctx.toString()).append(": ").append(ne.toString(true));
+    formatException(buffer,ne);
+  }
+}

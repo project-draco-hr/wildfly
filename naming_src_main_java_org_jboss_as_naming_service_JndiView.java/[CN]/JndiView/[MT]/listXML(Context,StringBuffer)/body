@@ -1,0 +1,65 @@
+{
+  ClassLoader loader=Thread.currentThread().getContextClassLoader();
+  try {
+    NamingEnumeration<?> ne=ctx.list("");
+    while (ne.hasMore()) {
+      NameClassPair pair=(NameClassPair)ne.next();
+      boolean recursive=false;
+      boolean isLinkRef=false;
+      try {
+        Class<?> c=loader.loadClass(pair.getClassName());
+        if (Context.class.isAssignableFrom(c))         recursive=true;
+        if (LinkRef.class.isAssignableFrom(c))         isLinkRef=true;
+      }
+ catch (      ClassNotFoundException cnfe) {
+      }
+      String name=pair.getName();
+      if (isLinkRef) {
+        Object obj=null;
+        LinkRef link=null;
+        try {
+          obj=ctx.lookupLink(name);
+          link=(LinkRef)obj;
+        }
+ catch (        Throwable t) {
+          log.error("Invalid LinkRef for: " + name,t);
+          appendLinkRefErrorTag(buffer);
+        }
+        appendLinkRefTag(buffer,link,pair);
+      }
+ else {
+        if (recursive) {
+          Object value=null;
+          try {
+            value=ctx.lookup(name);
+          }
+ catch (          Throwable t) {
+            appendErrorTag(buffer,"Failed to lookup: " + name + ", errmsg="+ t.getMessage());
+          }
+          if (value instanceof Context) {
+            Context subctx=(Context)value;
+            openContextTag(buffer);
+            appendNCPTag(buffer,pair);
+            try {
+              listXML(subctx,buffer);
+            }
+ catch (            Throwable t) {
+              appendErrorTag(buffer,"Failed to list contents of: " + name + ", errmsg="+ t.getMessage());
+            }
+            closeContextTag(buffer);
+          }
+ else {
+            appendNonContextTag(buffer,pair);
+          }
+        }
+ else {
+          appendLeafTag(buffer,pair);
+        }
+      }
+    }
+    ne.close();
+  }
+ catch (  NamingException ne) {
+    appendErrorTag(buffer,"error while listing context " + ctx.toString() + ": "+ ne.toString(true));
+  }
+}
