@@ -1,0 +1,20 @@
+{
+  final BatchBuilder batchBuilder=serviceActivatorContext.getBatchBuilder();
+  final DomainControllerConnectionService domainControllerClientService=new DomainControllerConnectionService(this);
+  final BatchServiceBuilder<Void> serviceBuilder=batchBuilder.addService(DomainControllerConnectionService.SERVICE_NAME,domainControllerClientService).addListener(new AbstractServiceListener<Void>(){
+    @Override public void serviceFailed(    ServiceController<? extends Void> serviceController,    StartException reason){
+      log.error("Failed to register with domain controller.",reason);
+    }
+  }
+).setInitialMode(ServiceController.Mode.IMMEDIATE);
+  final RemoteDomainControllerElement remoteDomainControllerElement=hostConfig.getRemoteDomainControllerElement();
+  final InetAddress hostAddress;
+  try {
+    hostAddress=InetAddress.getByName(remoteDomainControllerElement.getHost());
+  }
+ catch (  UnknownHostException e) {
+    throw new RuntimeException("Failed to get remote domain controller address",e);
+  }
+  serviceBuilder.addInjection(domainControllerClientService.getDomainControllerAddressInjector(),hostAddress);
+  serviceBuilder.addInjection(domainControllerClientService.getDomainControllerPortInjector(),remoteDomainControllerElement.getPort());
+}

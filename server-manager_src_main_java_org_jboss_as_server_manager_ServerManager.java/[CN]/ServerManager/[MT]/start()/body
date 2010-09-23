@@ -3,10 +3,25 @@
   launchDirectServerCommunicationHandler();
   launchProcessManagerSlave();
   initializeServerMaker();
+  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+  batchBuilder.addListener(new AbstractServiceListener<Object>(){
+    public void serviceFailed(    ServiceController<? extends Object> serviceController,    StartException reason){
+      log.errorf(reason,"Service [%s] failed.",serviceController.getName());
+    }
+  }
+);
+  final ServiceActivatorContext serviceActivatorContext=new ServiceActivatorContextImpl(batchBuilder);
+  activateManagementCommunication(serviceActivatorContext);
   if (hostConfig.getLocalDomainControllerElement() != null) {
-    launchLocalDomainController();
+    activateLocalDomainController(serviceActivatorContext);
   }
  else {
-    connectToRemoteDomainController();
+    activateRemoteDomainControllerConnection(serviceActivatorContext);
+  }
+  try {
+    batchBuilder.install();
+  }
+ catch (  ServiceRegistryException e) {
+    throw new RuntimeException(e);
   }
 }

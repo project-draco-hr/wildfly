@@ -1,0 +1,38 @@
+{
+  final InputStream socketIn=socketConnection.getInputStream();
+  byte[] signatureBytes=new byte[4];
+  try {
+    socketIn.read(signatureBytes);
+    if (!Arrays.equals(ManagementOperationHandler.SIGNATURE,signatureBytes)) {
+      log.errorf("ServerManager request failed. Invalid signature[%s]",Arrays.toString(signatureBytes));
+      return;
+    }
+  }
+ catch (  IOException e) {
+    log.error("ServerManager request failed.  Unable to read signature",e);
+    return;
+  }
+  byte handlerId;
+  try {
+    handlerId=(byte)socketIn.read();
+    if (handlerId == -1) {
+      log.error("ServerManager request failed.  Invalid handler id");
+      return;
+    }
+  }
+ catch (  IOException e) {
+    log.error("ServerManager request failed.  Unable to read handler id",e);
+    return;
+  }
+  final ManagementOperationHandler handler=handlers.get(Byte.valueOf(handlerId));
+  if (handler == null) {
+    log.error("ServerManager request failed.  Invalid handler id");
+    return;
+  }
+  try {
+    handler.handleRequest(socketConnection.getInputStream(),socketConnection.getOutputStream());
+  }
+  finally {
+    socketConnection.close();
+  }
+}

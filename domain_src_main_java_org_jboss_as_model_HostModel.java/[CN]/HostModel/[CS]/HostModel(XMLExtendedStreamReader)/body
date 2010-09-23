@@ -2,44 +2,71 @@
   super(reader);
   namespaces.putAll(readNamespaces(reader));
   schemaLocation=readSchemaLocation(reader);
-  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+  String name=null;
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (reader.getAttributeNamespace(i) != null) {
+      continue;
+    }
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+        name=value;
+        break;
+      }
+default :
+    throw unexpectedAttribute(reader,i);
+}
+}
+this.name=name != null ? name : DEFAULT_NAME;
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
 case DOMAIN_1_0:
 {
-        final Element element=Element.forName(reader.getLocalName());
+    final Element element=Element.forName(reader.getLocalName());
 switch (element) {
 case EXTENSIONS:
 {
-            parseExtensions(reader);
-            break;
-          }
-case SYSTEM_PROPERTIES:
-{
-          if (systemProperties != null) {
-            throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
-          }
-          this.systemProperties=new PropertiesElement(reader);
-          break;
-        }
-case DOMAIN_CONTROLLER:
-{
-        parseDomainController(reader);
+        parseExtensions(reader);
         break;
       }
-case INTERFACES:
+case SYSTEM_PROPERTIES:
 {
-      parseInterfaces(reader);
+      if (systemProperties != null) {
+        throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+      }
+      this.systemProperties=new PropertiesElement(reader);
       break;
     }
-case JVMS:
+case MANAGEMENT:
 {
-    parseJvms(reader);
+    if (managementElement != null) {
+      throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+    }
+    this.managementElement=new ManagementElement(reader);
     break;
   }
+case DOMAIN_CONTROLLER:
+{
+  parseDomainController(reader);
+  break;
+}
+case INTERFACES:
+{
+parseInterfaces(reader);
+break;
+}
+case JVMS:
+{
+parseJvms(reader);
+break;
+}
 case SERVERS:
 {
-  parseServers(reader);
-  break;
+parseServers(reader);
+break;
 }
 default :
 throw unexpectedElement(reader);
@@ -49,5 +76,8 @@ break;
 default :
 throw unexpectedElement(reader);
 }
+}
+if (managementElement == null) {
+throw missingRequiredElement(reader,Collections.singleton(Element.MANAGEMENT.getLocalName()));
 }
 }
