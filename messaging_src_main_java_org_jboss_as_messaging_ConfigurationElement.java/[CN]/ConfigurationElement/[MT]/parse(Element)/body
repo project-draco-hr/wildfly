@@ -1,0 +1,152 @@
+{
+  config.setBackup(XMLConfigurationUtil.getBoolean(e,"backup",config.isBackup()));
+  config.setSharedStore(XMLConfigurationUtil.getBoolean(e,"shared-store",config.isSharedStore()));
+  config.setFileDeploymentEnabled(XMLConfigurationUtil.getBoolean(e,"file-deployment-enabled",config instanceof FileConfiguration));
+  config.setPersistenceEnabled(XMLConfigurationUtil.getBoolean(e,"persistence-enabled",config.isPersistenceEnabled()));
+  config.setPersistDeliveryCountBeforeDelivery(XMLConfigurationUtil.getBoolean(e,"persist-delivery-count-before-delivery",config.isPersistDeliveryCountBeforeDelivery()));
+  config.setScheduledThreadPoolMaxSize(XMLConfigurationUtil.getInteger(e,"scheduled-thread-pool-max-size",config.getScheduledThreadPoolMaxSize(),Validators.GT_ZERO));
+  config.setThreadPoolMaxSize(XMLConfigurationUtil.getInteger(e,"thread-pool-max-size",config.getThreadPoolMaxSize(),Validators.MINUS_ONE_OR_GT_ZERO));
+  config.setSecurityEnabled(XMLConfigurationUtil.getBoolean(e,"security-enabled",config.isSecurityEnabled()));
+  config.setJMXManagementEnabled(XMLConfigurationUtil.getBoolean(e,"jmx-management-enabled",config.isJMXManagementEnabled()));
+  config.setJMXDomain(XMLConfigurationUtil.getString(e,"jmx-domain",config.getJMXDomain(),Validators.NOT_NULL_OR_EMPTY));
+  config.setSecurityInvalidationInterval(XMLConfigurationUtil.getLong(e,"security-invalidation-interval",config.getSecurityInvalidationInterval(),Validators.GT_ZERO));
+  config.setConnectionTTLOverride(XMLConfigurationUtil.getLong(e,"connection-ttl-override",config.getConnectionTTLOverride(),Validators.MINUS_ONE_OR_GT_ZERO));
+  config.setEnabledAsyncConnectionExecution(XMLConfigurationUtil.getBoolean(e,"async-connection-execution-enabled",config.isAsyncConnectionExecutionEnabled()));
+  config.setTransactionTimeout(XMLConfigurationUtil.getLong(e,"transaction-timeout",config.getTransactionTimeout(),Validators.GT_ZERO));
+  config.setTransactionTimeoutScanPeriod(XMLConfigurationUtil.getLong(e,"transaction-timeout-scan-period",config.getTransactionTimeoutScanPeriod(),Validators.GT_ZERO));
+  config.setMessageExpiryScanPeriod(XMLConfigurationUtil.getLong(e,"message-expiry-scan-period",config.getMessageExpiryScanPeriod(),Validators.MINUS_ONE_OR_GT_ZERO));
+  config.setMessageExpiryThreadPriority(XMLConfigurationUtil.getInteger(e,"message-expiry-thread-priority",config.getMessageExpiryThreadPriority(),Validators.THREAD_PRIORITY_RANGE));
+  config.setIDCacheSize(XMLConfigurationUtil.getInteger(e,"id-cache-size",config.getIDCacheSize(),Validators.GT_ZERO));
+  config.setPersistIDCache(XMLConfigurationUtil.getBoolean(e,"persist-id-cache",config.isPersistIDCache()));
+  config.setManagementAddress(new SimpleString(XMLConfigurationUtil.getString(e,"management-address",config.getManagementAddress().toString(),Validators.NOT_NULL_OR_EMPTY)));
+  config.setManagementNotificationAddress(new SimpleString(XMLConfigurationUtil.getString(e,"management-notification-address",config.getManagementNotificationAddress().toString(),Validators.NOT_NULL_OR_EMPTY)));
+  config.setClusterPassword(XMLConfigurationUtil.getString(e,"cluster-password",config.getClusterPassword(),Validators.NO_CHECK));
+  config.setClusterUser(XMLConfigurationUtil.getString(e,"cluster-user",config.getClusterUser(),Validators.NO_CHECK));
+  config.setLogDelegateFactoryClassName(XMLConfigurationUtil.getString(e,"log-delegate-factory-class-name",config.getLogDelegateFactoryClassName(),Validators.NOT_NULL_OR_EMPTY));
+  NodeList interceptorNodes=e.getElementsByTagName("remoting-interceptors");
+  ArrayList<String> interceptorList=new ArrayList<String>();
+  if (interceptorNodes.getLength() > 0) {
+    NodeList interceptors=interceptorNodes.item(0).getChildNodes();
+    for (int i=0; i < interceptors.getLength(); i++) {
+      if ("class-name".equalsIgnoreCase(interceptors.item(i).getNodeName())) {
+        String clazz=interceptors.item(i).getTextContent();
+        interceptorList.add(clazz);
+      }
+    }
+  }
+  config.setInterceptorClassNames(interceptorList);
+  NodeList backups=e.getElementsByTagName("backup-connector-ref");
+  if (backups.getLength() > 0) {
+    Node backupNode=backups.item(0);
+    config.setBackupConnectorName(backupNode.getAttributes().getNamedItem("connector-name").getNodeValue());
+  }
+  NodeList connectorNodes=e.getElementsByTagName("connector");
+  for (int i=0; i < connectorNodes.getLength(); i++) {
+    org.w3c.dom.Element connectorNode=(Element)connectorNodes.item(i);
+    TransportConfiguration connectorConfig=parseTransportConfiguration(connectorNode);
+    if (connectorConfig.getName() == null) {
+      log.warn("Cannot deploy a connector with no name specified.");
+      continue;
+    }
+    if (config.getConnectorConfigurations().containsKey(connectorConfig.getName())) {
+      log.warn("There is already a connector with name " + connectorConfig.getName() + " deployed. This one will not be deployed.");
+      continue;
+    }
+    config.getConnectorConfigurations().put(connectorConfig.getName(),connectorConfig);
+  }
+  NodeList acceptorNodes=e.getElementsByTagName("acceptor");
+  for (int i=0; i < acceptorNodes.getLength(); i++) {
+    Element acceptorNode=(Element)acceptorNodes.item(i);
+    TransportConfiguration acceptorConfig=parseTransportConfiguration(acceptorNode);
+    config.getAcceptorConfigurations().add(acceptorConfig);
+  }
+  NodeList bgNodes=e.getElementsByTagName("broadcast-group");
+  for (int i=0; i < bgNodes.getLength(); i++) {
+    Element bgNode=(Element)bgNodes.item(i);
+    parseBroadcastGroupConfiguration(bgNode,config);
+  }
+  NodeList dgNodes=e.getElementsByTagName("discovery-group");
+  for (int i=0; i < dgNodes.getLength(); i++) {
+    Element dgNode=(Element)dgNodes.item(i);
+    parseDiscoveryGroupConfiguration(dgNode,config);
+  }
+  NodeList brNodes=e.getElementsByTagName("bridge");
+  for (int i=0; i < brNodes.getLength(); i++) {
+    Element mfNode=(Element)brNodes.item(i);
+    parseBridgeConfiguration(mfNode,config);
+  }
+  NodeList gaNodes=e.getElementsByTagName("grouping-handler");
+  for (int i=0; i < gaNodes.getLength(); i++) {
+    Element gaNode=(Element)gaNodes.item(i);
+    parseGroupingHandlerConfiguration(gaNode,config);
+  }
+  NodeList ccNodes=e.getElementsByTagName("cluster-connection");
+  for (int i=0; i < ccNodes.getLength(); i++) {
+    Element ccNode=(Element)ccNodes.item(i);
+    parseClusterConnectionConfiguration(ccNode,config);
+  }
+  NodeList dvNodes=e.getElementsByTagName("divert");
+  for (int i=0; i < dvNodes.getLength(); i++) {
+    Element dvNode=(Element)dvNodes.item(i);
+    parseDivertConfiguration(dvNode,config);
+  }
+  config.setLargeMessagesDirectory(XMLConfigurationUtil.getString(e,"large-messages-directory",config.getLargeMessagesDirectory(),Validators.NOT_NULL_OR_EMPTY));
+  config.setBindingsDirectory(XMLConfigurationUtil.getString(e,"bindings-directory",config.getBindingsDirectory(),Validators.NOT_NULL_OR_EMPTY));
+  config.setCreateBindingsDir(XMLConfigurationUtil.getBoolean(e,"create-bindings-dir",config.isCreateBindingsDir()));
+  config.setJournalDirectory(XMLConfigurationUtil.getString(e,"journal-directory",config.getJournalDirectory(),Validators.NOT_NULL_OR_EMPTY));
+  config.setPagingDirectory(XMLConfigurationUtil.getString(e,"paging-directory",config.getPagingDirectory(),Validators.NOT_NULL_OR_EMPTY));
+  config.setCreateJournalDir(XMLConfigurationUtil.getBoolean(e,"create-journal-dir",config.isCreateJournalDir()));
+  String s=XMLConfigurationUtil.getString(e,"journal-type",config.getJournalType().toString(),Validators.JOURNAL_TYPE);
+  if (s.equals(JournalType.NIO.toString())) {
+    config.setJournalType(JournalType.NIO);
+  }
+ else   if (s.equals(JournalType.ASYNCIO.toString())) {
+    boolean supportsAIO=AIOSequentialFileFactory.isSupported();
+    if (supportsAIO) {
+      config.setJournalType(JournalType.ASYNCIO);
+    }
+ else {
+      log.warn("AIO wasn't located on this platform, it will fall back to using pure Java NIO. If your platform is Linux, install LibAIO to enable the AIO journal");
+      config.setJournalType(JournalType.NIO);
+    }
+  }
+  config.setJournalSyncTransactional(XMLConfigurationUtil.getBoolean(e,"journal-sync-transactional",config.isJournalSyncTransactional()));
+  config.setJournalSyncNonTransactional(XMLConfigurationUtil.getBoolean(e,"journal-sync-non-transactional",config.isJournalSyncNonTransactional()));
+  config.setJournalFileSize(XMLConfigurationUtil.getInteger(e,"journal-file-size",config.getJournalFileSize(),Validators.GT_ZERO));
+  int journalBufferTimeout=XMLConfigurationUtil.getInteger(e,"journal-buffer-timeout",config.getJournalType() == JournalType.ASYNCIO ? ConfigurationImpl.DEFAULT_JOURNAL_BUFFER_TIMEOUT_AIO : ConfigurationImpl.DEFAULT_JOURNAL_BUFFER_TIMEOUT_NIO,Validators.GT_ZERO);
+  int journalBufferSize=XMLConfigurationUtil.getInteger(e,"journal-buffer-size",config.getJournalType() == JournalType.ASYNCIO ? ConfigurationImpl.DEFAULT_JOURNAL_BUFFER_SIZE_AIO : ConfigurationImpl.DEFAULT_JOURNAL_BUFFER_SIZE_NIO,Validators.GT_ZERO);
+  int journalMaxIO=XMLConfigurationUtil.getInteger(e,"journal-max-io",config.getJournalType() == JournalType.ASYNCIO ? ConfigurationImpl.DEFAULT_JOURNAL_MAX_IO_AIO : ConfigurationImpl.DEFAULT_JOURNAL_MAX_IO_NIO,Validators.GT_ZERO);
+  if (config.getJournalType() == JournalType.ASYNCIO) {
+    config.setJournalBufferTimeout_AIO(journalBufferTimeout);
+    config.setJournalBufferSize_AIO(journalBufferSize);
+    config.setJournalMaxIO_AIO(journalMaxIO);
+  }
+ else {
+    config.setJournalBufferTimeout_NIO(journalBufferTimeout);
+    config.setJournalBufferSize_NIO(journalBufferSize);
+    config.setJournalMaxIO_NIO(journalMaxIO);
+  }
+  config.setJournalMinFiles(XMLConfigurationUtil.getInteger(e,"journal-min-files",config.getJournalMinFiles(),Validators.GT_ZERO));
+  config.setJournalCompactMinFiles(XMLConfigurationUtil.getInteger(e,"journal-compact-min-files",config.getJournalCompactMinFiles(),Validators.GE_ZERO));
+  config.setJournalCompactPercentage(XMLConfigurationUtil.getInteger(e,"journal-compact-percentage",config.getJournalCompactPercentage(),Validators.PERCENTAGE));
+  config.setLogJournalWriteRate(XMLConfigurationUtil.getBoolean(e,"log-journal-write-rate",ConfigurationImpl.DEFAULT_JOURNAL_LOG_WRITE_RATE));
+  config.setJournalPerfBlastPages(XMLConfigurationUtil.getInteger(e,"perf-blast-pages",ConfigurationImpl.DEFAULT_JOURNAL_PERF_BLAST_PAGES,Validators.MINUS_ONE_OR_GT_ZERO));
+  config.setRunSyncSpeedTest(XMLConfigurationUtil.getBoolean(e,"run-sync-speed-test",config.isRunSyncSpeedTest()));
+  config.setWildcardRoutingEnabled(XMLConfigurationUtil.getBoolean(e,"wild-card-routing-enabled",config.isWildcardRoutingEnabled()));
+  config.setMessageCounterEnabled(XMLConfigurationUtil.getBoolean(e,"message-counter-enabled",config.isMessageCounterEnabled()));
+  config.setMessageCounterSamplePeriod(XMLConfigurationUtil.getLong(e,"message-counter-sample-period",config.getMessageCounterSamplePeriod(),Validators.GT_ZERO));
+  config.setMessageCounterMaxDayHistory(XMLConfigurationUtil.getInteger(e,"message-counter-max-day-history",config.getMessageCounterMaxDayHistory(),Validators.GT_ZERO));
+  config.setServerDumpInterval(XMLConfigurationUtil.getLong(e,"server-dump-interval",config.getServerDumpInterval(),Validators.MINUS_ONE_OR_GT_ZERO));
+  config.setMemoryWarningThreshold(XMLConfigurationUtil.getInteger(e,"memory-warning-threshold",config.getMemoryWarningThreshold(),Validators.PERCENTAGE));
+  config.setMemoryMeasureInterval(XMLConfigurationUtil.getLong(e,"memory-measure-interval",config.getMemoryMeasureInterval(),Validators.MINUS_ONE_OR_GT_ZERO));
+  parseAddressSettings(e,config);
+  parseQueues(e,config);
+  parseSecurity(e,config);
+  NodeList connectorServiceConfigs=e.getElementsByTagName("connector-service");
+  ArrayList<ConnectorServiceConfiguration> configs=new ArrayList<ConnectorServiceConfiguration>();
+  for (int i=0; i < connectorServiceConfigs.getLength(); i++) {
+    Element node=(Element)connectorServiceConfigs.item(i);
+    configs.add((parseConnectorService(node)));
+  }
+  config.setConnectorServiceConfigurations(configs);
+}
