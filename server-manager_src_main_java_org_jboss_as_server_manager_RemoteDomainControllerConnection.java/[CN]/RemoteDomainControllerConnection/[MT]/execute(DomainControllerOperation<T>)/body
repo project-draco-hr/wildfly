@@ -1,19 +1,10 @@
 {
-  Socket socket=null;
+  final InitiatingFuture<T> initiatingFuture=new InitiatingFuture<T>();
+  executorService.execute(new InitiateRequestTask<T>(operation,initiatingFuture));
   try {
-    socket=new Socket(dcAddress,dcPort);
-    SimpleDataInput intput=new SimpleDataInput(Marshalling.createByteInput(socket.getInputStream()));
-    SimpleDataOutput output=new SimpleDataOutput(Marshalling.createByteOutput(socket.getOutputStream()));
-    final ManagementRequestProtocolHeader managementRequestHeader=new ManagementRequestProtocolHeader(ManagementProtocol.VERSION,ManagementProtocol.DOMAIN_CONTROLLER_REQUEST);
-    managementRequestHeader.write(output);
-    output.flush();
-    final ManagementResponseProtocolHeader responseHeader=new ManagementResponseProtocolHeader(intput);
-    return operation.execute(responseHeader.getVersion(),serverManagerId,output,intput);
+    return initiatingFuture.get();
   }
- catch (  Throwable t) {
-    throw new RuntimeException("Failed to execute server manager request " + operation,t);
-  }
- finally {
-    safeClose(socket);
+ catch (  Exception e) {
+    throw new RuntimeException("Failed to execute remote domain controller operation: " + operation,e);
   }
 }
