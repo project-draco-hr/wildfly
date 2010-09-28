@@ -1,0 +1,57 @@
+{
+  requireNoAttributes(reader);
+  final Set<String> names=new HashSet<String>();
+  while (reader.nextTag() != END_ELEMENT) {
+    final String name=readStringAttributeElement(reader,Attribute.NAME.getLocalName());
+    if (!names.add(name)) {
+      throw new XMLStreamException("Duplicate profile declaration",reader.getLocation());
+    }
+    final Set<String> includes=new LinkedHashSet<String>();
+    OUT:     while (reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case DOMAIN_1_0:
+{
+          if (Element.forName(reader.getLocalName()) != Element.INCLUDE) {
+            throw unexpectedElement(reader);
+          }
+          final String includedName=readStringAttributeElement(reader,Attribute.NAME.getLocalName());
+          if (!names.contains(includedName)) {
+            throw new XMLStreamException("No profile found for inclusion",reader.getLocation());
+          }
+          if (!includes.add(includedName)) {
+            throw new XMLStreamException("Duplicate profile include",reader.getLocation());
+          }
+          break;
+        }
+default :
+{
+        break OUT;
+      }
+  }
+}
+final Set<String> configuredSubsystemTypes=new HashSet<String>();
+while (reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case UNKNOWN:
+{
+      if (Element.forName(reader.getLocalName()) != Element.SUBSYSTEM) {
+        throw unexpectedElement(reader);
+      }
+      if (configuredSubsystemTypes.add(reader.getNamespaceURI())) {
+        throw new XMLStreamException("Duplicate subsystem declaration",reader.getLocation());
+      }
+      final List<AbstractSubsystemUpdate<?,?>> resultList=new ArrayList<AbstractSubsystemUpdate<?,?>>();
+      reader.handleAny(resultList);
+      for (      AbstractSubsystemUpdate<?,?> update : resultList) {
+        list.add(DomainProfileUpdate.create(name,update));
+      }
+      break;
+    }
+default :
+{
+    throw unexpectedElement(reader);
+  }
+}
+}
+}
+}
