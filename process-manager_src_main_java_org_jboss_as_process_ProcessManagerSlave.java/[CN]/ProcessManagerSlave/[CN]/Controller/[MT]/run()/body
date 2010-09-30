@@ -1,4 +1,5 @@
 {
+  OutgoingCommandHandlerToMessageHandlerAdapter handler=new OutgoingCommandHandlerToMessageHandlerAdapter();
   final InputStream input=ProcessManagerSlave.this.input;
   final StringBuilder b=new StringBuilder();
   try {
@@ -9,50 +10,15 @@
         break;
       }
       try {
-        final Command command=Command.valueOf(b.toString());
-switch (command) {
-case SHUTDOWN:
-{
-            shutdown();
-            break;
-          }
-case SHUTDOWN_SERVERS:
-{
-          handler.shutdownServers();
-          break;
-        }
-case DOWN:
-{
-        if (status == Status.MORE) {
-          status=StreamUtils.readWord(input,b);
-          handler.down(b.toString());
-        }
-        break;
+        final OutgoingCommand command=OutgoingCommand.valueOf(b.toString());
+        status=command.handleMessage(input,status,handler,b);
       }
-case MSG:
-{
-      if (status == Status.MORE) {
-        status=StreamUtils.readWord(input,b);
-        final String sourceProcess=b.toString();
-        if (status == Status.MORE) {
-          try {
-            handler.handleMessage(sourceProcess,StreamUtils.readBytesWithLength(input));
-          }
- catch (          Throwable t) {
-          }
-          status=StreamUtils.readStatus(input);
-        }
+ catch (      IllegalArgumentException e) {
       }
-      break;
+      if (status == Status.MORE)       StreamUtils.readToEol(input);
     }
-}
-}
- catch (IllegalArgumentException e) {
-}
-if (status == Status.MORE) StreamUtils.readToEol(input);
-}
-}
- catch (IOException e) {
-shutdown();
-}
+  }
+ catch (  IOException e) {
+    shutdown();
+  }
 }

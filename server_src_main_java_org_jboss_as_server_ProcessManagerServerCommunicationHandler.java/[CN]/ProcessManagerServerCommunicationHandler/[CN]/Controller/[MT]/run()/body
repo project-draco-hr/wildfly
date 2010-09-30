@@ -1,4 +1,5 @@
 {
+  OutgoingCommandHandlerToMessageHandlerAdapter handler=new OutgoingCommandHandlerToMessageHandlerAdapter();
   final InputStream input=ProcessManagerServerCommunicationHandler.this.input;
   final StringBuilder b=new StringBuilder();
   try {
@@ -9,52 +10,16 @@
         break;
       }
       try {
-        final Command command=Command.valueOf(b.toString());
-switch (command) {
-case SHUTDOWN:
-{
-            shutdown();
-            break;
-          }
-case MSG:
-{
-          if (status == Status.MORE) {
-            status=StreamUtils.readWord(input,b);
-            final String sourceProcess=b.toString();
-            if (status == Status.MORE) {
-              try {
-                handler.handleMessage(StreamUtils.readBytesWithLength(input));
-              }
- catch (              Throwable t) {
-                logger.error("Caught exception handling message from " + sourceProcess,t);
-              }
-              status=StreamUtils.readStatus(input);
-            }
-          }
-          break;
-        }
-case RECONNECT_SERVER_MANAGER:
-{
-        if (status == Status.MORE) {
-          status=StreamUtils.readWord(input,b);
-          final String address=b.toString();
-          if (status != Status.MORE) {
-            return;
-          }
-          status=StreamUtils.readWord(input,b);
-          final String port=b.toString();
-          handler.reconnectServer(address,port);
-        }
+        final OutgoingCommand command=OutgoingCommand.valueOf(b.toString());
+        status=command.handleMessage(input,status,handler,b);
       }
+ catch (      IllegalArgumentException e) {
+        logger.error("Received unknown command: " + b.toString());
+      }
+      if (status == Status.MORE)       StreamUtils.readToEol(input);
+    }
   }
-}
- catch (IllegalArgumentException e) {
-  logger.error("Received unknown command: " + b.toString());
-}
-if (status == Status.MORE) StreamUtils.readToEol(input);
-}
-}
- catch (IOException e) {
-shutdown();
-}
+ catch (  IOException e) {
+    shutdown();
+  }
 }

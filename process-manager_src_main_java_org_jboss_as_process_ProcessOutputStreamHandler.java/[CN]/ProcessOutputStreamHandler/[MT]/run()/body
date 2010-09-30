@@ -10,192 +10,24 @@
         return;
       }
       try {
-        final Command command=Command.valueOf(b.toString());
-        OUT: switch (command) {
-case ADD:
-{
-            if (status != Status.MORE) {
-              break;
-            }
-            status=StreamUtils.readWord(inputStream,b);
-            if (status != Status.MORE) {
-              break;
-            }
-            final String name=b.toString();
-            status=StreamUtils.readWord(inputStream,b);
-            if (status != Status.MORE) {
-              break;
-            }
-            final String workingDirectory=b.toString();
-            status=StreamUtils.readWord(inputStream,b);
-            if (status != Status.MORE) {
-              break;
-            }
-            final String sizeString=b.toString();
-            final int size;
-            try {
-              size=Integer.parseInt(sizeString,10);
-            }
- catch (            NumberFormatException e) {
-              e.printStackTrace(System.err);
-              break;
-            }
-            final List<String> execCmd=new ArrayList<String>();
-            for (int i=0; i < size; i++) {
-              status=StreamUtils.readWord(inputStream,b);
-              if (status != Status.MORE) {
-                break OUT;
-              }
-              execCmd.add(b.toString());
-            }
-            status=StreamUtils.readWord(inputStream,b);
-            if (status != Status.MORE) {
-              break;
-            }
-            final String mapSizeString=b.toString();
-            final int mapSize, lastEntry;
-            try {
-              mapSize=Integer.parseInt(mapSizeString,10);
-              lastEntry=mapSize - 1;
-            }
- catch (            NumberFormatException e) {
-              e.printStackTrace(System.err);
-              break;
-            }
-            final Map<String,String> env=new HashMap<String,String>();
-            for (int i=0; i < mapSize; i++) {
-              status=StreamUtils.readWord(inputStream,b);
-              if (status != Status.MORE) {
-                break OUT;
-              }
-              final String key=b.toString();
-              status=StreamUtils.readWord(inputStream,b);
-              if (status == Status.MORE || (i == lastEntry && status == Status.END_OF_LINE)) {
-                env.put(key,b.toString());
-              }
- else {
-                break OUT;
-              }
-            }
-            master.addProcess(name,execCmd,env,workingDirectory);
-            break;
-          }
-case START:
-{
-          if (status != Status.MORE) {
-            break;
-          }
-          status=StreamUtils.readWord(inputStream,b);
-          final String name=b.toString();
-          master.startProcess(name);
-          break;
-        }
-case STOP:
-{
-        if (status != Status.MORE) {
-          break;
-        }
-        status=StreamUtils.readWord(inputStream,b);
-        final String name=b.toString();
-        master.stopProcess(name);
-        break;
+        final IncomingCommand command=IncomingCommand.valueOf(b.toString());
+        status=command.handleMessage(inputStream,status,master,processName,b);
       }
-case SERVERS_SHUTDOWN:
-{
-      if (processName.equals(ProcessManagerMaster.SERVER_MANAGER_PROCESS_NAME)) {
-        master.serversShutdown();
+ catch (      IllegalArgumentException e) {
+        log.error("Received unknown command: " + b.toString());
       }
- else {
-        log.warnf("%s received from wrong process %s",Command.SERVERS_SHUTDOWN,processName);
-      }
-      break;
+      if (status == Status.MORE)       StreamUtils.readToEol(inputStream);
     }
-case REMOVE:
-{
-    if (status != Status.MORE) {
-      break;
-    }
-    status=StreamUtils.readWord(inputStream,b);
-    final String name=b.toString();
-    master.removeProcess(name);
-    break;
   }
-case SEND:
-{
-  if (status != Status.MORE) {
-    break;
+ catch (  SocketException e) {
+    log.error("Socket closed for " + processName + ", shutting down");
+    managed.closeCommandStream();
   }
-  status=StreamUtils.readWord(inputStream,b);
-  if (status == Status.MORE) {
-    final String recipient=b.toString();
-    master.sendMessage(processName,recipient,StreamUtils.readBytesWithLength(inputStream));
-    status=StreamUtils.readStatus(inputStream);
+catch (  Exception e) {
+    log.error("Output stream handler for process " + processName + " caught an exception; shutting down",e);
+    managed.closeCommandStream();
   }
-  break;
-}
-case SEND_STDIN:
-{
-if (status != Status.MORE) {
-  break;
-}
-status=StreamUtils.readWord(inputStream,b);
-if (status == Status.MORE) {
-  final String recipient=b.toString();
-  master.sendStdin(recipient,StreamUtils.readBytesWithLength(inputStream));
-  status=StreamUtils.readStatus(inputStream);
-}
-break;
-}
-case BROADCAST_BYTES:
-{
-if (status == Status.MORE) {
-master.broadcastMessage(processName,StreamUtils.readBytesWithLength(inputStream));
-status=StreamUtils.readStatus(inputStream);
-}
-break;
-}
-case RECONNECT_SERVERS:
-{
-status=StreamUtils.readWord(inputStream,b);
-if (status != Status.MORE) {
-break;
-}
-final String smAddress=b.toString();
-status=StreamUtils.readWord(inputStream,b);
-final String smPort=b.toString();
-master.reconnectServersToServerManager(smAddress,smPort);
-break;
-}
-case RECONNECT_SERVER:
-{
-status=StreamUtils.readWord(inputStream,b);
-if (status != Status.MORE) {
-break;
-}
-final String serverName=b.toString();
-status=StreamUtils.readWord(inputStream,b);
-if (status != Status.MORE) {
-break;
-}
-final String smAddress=b.toString();
-status=StreamUtils.readWord(inputStream,b);
-final String smPort=b.toString();
-master.reconnectProcessToServerManager(serverName,smAddress,smPort);
-break;
-}
-}
-}
- catch (IllegalArgumentException e) {
-log.error("Received unknown command: " + b.toString());
-}
-if (status == Status.MORE) StreamUtils.readToEol(inputStream);
-}
-}
- catch (Exception e) {
-log.error("Output stream handler for process " + processName + " caught an exception; shutting down",e);
-managed.closeCommandStream();
-}
  finally {
-ManagedProcess.safeClose(inputStream);
-}
+    ManagedProcess.safeClose(inputStream);
+  }
 }
