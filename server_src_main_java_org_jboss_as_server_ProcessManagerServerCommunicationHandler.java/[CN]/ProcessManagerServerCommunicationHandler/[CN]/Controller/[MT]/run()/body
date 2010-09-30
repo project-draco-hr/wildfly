@@ -21,56 +21,35 @@ case MSG:
           if (status == Status.MORE) {
             status=StreamUtils.readWord(input,b);
             final String sourceProcess=b.toString();
-            final List<String> msg=new ArrayList<String>();
-            while (status == Status.MORE) {
-              status=StreamUtils.readWord(input,b);
-              msg.add(b.toString());
-            }
-            if (status == Status.END_OF_LINE) {
+            if (status == Status.MORE) {
               try {
-                handler.handleMessage(msg);
+                handler.handleMessage(StreamUtils.readBytesWithLength(input));
               }
  catch (              Throwable t) {
                 logger.error("Caught exception handling message from " + sourceProcess,t);
               }
+              status=StreamUtils.readStatus(input);
             }
           }
           break;
         }
-case MSG_BYTES:
+case RECONNECT_SERVER_MANAGER:
 {
         if (status == Status.MORE) {
           status=StreamUtils.readWord(input,b);
-          final String sourceProcess=b.toString();
-          if (status == Status.MORE) {
-            try {
-              handler.handleMessage(StreamUtils.readBytesWithLength(input));
-            }
- catch (            Throwable t) {
-              logger.error("Caught exception handling message from " + sourceProcess,t);
-            }
-            status=StreamUtils.readStatus(input);
+          final String address=b.toString();
+          if (status != Status.MORE) {
+            return;
           }
+          status=StreamUtils.readWord(input,b);
+          final String port=b.toString();
+          handler.reconnectServer(address,port);
         }
-        break;
       }
-case RECONNECT_SERVER_MANAGER:
-{
-      if (status == Status.MORE) {
-        status=StreamUtils.readWord(input,b);
-        final String address=b.toString();
-        if (status != Status.MORE) {
-          return;
-        }
-        status=StreamUtils.readWord(input,b);
-        final String port=b.toString();
-        handler.reconnectServer(address,port);
-      }
-    }
-}
+  }
 }
  catch (IllegalArgumentException e) {
-logger.error("Received unknown command: " + b.toString());
+  logger.error("Received unknown command: " + b.toString());
 }
 if (status == Status.MORE) StreamUtils.readToEol(input);
 }
