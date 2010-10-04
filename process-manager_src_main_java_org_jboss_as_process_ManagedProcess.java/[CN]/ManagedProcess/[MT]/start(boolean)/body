@@ -3,22 +3,13 @@ synchronized (this) {
     if (start) {
       return;
     }
-    final ProcessBuilder processBuilder=new ProcessBuilder(command);
-    final Map<String,String> env=processBuilder.environment();
-    env.clear();
-    env.putAll(this.env);
-    processBuilder.directory(new File(workingDirectory));
-    final Process process;
-synchronized (ManagedProcess.class) {
-      process=processBuilder.start();
+    List<String> command=new ArrayList<String>(this.command);
+    if (isRespawn && processName.equals(ProcessManagerMaster.SERVER_MANAGER_PROCESS_NAME)) {
+      command.add(CommandLineConstants.RESTART_SERVER_MANAGER);
     }
-    final ErrorStreamHandler errorStreamHandler=new ErrorStreamHandler(processName,process.getErrorStream());
-    final Thread errorThread=new Thread(errorStreamHandler);
-    errorThread.setName("Process " + processName + " stderr thread");
-    final Thread monitorThread=new Thread(new ProcessMonitor(process));
-    monitorThread.setName("Process " + processName + " monitor thread");
-    errorThread.start();
-    monitorThread.start();
+    ProcessHandler proc=master.getProcessHandlerFactory().createHandler().createProcess(this,command,Collections.unmodifiableMap(env),workingDirectory);
+    stdinStream=proc.getInputStream();
+    new Thread(new ErrorStreamHandler(processName,proc.getErrorStream()),"Process " + processName + " stderr thread").start();
     start=true;
     stopped=false;
     if (!isRespawn)     respawnCount=0;

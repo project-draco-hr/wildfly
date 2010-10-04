@@ -1,18 +1,26 @@
 {
   InputStream in=socket.getInputStream();
   StringBuilder sb=new StringBuilder();
-  Status status=StreamUtils.readWord(in,sb);
-  if (status != Status.MORE) {
-    throw new InitialSocketRequestException("Process acceptor: received '" + sb.toString() + "' but no more");
-  }
-  if (!sb.toString().equals("CONNECTED")) {
-    throw new InitialSocketRequestException("Process acceptor: received unknown start command '" + sb.toString() + "'");
-  }
-  sb=new StringBuilder();
-  while (status == Status.MORE) {
+  socket.setSoTimeout(10000);
+  Status status;
+  String processName;
+  try {
     status=StreamUtils.readWord(in,sb);
+    if (status != Status.MORE) {
+      throw new InitialSocketRequestException("Process acceptor: received '" + sb.toString() + "' but no more");
+    }
+    if (!sb.toString().equals("CONNECTED")) {
+      throw new InitialSocketRequestException("Process acceptor: received unknown start command '" + sb.toString() + "'");
+    }
+    sb=new StringBuilder();
+    while (status == Status.MORE) {
+      status=StreamUtils.readWord(in,sb);
+    }
+    processName=sb.toString();
   }
-  String processName=sb.toString();
+ catch (  SocketTimeoutException e) {
+    throw new InitialSocketRequestException("Process acceptor: did not receive any data on socket within 10 seconds");
+  }
   final Map<String,ManagedProcess> processes=ProcessManagerMaster.this.processes;
   ManagedProcess process=null;
 synchronized (processes) {
@@ -20,10 +28,9 @@ synchronized (processes) {
     if (process == null) {
       throw new InitialSocketRequestException("Process acceptor: received connect command for unknown process '" + processName + "' ("+ processes.keySet()+ ")");
     }
-    if (!process.isStart()) {
-      throw new InitialSocketRequestException("Process acceptor: received connect command for not started process '" + process + "'");
-    }
   }
+  socket.setSoTimeout(0);
   SocketConnection connection=SocketConnection.accepted(socket);
   process.setSocket(connection);
+  acceptedConnection(processName,connection);
 }

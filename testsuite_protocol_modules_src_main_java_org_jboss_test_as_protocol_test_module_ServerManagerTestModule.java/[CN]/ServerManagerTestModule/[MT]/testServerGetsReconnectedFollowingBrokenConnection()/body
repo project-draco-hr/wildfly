@@ -1,35 +1,29 @@
 {
-  MockProcessManager pm=MockProcessManager.create(3);
   setDomainConfigDir("standard");
-  ServerManager sm=ServerManagerStarter.createServerManager(pm);
-  pm.waitForServerManager();
-  checkProcessManagerConnection(pm,"ServerManager",true);
-  pm.waitForAddedProcesses();
-  pm.waitForStartedProcesses();
-  MockManagedProcess svr1=pm.getProcess("Server:server-one");
-  Assert.assertNotNull(svr1);
-  MockManagedProcess svr2=pm.getProcess("Server:server-two");
-  Assert.assertNotNull(svr2);
-  svr1.waitForStart();
-  svr2.waitForStart();
-  ServerModel cfg1=readStartCommand(svr1.getMessageHandler());
-  Assert.assertEquals("server-one",cfg1.getServerName());
-  ServerModel cfg2=readStartCommand(svr2.getMessageHandler());
-  Assert.assertEquals("server-two",cfg2.getServerName());
-  Assert.assertTrue(managerAlive(svr1.getSmAddress(),svr1.getSmPort()));
-  svr1.getCommunicationHandler().sendMessage(ServerManagerProtocolCommand.SERVER_STARTED.createCommandBytes(null));
-  svr2.getCommunicationHandler().sendMessage(ServerManagerProtocolCommand.SERVER_STARTED.createCommandBytes(null));
-  pm.resetReconnectServers();
-  svr2.getCommunicationHandler().shutdown();
+  TestProcessHandlerFactory processHandlerFactory=new TestProcessHandlerFactory(true,false);
+  final TestProcessManager pm=TestProcessManager.create(processHandlerFactory,InetAddress.getLocalHost(),0);
+  pm.pollAddedProcess(3);
+  pm.pollStartedProcess(3);
+  TestServerManagerProcess sm=assertGetServerManager(processHandlerFactory);
+  MockServerProcess svr1=assertGetServer(processHandlerFactory,"Server:server-one");
+  MockServerProcess svr2=assertGetServer(processHandlerFactory,"Server:server-two");
+  sendMessageToServerManager(ServerToServerManagerProtocolCommand.SERVER_AVAILABLE,svr1,svr2);
+  Assert.assertEquals("server-one",assertReadStartCommand(svr1).getServerName());
+  Assert.assertEquals("server-two",assertReadStartCommand(svr2).getServerName());
+  managerAlive(svr1.getSmAddress(),svr1.getSmPort());
+  managerAlive(svr1.getPmAddress(),svr1.getPmPort());
+  sendMessageToServerManager(ServerToServerManagerProtocolCommand.SERVER_STARTED,svr1,svr2);
+  svr2.closeServerManagerConnection();
   int newSmPort=parsePort("Server:server-two",pm.waitForReconnectServers());
-  svr2.reconnnectAndSendReconnectStatus(InetAddress.getLocalHost(),newSmPort,ServerState.AVAILABLE);
-  cfg2=readStartCommand(svr2.getMessageHandler());
-  Assert.assertEquals("server-two",cfg2.getServerName());
+  Assert.assertEquals(newSmPort,parsePort(svr2.waitForReconnectServer()));
+  Assert.assertSame(sm,assertGetServerManager(processHandlerFactory));
+  svr2.reconnnectToServerManagerAndSendReconnectStatus(InetAddress.getLocalHost(),newSmPort,ServerState.AVAILABLE);
+  Assert.assertEquals("server-two",assertReadStartCommand(svr2).getServerName());
   try {
-    svr1.getMessageHandler().awaitAndReadMessage(500);
+    svr2.awaitAndReadMessage(500);
     Assert.fail("Should not have any messages for server one");
   }
  catch (  Exception expected) {
   }
-  sm.stop();
+  shutdownProcessManagerNoWait(pm);
 }
