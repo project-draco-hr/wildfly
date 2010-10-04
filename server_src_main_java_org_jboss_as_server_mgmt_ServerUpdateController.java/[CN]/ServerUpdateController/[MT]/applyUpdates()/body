@@ -3,6 +3,8 @@
     transition(false);
     return;
   }
+  BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+  UpdateContext updateContext=new SimpleUpdateContext(serviceContainer,batchBuilder);
   for (  ServerModelUpdateTuple<?,?> update : updates) {
     logger.debugf("Applying update %s",update.getUpdate().toString());
     if (status != Status.ACTIVE) {
@@ -16,7 +18,7 @@
       serverModel.update(update.getUpdate());
       appliedToModel=true;
       if (allowRuntimeUpdates) {
-        update.applyUpdate(serviceContainer);
+        update.applyUpdate(updateContext);
       }
  else {
         updateComplete();
@@ -30,10 +32,10 @@
       update.handleFailure(e);
       if (rollbackTuple != null) {
         if (appliedToModel) {
-          rollbackTuple.applyUpdate(serviceContainer);
-        }
-        if (appliedToModel) {
           try {
+            if (allowRuntimeUpdates) {
+              rollbackTuple.applyUpdate(updateContext);
+            }
             serverModel.update(rollbackTuple.getUpdate());
           }
  catch (          UpdateFailedException e1) {
@@ -41,6 +43,14 @@
           }
         }
       }
+    }
+  }
+  if (status == Status.ACTIVE) {
+    try {
+      batchBuilder.install();
+    }
+ catch (    ServiceRegistryException e) {
+      handleRollback();
     }
   }
   if (logger.isDebugEnabled()) {
