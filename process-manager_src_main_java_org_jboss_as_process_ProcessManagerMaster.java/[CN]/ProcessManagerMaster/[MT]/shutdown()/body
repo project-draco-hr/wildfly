@@ -1,40 +1,32 @@
 {
   boolean isShutdown=shutdown.getAndSet(true);
   if (isShutdown)   return;
-  ManagedProcess serverManagerProcess=null;
+  log.info("Initiating shutdown of ProcessManager");
+  ManagedProcess serverManager=null;
 synchronized (processes) {
-    serverManagerProcess=processes.get(SERVER_MANAGER_PROCESS_NAME);
+    serverManager=processes.get(SERVER_MANAGER_PROCESS_NAME);
   }
-  boolean stopped=false;
-  if (serverManagerProcess != null) {
+  if (serverManager != null) {
     try {
-      stopped=serverManagerProcess.shutdownServers();
+      log.info("Stopping ServerManager");
+      serverManager.stop();
     }
  catch (    IOException e) {
-      log.errorf("Error sending %s command to %s",OutgoingPmCommand.SHUTDOWN_SERVERS,SERVER_MANAGER_PROCESS_NAME);
-    }
-  }
-  if (stopped) {
-    try {
-      if (!shutdownServersLatch.await(10,TimeUnit.SECONDS)) {
-        log.errorf("Did not receive shutdown confirmation of servers in %d seconds. Continuing shutdown process ",10);
-      }
-    }
- catch (    InterruptedException e) {
-      log.errorf(e,"Error waiting for %s command from %s",IncomingPmCommand.SERVERS_SHUTDOWN,SERVER_MANAGER_PROCESS_NAME);
+      log.error("Error sending SHUTDOWN to ServerManager");
     }
   }
 synchronized (processes) {
     for (    ManagedProcess proc : processes.values()) {
-      if (proc.isStart()) {
-        try {
-          proc.stop();
-        }
- catch (        IOException e) {
-        }
+      try {
+        log.info("Stopping " + proc.getProcessName());
+        proc.stop();
+      }
+ catch (      IOException e) {
+        log.error("Error sending SHUTDOWN to " + proc.getProcessName());
       }
     }
     processes.clear();
   }
   socketListener.shutdown();
+  log.info("Shutdown ProcessManager");
 }

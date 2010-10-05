@@ -1,4 +1,5 @@
 {
+  if (stopping.get())   return;
   Server server=servers.get(serverName);
   if (server == null) {
     log.errorf("No server called %s exists for stop",serverName);
@@ -7,10 +8,16 @@
   checkState(server,ServerState.STOPPING);
   try {
     processManagerSlave.stopProcess(serverName);
+  }
+ catch (  IOException e) {
+    if (stopping.get())     return;
+    log.errorf(e,"Could not stop server %s in PM",serverName);
+  }
+  try {
     processManagerSlave.removeProcess(serverName);
   }
  catch (  IOException e) {
-    throw new RuntimeException(e);
+    if (stopping.get())     return;
+    log.errorf(e,"Could not stop server %s",serverName);
   }
-  if (shutdownLatch != null)   shutdownLatch.remove(serverName);
 }

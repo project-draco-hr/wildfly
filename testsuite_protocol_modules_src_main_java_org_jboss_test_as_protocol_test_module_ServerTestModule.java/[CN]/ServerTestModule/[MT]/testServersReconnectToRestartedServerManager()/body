@@ -20,18 +20,14 @@
   Command<ServerToServerManagerProtocolCommand> cmd=assertReadServerCommand(sm,"Server:server-one",ServerToServerManagerProtocolCommand.SERVER_RECONNECT_STATUS);
   ServerState state=ServerManagerProtocolUtils.unmarshallCommandData(ServerState.class,cmd);
   Assert.assertSame(ServerState.STARTED,state);
+  TestServerProcess proc1=processHandlerFactory.getProcessHandler("Server:server-one").getTestServerProcess();
   new Thread(new Runnable(){
     public void run(){
       pm.shutdown();
     }
   }
 ).start();
-  assertReadPmCommand(sm,OutgoingPmCommand.SHUTDOWN_SERVERS.toString());
-  sm.sendMessageToServer("Server:server-one",ServerManagerToServerProtocolCommand.STOP_SERVER);
-  assertReadServerCommand(sm,"Server:server-one",ServerToServerManagerProtocolCommand.SERVER_STOPPED);
-  sm.stopServerInPm("Server:server-one");
-  sm.removeServerFromPm("Server:server-one");
-  sm.sendServersShutdownToProcessManager();
-  assertReadPmCommand(sm,OutgoingPmCommand.SHUTDOWN.toString());
+  sm.waitForShutdownCommand();
+  proc1.awaitShutdown();
   sm.stop();
 }
