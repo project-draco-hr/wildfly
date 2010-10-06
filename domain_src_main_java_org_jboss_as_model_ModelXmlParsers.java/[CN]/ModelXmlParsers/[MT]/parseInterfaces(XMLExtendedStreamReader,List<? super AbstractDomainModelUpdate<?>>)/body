@@ -1,6 +1,8 @@
 {
   requireNoAttributes(reader);
   final Set<String> names=new HashSet<String>();
+  final Map<Element,AbstractInterfaceCriteriaElement<?>> interfaceCriteria=new HashMap<Element,AbstractInterfaceCriteriaElement<?>>();
+  Element anyElement=null;
   while (reader.nextTag() != END_ELEMENT) {
     final String name=readStringAttributeElement(reader,Attribute.NAME.getLocalName());
     if (!names.add(name)) {
@@ -14,10 +16,13 @@
       if (Namespace.forUri(reader.getNamespaceURI()) != Namespace.DOMAIN_1_0) {
         throw unexpectedElement(reader);
       }
-switch (Element.forName(reader.getLocalName())) {
+      final Element element=Element.forName(reader.getLocalName());
+switch (element) {
 case ANY_ADDRESS:
+case ANY_IPV4_ADDRESS:
+case ANY_IPV6_ADDRESS:
 {
-          if (!first) {
+          if (!first || anyElement != null) {
             throw unexpectedElement(reader);
           }
           requireNoAttributes(reader);
@@ -25,11 +30,36 @@ case ANY_ADDRESS:
           if (reader.nextTag() != END_ELEMENT) {
             throw unexpectedElement(reader);
           }
+          anyElement=element;
+        }
+default :
+{
+        if (anyElement != null) {
+          throw unexpectedElement(reader);
+        }
+switch (element) {
+case ANY:
+case NOT:
+{
+            final CompoundCriteriaElement criteria=InterfaceParsingUtils.createCompoundCriteria(reader,element == Element.ANY);
+            interfaceCriteria.put(element,criteria);
+            break;
+          }
+default :
+{
+          final AbstractInterfaceCriteriaElement<?> criteria=InterfaceParsingUtils.parseSimpleInterfaceCriteria(reader,element);
+          interfaceCriteria.put(element,criteria);
         }
     }
-    first=false;
   }
+}
+first=false;
+}
  while (reader.nextTag() != END_ELEMENT);
+if (anyElement == null && interfaceCriteria.isEmpty()) {
+throw new XMLStreamException("Either an inet-address element or some other interface criteria element is required",reader.getLocation());
+}
+list.add(new DomainInterfaceAdd(new InterfaceAdd(name,anyElement == Element.ANY_IPV4_ADDRESS,anyElement == Element.ANY_IPV6_ADDRESS,anyElement == Element.ANY_ADDRESS,interfaceCriteria.values())));
 }
 return names;
 }
