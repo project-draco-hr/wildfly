@@ -13,11 +13,26 @@
   if (profileName == null) {
     throw new IllegalArgumentException("Domain model does not contain a profile named '" + profileName + "'");
   }
+  list.add(new ServerNameUpdate(serverName));
+  final Set<String> extensionNames=new LinkedHashSet<String>();
+  for (  String name : domainModel.getExtensions()) {
+    extensionNames.add(name);
+  }
+  for (  String name : hostModel.getExtensions()) {
+    extensionNames.add(name);
+  }
+  for (  String name : extensionNames) {
+    list.add(new ServerExtensionAdd(name));
+  }
   Set<String> unspecifiedInterfaces=new HashSet<String>();
   Map<String,InterfaceElement> interfaces=new HashMap<String,InterfaceElement>();
   for (  InterfaceElement ie : domainModel.getInterfaces()) {
-    if (ie.isFullySpecified())     interfaces.put(ie.getName(),ie);
- else     unspecifiedInterfaces.add(ie.getName());
+    if (ie.isFullySpecified()) {
+      interfaces.put(ie.getName(),ie);
+    }
+ else {
+      unspecifiedInterfaces.add(ie.getName());
+    }
   }
   for (  InterfaceElement ie : hostModel.getInterfaces()) {
     interfaces.put(ie.getName(),ie);
@@ -36,19 +51,19 @@
     bindingRef=serverGroup.getSocketBindingGroupName();
     portOffset=serverGroup.getSocketBindingPortOffset();
   }
+  list.add(new ServerPortOffsetUpdate(portOffset));
   SocketBindingGroupElement domainBindings=domainModel.getSocketBindingGroup(bindingRef);
   if (domainBindings == null) {
     domainBindings=new SocketBindingGroupElement("domainBindings");
   }
-  final Set<String> extensionNames=new LinkedHashSet<String>();
-  for (  String name : domainModel.getExtensions()) {
-    extensionNames.add(name);
-  }
-  for (  String name : hostModel.getExtensions()) {
-    extensionNames.add(name);
-  }
-  for (  String name : extensionNames) {
-    list.add(new ServerExtensionAdd(name));
+  list.add(new ServerSocketBindingGroupUpdate(new SocketBindingGroupUpdate(domainBindings.getName(),domainBindings.getDefaultInterface(),Collections.<String>emptySet())));
+  processSocketBindings(domainBindings,list);
+  for (  final String socketInclude : domainBindings.getIncludedSocketBindingGroups()) {
+    final SocketBindingGroupElement include=domainModel.getSocketBindingGroup(socketInclude);
+    if (include == null) {
+      throw new IllegalStateException("failed to resolve binding-group " + socketInclude);
+    }
+    processSocketBindings(include,list);
   }
   for (  AbstractSubsystemElement<? extends AbstractSubsystemElement<?>> subsystemElement : leafProfile.getSubsystems()) {
     processSubsystem((AbstractSubsystemElement)subsystemElement,list);
