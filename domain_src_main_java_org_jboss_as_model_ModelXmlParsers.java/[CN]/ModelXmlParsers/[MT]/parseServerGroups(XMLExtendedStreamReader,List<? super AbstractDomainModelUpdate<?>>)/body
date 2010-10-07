@@ -46,7 +46,7 @@ throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.PROFILE)
 }
 list.add(new ServerGroupAdd(name,profile));
 NamedModelUpdates<JvmElement> jvm=null;
-boolean sawBindingGroup=false;
+NameOffset socketBinding=null;
 boolean sawDeployments=false;
 while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
@@ -68,11 +68,14 @@ case JVM:
       }
 case SOCKET_BINDING_GROUP:
 {
-      if (sawBindingGroup) {
+      if (socketBinding != null) {
         throw new XMLStreamException(element.getLocalName() + " already defined",reader.getLocation());
       }
-      sawBindingGroup=true;
-      parseSocketBindingGroupRef(reader,name,list);
+      socketBinding=parseSocketBindingGroupRef(reader);
+      list.add(DomainServerGroupUpdate.create(name,new ServerGroupSocketBindingGroupUpdate(socketBinding.name)));
+      if (socketBinding.offset > 0) {
+        list.add(DomainServerGroupUpdate.create(name,new ServerGroupSocketBindingPortOffsetUpdate(socketBinding.offset)));
+      }
       break;
     }
 case DEPLOYMENTS:
