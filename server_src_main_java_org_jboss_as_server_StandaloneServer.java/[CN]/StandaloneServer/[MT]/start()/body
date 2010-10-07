@@ -6,16 +6,25 @@
   if (!standalone.canWrite()) {
     throw new ServerStartException("File " + standalone.getAbsolutePath() + " is not writeable.");
   }
-  final ParseResult<ServerModel> parseResult=new ParseResult<ServerModel>();
+  final List<AbstractServerModelUpdate<?>> updates=new ArrayList<AbstractServerModelUpdate<?>>();
   try {
     final XMLMapper mapper=XMLMapper.Factory.create();
     extensionRegistrar.registerStandardStandaloneReaders(mapper);
-    mapper.parseDocument(parseResult,XMLInputFactory.newInstance().createXMLStreamReader(new BufferedReader(new FileReader(standalone))));
+    mapper.parseDocument(updates,XMLInputFactory.newInstance().createXMLStreamReader(new BufferedReader(new FileReader(standalone))));
   }
  catch (  Exception e) {
     throw new ServerStartException("Caught exception during processing of standalone.xml",e);
   }
-  start(parseResult.getResult());
+  final ServerModel config=new ServerModel();
+  try {
+    for (    final AbstractServerModelUpdate<?> update : updates) {
+      config.update(update);
+    }
+  }
+ catch (  UpdateFailedException e) {
+    throw new ServerStartException("failed to process updates",e);
+  }
+  start(config);
   new Thread(){
 {
       setName("Server Life Thread");
