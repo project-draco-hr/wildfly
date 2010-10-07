@@ -1,4 +1,111 @@
 {
   final List<NamespacePrefix> prefixes=readNamespaces(reader);
   if (!prefixes.isEmpty())   list.add(new ServerNamespaceUpdate(prefixes));
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+switch (Namespace.forUri(reader.getAttributeNamespace(i))) {
+case DOMAIN_1_0:
+{
+        throw unexpectedAttribute(reader,i);
+      }
+case XML_SCHEMA_INSTANCE:
+{
+switch (Attribute.forName(reader.getAttributeLocalName(i))) {
+case SCHEMA_LOCATION:
+{
+          final List<SchemaLocation> locationList=readSchemaLocations(reader,i);
+          list.add(new ServerSchemaLocationUpdate(locationList));
+          break;
+        }
+case NO_NAMESPACE_SCHEMA_LOCATION:
+{
+        break;
+      }
+default :
+{
+      throw unexpectedAttribute(reader,i);
+    }
+}
+}
+}
+}
+Element element=nextElement(reader);
+if (element == Element.NAME) {
+list.add(new ServerNameUpdate(reader.getElementText().trim()));
+reader.require(END_ELEMENT,null,null);
+element=nextElement(reader);
+}
+if (element == Element.EXTENSIONS) {
+Set<String> extensionModules=parseExtensions(reader);
+for (String moduleName : extensionModules) {
+list.add(new ServerExtensionAdd(moduleName));
+}
+element=nextElement(reader);
+}
+if (element == Element.PROFILE) {
+parseServerProfile(reader,list);
+element=nextElement(reader);
+}
+Set<String> interfaceNames=null;
+if (element == Element.INTERFACES) {
+interfaceNames=parseServerModelInterfaces(reader,list);
+element=nextElement(reader);
+}
+if (element == Element.SOCKET_BINDING_GROUP) {
+final List<SocketBindingAdd> bindingUpdates=new ArrayList<SocketBindingAdd>();
+final SocketBindingGroupUpdate group=parseSocketBindingGroup(reader,bindingUpdates,interfaceNames,false);
+list.add(new ServerSocketBindingGroupUpdate(group));
+for (final SocketBindingAdd bindingUpdate : bindingUpdates) {
+list.add(new ServerSocketBindingUpdate(bindingUpdate));
+}
+element=nextElement(reader);
+}
+if (element == Element.SYSTEM_PROPERTIES) {
+parseServerModelSystemProperties(reader,list);
+element=nextElement(reader);
+}
+if (element == Element.DEPLOYMENT_REPOSITORY) {
+boolean enabled=true;
+int interval=0;
+String path=DeploymentRepositoryElement.DEFAULT_STANDALONE_PATH;
+final int attrCount=reader.getAttributeCount();
+for (int i=0; i < attrCount; i++) {
+final String value=reader.getAttributeValue(i);
+if (reader.getAttributeNamespace(i) != null) {
+throw ParseUtils.unexpectedAttribute(reader,i);
+}
+ else {
+final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case PATH:
+{
+  path=value;
+  break;
+}
+case SCAN_INTERVAL:
+{
+interval=Integer.valueOf(value);
+break;
+}
+case SCAN_ENABLED:
+{
+enabled=Boolean.parseBoolean(value);
+break;
+}
+default :
+throw ParseUtils.unexpectedAttribute(reader,i);
+}
+}
+}
+requireNoContent(reader);
+list.add(new ServerDeploymentRepositoryAdd(path,interval,enabled));
+element=nextElement(reader);
+}
+if (element == Element.DEPLOYMENTS) {
+parseServerDeployments(reader,list);
+element=nextElement(reader);
+}
+if (element != null) {
+throw unexpectedElement(reader);
+}
 }

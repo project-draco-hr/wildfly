@@ -1,0 +1,33 @@
+{
+  requireSingleAttribute(reader,Attribute.NAME.getLocalName());
+  final String name=reader.getAttributeValue(0);
+  list.add(new ServerProfileUpdate(name));
+  final Set<String> configuredSubsystemTypes=new HashSet<String>();
+  while (reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case UNKNOWN:
+{
+        if (Element.forName(reader.getLocalName()) != Element.SUBSYSTEM) {
+          throw unexpectedElement(reader);
+        }
+        if (!configuredSubsystemTypes.add(reader.getNamespaceURI())) {
+          throw new XMLStreamException("Duplicate subsystem declaration",reader.getLocation());
+        }
+        final ParseResult<ExtensionContext.SubsystemConfiguration<?>> result=new ParseResult<ExtensionContext.SubsystemConfiguration<?>>();
+        reader.handleAny(result);
+        list.add(new ServerSubsystemAdd(result.getResult().getSubsystemAdd()));
+        for (        AbstractSubsystemUpdate<?,?> update : result.getResult().getUpdates()) {
+          list.add(ServerSubsystemUpdate.create(update));
+        }
+        break;
+      }
+default :
+{
+      throw unexpectedElement(reader);
+    }
+}
+}
+if (configuredSubsystemTypes.size() == 0) {
+throw new XMLStreamException("Profile has no subsystem configurations",reader.getLocation());
+}
+}
