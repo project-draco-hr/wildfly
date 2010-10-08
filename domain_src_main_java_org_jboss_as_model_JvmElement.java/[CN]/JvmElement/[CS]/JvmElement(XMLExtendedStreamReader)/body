@@ -20,8 +20,23 @@ case JAVA_HOME:
         home=value;
         break;
       }
+case DEBUG_ENABLED:
+{
+      debugEnabled=Boolean.valueOf(value);
+      break;
+    }
+case DEBUG_OPTIONS:
+{
+    debugOptions=value;
+    break;
+  }
+case ENV_CLASSPATH_IGNORED:
+{
+  envClasspathIgnored=Boolean.valueOf(value);
+  break;
+}
 default :
-    throw ParseUtils.unexpectedAttribute(reader,i);
+throw ParseUtils.unexpectedAttribute(reader,i);
 }
 }
 }
@@ -34,28 +49,74 @@ while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
 case DOMAIN_1_0:
 {
-  final Element element=Element.forName(reader.getLocalName());
+final Element element=Element.forName(reader.getLocalName());
 switch (element) {
 case HEAP:
 {
-      parseHeap(reader);
-      break;
-    }
+if (heapSize != null || maxHeap != null) {
+  throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+}
+parseMinMax(reader,new HeapSetter());
+break;
+}
+case PERMGEN:
+{
+if (permgenSize != null || maxPermgen != null) {
+throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+}
+parseMinMax(reader,new PermGenSetter());
+break;
+}
+case STACK:
+{
+if (stack != null) {
+throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+}
+parseStack(reader);
+break;
+}
 case ENVIRONMENT_VARIABLES:
 {
-    if (environmentVariables != null) {
-      throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
-    }
-    this.environmentVariables=new PropertiesElement(reader,Element.VARIABLE,true);
-    break;
-  }
+if (environmentVariables != null) {
+throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+}
+this.environmentVariables=new PropertiesElement(reader,Element.VARIABLE,true);
+break;
+}
 case SYSTEM_PROPERTIES:
 {
-  if (systemProperties != null) {
-    throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
-  }
-  this.systemProperties=new PropertiesElement(reader);
-  break;
+if (systemProperties != null) {
+throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+}
+this.systemProperties=new PropertiesElement(reader);
+break;
+}
+case AGENT_LIB:
+{
+if (agentLib != null) {
+throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+}
+if (agentPath != null) {
+throw new XMLStreamException(element.getLocalName() + " when we already also have a " + Element.AGENT_PATH,reader.getLocation());
+}
+agentLib=parseValue(reader);
+break;
+}
+case AGENT_PATH:
+{
+if (agentPath != null) {
+throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+}
+if (agentLib != null) {
+throw new XMLStreamException(element.getLocalName() + " when we already also have a " + Element.AGENT_LIB,reader.getLocation());
+}
+agentPath=parseValue(reader);
+break;
+}
+case JAVA_AGENT:
+{
+javaagent=parseValue(reader);
+break;
 }
 default :
 throw ParseUtils.unexpectedElement(reader);
