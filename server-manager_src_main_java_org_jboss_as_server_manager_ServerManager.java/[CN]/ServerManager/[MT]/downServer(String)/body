@@ -4,6 +4,24 @@
     log.errorf("No server called %s exists",downServerName);
     return;
   }
-  server.setState(ServerState.FAILED);
-  respawn(server);
+  if (environment.isRestart() && server.getState() == ServerState.BOOTING && environment.getServerManagerPort() == 0) {
+    JvmElement jvmElement=getServerJvmElement(domainConfig,hostConfig,server.getServerConfig().getServerName());
+    try {
+      serverMaker.removeAndAddProcess(server,jvmElement);
+    }
+ catch (    IOException e) {
+      log.errorf("Error removing and adding process %s",downServerName);
+      return;
+    }
+    try {
+      processManagerSlave.startProcess(downServerName);
+    }
+ catch (    IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+ else {
+    server.setState(ServerState.FAILED);
+    respawn(server);
+  }
 }
