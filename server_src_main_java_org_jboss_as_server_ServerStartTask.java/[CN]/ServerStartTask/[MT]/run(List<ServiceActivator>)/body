@@ -3,15 +3,15 @@
   log.infof("Starting server \"%s\"",serverName);
   final ServiceContainer container=ServiceContainer.Factory.create();
   final ServerStartupListener serverStartupListener=new ServerStartupListener(createListenerCallback());
-  final BatchBuilder bootBatchBuilder=container.batchBuilder();
-  bootBatchBuilder.addListener(serverStartupListener);
+  final ServerStartBatchBuilder batchBuilder=new ServerStartBatchBuilder(container.batchBuilder(),serverStartupListener);
+  batchBuilder.addListener(serverStartupListener);
   final ServiceActivatorContext serviceActivatorContext=new ServiceActivatorContext(){
     public BatchBuilder getBatchBuilder(){
-      return bootBatchBuilder;
+      return batchBuilder;
     }
   }
 ;
-  final BatchServiceBuilder<Void> builder=bootBatchBuilder.addService(ServiceName.JBOSS.append("as","server"),Service.NULL);
+  final BatchServiceBuilder<Void> builder=batchBuilder.addService(ServiceName.JBOSS.append("as","server"),Service.NULL);
   builder.setInitialMode(ServiceController.Mode.IMMEDIATE);
   for (  ServiceActivator service : this.startServices) {
     service.activate(serviceActivatorContext);
@@ -19,14 +19,6 @@
   for (  ServiceActivator service : startServices) {
     service.activate(serviceActivatorContext);
   }
-  try {
-    bootBatchBuilder.install();
-  }
- catch (  ServiceRegistryException e) {
-    throw new IllegalStateException("Failed to install boot services",e);
-  }
-  final BatchBuilder batchBuilder=container.batchBuilder();
-  batchBuilder.addListener(serverStartupListener);
   final ServerModel serverModel=new ServerModel(serverName,portOffset);
   final Properties systemProperties=System.getProperties();
   final ServerEnvironment environment=new ServerEnvironment(systemProperties,serverName,false);
@@ -55,17 +47,9 @@
       throw new IllegalStateException("Failed to start server",e);
     }
   }
-  try {
-    batchBuilder.install();
-  }
- catch (  ServiceRegistryException e) {
-    throw new IllegalStateException("Failed to start server",e);
-  }
-  final BatchBuilder updatesBatchBuilder=container.batchBuilder();
-  updatesBatchBuilder.addListener(serverStartupListener);
   final UpdateContext context=new UpdateContext(){
     public BatchBuilder getBatchBuilder(){
-      return updatesBatchBuilder;
+      return batchBuilder;
     }
     public ServiceContainer getServiceContainer(){
       return container;
@@ -73,11 +57,14 @@
   }
 ;
   for (  AbstractServerModelUpdate<?> update : updates) {
-    update.applyUpdateBootAction(context);
+    if (!update.isDeploymentUpdate()) {
+      update.applyUpdateBootAction(context);
+    }
   }
   try {
-    serverStartupListener.finish();
-    updatesBatchBuilder.install();
+    serverStartupListener.startBatch(createDeploymentTask(container,serverStartupListener));
+    batchBuilder.install();
+    serverStartupListener.finishBatch();
   }
  catch (  ServiceRegistryException e) {
     throw new IllegalStateException("Failed to install boot services",e);
