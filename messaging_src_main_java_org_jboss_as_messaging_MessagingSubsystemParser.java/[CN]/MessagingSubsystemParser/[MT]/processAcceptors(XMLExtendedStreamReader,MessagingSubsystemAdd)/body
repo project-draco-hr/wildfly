@@ -1,16 +1,56 @@
 {
-  String localName=null;
-  do {
-    reader.nextTag();
-    localName=reader.getLocalName();
-    final Element element=Element.forName(reader.getLocalName());
+  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+    String name=null;
+    String socketBinding=null;
+    int serverId=0;
+    int count=reader.getAttributeCount();
+    for (int i=0; i < count; i++) {
+      final String attrValue=reader.getAttributeValue(i);
+      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+          name=attrValue;
+          break;
+        }
+case SOCKET_BINDING:
+{
+        socketBinding=attrValue;
+        break;
+      }
+case SERVER_ID:
+{
+      serverId=Integer.valueOf(attrValue);
+      break;
+    }
+default :
+{
+    throw ParseUtils.unexpectedAttribute(reader,i);
+  }
+}
+}
+final Element element=Element.forName(reader.getLocalName());
 switch (element) {
-case ACCEPTOR:
-      String name=reader.getAttributeValue(0);
-    final TransportSpecification transportSpecification=parseTransportConfiguration(reader,name,Element.ACCEPTOR);
-  messagingSubsystemAdd.addAcceptor(transportSpecification);
+case NETTY_ACCEPTOR:
+{
+final NettyAcceptorSpec acceptor=new NettyAcceptorSpec(name);
+acceptor.setSocketBindingRef(socketBinding);
+parseTransportConfigurationParams(reader,acceptor,element);
+messagingSubsystemAdd.addAcceptor(acceptor);
 break;
 }
+case IN_VM_ACCEPTOR:
+{
+final InVMAcceptorSpec acceptor=new InVMAcceptorSpec(name);
+acceptor.setServerId(serverId);
+parseTransportConfigurationParams(reader,acceptor,element);
+messagingSubsystemAdd.addAcceptor(acceptor);
+break;
 }
- while (reader.hasNext() && localName.equals(Element.ACCEPTOR.getLocalName()));
+default :
+{
+throw ParseUtils.unexpectedElement(reader);
+}
+}
+}
 }

@@ -1,18 +1,6 @@
 {
   final HornetQService hqservice=new HornetQService();
   final Configuration hqConfig=new ConfigurationImpl();
-  if (bindingsDirectory != null) {
-    hqConfig.setBindingsDirectory(bindingsDirectory);
-  }
-  if (journalDirectory != null) {
-    hqConfig.setJournalDirectory(journalDirectory);
-  }
-  if (largeMessagesDirectory != null) {
-    hqConfig.setLargeMessagesDirectory(largeMessagesDirectory);
-  }
-  if (pagingDirectory != null) {
-    hqConfig.setPagingDirectory(pagingDirectory);
-  }
   if (clustered != null) {
     hqConfig.setClustered(clustered);
   }
@@ -64,24 +52,34 @@
   hqservice.setConfiguration(hqConfig);
   final BatchBuilder batchBuilder=updateContext.getBatchBuilder();
   final BatchServiceBuilder<HornetQServer> serviceBuilder=batchBuilder.addService(MessagingSubsystemElement.JBOSS_MESSAGING,hqservice);
+  createRelativePathService("bindings",bindingsDirectory,batchBuilder);
+  addPathDependency("bindings",hqservice,serviceBuilder);
+  createRelativePathService("journal",journalDirectory,batchBuilder);
+  addPathDependency("journal",hqservice,serviceBuilder);
+  createRelativePathService("largemessages",largeMessagesDirectory,batchBuilder);
+  addPathDependency("largemessages",hqservice,serviceBuilder);
+  createRelativePathService("paging",pagingDirectory,batchBuilder);
+  addPathDependency("paging",hqservice,serviceBuilder);
   final Map<String,TransportConfiguration> connectors=hqConfig.getConnectorConfigurations();
-  for (  TransportSpecification connectorSpec : this.connectors) {
-    connectors.put(connectorSpec.getName(),new TransportConfiguration(connectorSpec.getFactoryClassName(),connectorSpec.getParams(),connectorSpec.getName()));
-    final Object socketRef=connectorSpec.getParams().get("socket-ref");
+  for (  AbstractTransportSpecification connectorSpec : this.connectors) {
+    final TransportConfiguration transport=new TransportConfiguration(connectorSpec.getFactoryClassName(),connectorSpec.getParams(),connectorSpec.getName());
+    connectorSpec.processHQConfig(transport);
+    connectors.put(connectorSpec.getName(),transport);
+    final String socketRef=connectorSpec.getSocketBindingRef();
     if (socketRef != null) {
-      final String name=socketRef.toString();
-      final ServiceName socketName=SocketBinding.JBOSS_BINDING_NAME.append(name);
-      serviceBuilder.addDependency(socketName,SocketBinding.class,hqservice.getSocketBindingInjector(name));
+      final ServiceName socketName=SocketBinding.JBOSS_BINDING_NAME.append(socketRef);
+      serviceBuilder.addDependency(socketName,SocketBinding.class,hqservice.getSocketBindingInjector(socketRef));
     }
   }
   final Collection<TransportConfiguration> acceptors=hqConfig.getAcceptorConfigurations();
-  for (  TransportSpecification acceptorSpec : this.acceptors) {
-    acceptors.add(new TransportConfiguration(acceptorSpec.getFactoryClassName(),acceptorSpec.getParams(),acceptorSpec.getName()));
-    final Object socketRef=acceptorSpec.getParams().get("socket-ref");
+  for (  AbstractTransportSpecification acceptorSpec : this.acceptors) {
+    final TransportConfiguration transport=new TransportConfiguration(acceptorSpec.getFactoryClassName(),acceptorSpec.getParams(),acceptorSpec.getName());
+    acceptorSpec.processHQConfig(transport);
+    acceptors.add(transport);
+    final String socketRef=acceptorSpec.getSocketBindingRef();
     if (socketRef != null) {
-      final String name=socketRef.toString();
-      final ServiceName socketName=SocketBinding.JBOSS_BINDING_NAME.append(name);
-      serviceBuilder.addDependency(socketName,SocketBinding.class,hqservice.getSocketBindingInjector(name));
+      final ServiceName socketName=SocketBinding.JBOSS_BINDING_NAME.append(socketRef);
+      serviceBuilder.addDependency(socketName,SocketBinding.class,hqservice.getSocketBindingInjector(socketRef));
     }
   }
   serviceBuilder.setInitialMode(ServiceController.Mode.IMMEDIATE);
