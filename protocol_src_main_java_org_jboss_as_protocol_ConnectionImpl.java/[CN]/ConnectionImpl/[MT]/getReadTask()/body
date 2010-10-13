@@ -1,0 +1,65 @@
+{
+  return new Runnable(){
+    public void run(){
+      try {
+        final InputStream is=socket.getInputStream();
+        PipedOutputStream mos=null;
+        final byte[] buffer=new byte[8192];
+        int cmd=is.read();
+switch (cmd) {
+case -1:
+{
+            safeHandleShutdown();
+            boolean done;
+            if (mos != null) {
+              mos.close();
+            }
+synchronized (lock) {
+              readDone=true;
+              done=writeDone;
+            }
+            if (done) {
+              safeHandleFinished();
+            }
+            return;
+          }
+case CHUNK_START:
+{
+          if (mos == null) {
+            final PipedInputStream pis=new PipedInputStream();
+            mos=new PipedOutputStream(pis);
+            readExecutor.execute(new Runnable(){
+              public void run(){
+                safeHandleMessage(new MessageInputStream(pis));
+              }
+            }
+);
+          }
+          int cnt=StreamUtils.readInt(is);
+          while (cnt > 0) {
+            int sc=is.read(buffer);
+            mos.write(buffer,0,sc);
+            cnt-=sc;
+          }
+          break;
+        }
+case CHUNK_END:
+{
+        if (mos != null) {
+          mos.close();
+          mos=null;
+        }
+        break;
+      }
+default :
+{
+    }
+}
+}
+ catch (IOException e) {
+safeHandlerFailure(e);
+}
+}
+}
+;
+}

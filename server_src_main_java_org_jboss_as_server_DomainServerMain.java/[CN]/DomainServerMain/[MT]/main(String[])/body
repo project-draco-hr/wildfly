@@ -6,6 +6,15 @@
   StdioContext.install();
   final StdioContext context=StdioContext.create(new NullInputStream(),new LoggingOutputStream(org.jboss.logmanager.Logger.getLogger("stdout"),Level.INFO),new LoggingOutputStream(org.jboss.logmanager.Logger.getLogger("stderr"),Level.ERROR));
   StdioContext.setStdioContextSelector(new SimpleStdioContextSelector(context));
+  final byte[] authKey=new byte[16];
+  try {
+    StreamUtils.readFully(initialInput,authKey);
+  }
+ catch (  IOException e) {
+    e.printStackTrace();
+    System.exit(1);
+    throw new IllegalStateException();
+  }
   final MarshallerFactory factory;
   try {
     factory=Marshalling.getMarshallerFactory("river",Module.getModuleFromDefaultLoader(ModuleIdentifier.fromString("org.jboss.marshalling.river")).getClassLoader());
@@ -13,15 +22,22 @@
  catch (  ModuleLoadException e) {
     throw new IllegalStateException("Failed to start server",e);
   }
+  final Unmarshaller unmarshaller;
+  final ByteInput byteInput;
   try {
     final MarshallingConfiguration configuration=new MarshallingConfiguration();
     configuration.setVersion(2);
     configuration.setClassTable(ModularClassTable.getInstance());
-    final Unmarshaller unmarshaller=factory.createUnmarshaller(configuration);
-    unmarshaller.start(Marshalling.createByteInput(initialInput));
+    unmarshaller=factory.createUnmarshaller(configuration);
+    byteInput=Marshalling.createByteInput(initialInput);
+    unmarshaller.start(byteInput);
     final ServerTask task=unmarshaller.readObject(ServerTask.class);
     unmarshaller.finish();
-    task.run(Collections.<ServiceActivator>emptyList());
+    task.run(Arrays.<ServiceActivator>asList(new ServiceActivator(){
+      public void activate(      final ServiceActivatorContext serviceActivatorContext){
+      }
+    }
+));
   }
  catch (  Exception e) {
     e.printStackTrace(initialError);
@@ -29,12 +45,16 @@
     throw new IllegalStateException();
   }
   for (; ; )   try {
-    while (initialInput.read() != -1) {
-    }
+    unmarshaller.start(byteInput);
+    final InetSocketAddress socketAddress=unmarshaller.readObject(InetSocketAddress.class);
+    unmarshaller.finish();
     break;
   }
  catch (  InterruptedIOException e) {
     Thread.interrupted();
+  }
+catch (  EOFException e) {
+    break;
   }
 catch (  Exception e) {
     break;

@@ -1,0 +1,96 @@
+{
+  if (messageHandler != null) {
+    configuration.setMessageHandler(new MessageHandler(){
+      public void handleMessage(      final Connection connection,      final InputStream dataStream) throws IOException {
+        final ProcessManagerClient client=(ProcessManagerClient)connection.getAttachment();
+        final int cmd=readUnsignedByte(dataStream);
+switch (cmd) {
+case Protocol.PROCESS_ADDED:
+{
+            final String processName=readUTFZBytes(dataStream);
+            dataStream.close();
+            messageHandler.handleProcessAdded(client,processName);
+            break;
+          }
+case Protocol.PROCESS_STARTED:
+{
+          final String processName=readUTFZBytes(dataStream);
+          dataStream.close();
+          messageHandler.handleProcessStarted(client,processName);
+          break;
+        }
+case Protocol.PROCESS_STOPPED:
+{
+        final String processName=readUTFZBytes(dataStream);
+        final long uptimeMillis=readLong(dataStream);
+        dataStream.close();
+        messageHandler.handleProcessStopped(client,processName,uptimeMillis);
+        break;
+      }
+case Protocol.PROCESS_REMOVED:
+{
+      final String processName=readUTFZBytes(dataStream);
+      dataStream.close();
+      messageHandler.handleProcessRemoved(client,processName);
+      break;
+    }
+case Protocol.PROCESS_INVENTORY:
+{
+    final int cnt=readInt(dataStream);
+    final Map<String,ProcessInfo> inventory=new HashMap<String,ProcessInfo>();
+    for (int i=0; i < cnt; i++) {
+      final String processName=readUTFZBytes(dataStream);
+      final byte[] processAuthCode=new byte[16];
+      final boolean processRunning=StreamUtils.readBoolean(dataStream);
+      readFully(dataStream,processAuthCode);
+      inventory.put(processName,new ProcessInfo(processName,authCode,processRunning));
+    }
+    dataStream.close();
+    messageHandler.handleProcessInventory(client,inventory);
+    break;
+  }
+default :
+{
+  dataStream.close();
+  break;
+}
+}
+}
+public void handleShutdown(final Connection connection) throws IOException {
+final ProcessManagerClient client=(ProcessManagerClient)connection.getAttachment();
+messageHandler.handleConnectionShutdown(client);
+}
+public void handleFailure(final Connection connection,final IOException cause) throws IOException {
+final ProcessManagerClient client=(ProcessManagerClient)connection.getAttachment();
+messageHandler.handleConnectionFailure(client,cause);
+}
+public void handleFinished(final Connection connection) throws IOException {
+final ProcessManagerClient client=(ProcessManagerClient)connection.getAttachment();
+messageHandler.handleConnectionFinished(client);
+}
+}
+);
+}
+final ProtocolClient client=new ProtocolClient(configuration);
+final Connection connection=client.connect();
+boolean ok=false;
+try {
+final OutputStream os=connection.writeMessage();
+try {
+os.write(Protocol.AUTH);
+os.write(1);
+os.write(authCode);
+os.close();
+ok=true;
+return new ProcessManagerClient(connection);
+}
+  finally {
+safeClose(os);
+}
+}
+  finally {
+if (!ok) {
+safeClose(connection);
+}
+}
+}

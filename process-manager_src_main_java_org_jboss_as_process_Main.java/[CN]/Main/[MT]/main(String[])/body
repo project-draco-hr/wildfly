@@ -1,0 +1,99 @@
+{
+  MDC.put("process","process manager");
+  String jvmName=System.getProperty("java.home") + "/bin/java";
+  String jbossHome=System.getProperty("jboss.home.dir");
+  String modulePath=System.getProperty("jboss.module.path");
+  String bootJar="jboss-modules.jar";
+  String logModule="org.jboss.logmanager";
+  String bootModule=SERVER_MANAGER_MODULE;
+  String bindAddress="127.0.0.1";
+  int bindPort=0;
+  final List<String> javaOptions=new ArrayList<String>();
+  final List<String> smOptions=new ArrayList<String>();
+  OUT:   for (int i=0; i < args.length; i++) {
+    String arg=args[i];
+    if ("-jvm".equals(arg)) {
+      jvmName=args[++i];
+    }
+ else     if ("-jboss-home".equals(arg)) {
+      jbossHome=args[++i];
+    }
+ else     if ("-mp".equals(arg)) {
+      modulePath=args[++i];
+    }
+ else     if ("-jar".equals(arg)) {
+      bootJar=args[++i];
+    }
+ else     if ("-logmodule".equals(arg)) {
+      logModule=args[++i];
+    }
+ else     if ("-bind-addr".equals(arg)) {
+      bindAddress=args[++i];
+    }
+ else     if ("-bind-port".equals(arg)) {
+      bindPort=Integer.parseInt(args[++i]);
+    }
+ else     if ("--".equals(arg)) {
+      for (i++; i < args.length; i++) {
+        if ("--".equals(arg)) {
+          for (i++; i < args.length; i++) {
+            smOptions.add(arg);
+          }
+          break OUT;
+        }
+ else {
+          javaOptions.add(arg);
+        }
+      }
+      break OUT;
+    }
+ else {
+      throw new IllegalArgumentException("Bad option: " + arg);
+    }
+  }
+  final List<String> initialCommand=new ArrayList<String>();
+  initialCommand.add(jvmName);
+  initialCommand.add("-D" + "jboss.home.dir=" + jbossHome);
+  initialCommand.addAll(javaOptions);
+  initialCommand.add("-jar");
+  initialCommand.add(bootJar);
+  initialCommand.add("-mp");
+  initialCommand.add(modulePath);
+  initialCommand.add("-logmodule");
+  initialCommand.add(logModule);
+  initialCommand.add(bootModule);
+  initialCommand.addAll(smOptions);
+  Handler consoleHandler=null;
+  final Logger rootLogger=Logger.getLogger("");
+  for (  Handler handler : rootLogger.getHandlers()) {
+    if (handler instanceof ConsoleHandler) {
+      if (consoleHandler != null) {
+        rootLogger.removeHandler(handler);
+      }
+ else {
+        consoleHandler=handler;
+        ((ConsoleHandler)consoleHandler).setWriter(new SynchronizedWriter(System.out));
+      }
+    }
+  }
+  if (consoleHandler == null) {
+    consoleHandler=new NullHandler();
+  }
+  final ProtocolServer.Configuration configuration=new ProtocolServer.Configuration();
+  if (bindAddress != null) {
+    configuration.setBindAddress(new InetSocketAddress(bindAddress,bindPort));
+  }
+ else {
+    configuration.setBindAddress(new InetSocketAddress(bindPort));
+  }
+  configuration.setReadExecutor(Executors.newCachedThreadPool());
+  final ProcessManager processManager=new ProcessManager(consoleHandler,configuration,System.out,System.err);
+  processManager.addProcess("Server Manager",initialCommand,Collections.<String,String>emptyMap(),jbossHome,true);
+  processManager.startProcess("Server Manager");
+  new Thread(new Runnable(){
+    public void run(){
+      processManager.shutdown();
+    }
+  }
+,"Shutdown thread");
+}

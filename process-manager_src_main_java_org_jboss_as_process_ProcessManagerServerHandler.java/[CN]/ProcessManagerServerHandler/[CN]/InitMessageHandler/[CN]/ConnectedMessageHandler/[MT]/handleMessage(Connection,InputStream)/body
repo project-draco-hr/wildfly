@@ -1,0 +1,80 @@
+{
+  try {
+    final int cmd=StreamUtils.readUnsignedByte(dataStream);
+switch (cmd) {
+case Protocol.SEND_STDIN:
+{
+        if (isServerManager) {
+          final String processName=readUTFZBytes(dataStream);
+          processManager.sendStdin(processName,dataStream);
+        }
+        dataStream.close();
+        break;
+      }
+case Protocol.ADD_PROCESS:
+{
+      if (isServerManager) {
+        final String processName=readUTFZBytes(dataStream);
+        final byte[] authKey=new byte[16];
+        readFully(dataStream,authKey);
+        final int commandCount=readInt(dataStream);
+        final String[] command=new String[commandCount];
+        for (int i=0; i < commandCount; i++) {
+          command[i]=readUTFZBytes(dataStream);
+        }
+        final int envCount=readInt(dataStream);
+        final Map<String,String> env=new HashMap<String,String>();
+        for (int i=0; i < envCount; i++) {
+          env.put(readUTFZBytes(dataStream),readUTFZBytes(dataStream));
+        }
+        final String workingDirectory=readUTFZBytes(dataStream);
+        processManager.addProcess(processName,Arrays.asList(command),env,workingDirectory,false);
+      }
+      dataStream.close();
+      break;
+    }
+case Protocol.START_PROCESS:
+{
+    if (isServerManager) {
+      final String processName=readUTFZBytes(dataStream);
+      processManager.startProcess(processName);
+    }
+    dataStream.close();
+    break;
+  }
+case Protocol.STOP_PROCESS:
+{
+  if (isServerManager) {
+    final String processName=readUTFZBytes(dataStream);
+    processManager.stopProcess(processName);
+  }
+  dataStream.close();
+  break;
+}
+case Protocol.REMOVE_PROCESS:
+{
+if (isServerManager) {
+  final String processName=readUTFZBytes(dataStream);
+  processManager.removeProcess(processName);
+}
+dataStream.close();
+break;
+}
+case Protocol.REQUEST_PROCESS_INVENTORY:
+{
+if (isServerManager) {
+processManager.sendInventory();
+}
+dataStream.close();
+break;
+}
+default :
+{
+dataStream.close();
+}
+}
+}
+  finally {
+safeClose(dataStream);
+}
+}
