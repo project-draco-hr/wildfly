@@ -6,15 +6,64 @@
     for (int i=0; i < updateCount; i++) {
       expectHeader(input,Protocol.PARAM_APPLY_UPDATE_RESULT);
       byte resultCode=input.readByte();
-      if (resultCode == (byte)Protocol.APPLY_UPDATE_RESULT_SUCCESS) {
-        expectHeader(input,Protocol.PARAM_APPLY_UPDATE_RESULT_RETURN);
-        final Object result=unmarshal(input,Object.class);
-        results.add(new DomainUpdateResult<Object>(result));
-      }
- else {
-        expectHeader(input,Protocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION);
+      if (resultCode == (byte)Protocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION) {
         final UpdateFailedException updateFailedException=unmarshal(input,UpdateFailedException.class);
         results.add(new DomainUpdateResult<Object>(updateFailedException));
+      }
+ else       if (resultCode == (byte)Protocol.APPLY_UPDATE_RESULT_DOMAIN_MODEL_SUCCESS) {
+        Map<String,UpdateFailedException> hostFailures=null;
+        Map<ServerIdentity,Object> serverResults=null;
+        Map<ServerIdentity,Throwable> serverFailures=null;
+        expectHeader(input,Protocol.PARAM_APPLY_UPDATE_RESULT_HOST_FAILURE_COUNT);
+        int hostFailureCount=input.readInt();
+        if (hostFailureCount > 0) {
+          hostFailures=new HashMap<String,UpdateFailedException>();
+          for (int j=0; j < hostFailureCount; j++) {
+            expectHeader(input,Protocol.PARAM_HOST_NAME);
+            final String hostName=input.readUTF();
+            expectHeader(input,Protocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION);
+            final UpdateFailedException updateFailedException=unmarshal(input,UpdateFailedException.class);
+            hostFailures.put(hostName,updateFailedException);
+          }
+        }
+        expectHeader(input,Protocol.PARAM_APPLY_UPDATE_RESULT_SERVER_FAILURE_COUNT);
+        int serverFailureCount=input.readInt();
+        if (serverFailureCount > 0) {
+          serverFailures=new HashMap<ServerIdentity,Throwable>();
+          for (int j=0; j < hostFailureCount; j++) {
+            expectHeader(input,Protocol.PARAM_HOST_NAME);
+            final String hostName=input.readUTF();
+            expectHeader(input,Protocol.PARAM_SERVER_GROUP_NAME);
+            final String serverGroupName=input.readUTF();
+            expectHeader(input,Protocol.PARAM_SERVER_NAME);
+            final String serverName=input.readUTF();
+            ServerIdentity identity=new ServerIdentity(hostName,serverGroupName,serverName);
+            expectHeader(input,Protocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION);
+            final Throwable serverException=unmarshal(input,Throwable.class);
+            serverFailures.put(identity,serverException);
+          }
+        }
+        expectHeader(input,Protocol.PARAM_APPLY_UPDATE_RESULT_SERVER_RESULT_COUNT);
+        int serverResultCount=input.readInt();
+        if (serverResultCount > 0) {
+          serverResults=new HashMap<ServerIdentity,Object>();
+          for (int j=0; j < hostFailureCount; j++) {
+            expectHeader(input,Protocol.PARAM_HOST_NAME);
+            final String hostName=input.readUTF();
+            expectHeader(input,Protocol.PARAM_SERVER_GROUP_NAME);
+            final String serverGroupName=input.readUTF();
+            expectHeader(input,Protocol.PARAM_SERVER_NAME);
+            final String serverName=input.readUTF();
+            ServerIdentity identity=new ServerIdentity(hostName,serverGroupName,serverName);
+            expectHeader(input,Protocol.PARAM_APPLY_SERVER_MODEL_UPDATE_RESULT_RETURN);
+            final Object serverResult=unmarshal(input,Object.class);
+            serverResults.put(identity,serverResult);
+          }
+        }
+        results.add(new DomainUpdateResult<Object>(hostFailures,serverResults,serverFailures));
+      }
+ else {
+        throw new IOException("Invalid byte token.  Expecting '" + Protocol.APPLY_UPDATE_RESULT_DOMAIN_MODEL_SUCCESS + "' or '"+ Protocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION+ "' received '"+ resultCode+ "'");
       }
     }
     return results;
