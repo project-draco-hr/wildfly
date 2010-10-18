@@ -1,0 +1,58 @@
+{
+  final WarMetaData warMetaData=deploymentUnitContext.getAttachment(WarMetaData.ATTACHMENT_KEY);
+  JBossWebMetaData metaData=warMetaData.getMergedJBossWebMetaData();
+  if (ok && (metaData != null)) {
+    metaData.resolveAnnotations();
+    resolveAnnotations(metaData.getAnnotations());
+  }
+  if (ok) {
+    resolveServletSecurity();
+  }
+  if (ok) {
+    validateSecurityRoles();
+  }
+  if (ok && (metaData != null)) {
+    metaData.resolveRunAs();
+  }
+  if (ok) {
+    authenticatorConfig();
+  }
+  if (ok) {
+    Set<VirtualFile> overlays=warMetaData.getOverlays();
+    if (overlays != null) {
+      if (context.getResources() instanceof ProxyDirContext) {
+        ProxyDirContext resources=(ProxyDirContext)context.getResources();
+        for (        VirtualFile overlay : overlays) {
+          FileDirContext dirContext=new FileDirContext();
+          try {
+            dirContext.setDocBase(overlay.getPhysicalFile().getAbsolutePath());
+            resources.addOverlay(dirContext);
+          }
+ catch (          IOException e) {
+            log.error(sm.getString("contextConfig.noOverlay",context.getName()),e);
+            ok=false;
+            break;
+          }
+        }
+      }
+ else       if (overlays.size() > 0) {
+        log.error(sm.getString("contextConfig.noOverlay",context.getName()));
+        ok=false;
+      }
+    }
+  }
+  if (ok) {
+    for (    String overlay : overlays) {
+      if (context.getResources() instanceof ProxyDirContext) {
+        ProxyDirContext resources=(ProxyDirContext)context.getResources();
+        FileDirContext dirContext=new FileDirContext();
+        dirContext.setDocBase(overlay);
+        resources.addOverlay(dirContext);
+      }
+    }
+  }
+  if (!ok) {
+    log.error(sm.getString("contextConfig.unavailable"));
+    context.setConfigured(false);
+  }
+}

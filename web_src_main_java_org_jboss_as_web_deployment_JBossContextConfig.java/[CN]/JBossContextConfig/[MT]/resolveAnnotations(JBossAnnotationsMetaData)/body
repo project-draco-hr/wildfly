@@ -1,0 +1,58 @@
+{
+  if (annotations != null) {
+    for (    AnnotationMetaData annotation : annotations) {
+      String className=annotation.getClassName();
+      Container[] wrappers=context.findChildren();
+      for (int i=0; i < wrappers.length; i++) {
+        Wrapper wrapper=(Wrapper)wrappers[i];
+        if (className.equals(wrapper.getServletClass())) {
+          if (annotation.getRunAs() != null && wrapper.getRunAs() == null) {
+            wrapper.setRunAs(annotation.getRunAs().getRoleName());
+          }
+          if (annotation.getMultipartConfig() != null && wrapper.getMultipartConfig() == null) {
+            MultipartConfigMetaData multipartConfigMetaData=annotation.getMultipartConfig();
+            Multipart multipartConfig=new Multipart();
+            multipartConfig.setLocation(multipartConfigMetaData.getLocation());
+            multipartConfig.setMaxRequestSize(multipartConfigMetaData.getMaxRequestSize());
+            multipartConfig.setMaxFileSize(multipartConfigMetaData.getMaxFileSize());
+            multipartConfig.setFileSizeThreshold(multipartConfigMetaData.getFileSizeThreshold());
+            wrapper.setMultipartConfig(multipartConfig);
+          }
+          if (annotation.getServletSecurity() != null && wrapper.getServletSecurity() == null) {
+            ServletSecurityMetaData servletSecurityAnnotation=annotation.getServletSecurity();
+            Collection<HttpMethodConstraintElement> methodConstraints=null;
+            EmptyRoleSemantic emptyRoleSemantic=EmptyRoleSemantic.PERMIT;
+            if (servletSecurityAnnotation.getEmptyRoleSemantic() != null) {
+              emptyRoleSemantic=EmptyRoleSemantic.valueOf(servletSecurityAnnotation.getEmptyRoleSemantic().toString());
+            }
+            TransportGuarantee transportGuarantee=TransportGuarantee.NONE;
+            if (servletSecurityAnnotation.getTransportGuarantee() != null) {
+              transportGuarantee=TransportGuarantee.valueOf(servletSecurityAnnotation.getTransportGuarantee().toString());
+            }
+            String[] roleNames=servletSecurityAnnotation.getRolesAllowed().toArray(new String[0]);
+            HttpConstraintElement constraint=new HttpConstraintElement(emptyRoleSemantic,transportGuarantee,roleNames);
+            if (servletSecurityAnnotation.getHttpMethodConstraints() != null) {
+              methodConstraints=new HashSet<HttpMethodConstraintElement>();
+              for (              HttpMethodConstraintMetaData annotationMethodConstraint : servletSecurityAnnotation.getHttpMethodConstraints()) {
+                emptyRoleSemantic=EmptyRoleSemantic.PERMIT;
+                if (annotationMethodConstraint.getEmptyRoleSemantic() != null) {
+                  emptyRoleSemantic=EmptyRoleSemantic.valueOf(annotationMethodConstraint.getEmptyRoleSemantic().toString());
+                }
+                transportGuarantee=TransportGuarantee.NONE;
+                if (annotationMethodConstraint.getTransportGuarantee() != null) {
+                  transportGuarantee=TransportGuarantee.valueOf(annotationMethodConstraint.getTransportGuarantee().toString());
+                }
+                roleNames=annotationMethodConstraint.getRolesAllowed().toArray(new String[0]);
+                HttpConstraintElement constraint2=new HttpConstraintElement(emptyRoleSemantic,transportGuarantee,roleNames);
+                HttpMethodConstraintElement methodConstraint=new HttpMethodConstraintElement(annotationMethodConstraint.getMethod(),constraint2);
+                methodConstraints.add(methodConstraint);
+              }
+            }
+            ServletSecurityElement servletSecurity=new ServletSecurityElement(constraint,methodConstraints);
+            wrapper.setServletSecurity(servletSecurity);
+          }
+        }
+      }
+    }
+  }
+}
