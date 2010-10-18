@@ -1,0 +1,38 @@
+{
+  ClassLoader cl=Thread.currentThread().getContextClassLoader();
+  Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
+  try {
+    sf=HornetQClient.createClientSessionFactory(new TransportConfiguration(InVMConnectorFactory.class.getName()));
+    ClientSession coreSession=sf.createSession(false,true,true);
+    coreSession.createQueue(QUEUE_EXAMPLE_QUEUE,QUEUE_EXAMPLE_QUEUE,true);
+    coreSession.close();
+    session=sf.createSession();
+    consumer=session.createConsumer(QUEUE_EXAMPLE_QUEUE);
+    session.start();
+    new Thread(new Runnable(){
+      @Override public void run(){
+        while (!shutdown.get()) {
+          try {
+            ClientMessage message=consumer.receive(500);
+            if (message == null) {
+              continue;
+            }
+            String s=message.getStringProperty(BODY);
+            log.info("-----> Received: " + s);
+synchronized (receivedMessages) {
+              receivedMessages.add(s);
+            }
+          }
+ catch (          HornetQException e) {
+            log.error("Exception, closing receiver",e);
+          }
+        }
+      }
+    }
+).start();
+    System.out.println("-----> Started queue and session");
+  }
+  finally {
+    Thread.currentThread().setContextClassLoader(cl);
+  }
+}
