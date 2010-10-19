@@ -1,5 +1,26 @@
 {
-  final InitiatingFuture<T> initiatingFuture=new InitiatingFuture<T>();
-  executorService.execute(new InitiateRequestTask<T>(this,initiatingFuture));
-  return initiatingFuture.get();
+  final int timeout=(int)TimeUnit.SECONDS.toMillis(connectTimeout);
+  final ProtocolClient.Configuration config=new ProtocolClient.Configuration();
+  config.setMessageHandler(new InitiatingMessageHandler());
+  config.setConnectTimeout(timeout);
+  config.setReadExecutor(executorService);
+  config.setSocketFactory(SocketFactory.getDefault());
+  config.setServerAddress(new InetSocketAddress(address,port));
+  config.setThreadFactory(threadFactory);
+  final ProtocolClient protocolClient=new ProtocolClient(config);
+  OutputStream dataOutput=null;
+  try {
+    connection=protocolClient.connect();
+    dataOutput=connection.writeMessage();
+    final ByteDataOutput output=new SimpleByteDataOutput(dataOutput);
+    final ManagementRequestHeader managementRequestHeader=new ManagementRequestHeader(ManagementProtocol.VERSION,requestId,getHandlerId());
+    managementRequestHeader.write(output);
+  }
+ catch (  IOException e) {
+    throw new ManagementException("Failed to connect using protocol client",e);
+  }
+ finally {
+    safeClose(dataOutput);
+  }
+  return future;
 }
