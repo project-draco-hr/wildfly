@@ -1,24 +1,25 @@
 {
-  if (readUnsignedByte(dataStream) != Protocol.AUTH) {
+  final int cmd=readUnsignedByte(dataStream);
+  if (cmd != Protocol.AUTH) {
+    log.warnf("Received unrecognized greeting code 0x%02x from %s",Integer.valueOf(cmd),connection.getPeerAddress());
     connection.close();
     return;
   }
   final int version=StreamUtils.readUnsignedByte(dataStream);
   if (version < 1) {
+    log.warnf("Received connection with invalid version from %s",connection.getPeerAddress());
     connection.close();
     return;
   }
   final byte[] authCode=new byte[16];
   StreamUtils.readFully(dataStream,authCode);
-  dataStream.close();
-  final OutputStream os=connection.writeMessage();
-  os.write(1);
-  os.close();
   final ManagedProcess process=processManager.getServerByAuthCode(authCode);
   if (process == null) {
     log.warnf("Received connection with unknown credentials from %s",connection.getPeerAddress());
     StreamUtils.safeClose(connection);
     return;
   }
+  log.tracef("Received authentic connection from %s",connection.getPeerAddress());
   connection.setMessageHandler(new ConnectedMessageHandler(processManager,process.isInitial()));
+  dataStream.close();
 }

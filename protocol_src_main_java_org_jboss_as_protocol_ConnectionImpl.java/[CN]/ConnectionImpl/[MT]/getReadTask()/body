@@ -2,58 +2,71 @@
   return new Runnable(){
     public void run(){
       try {
+        Pipe pipe=null;
         final InputStream is=socket.getInputStream();
-        PipedOutputStream mos=null;
-        final byte[] buffer=new byte[8192];
-        int cmd=is.read();
+        OutputStream mos=null;
+        final int bufferSize=8192;
+        final byte[] buffer=new byte[bufferSize];
+        for (; ; ) {
+          int cmd=is.read();
 switch (cmd) {
 case -1:
 {
-            safeHandleShutdown();
-            boolean done;
-            if (mos != null) {
-              mos.close();
-            }
+              log.trace("Received end of stream");
+              safeHandleShutdown();
+              boolean done;
+              if (mos != null) {
+                mos.close();
+                pipe.await();
+              }
 synchronized (lock) {
-              readDone=true;
-              done=writeDone;
+                readDone=true;
+                done=writeDone;
+              }
+              if (done) {
+                StreamUtils.safeClose(socket);
+                safeHandleFinished();
+              }
+              return;
             }
-            if (done) {
-              safeHandleFinished();
-            }
-            return;
-          }
 case CHUNK_START:
 {
-          if (mos == null) {
-            final PipedInputStream pis=new PipedInputStream();
-            mos=new PipedOutputStream(pis);
-            readExecutor.execute(new Runnable(){
-              public void run(){
-                safeHandleMessage(new MessageInputStream(pis));
+            if (mos == null) {
+              pipe=new Pipe(8192);
+              final InputStream pis=pipe.getIn();
+              mos=pipe.getOut();
+              readExecutor.execute(new Runnable(){
+                public void run(){
+                  safeHandleMessage(new MessageInputStream(pis));
+                }
               }
-            }
 );
+            }
+            int cnt=StreamUtils.readInt(is);
+            log.tracef("Received data chunk of size %d",Integer.valueOf(cnt));
+            while (cnt > 0) {
+              int sc=is.read(buffer,0,Math.min(cnt,bufferSize));
+              mos.write(buffer,0,sc);
+              cnt-=sc;
+            }
+            break;
           }
-          int cnt=StreamUtils.readInt(is);
-          while (cnt > 0) {
-            int sc=is.read(buffer);
-            mos.write(buffer,0,sc);
-            cnt-=sc;
+case CHUNK_END:
+{
+          log.trace("Received end data marker");
+          if (mos != null) {
+            mos.close();
+            pipe.await();
+            mos=null;
+            pipe=null;
           }
           break;
         }
-case CHUNK_END:
-{
-        if (mos != null) {
-          mos.close();
-          mos=null;
-        }
-        break;
-      }
 default :
 {
-    }
+        throw new IOException("Invalid command byte read: " + cmd);
+      }
+  }
 }
 }
  catch (IOException e) {
