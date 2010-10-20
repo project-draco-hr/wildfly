@@ -1,0 +1,58 @@
+{
+  Thread thread=null;
+  try {
+    for (    final int bufSize : ints(31,256,8192)) {
+      for (      final int pieceSize : ints(31,64,127)) {
+        final int pieceCnt=(1 << 17) / pieceSize;
+        System.out.printf("Buffer size: %d; piece size: %d; piece count %d\n",Integer.valueOf(bufSize),Integer.valueOf(pieceSize),Integer.valueOf(pieceCnt));
+        final int finalSize=pieceCnt * pieceSize;
+        final Pipe pipe=new Pipe(bufSize);
+        InputStream in=pipe.getIn();
+        thread=new Thread(new Runnable(){
+          public void run(){
+            final Random rng=new Random(SEED);
+            final byte[] piece=new byte[pieceSize];
+            try {
+              OutputStream out=pipe.getOut();
+              for (int i=0; i < pieceCnt; i++) {
+                rng.nextBytes(piece);
+                out.write(piece);
+              }
+              out.close();
+              pipe.await();
+            }
+ catch (            IOException e) {
+              e.printStackTrace(System.err);
+              System.err.flush();
+            }
+          }
+        }
+,"Test write thread");
+        thread.setDaemon(true);
+        thread.start();
+        final Random rng1=new Random(SEED);
+        int remaining=finalSize;
+        while (remaining > 0) {
+          byte[] buf1=new byte[Math.min(pieceSize,remaining)];
+          byte[] buf2=new byte[buf1.length];
+          try {
+            StreamUtils.readFully(in,buf1);
+          }
+ catch (          IOException e) {
+            thread.isDaemon();
+          }
+          rng1.nextBytes(buf2);
+          assertArrayEquals("Failure at remaining = " + remaining,buf1,buf2);
+          remaining-=buf1.length;
+        }
+        assertEquals(-1,in.read());
+        in.close();
+      }
+    }
+  }
+  finally {
+    if (thread != null) {
+      thread.join(1000L);
+    }
+  }
+}
