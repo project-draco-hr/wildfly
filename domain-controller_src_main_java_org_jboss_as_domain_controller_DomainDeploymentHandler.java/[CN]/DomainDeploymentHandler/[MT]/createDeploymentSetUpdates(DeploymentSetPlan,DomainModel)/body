@@ -1,0 +1,111 @@
+{
+  List<DeploymentAction> actions=plan.getDeploymentActions();
+  if (actions.size() == 0) {
+    throw new InvalidDeploymentPlanException(String.format("%s %s contains no deployment actions",DeploymentSetPlan.class.getSimpleName(),plan.getId()));
+  }
+  List<ActionUpdates> actionUpdates=new ArrayList<ActionUpdates>();
+  for (  DeploymentAction action : actions) {
+    ActionUpdates au=new ActionUpdates(action);
+    actionUpdates.add(au);
+    DeploymentActionImpl dai=(DeploymentActionImpl)action;
+switch (action.getType()) {
+case ADD:
+{
+        String deploymentName=dai.getDeploymentUnitUniqueName();
+        String runtimeName=dai.getNewContentFileName();
+        byte[] hash=dai.getNewContentHash();
+        if (runtimeName == null) {
+          DeploymentUnitElement de=model.getDeployment(deploymentName);
+          if (de == null) {
+            throw new InvalidDeploymentPlanException("Unknown deployment unit " + deploymentName);
+          }
+          runtimeName=de.getRuntimeName();
+          hash=de.getSha1Hash();
+        }
+ else         if (model.getDeployment(deploymentName) == null) {
+          au.domainUpdates.add(new DomainDeploymentAdd(deploymentName,runtimeName,hash,false));
+        }
+        ServerGroupDeploymentAdd sgda=new ServerGroupDeploymentAdd(deploymentName,runtimeName,hash,false);
+        addServerGroupUpdates(plan,au,sgda);
+        break;
+      }
+case DEPLOY:
+{
+      ServerGroupDeploymentStartStopUpdate sgdssu=new ServerGroupDeploymentStartStopUpdate(dai.getDeploymentUnitUniqueName(),true);
+      addServerGroupUpdates(plan,au,sgdssu);
+      break;
+    }
+case FULL_REPLACE:
+{
+    String deploymentName=dai.getDeploymentUnitUniqueName();
+    Set<String> names=new LinkedHashSet<String>(model.getServerGroupNames());
+    for (    Set<ServerGroupDeploymentPlan> ssgp : plan.getServerGroupDeploymentPlans()) {
+      for (      ServerGroupDeploymentPlan sgdp : ssgp) {
+        names.remove(sgdp.getServerGroupName());
+      }
+    }
+    for (Iterator<String> it=names.iterator(); it.hasNext(); ) {
+      String name=it.next();
+      ServerGroupElement sge=model.getServerGroup(name);
+      if (sge.getDeployment(dai.getDeploymentUnitUniqueName()) == null) {
+        it.remove();
+      }
+    }
+    if (names.size() > 0) {
+      throw new IncompleteDeploymentReplaceException(deploymentName,names.toArray(new String[names.size()]));
+    }
+    DeploymentUnitElement deployment=model.getDeployment(dai.getDeploymentUnitUniqueName());
+    boolean start=deployment != null && deployment.isStart();
+    DomainDeploymentFullReplaceUpdate update=new DomainDeploymentFullReplaceUpdate(deploymentName,dai.getNewContentFileName(),dai.getNewContentHash(),start);
+    au.domainUpdates.add(update);
+    au.serverUpdates.add(update.getServerModelUpdate());
+    break;
+  }
+case REDEPLOY:
+{
+  DomainDeploymentRedeployUpdate update=new DomainDeploymentRedeployUpdate(dai.getDeploymentUnitUniqueName());
+  au.domainUpdates.add(update);
+  au.serverUpdates.add(update.getServerModelUpdate());
+  break;
+}
+case REMOVE:
+{
+ServerGroupDeploymentRemove sgdr=new ServerGroupDeploymentRemove(dai.getDeploymentUnitUniqueName());
+addServerGroupUpdates(plan,au,sgdr);
+Set<String> names=model.getServerGroupNames();
+for (Set<ServerGroupDeploymentPlan> ssgp : plan.getServerGroupDeploymentPlans()) {
+  for (  ServerGroupDeploymentPlan sgdp : ssgp) {
+    names.remove(sgdp.getServerGroupName());
+  }
+}
+boolean left=false;
+for (String name : names) {
+  ServerGroupElement sge=model.getServerGroup(name);
+  if (sge.getDeployment(dai.getDeploymentUnitUniqueName()) != null) {
+    left=true;
+    break;
+  }
+}
+if (!left) {
+  au.domainUpdates.add(new DomainDeploymentRemove(dai.getDeploymentUnitUniqueName()));
+}
+break;
+}
+case REPLACE:
+{
+ServerGroupDeploymentReplaceUpdate sgdru=new ServerGroupDeploymentReplaceUpdate(dai.getDeploymentUnitUniqueName(),dai.getNewContentFileName(),dai.getNewContentHash(),dai.getReplacedDeploymentUnitUniqueName());
+addServerGroupUpdates(plan,au,sgdru);
+break;
+}
+case UNDEPLOY:
+{
+ServerGroupDeploymentStartStopUpdate sgdssu=new ServerGroupDeploymentStartStopUpdate(dai.getDeploymentUnitUniqueName(),false);
+addServerGroupUpdates(plan,au,sgdssu);
+break;
+}
+default :
+throw new IllegalStateException(String.format("Unknown %s %s",DeploymentAction.class.getSimpleName(),action.getType()));
+}
+}
+return new DeploymentSetUpdates(actionUpdates,plan);
+}

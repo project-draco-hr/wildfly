@@ -1,0 +1,37 @@
+{
+  List<DomainUpdateApplierResponse> result=new ArrayList<DomainUpdateApplierResponse>(updates.size());
+  boolean ok=true;
+  List<AbstractDomainModelUpdate<?>> rollbacks=new ArrayList<AbstractDomainModelUpdate<?>>();
+  for (  AbstractDomainModelUpdate<?> update : updates) {
+    if (ok) {
+      try {
+        AbstractDomainModelUpdate<?> rollback=update.getCompensatingUpdate(domainModel);
+        domainModel.update(update);
+        rollbacks.add(0,rollback);
+        result.add(new DomainUpdateApplierResponse(false));
+      }
+ catch (      UpdateFailedException e) {
+        ok=false;
+        result.add(new DomainUpdateApplierResponse(e));
+      }
+    }
+ else {
+      result.add(new DomainUpdateApplierResponse(true));
+    }
+  }
+  if (!ok) {
+    for (int i=0; i < rollbacks.size(); i++) {
+      AbstractDomainModelUpdate<?> rollback=rollbacks.get(i);
+      try {
+        domainModel.update(rollback);
+      }
+ catch (      UpdateFailedException e) {
+      }
+    }
+  }
+ else {
+    configPersister.persistConfiguration(domainModel);
+    result=applyUpdatesToServerManagers(updates,rollbacks);
+  }
+  return result;
+}

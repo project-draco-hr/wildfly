@@ -1,0 +1,50 @@
+{
+  List<DomainUpdateResult<?>> result;
+  Map<AbstractDomainModelUpdate<?>,AbstractServerModelUpdate<?>> serverByDomain=new HashMap<AbstractDomainModelUpdate<?>,AbstractServerModelUpdate<?>>();
+  Map<AbstractServerModelUpdate<?>,DomainUpdateResult<Object>> resultsByUpdate=new HashMap<AbstractServerModelUpdate<?>,DomainUpdateResult<Object>>();
+  for (int i=0; i < updates.size(); i++) {
+    AbstractDomainModelUpdate<?> domainUpdate=updates.get(i);
+    AbstractServerModelUpdate<?> serverUpdate=domainUpdate.getServerModelUpdate();
+    if (serverUpdate != null) {
+      serverByDomain.put(domainUpdate,serverUpdate);
+      resultsByUpdate.put(serverUpdate,new DomainUpdateResult<Object>());
+    }
+  }
+  Map<ServerIdentity,List<AbstractServerModelUpdate<?>>> updatesByServer=getUpdatesByServer(updates,domainResults,serverByDomain);
+  for (  Map.Entry<ServerIdentity,List<AbstractServerModelUpdate<?>>> entry : updatesByServer.entrySet()) {
+    ServerIdentity server=entry.getKey();
+    List<AbstractServerModelUpdate<?>> serverUpdates=entry.getValue();
+    List<UpdateResultHandlerResponse<?>> rsps=applyUpdatesToServer(server,serverUpdates,allowOverallRollback);
+    for (int i=0; i < serverUpdates.size(); i++) {
+      UpdateResultHandlerResponse<?> rsp=rsps.get(i);
+      AbstractServerModelUpdate<?> serverUpdate=entry.getValue().get(i);
+      DomainUpdateResult<Object> dur=resultsByUpdate.get(serverUpdate);
+      if (rsp.isCancelled()) {
+        dur=dur.newWithAddedCancellation(server);
+      }
+ else       if (rsp.isTimedOut()) {
+        dur=dur.newWithAddedTimeout(server);
+      }
+ else       if (rsp.isRolledBack()) {
+        dur=dur.newWithAddedRollback(server);
+      }
+ else       if (rsp.getFailureResult() != null) {
+        dur=dur.newWithAddedFailure(server,rsp.getFailureResult());
+      }
+ else {
+        dur=dur.newWithAddedResult(server,rsp.getSuccessResult());
+      }
+      resultsByUpdate.put(serverUpdate,dur);
+    }
+  }
+  result=new ArrayList<DomainUpdateResult<?>>();
+  for (  AbstractDomainModelUpdate<?> domainUpdate : updates) {
+    AbstractServerModelUpdate<?> serverUpdate=serverByDomain.get(domainUpdate);
+    DomainUpdateResult<?> dur=resultsByUpdate.get(serverUpdate);
+    if (dur == null) {
+      dur=new DomainUpdateResult<Object>();
+    }
+    result.add(dur);
+  }
+  return result;
+}

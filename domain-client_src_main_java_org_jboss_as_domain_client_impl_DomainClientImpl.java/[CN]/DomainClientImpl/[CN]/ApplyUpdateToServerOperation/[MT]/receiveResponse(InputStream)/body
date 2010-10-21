@@ -1,31 +1,25 @@
 {
   final Unmarshaller unmarshaller=getUnmarshaller();
   unmarshaller.start(createByteInput(input));
-  byte resultCode=unmarshaller.readByte();
-  if (resultCode == (byte)DomainClientProtocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION) {
-    final Throwable exception=unmarshal(unmarshaller,Throwable.class);
-    if (resultHandler != null) {
-      resultHandler.handleFailure(exception,param);
-    }
-  }
- else   if (resultCode == (byte)DomainClientProtocol.PARAM_APPLY_SERVER_MODEL_UPDATE_CANCELLED) {
-    if (resultHandler != null) {
+  expectHeader(unmarshaller,DomainClientProtocol.RETURN_APPLY_SERVER_MODEL_UPDATE);
+  @SuppressWarnings("unchecked") final UpdateResultHandlerResponse<R> result=unmarshal(unmarshaller,UpdateResultHandlerResponse.class);
+  unmarshaller.finish();
+  if (resultHandler != null) {
+    if (result.isCancelled()) {
       resultHandler.handleCancellation(param);
     }
-  }
- else   if (resultCode == (byte)DomainClientProtocol.PARAM_APPLY_SERVER_MODEL_UPDATE_TIMED_OUT) {
-    if (resultHandler != null) {
+ else     if (result.isRolledBack()) {
+      resultHandler.handleRollbackSuccess(param);
+    }
+ else     if (result.isTimedOut()) {
       resultHandler.handleTimeout(param);
     }
-  }
- else   if (resultCode == (byte)DomainClientProtocol.PARAM_APPLY_SERVER_MODEL_UPDATE_RESULT_RETURN) {
-    @SuppressWarnings("unchecked") final R result=(R)unmarshal(unmarshaller,Object.class);
-    if (resultHandler != null) {
-      resultHandler.handleSuccess(result,param);
+ else     if (result.getFailureResult() != null) {
+      resultHandler.handleFailure(result.getFailureResult(),param);
     }
-  }
  else {
-    throw new IOException("Invalid byte token.  Expecting '" + DomainClientProtocol.PARAM_APPLY_SERVER_MODEL_UPDATE_RESULT_RETURN + "' or '"+ DomainClientProtocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION+ "' received '"+ resultCode+ "'");
+      resultHandler.handleSuccess(result.getSuccessResult(),param);
+    }
   }
   unmarshaller.finish();
   return null;

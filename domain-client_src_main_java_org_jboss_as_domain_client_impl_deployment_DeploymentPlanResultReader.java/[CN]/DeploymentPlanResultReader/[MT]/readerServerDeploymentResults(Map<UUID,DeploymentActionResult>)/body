@@ -1,0 +1,33 @@
+{
+  byte nextHeader;
+  do {
+    UUID actionId=unmarshal(unmarshaller,UUID.class);
+    DeploymentActionResultImpl actionResult=(DeploymentActionResultImpl)actionResults.get(actionId);
+    ServerIdentity serverId=readServerIdentity();
+    expectHeader(DomainClientProtocol.RETURN_SERVER_DEPLOYMENT_RESULT);
+    @SuppressWarnings("unchecked") UpdateResultHandlerResponse<Void> urhr=unmarshal(unmarshaller,UpdateResultHandlerResponse.class);
+    ServerUpdateResult<Void> sur=new ServerUpdateResultImpl<Void>(actionId,serverId,urhr);
+    actionResult.storeServerUpdateResult(serverId,sur);
+    DeploymentActionImpl action=(DeploymentActionImpl)actionResult.getDeploymentAction();
+    for (    DomainUpdateListener<?> listener : action.getListeners()) {
+      if (urhr.isCancelled()) {
+        listener.handleCancellation(serverId);
+      }
+ else       if (urhr.isRolledBack()) {
+        listener.handleRollbackSuccess(serverId);
+      }
+ else       if (urhr.isTimedOut()) {
+        listener.handleTimeout(serverId);
+      }
+ else       if (urhr.getFailureResult() != null) {
+        listener.handleFailure(urhr.getFailureResult(),serverId);
+      }
+ else {
+        listener.handleSuccess(null,serverId);
+      }
+    }
+    nextHeader=unmarshaller.readByte();
+  }
+ while (nextHeader == DomainClientProtocol.RETURN_SERVER_DEPLOYMENT);
+  return nextHeader;
+}

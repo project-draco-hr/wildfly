@@ -1,0 +1,24 @@
+{
+  if (!serverGroupName.equals(server.getServerGroupName()) || !servers.contains(server)) {
+    throw new IllegalStateException("Unknown server " + server);
+  }
+  UpdateResultHandlerResponse<?> last=responses.size() == 0 ? null : responses.get(responses.size() - 1);
+synchronized (this) {
+    boolean serverFailed=last != null && last.isCancelled() || last.isRolledBack() || last.isTimedOut() || last.getFailureResult() != null;
+    int previousFailed=failureCount;
+    if (serverFailed) {
+      failureCount++;
+    }
+ else {
+      successCount++;
+    }
+    if (previousFailed <= maxFailed) {
+      if (!serverFailed && (successCount + failureCount) == servers.size()) {
+        parent.recordServerGroupResult(serverGroupName,false);
+      }
+ else       if (serverFailed && failureCount > maxFailed) {
+        parent.recordServerGroupResult(serverGroupName,true);
+      }
+    }
+  }
+}

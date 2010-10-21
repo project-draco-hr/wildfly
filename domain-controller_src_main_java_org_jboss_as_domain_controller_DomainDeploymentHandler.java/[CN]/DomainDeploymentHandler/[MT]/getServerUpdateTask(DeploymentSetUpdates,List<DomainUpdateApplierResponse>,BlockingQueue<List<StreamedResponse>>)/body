@@ -1,0 +1,46 @@
+{
+  Map<String,SortedSet<ServerIdentity>> serversByGroup=new HashMap<String,SortedSet<ServerIdentity>>();
+  for (  DomainUpdateApplierResponse duar : rsps) {
+    for (    ServerIdentity serverId : duar.getServers()) {
+      SortedSet<ServerIdentity> set=serversByGroup.get(serverId.getServerGroupName());
+      if (set == null) {
+        set=new TreeSet<ServerIdentity>(ServerIdentityComparator.INSTANCE);
+        serversByGroup.put(serverId.getServerGroupName(),set);
+      }
+      set.add(serverId);
+    }
+  }
+  boolean shutdown=updateSet.setPlan.isShutdown();
+  long gracefulTimeout=updateSet.setPlan.getGracefulShutdownTimeout();
+  List<Runnable> masterList=new ArrayList<Runnable>();
+  ConcurrentGroupServerUpdatePolicy predecessor=null;
+  for (  Set<ServerGroupDeploymentPlan> groupPlans : updateSet.setPlan.getServerGroupDeploymentPlans()) {
+    List<Runnable> concurrentList=new ArrayList<Runnable>(groupPlans.size());
+    ConcurrentGroupServerUpdatePolicy parent=new ConcurrentGroupServerUpdatePolicy(predecessor,groupPlans);
+    predecessor=parent;
+    for (    ServerGroupDeploymentPlan groupPlan : groupPlans) {
+      String serverGroupName=groupPlan.getServerGroupName();
+      SortedSet<ServerIdentity> servers=serversByGroup.get(serverGroupName);
+      ServerUpdatePolicy policy=new ServerUpdatePolicy(parent,serverGroupName,servers,groupPlan);
+      List<Runnable> groupTasks=new ArrayList<Runnable>(servers.size());
+      if (shutdown) {
+        for (        ServerIdentity server : servers) {
+          groupTasks.add(new ServerRestartTask(server,updateSet,policy,responseQueue,gracefulTimeout));
+        }
+      }
+ else {
+        for (        ServerIdentity server : servers) {
+          groupTasks.add(new RunningServerUpdateTask(server,updateSet,policy,responseQueue,groupPlan.isRollback()));
+        }
+      }
+      if (groupPlan.isRollingToServers()) {
+        concurrentList.add(new RollingUpdateTask(groupTasks));
+      }
+ else {
+        concurrentList.add(new ConcurrentUpdateTask(groupTasks,getDeploymentExecutor()));
+      }
+    }
+    masterList.add(new ConcurrentUpdateTask(concurrentList,getDeploymentExecutor()));
+  }
+  return new RollingUpdateTask(masterList);
+}

@@ -1,0 +1,33 @@
+{
+  pushSingleResponse(responseQueue,new StreamedResponse((byte)DomainClientProtocol.RETURN_DEPLOYMENT_PLAN_ID,plan.getId()));
+  List<DeploymentSetPlan> setPlans=plan.getDeploymentSetPlans();
+  List<DeploymentSetUpdates> updateSets=new ArrayList<DeploymentSetUpdates>(setPlans.size());
+  for (  DeploymentSetPlan setPlan : setPlans) {
+    try {
+      updateSets.add(createDeploymentSetUpdates(setPlan,getDomainModel()));
+    }
+ catch (    InvalidDeploymentPlanException e) {
+      pushSingleResponse(responseQueue,new StreamedResponse((byte)DomainClientProtocol.RETURN_DEPLOYMENT_PLAN_INVALID,e,true));
+      return;
+    }
+  }
+  List<DeploymentSetUpdates> rollbackSets=new ArrayList<DeploymentSetUpdates>(setPlans.size());
+  boolean ok=true;
+  for (  DeploymentSetUpdates updateSet : updateSets) {
+    if (ok) {
+      ok=executeDeploymentSet(updateSet,responseQueue);
+      if (ok) {
+        rollbackSets.add(0,updateSet);
+      }
+    }
+ else {
+      cancelDeploymentSet(updateSet,responseQueue);
+    }
+  }
+  if (!ok && plan.isGlobalRollback()) {
+    for (    DeploymentSetUpdates updateSet : rollbackSets) {
+      rollbackDeploymentSet(updateSet,responseQueue);
+    }
+  }
+  pushSingleResponse(responseQueue,new StreamedResponse((byte)DomainClientProtocol.RETURN_DEPLOYMENT_PLAN_COMPLETE,null,true));
+}
