@@ -1,0 +1,77 @@
+{
+  try {
+    final Unmarshaller unmarshaller=getUnmarshaller();
+    unmarshaller.start(input);
+    expectHeader(unmarshaller,Protocol.PARAM_APPLY_UPDATES_RESULT_COUNT);
+    final int updateCount=unmarshaller.readInt();
+    final List<DomainUpdateResult<?>> results=new ArrayList<DomainUpdateResult<?>>(updateCount);
+    for (int i=0; i < updateCount; i++) {
+      expectHeader(unmarshaller,Protocol.PARAM_APPLY_UPDATE_RESULT);
+      byte resultCode=unmarshaller.readByte();
+      if (resultCode == (byte)Protocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION) {
+        final UpdateFailedException updateFailedException=unmarshaller.readObject(UpdateFailedException.class);
+        results.add(new DomainUpdateResult<Object>(updateFailedException));
+      }
+ else       if (resultCode == (byte)Protocol.APPLY_UPDATE_RESULT_DOMAIN_MODEL_SUCCESS) {
+        Map<String,UpdateFailedException> hostFailures=null;
+        Map<ServerIdentity,Object> serverResults=null;
+        Map<ServerIdentity,Throwable> serverFailures=null;
+        expectHeader(unmarshaller,Protocol.PARAM_APPLY_UPDATE_RESULT_HOST_FAILURE_COUNT);
+        int hostFailureCount=unmarshaller.readInt();
+        if (hostFailureCount > 0) {
+          hostFailures=new HashMap<String,UpdateFailedException>();
+          for (int j=0; j < hostFailureCount; j++) {
+            expectHeader(unmarshaller,Protocol.PARAM_HOST_NAME);
+            final String hostName=unmarshaller.readUTF();
+            expectHeader(unmarshaller,Protocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION);
+            final UpdateFailedException updateFailedException=unmarshaller.readObject(UpdateFailedException.class);
+            hostFailures.put(hostName,updateFailedException);
+          }
+        }
+        expectHeader(unmarshaller,Protocol.PARAM_APPLY_UPDATE_RESULT_SERVER_FAILURE_COUNT);
+        int serverFailureCount=unmarshaller.readInt();
+        if (serverFailureCount > 0) {
+          serverFailures=new HashMap<ServerIdentity,Throwable>();
+          for (int j=0; j < hostFailureCount; j++) {
+            expectHeader(unmarshaller,Protocol.PARAM_HOST_NAME);
+            final String hostName=unmarshaller.readUTF();
+            expectHeader(unmarshaller,Protocol.PARAM_SERVER_GROUP_NAME);
+            final String serverGroupName=unmarshaller.readUTF();
+            expectHeader(unmarshaller,Protocol.PARAM_SERVER_NAME);
+            final String serverName=unmarshaller.readUTF();
+            ServerIdentity identity=new ServerIdentity(hostName,serverGroupName,serverName);
+            expectHeader(unmarshaller,Protocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION);
+            final Throwable serverException=unmarshaller.readObject(Throwable.class);
+            serverFailures.put(identity,serverException);
+          }
+        }
+        expectHeader(unmarshaller,Protocol.PARAM_APPLY_UPDATE_RESULT_SERVER_RESULT_COUNT);
+        int serverResultCount=unmarshaller.readInt();
+        if (serverResultCount > 0) {
+          serverResults=new HashMap<ServerIdentity,Object>();
+          for (int j=0; j < hostFailureCount; j++) {
+            expectHeader(unmarshaller,Protocol.PARAM_HOST_NAME);
+            final String hostName=unmarshaller.readUTF();
+            expectHeader(unmarshaller,Protocol.PARAM_SERVER_GROUP_NAME);
+            final String serverGroupName=unmarshaller.readUTF();
+            expectHeader(unmarshaller,Protocol.PARAM_SERVER_NAME);
+            final String serverName=unmarshaller.readUTF();
+            ServerIdentity identity=new ServerIdentity(hostName,serverGroupName,serverName);
+            expectHeader(unmarshaller,Protocol.PARAM_APPLY_SERVER_MODEL_UPDATE_RESULT_RETURN);
+            final Object serverResult=unmarshaller.readObject(Object.class);
+            serverResults.put(identity,serverResult);
+          }
+        }
+        results.add(new DomainUpdateResult<Object>(hostFailures,serverResults,serverFailures));
+      }
+ else {
+        throw new IOException("Invalid byte token.  Expecting '" + Protocol.APPLY_UPDATE_RESULT_DOMAIN_MODEL_SUCCESS + "' or '"+ Protocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION+ "' received '"+ resultCode+ "'");
+      }
+    }
+    unmarshaller.finish();
+    return results;
+  }
+ catch (  Exception e) {
+    throw new RuntimeException("Failed to read update responses",e);
+  }
+}
