@@ -5,6 +5,7 @@
     throw new DeploymentUnitProcessingException("failed to resolve module for deployment " + deploymentRoot);
   }
   final ClassLoader classLoader=module.getClassLoader();
+  final JBossWebMetaData metaData=warMetaData.getMergedJBossWebMetaData();
   final StandardContext webContext=new StandardContext();
   final ContextConfig config=new JBossContextConfig(context);
   try {
@@ -15,12 +16,21 @@
   }
   webContext.addLifecycleListener(config);
   final String deploymentName=context.getName();
-  String pathName=deploymentRoot.getName();
-  if (pathName.equals("ROOT.war")) {
-    pathName="";
+  String pathName=null;
+  if (metaData.getContextRoot() == null) {
+    pathName=deploymentRoot.getName();
+    if (pathName.equals("ROOT.war")) {
+      pathName="";
+    }
+ else {
+      pathName="/" + pathName.substring(0,pathName.length() - 4);
+    }
   }
  else {
-    pathName="/" + pathName.substring(0,pathName.length() - 4);
+    pathName=metaData.getContextRoot();
+    if ("/".equals(pathName)) {
+      pathName="";
+    }
   }
   webContext.setPath(pathName);
   webContext.setIgnoreAnnotations(true);
@@ -30,7 +40,6 @@
   final InstanceManager manager=new WebInjectionContainer(classLoader);
   webContext.setInstanceManager(manager);
   webContext.setLoader(loader);
-  final JBossWebMetaData metaData=warMetaData.getMergedJBossWebMetaData();
 switch (metaData.getSessionCookies()) {
 case JBossWebMetaData.SESSION_COOKIES_ENABLED:
     webContext.setCookies(true);
