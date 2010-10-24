@@ -1,0 +1,50 @@
+{
+  final int workingVersion;
+  final ManagementRequestHeader requestHeader;
+  final ManagementOperationHandler handler;
+  ByteDataInput input=null;
+  try {
+    input=new SimpleByteDataInput(dataStream);
+    requestHeader=new ManagementRequestHeader(input);
+    workingVersion=Math.min(ManagementProtocol.VERSION,requestHeader.getVersion());
+    byte handlerId=requestHeader.getOperationHandlerId();
+    if (handlerId == -1) {
+      throw new IOException("Management request failed.  Invalid handler id");
+    }
+    handler=handlers.get(handlerId);
+    if (handler == null) {
+      throw new IOException("Management request failed.  NO handler found for id" + handlerId);
+    }
+    connection.setMessageHandler(handler);
+  }
+ catch (  IOException e) {
+    throw e;
+  }
+catch (  Throwable t) {
+    throw new IOException("Failed to read request header",t);
+  }
+ finally {
+    safeClose(input);
+    safeClose(dataStream);
+  }
+  OutputStream dataOutput=null;
+  ByteDataOutput output=null;
+  try {
+    dataOutput=connection.writeMessage();
+    output=new SimpleByteDataOutput(dataOutput);
+    final ManagementResponseHeader responseHeader=new ManagementResponseHeader(workingVersion,requestHeader.getRequestId());
+    responseHeader.write(output);
+    output.close();
+    dataOutput.close();
+  }
+ catch (  IOException e) {
+    throw e;
+  }
+catch (  Throwable t) {
+    throw new IOException("Failed to write management response headers",t);
+  }
+ finally {
+    safeClose(output);
+    safeClose(dataOutput);
+  }
+}
