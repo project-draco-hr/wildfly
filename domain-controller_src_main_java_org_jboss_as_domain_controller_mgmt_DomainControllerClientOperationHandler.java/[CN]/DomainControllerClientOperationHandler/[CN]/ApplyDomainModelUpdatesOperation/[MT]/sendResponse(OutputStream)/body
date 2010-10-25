@@ -1,0 +1,73 @@
+{
+  List<DomainUpdateResult<?>> responses=new ArrayList<DomainUpdateResult<?>>(updates.size());
+  for (  AbstractDomainModelUpdate<?> update : updates) {
+    responses.add(processUpdate(update));
+  }
+  final Marshaller marshaller=getMarshaller();
+  marshaller.start(createByteOutput(output));
+  marshaller.writeByte(DomainClientProtocol.PARAM_APPLY_UPDATES_RESULT_COUNT);
+  marshaller.writeInt(responses.size());
+  for (  DomainUpdateResult<?> response : responses) {
+    marshaller.writeByte(DomainClientProtocol.PARAM_APPLY_UPDATE_RESULT);
+    if (response.getDomainFailure() != null) {
+      marshaller.writeByte(DomainClientProtocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION);
+      marshaller.writeObject(response.getDomainFailure());
+    }
+ else {
+      marshaller.writeByte(DomainClientProtocol.APPLY_UPDATE_RESULT_DOMAIN_MODEL_SUCCESS);
+      marshaller.writeByte(DomainClientProtocol.PARAM_APPLY_UPDATE_RESULT_HOST_FAILURE_COUNT);
+      Map<String,UpdateFailedException> hostFailures=response.getHostFailures();
+      if (hostFailures == null || hostFailures.size() == 0) {
+        marshaller.writeInt(0);
+      }
+ else {
+        marshaller.writeInt(hostFailures.size());
+        for (        Map.Entry<String,UpdateFailedException> entry : hostFailures.entrySet()) {
+          marshaller.writeByte(DomainClientProtocol.PARAM_HOST_NAME);
+          marshaller.writeUTF(entry.getKey());
+          marshaller.writeByte(DomainClientProtocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION);
+          marshaller.writeObject(entry.getValue());
+        }
+      }
+      marshaller.writeByte(DomainClientProtocol.PARAM_APPLY_UPDATE_RESULT_SERVER_FAILURE_COUNT);
+      Map<ServerIdentity,Throwable> serverFailures=response.getServerFailures();
+      if (serverFailures == null || serverFailures.size() == 0) {
+        marshaller.writeInt(0);
+      }
+ else {
+        marshaller.writeInt(serverFailures.size());
+        for (        Map.Entry<ServerIdentity,Throwable> entry : serverFailures.entrySet()) {
+          ServerIdentity identity=entry.getKey();
+          marshaller.writeByte(DomainClientProtocol.PARAM_HOST_NAME);
+          marshaller.writeUTF(identity.getHostName());
+          marshaller.writeByte(DomainClientProtocol.PARAM_SERVER_GROUP_NAME);
+          marshaller.writeUTF(identity.getServerGroupName());
+          marshaller.writeByte(DomainClientProtocol.PARAM_SERVER_NAME);
+          marshaller.writeUTF(identity.getServerName());
+          marshaller.writeByte(DomainClientProtocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION);
+          marshaller.writeObject(entry.getValue());
+        }
+      }
+      marshaller.writeByte(DomainClientProtocol.PARAM_APPLY_UPDATE_RESULT_SERVER_RESULT_COUNT);
+      Map<ServerIdentity,?> serverResults=response.getServerResults();
+      if (serverResults == null || serverResults.size() == 0) {
+        marshaller.writeInt(0);
+      }
+ else {
+        marshaller.writeInt(serverResults.size());
+        for (        Map.Entry<ServerIdentity,?> entry : serverFailures.entrySet()) {
+          ServerIdentity identity=entry.getKey();
+          marshaller.writeByte(DomainClientProtocol.PARAM_HOST_NAME);
+          marshaller.writeUTF(identity.getHostName());
+          marshaller.writeByte(DomainClientProtocol.PARAM_SERVER_GROUP_NAME);
+          marshaller.writeUTF(identity.getServerGroupName());
+          marshaller.writeByte(DomainClientProtocol.PARAM_SERVER_NAME);
+          marshaller.writeUTF(identity.getServerName());
+          marshaller.writeByte(DomainClientProtocol.PARAM_APPLY_SERVER_MODEL_UPDATE_RESULT_RETURN);
+          marshaller.writeObject(entry.getValue());
+        }
+      }
+    }
+  }
+  marshaller.finish();
+}
