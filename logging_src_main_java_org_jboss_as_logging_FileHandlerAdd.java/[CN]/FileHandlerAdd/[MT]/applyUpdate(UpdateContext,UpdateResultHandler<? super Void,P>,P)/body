@@ -1,0 +1,35 @@
+{
+  try {
+    final BatchBuilder batchBuilder=updateContext.getBatchBuilder();
+    final FileHandlerService service=new FileHandlerService();
+    final BatchServiceBuilder<Handler> serviceBuilder=batchBuilder.addService(LogServices.handlerName(getName()),service);
+    final String relativeTo=this.relativeTo;
+    if (relativeTo != null) {
+      serviceBuilder.addDependency(AbstractPathService.pathNameOf(relativeTo),String.class,service.getRelativeToInjector());
+    }
+    service.setLevel(Level.parse(getLevelName()));
+    final Boolean autoFlush=getAutoflush();
+    if (autoFlush != null)     service.setAutoflush(autoFlush.booleanValue());
+    try {
+      service.setEncoding(getEncoding());
+    }
+ catch (    UnsupportedEncodingException e) {
+      handler.handleFailure(e,param);
+      return;
+    }
+    try {
+      service.setPath(path);
+    }
+ catch (    FileNotFoundException e) {
+      handler.handleFailure(e,param);
+      return;
+    }
+    service.setFormatterSpec(getFormatter());
+    serviceBuilder.setInitialMode(ServiceController.Mode.ACTIVE);
+    serviceBuilder.addListener(new UpdateResultHandler.ServiceStartListener<P>(handler,param));
+  }
+ catch (  Throwable t) {
+    handler.handleFailure(t,param);
+    return;
+  }
+}
