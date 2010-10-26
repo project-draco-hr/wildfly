@@ -1,7 +1,27 @@
 {
   List<ResultHandler<?,Void>> results=new ArrayList<ResultHandler<?,Void>>(updates.size());
+  final CountDownLatch latch=new CountDownLatch(1);
+  final ServerUpdateController controller=new ServerUpdateController(serverController.getServerModel(),ServiceContainer.Factory.create(),executor,new ServerUpdateCommitHandler(){
+    public void handleUpdateRollback(    ServerUpdateController controller,    Status priorStatus){
+      latch.countDown();
+    }
+    public void handleUpdateCommit(    ServerUpdateController controller,    Status priorStatus){
+      configurationPersister.configurationModified();
+      latch.countDown();
+    }
+  }
+,true,preventShutdown);
+  boolean requiresRestart=false;
   for (  final AbstractServerModelUpdate<?> update : updates) {
-    results.add(processUpdate(update));
+    requiresRestart|=update.requiresRestart();
+    results.add(addUpdate(update,controller));
+  }
+  controller.executeUpdates();
+  try {
+    latch.await();
+  }
+ catch (  Exception e) {
+    throw new ManagementException("failed to execute updates",e);
   }
   final Marshaller marshaller=getMarshaller();
   marshaller.start(createByteOutput(output));
@@ -9,9 +29,9 @@
   marshaller.writeInt(results.size());
   for (  ResultHandler<?,Void> result : results) {
     marshaller.writeByte(StandaloneClientProtocol.PARAM_APPLY_UPDATE_RESULT);
-    if (result.e != null) {
+    if (result.failure != null) {
       marshaller.writeByte(StandaloneClientProtocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION);
-      marshaller.writeObject(result.e);
+      marshaller.writeObject(result.failure);
     }
  else {
       marshaller.writeByte(StandaloneClientProtocol.APPLY_UPDATE_RESULT_SERVER_MODEL_SUCCESS);
@@ -19,4 +39,17 @@
     }
   }
   marshaller.finish();
+  if (!preventShutdown && requiresRestart) {
+    executor.execute(new Runnable(){
+      public void run(){
+        try {
+          shutdownHandler.shutdownRequested();
+        }
+ catch (        Exception e) {
+          log.warn(e);
+        }
+      }
+    }
+);
+  }
 }
