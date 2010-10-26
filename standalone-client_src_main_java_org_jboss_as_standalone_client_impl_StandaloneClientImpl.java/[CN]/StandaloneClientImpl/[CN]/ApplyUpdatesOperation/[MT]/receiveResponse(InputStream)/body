@@ -2,13 +2,19 @@
   final Unmarshaller unmarshaller=getUnmarshaller();
   unmarshaller.start(createByteInput(input));
   expectHeader(unmarshaller,StandaloneClientProtocol.PARAM_APPLY_UPDATES_RESULT_COUNT);
-  byte resultCode=unmarshaller.readByte();
-  if (resultCode == (byte)StandaloneClientProtocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION) {
-    final UpdateFailedException failure=unmarshal(unmarshaller,UpdateFailedException.class);
-    return new StandaloneUpdateResult<Object>(null,failure);
-  }
+  final int updateCount=unmarshaller.readInt();
+  List<StandaloneUpdateResult<?>> results=new ArrayList<StandaloneUpdateResult<?>>();
+  for (int i=0; i < updateCount; i++) {
+    expectHeader(unmarshaller,StandaloneClientProtocol.PARAM_APPLY_UPDATE_RESULT);
+    byte resultCode=unmarshaller.readByte();
+    if (resultCode == (byte)StandaloneClientProtocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION) {
+      final UpdateFailedException failure=unmarshal(unmarshaller,UpdateFailedException.class);
+      results.add(new StandaloneUpdateResult<Object>(null,failure));
+    }
  else {
-    final Object result=unmarshal(unmarshaller,Object.class);
-    return new StandaloneUpdateResult<Object>(result,null);
+      final Object result=unmarshal(unmarshaller,Object.class);
+      results.add(new StandaloneUpdateResult<Object>(result,null));
+    }
   }
+  return results;
 }
