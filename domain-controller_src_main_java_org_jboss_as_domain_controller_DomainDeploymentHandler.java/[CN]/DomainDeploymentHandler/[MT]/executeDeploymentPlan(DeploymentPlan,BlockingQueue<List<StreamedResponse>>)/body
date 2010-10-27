@@ -1,7 +1,32 @@
 {
   Runnable r=new Runnable(){
     @Override public void run(){
-      runDeploymentPlan(plan,responseQueue);
+      boolean failed=false;
+      try {
+        runDeploymentPlan(plan,responseQueue);
+        logger.infof("Completed deployment plan %s",plan.getId());
+      }
+ catch (      InterruptedException e) {
+        failed=true;
+        Thread.currentThread().interrupt();
+        logger.errorf(e,"Interrupted while executing deployment plan %s",plan.getId());
+      }
+catch (      Exception e) {
+        logger.errorf(e,"Caught exception executing deployment plan %s",plan.getId());
+        failed=true;
+      }
+catch (      Error e) {
+        logger.errorf(e,"Caught error executing deployment plan %s",plan.getId());
+        throw e;
+      }
+      if (failed) {
+        try {
+          pushSingleResponse(responseQueue,new StreamedResponse((byte)DomainClientProtocol.RETURN_DEPLOYMENT_PLAN_COMPLETE,null,true));
+        }
+ catch (        InterruptedException e1) {
+          Thread.currentThread().interrupt();
+        }
+      }
     }
   }
 ;

@@ -1,6 +1,5 @@
 {
   List<DomainUpdateApplierResponse> result=new ArrayList<DomainUpdateApplierResponse>(updates.size());
-  boolean ok=true;
   Map<String,Future<List<ModelUpdateResponse<List<ServerIdentity>>>>> futures=new HashMap<String,Future<List<ModelUpdateResponse<List<ServerIdentity>>>>>();
   for (  Map.Entry<String,ServerManagerClient> entry : clients.entrySet()) {
     final ServerManagerClient client=entry.getValue();
@@ -12,6 +11,8 @@
 ;
     futures.put(entry.getKey(),scheduledExecutorService.getValue().submit(callable));
   }
+  log.debugf("Domain updates pushed to %s server manager(s)",futures.size());
+  boolean ok=true;
   for (int i=0; i < updates.size(); i++) {
     Map<String,UpdateFailedException> hostFailures=new HashMap<String,UpdateFailedException>();
     List<ServerIdentity> servers=new ArrayList<ServerIdentity>();
@@ -29,23 +30,36 @@
         }
       }
  catch (      InterruptedException e) {
+        log.debug("Interrupted reading server manager response");
         Thread.currentThread().interrupt();
         hostFailures.put(entry.getKey(),new UpdateFailedException(e));
       }
 catch (      ExecutionException e) {
+        log.debug("Execution exception reading server manager response",e);
         hostFailures.put(entry.getKey(),new UpdateFailedException(e));
       }
     }
     if (hostFailures.size() == 0) {
+      log.debugf("%s servers affected by update %s",servers.size(),i);
       result.add(new DomainUpdateApplierResponse(servers));
     }
  else {
+      log.debugf("%s server managers failed on update %s",hostFailures.size(),i);
       result.add(new DomainUpdateApplierResponse(hostFailures));
       ok=false;
       break;
     }
   }
   if (!ok) {
+    log.warn("One or more updates failed on some server managers; rolling back");
+    for (int i=0; i < rollbacks.size(); i++) {
+      AbstractDomainModelUpdate<?> rollback=rollbacks.get(i);
+      try {
+        domainModel.update(rollback);
+      }
+ catch (      UpdateFailedException e) {
+      }
+    }
     Set<String> outOfSync=new HashSet<String>();
     Map<String,Future<Boolean>> rollbackFutures=new HashMap<String,Future<Boolean>>(futures.size());
     for (    Map.Entry<String,Future<List<ModelUpdateResponse<List<ServerIdentity>>>>> entry : futures.entrySet()) {
@@ -58,17 +72,17 @@ catch (      ExecutionException e) {
         if (idx < 0) {
           continue;
         }
-        final List<AbstractDomainModelUpdate<?>> serverRollbacks=(idx == rollbacks.size() - 1) ? rollbacks : new ArrayList<AbstractDomainModelUpdate<?>>(idx + 1);
-        if (serverRollbacks != rollbacks) {
+        final List<AbstractDomainModelUpdate<?>> serverManagerRollbacks=(idx == rollbacks.size() - 1) ? rollbacks : new ArrayList<AbstractDomainModelUpdate<?>>(idx + 1);
+        if (serverManagerRollbacks != rollbacks) {
           for (int j=rollbacks.size() - 1 - idx; j < rollbacks.size(); j++) {
-            serverRollbacks.add(rollbacks.get(j));
+            serverManagerRollbacks.add(rollbacks.get(j));
           }
         }
         final ServerManagerClient client=clients.get(entry.getKey());
         Callable<Boolean> callable=new Callable<Boolean>(){
           @Override public Boolean call() throws Exception {
-            List<ModelUpdateResponse<List<ServerIdentity>>> rsp=client.updateDomainModel(serverRollbacks);
-            return Boolean.valueOf(rsp.size() == serverRollbacks.size() && rsp.get(rsp.size() - 1).isSuccess());
+            List<ModelUpdateResponse<List<ServerIdentity>>> rsp=client.updateDomainModel(serverManagerRollbacks);
+            return Boolean.valueOf(rsp.size() == serverManagerRollbacks.size() && rsp.get(rsp.size() - 1).isSuccess());
           }
         }
 ;

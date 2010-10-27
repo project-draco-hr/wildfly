@@ -1,11 +1,14 @@
 {
+  logger.debugf("Creating server tasks for %s domain responses",rsps.size());
   Map<String,SortedSet<ServerIdentity>> serversByGroup=new HashMap<String,SortedSet<ServerIdentity>>();
   for (  DomainUpdateApplierResponse duar : rsps) {
     for (    ServerIdentity serverId : duar.getServers()) {
-      SortedSet<ServerIdentity> set=serversByGroup.get(serverId.getServerGroupName());
+      String serverGroupName=serverId.getServerGroupName();
+      SortedSet<ServerIdentity> set=serversByGroup.get(serverGroupName);
       if (set == null) {
+        logger.debugf("Found affected servers in server group %s",serverGroupName);
         set=new TreeSet<ServerIdentity>(ServerIdentityComparator.INSTANCE);
-        serversByGroup.put(serverId.getServerGroupName(),set);
+        serversByGroup.put(serverGroupName,set);
       }
       set.add(serverId);
     }
@@ -15,13 +18,17 @@
   List<Runnable> masterList=new ArrayList<Runnable>();
   ConcurrentGroupServerUpdatePolicy predecessor=null;
   for (  Set<ServerGroupDeploymentPlan> groupPlans : updateSet.setPlan.getServerGroupDeploymentPlans()) {
-    List<Runnable> concurrentList=new ArrayList<Runnable>(groupPlans.size());
+    List<Runnable> concurrentGroupsList=new ArrayList<Runnable>(groupPlans.size());
     ConcurrentGroupServerUpdatePolicy parent=new ConcurrentGroupServerUpdatePolicy(predecessor,groupPlans);
     predecessor=parent;
     for (    ServerGroupDeploymentPlan groupPlan : groupPlans) {
       String serverGroupName=groupPlan.getServerGroupName();
       SortedSet<ServerIdentity> servers=serversByGroup.get(serverGroupName);
+      if (servers == null) {
+        servers=new TreeSet<ServerIdentity>();
+      }
       ServerUpdatePolicy policy=new ServerUpdatePolicy(parent,serverGroupName,servers,groupPlan);
+      updateSet.updatePolicies.put(serverGroupName,policy);
       List<Runnable> groupTasks=new ArrayList<Runnable>(servers.size());
       if (shutdown) {
         for (        ServerIdentity server : servers) {
@@ -34,13 +41,13 @@
         }
       }
       if (groupPlan.isRollingToServers()) {
-        concurrentList.add(new RollingUpdateTask(groupTasks));
+        concurrentGroupsList.add(new RollingUpdateTask(groupTasks));
       }
  else {
-        concurrentList.add(new ConcurrentUpdateTask(groupTasks,getDeploymentExecutor()));
+        concurrentGroupsList.add(new ConcurrentUpdateTask(groupTasks,getDeploymentExecutor()));
       }
     }
-    masterList.add(new ConcurrentUpdateTask(concurrentList,getDeploymentExecutor()));
+    masterList.add(new ConcurrentUpdateTask(concurrentGroupsList,getDeploymentExecutor()));
   }
   return new RollingUpdateTask(masterList);
 }

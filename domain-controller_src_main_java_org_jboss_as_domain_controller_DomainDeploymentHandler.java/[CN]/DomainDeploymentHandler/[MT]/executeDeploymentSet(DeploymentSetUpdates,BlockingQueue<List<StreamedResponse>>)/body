@@ -1,15 +1,17 @@
 {
+  logger.debugf("Executing deployment set %s",updateSet.setPlan.getId());
   List<DomainUpdateApplierResponse> rsps=domainController.applyUpdatesToModel(updateSet.getDomainUpdates());
   pushSingleResponse(responseQueue,new StreamedResponse((byte)DomainClientProtocol.RETURN_DEPLOYMENT_SET_ID,updateSet.setPlan.getId()));
-  List<StreamedResponse> rspList=new ArrayList<StreamedResponse>();
   DeploymentAction lastResponseAction=null;
   for (int i=0; i < rsps.size(); i++) {
     DomainUpdateApplierResponse duar=rsps.get(i);
     if (duar.getDomainFailure() != null || duar.getHostFailures().size() > 0 || updateSet.isLastDomainUpdateForAction(i)) {
       DeploymentAction action=updateSet.getDeploymentActionForDomainUpdate(i);
       if (action != lastResponseAction) {
+        List<StreamedResponse> rspList=new ArrayList<StreamedResponse>(2);
         rspList.add(new StreamedResponse((byte)DomainClientProtocol.RETURN_DEPLOYMENT_ACTION_ID,action.getId()));
         rspList.add(new StreamedResponse((byte)DomainClientProtocol.RETURN_DEPLOYMENT_ACTION_MODEL_RESULT,duar));
+        responseQueue.put(rspList);
         lastResponseAction=action;
       }
     }
@@ -20,5 +22,16 @@
   }
   Runnable r=getServerUpdateTask(updateSet,rsps,responseQueue);
   r.run();
-  throw new UnsupportedOperationException("handle rollback");
+  boolean ok=true;
+  for (  ServerUpdatePolicy policy : updateSet.updatePolicies.values()) {
+    if (policy.isFailed()) {
+      logger.infof("Deployment set failed on %s",policy.getServerGroupName());
+      ok=false;
+      break;
+    }
+  }
+  if (!ok) {
+    rollbackDeploymentSet(updateSet,responseQueue);
+  }
+  return ok;
 }

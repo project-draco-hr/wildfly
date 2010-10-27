@@ -1,19 +1,27 @@
 {
+  int count=updates.size();
+  log.debugf("Received %s updates",count);
+  List<UpdateResultHandlerResponse<?>> results=new ArrayList<UpdateResultHandlerResponse<?>>(count);
   if (modelOnly && !standalone) {
-    throw new IllegalStateException("model-only updates are not valid on a domain-based server");
+    Exception e=new IllegalStateException("Update sets that only affect the configuration and not the runtime are not valid on a domain-based server");
+    for (int i=0; i < count; i++) {
+      results.add(UpdateResultHandlerResponse.createFailureResponse(e));
+    }
+    return results;
   }
-  List<UpdateResultHandlerResponse<?>> results=new ArrayList<UpdateResultHandlerResponse<?>>(updates.size());
   final CountDownLatch latch=new CountDownLatch(1);
-  ServerUpdateCommitHandlerImpl handler=new ServerUpdateCommitHandlerImpl(results,latch);
-  final ServerUpdateController controller=new ServerUpdateController(getServerModel(),container,executor,handler,rollbackOnFailure,modelOnly);
-  for (int i=0; i < updates.size(); i++) {
+  ServerUpdateCommitHandlerImpl handler=new ServerUpdateCommitHandlerImpl(results,count,latch);
+  final ServerUpdateController controller=new ServerUpdateController(getServerModel(),container,executor,handler,rollbackOnFailure,!modelOnly);
+  for (int i=0; i < count; i++) {
     controller.addServerModelUpdate(updates.get(i),handler,Integer.valueOf(i));
   }
   controller.executeUpdates();
+  log.debugf("Executed %s updates",updates.size());
   try {
     latch.await();
   }
- catch (  Exception e) {
+ catch (  InterruptedException e) {
+    Thread.currentThread().interrupt();
     throw new ManagementException("failed to execute updates",e);
   }
   return results;
