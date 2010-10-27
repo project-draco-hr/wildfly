@@ -1,11 +1,32 @@
 {
   final BatchBuilder builder=updateContext.getBatchBuilder();
+  new RaDeploymentActivator().activate(new ServiceActivatorContext(){
+    public BatchBuilder getBatchBuilder(){
+      return builder;
+    }
+  }
+);
+  WorkManager wm=new WorkManagerImpl();
+  final WorkManagerService wmService=new WorkManagerService(wm);
+  final BatchServiceBuilder<WorkManager> wmServiceBuilder=builder.addService(ConnectorServices.WORKMANAGER_SERVICE,wmService);
+  wmServiceBuilder.addDependency(ThreadsServices.EXECUTOR.append(shortRunningThreadPool),Executor.class,wmService.getExecutorShortInjector());
+  wmServiceBuilder.addDependency(ThreadsServices.EXECUTOR.append(longRunningThreadPool),Executor.class,wmService.getExecutorLongInjector());
+  wmServiceBuilder.addDependency(TxnServices.JBOSS_TXN_XA_TERMINATOR,JBossXATerminator.class,wmService.getXaTerminatorInjector());
+  wmServiceBuilder.setInitialMode(Mode.ACTIVE);
+  CloneableBootstrapContext ctx=new BaseCloneableBootstrapContext();
+  final DefaultBootStrapContextService defaultBootCtxService=new DefaultBootStrapContextService(ctx);
+  final BatchServiceBuilder<CloneableBootstrapContext> defaultBootCtxServiceBuilder=builder.addService(ConnectorServices.DEFAULT_BOOTSTRAP_CONTEXT_SERVICE,defaultBootCtxService);
+  defaultBootCtxServiceBuilder.addDependency(ConnectorServices.WORKMANAGER_SERVICE,WorkManager.class,defaultBootCtxService.getWorkManagerValueInjector());
+  defaultBootCtxServiceBuilder.addDependency(TxnServices.JBOSS_TXN_XA_TERMINATOR,JBossXATerminator.class,defaultBootCtxService.getXaTerminatorInjector());
+  defaultBootCtxServiceBuilder.addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,com.arjuna.ats.jbossatx.jta.TransactionManagerService.class,defaultBootCtxService.getTxManagerInjector());
+  defaultBootCtxServiceBuilder.setInitialMode(Mode.ACTIVE);
   final ConnectorSubsystemConfiguration config=new ConnectorSubsystemConfiguration();
   config.setArchiveValidation(archiveValidation);
   config.setArchiveValidationFailOnError(archiveValidationFailOnError);
   config.setArchiveValidationFailOnWarn(archiveValidationFailOnWarn);
-  config.setBeanValidation(beanValidation);
+  config.setBeanValidation(false);
   final ConnectorConfigService connectorConfigService=new ConnectorConfigService(config);
-  final BatchServiceBuilder<ConnectorSubsystemConfiguration> serviceBuilder=builder.addService(ConnectorServices.CONNECTOR_CONFIG_SERVICE,connectorConfigService);
-  serviceBuilder.setInitialMode(Mode.ACTIVE);
+  final BatchServiceBuilder<ConnectorSubsystemConfiguration> configServiceBuilder=builder.addService(ConnectorServices.CONNECTOR_CONFIG_SERVICE,connectorConfigService);
+  configServiceBuilder.addDependency(ConnectorServices.DEFAULT_BOOTSTRAP_CONTEXT_SERVICE,CloneableBootstrapContext.class,connectorConfigService.getDefaultBootstrapContextInjector());
+  configServiceBuilder.setInitialMode(Mode.ACTIVE);
 }
