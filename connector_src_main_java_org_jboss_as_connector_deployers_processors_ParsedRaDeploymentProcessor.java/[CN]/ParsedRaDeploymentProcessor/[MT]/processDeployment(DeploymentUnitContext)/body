@@ -1,0 +1,30 @@
+{
+  final ConnectorXmlDescriptor connectorXmlDescriptor=context.getAttachment(ConnectorXmlDescriptor.ATTACHMENT_KEY);
+  final IronJacamarXmlDescriptor ironJacamarXmlDescriptor=context.getAttachment(IronJacamarXmlDescriptor.ATTACHMENT_KEY);
+  final Module module=context.getAttachment(ModuleDeploymentProcessor.MODULE_ATTACHMENT_KEY);
+  if (module == null)   throw new DeploymentUnitProcessingException("Failed to get module attachment for deployment: " + context.getName());
+  final ClassLoader classLoader=module.getClassLoader();
+  Connector cmd=connectorXmlDescriptor != null ? connectorXmlDescriptor.getConnector() : null;
+  final IronJacamar ijmd=ironJacamarXmlDescriptor != null ? ironJacamarXmlDescriptor.getIronJacamar() : null;
+  try {
+    Annotations annotator=new Annotations();
+    AnnotationRepository repository=new JandexAnnotationRepositoryImpl(context.getAttachment(AnnotationIndexProcessor.ATTACHMENT_KEY),classLoader);
+    cmd=annotator.merge(cmd,repository,classLoader);
+    cmd.validate();
+    cmd=(new Merger()).mergeConnectorWithCommonIronJacamar(ijmd,cmd);
+    AS7RaDeployer raDeployer=new AS7RaDeployer();
+    raDeployer.setConfiguration(config.getValue());
+    URL url=connectorXmlDescriptor == null ? null : connectorXmlDescriptor.getUrl();
+    String deploymentName=connectorXmlDescriptor == null ? null : connectorXmlDescriptor.getDeploymentName();
+    File root=connectorXmlDescriptor == null ? null : connectorXmlDescriptor.getRoot();
+    CommonDeployment raDeployment=raDeployer.doDeploy(url,deploymentName,root,classLoader,cmd,ijmd);
+    final BatchBuilder batchBuilder=context.getBatchBuilder();
+    ResourceAdapterDeployment dply=new ResourceAdapterDeployment(module.getIdentifier(),raDeployment);
+    ResourceAdapterDeploymentService raDeployementService=new ResourceAdapterDeploymentService(dply);
+    batchBuilder.addService(ConnectorServices.RESOURCE_ADAPTER_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName()),raDeployementService).addDependency(ConnectorServices.IRONJACAMAR_MDR,MetadataRepository.class,raDeployementService.getMdrInjector()).addDependency(ConnectorServices.RESOURCE_ADAPTER_REGISTRY_SERVICE,ResourceAdapterDeploymentRegistry.class,raDeployementService.getRegistryInjector()).addDependency(ConnectorServices.JNDI_STRATEGY_SERVICE,JndiStrategy.class,raDeployementService.getJndiInjector()).setInitialMode(Mode.ACTIVE);
+    registry.getValue().registerResourceAdapterDeployment(dply);
+  }
+ catch (  Throwable t) {
+    throw new DeploymentUnitProcessingException(t);
+  }
+}
