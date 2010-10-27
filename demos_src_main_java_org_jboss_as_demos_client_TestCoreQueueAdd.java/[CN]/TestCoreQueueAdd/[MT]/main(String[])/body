@@ -1,0 +1,38 @@
+{
+  final String queueName="queue.standalone";
+  final ClientSessionFactory sf=createClientSessionFactory("localhost",5445);
+  final StandaloneClient client=StandaloneClient.Factory.create(InetAddress.getByName("localhost"),9999);
+  if (queueExists(queueName,sf)) {
+    throw new IllegalStateException();
+  }
+  final QueueAdd add=new QueueAdd(queueName);
+  add.setAddress(queueName);
+  applyUpdates(Collections.<AbstractServerModelUpdate<?>>singletonList(ServerSubsystemUpdate.create(add)),client);
+  if (!queueExists(queueName,sf)) {
+    throw new IllegalStateException();
+  }
+  ClientSession session=null;
+  try {
+    session=sf.createSession();
+    ClientProducer producer=session.createProducer(queueName);
+    ClientMessage message=session.createMessage(false);
+    final String propName="myprop";
+    message.putStringProperty(propName,"Hello sent at " + new Date());
+    System.out.println("Sending the message.");
+    producer.send(message);
+    ClientConsumer messageConsumer=session.createConsumer(queueName);
+    session.start();
+    ClientMessage messageReceived=messageConsumer.receive(1000);
+    System.out.println("Received TextMessage:" + messageReceived.getStringProperty(propName));
+  }
+  finally {
+    if (session != null) {
+      session.close();
+    }
+  }
+  final QueueRemove remove=new QueueRemove(queueName);
+  applyUpdates(Collections.<AbstractServerModelUpdate<?>>singletonList(ServerSubsystemUpdate.create(remove)),client);
+  if (queueExists(queueName,sf)) {
+    throw new IllegalStateException();
+  }
+}
