@@ -1,15 +1,23 @@
 {
-  String processName=ManagedServer.getServerProcessName(serverName);
-  ManagedServer server=servers.get(processName);
-  if (server == null) {
-    throw new IllegalStateException(String.format("Server %s is unknown; cannot stop it",serverName));
-  }
-  if (gracefulTimeout > -1) {
-    server.gracefulShutdown(gracefulTimeout);
-  }
+  try {
+    String processName=ManagedServer.getServerProcessName(serverName);
+    ManagedServer server=servers.get(processName);
+    if (server != null) {
+      if (gracefulTimeout > -1) {
+        log.warnf("Graceful shutdown of server %s was requested but is not presently supported. " + "Falling back to rapid shutdown.",serverName);
+        server.stopServerProcess();
+        server.removeServerProcess();
+        servers.remove(processName);
+      }
  else {
-    server.stopServerProcess();
-    server.removeServerProcess();
-    servers.remove(processName);
+        server.stopServerProcess();
+        server.removeServerProcess();
+        servers.remove(processName);
+      }
+    }
   }
+ catch (  Exception e) {
+    log.errorf(e,"Failed to stop server %s",serverName);
+  }
+  return determineServerStatus(serverName);
 }
