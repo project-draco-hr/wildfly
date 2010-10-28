@@ -9,15 +9,22 @@
   for (  ResourceInjection<?> resourceInjection : resourceInjections) {
     resourceInjection.inject(managedBean);
   }
-  if (postConstructMethods != null) {
-    for (    Method postConstructMethod : postConstructMethods) {
-      try {
-        postConstructMethod.invoke(managedBean);
-      }
- catch (      Throwable t) {
-        throw new RuntimeException("Failed to invoke post construct method '" + postConstructMethod.getName() + "' for class "+ beanClass,t);
+  final ClassLoader contextCl=getContextClassLoader();
+  setContextClassLoader(deploymentClassLoader);
+  try {
+    if (postConstructMethods != null) {
+      for (      Method postConstructMethod : postConstructMethods) {
+        try {
+          postConstructMethod.invoke(managedBean);
+        }
+ catch (        Throwable t) {
+          throw new RuntimeException("Failed to invoke post construct method '" + postConstructMethod.getName() + "' for class "+ beanClass,t);
+        }
       }
     }
+  }
+  finally {
+    setContextClassLoader(contextCl);
   }
   if (!interceptors.isEmpty()) {
     final List<ManagedBeanInterceptor.AroundInvokeInterceptor<?>> aroundInvokeInterceptors=new ArrayList<ManagedBeanInterceptor.AroundInvokeInterceptor<?>>(interceptors.size());
@@ -30,7 +37,7 @@
       }
     }
     try {
-      managedBean=ManagedBeanProxyHandler.createProxy(beanClass,managedBean,aroundInvokeInterceptors);
+      managedBean=ManagedBeanProxyHandler.createProxy(beanClass,deploymentClassLoader,managedBean,aroundInvokeInterceptors);
     }
  catch (    Throwable t) {
       throw new RuntimeException("Unable to create managed bean proxy for " + beanClass,t);
