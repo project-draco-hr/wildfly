@@ -1,11 +1,12 @@
 {
   log.infof("Activating deployment: %s",deploymentName);
-  Closeable handle=null;
+  MountHandle handle=null;
   try {
     final ServerDeploymentRepository deploymentRepo=getDeploymentRepository(serviceContainer);
     final VirtualFile deploymentRoot=VFS.getChild("content/" + runtimeName);
     try {
-      handle=deploymentRepo.mountDeploymentContent(deploymentName,runtimeName,deploymentHash,deploymentRoot);
+      Closeable mount=deploymentRepo.mountDeploymentContent(deploymentName,runtimeName,deploymentHash,deploymentRoot);
+      handle=new MountHandle(mount);
     }
  catch (    IOException e) {
       throw new RuntimeException("Failed to mount deployment archive",e);
@@ -18,7 +19,7 @@
     deploymentSubBatch.addListener(new DeploymentFailureListener(deploymentServiceName));
     final DeploymentUnitContext deploymentUnitContext=new DeploymentUnitContextImpl(deploymentServiceName.getSimpleName(),deploymentSubBatch,serviceBuilder);
     attachVirtualFile(deploymentUnitContext,deploymentRoot);
-    deploymentUnitContext.putAttachment(MountHandle.ATTACHMENT_KEY,new MountHandle(handle));
+    deploymentUnitContext.putAttachment(MountHandle.ATTACHMENT_KEY,handle);
     try {
       Manifest manifest=VFSUtils.getManifest(deploymentRoot);
       if (manifest != null)       ManifestAttachment.attachManifest(deploymentUnitContext,manifest);
