@@ -1,40 +1,69 @@
 {
   final List<NamespacePrefix> prefixes=readNamespaces(reader);
   if (!prefixes.isEmpty())   list.add(new ServerNamespaceUpdate(prefixes));
+  String serverName=null;
   final int count=reader.getAttributeCount();
   for (int i=0; i < count; i++) {
 switch (Namespace.forUri(reader.getAttributeNamespace(i))) {
 case DOMAIN_1_0:
 {
+        final String value=reader.getAttributeValue(i);
+        final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+            if (serverName != null)             throw unexpectedAttribute(reader,i);
+            serverName=value;
+            break;
+          }
+default :
         throw unexpectedAttribute(reader,i);
-      }
+    }
+    break;
+  }
 case XML_SCHEMA_INSTANCE:
 {
 switch (Attribute.forName(reader.getAttributeLocalName(i))) {
 case SCHEMA_LOCATION:
 {
-          final List<SchemaLocation> locationList=readSchemaLocations(reader,i);
-          list.add(new ServerSchemaLocationUpdate(locationList));
-          break;
-        }
+      final List<SchemaLocation> locationList=readSchemaLocations(reader,i);
+      list.add(new ServerSchemaLocationUpdate(locationList));
+      break;
+    }
 case NO_NAMESPACE_SCHEMA_LOCATION:
 {
-        break;
-      }
+    break;
+  }
 default :
 {
-      throw unexpectedAttribute(reader,i);
-    }
+  throw unexpectedAttribute(reader,i);
+}
+}
+break;
+}
+case UNKNOWN:
+{
+if (reader.getAttributeNamespace(i) != null) throw unexpectedAttribute(reader,i);
+final String value=reader.getAttributeValue(i);
+final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+if (serverName != null) throw unexpectedAttribute(reader,i);
+serverName=value;
+break;
+}
+default :
+throw unexpectedAttribute(reader,i);
+}
+break;
 }
 }
 }
+if (serverName != null && serverName.length() != 0) {
+list.add(new ServerNameUpdate(serverName));
 }
 Element element=nextElement(reader);
-if (element == Element.NAME) {
-list.add(new ServerNameUpdate(reader.getElementText().trim()));
-reader.require(END_ELEMENT,null,null);
-element=nextElement(reader);
-}
 if (element == Element.EXTENSIONS) {
 Set<String> extensionModules=parseExtensions(reader);
 for (String moduleName : extensionModules) {
@@ -89,8 +118,8 @@ final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
 switch (attribute) {
 case PATH:
 {
-  path=value;
-  break;
+path=value;
+break;
 }
 case NAME:
 {
