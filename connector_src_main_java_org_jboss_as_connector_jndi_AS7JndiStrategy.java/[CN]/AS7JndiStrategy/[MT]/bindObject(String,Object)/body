@@ -1,0 +1,19 @@
+{
+  ensureNotNull(obj,"Bind Object");
+  ensureNotEmpty(jndiName,"JNDI Name");
+  final String className=obj.getClass().getName();
+  log.tracef("Binding %s under %s",className,jndiName);
+  final Reference reference=ModularReference.create(className,new StringRefAddr("class",className),AS7JndiStrategy.class);
+  reference.add(new StringRefAddr("name",jndiName));
+  if (objs.putIfAbsent(qualifiedName(jndiName,className),obj) != null)   throw new Exception("Deployment " + className + " failed, "+ jndiName+ " is already deployed");
+  final Referenceable referenceable=(Referenceable)obj;
+  referenceable.setReference(reference);
+  final Context context=new InitialContext();
+  try {
+    Util.bind(context,jndiName,obj);
+    log.debugf("Bound %s under %s",className,jndiName);
+  }
+  finally {
+    safeClose(context);
+  }
+}
