@@ -2,18 +2,39 @@
   try {
     String processName=ManagedServer.getServerProcessName(serverName);
     ManagedServer server=servers.get(processName);
+    boolean canStart=true;
     if (server != null) {
       if (server.getState() != ServerState.STOPPED) {
-        throw new IllegalStateException("Server " + serverName + " is not stopped; state is "+ server.getState());
+        log.warnf("Received request to start server %s but it is not stopped; server state is ",serverName,server.getState());
+        canStart=false;
       }
-      server.removeServerProcess();
-      servers.remove(processName);
+ else {
+        server.removeServerProcess();
+        servers.remove(processName);
+      }
     }
-    InetSocketAddress managementSocket=new InetSocketAddress(0);
-    startServer(serverName,managementSocket);
+    if (canStart) {
+      startServer(serverName,managementSocketAddress);
+    }
   }
  catch (  Exception e) {
     log.errorf(e,"Failed to start server %s",serverName);
   }
-  return determineServerStatus(serverName);
+  ServerStatus status=determineServerStatus(serverName);
+  for (int i=0; i < 50; i++) {
+    status=determineServerStatus(serverName);
+    if (status == ServerStatus.STARTING) {
+      try {
+        Thread.sleep(100);
+      }
+ catch (      InterruptedException e) {
+        Thread.currentThread().interrupt();
+        break;
+      }
+    }
+ else {
+      break;
+    }
+  }
+  return status;
 }
