@@ -1,0 +1,60 @@
+{
+  String value=req.getParameter("value");
+  Writer writer=resp.getWriter();
+  writer.write("Servlet Response\n");
+  Object o=req.getAttribute("Filtered");
+  writer.write("Filtered: " + (o != null) + "\n");
+  writer.write("Entries in database:\n");
+  Connection sqlConn=null;
+  PreparedStatement stmt=null;
+  try {
+    sqlConn=ds.getConnection();
+    stmt=sqlConn.prepareCall("INSERT INTO WebAppTestTable (value) VALUES ('" + value + "')");
+    stmt.executeUpdate();
+  }
+ catch (  Exception e) {
+    throw new ServletException(e);
+  }
+ finally {
+    safeClose(stmt);
+    safeClose(sqlConn);
+  }
+  ResultSet rs=null;
+  try {
+    sqlConn=ds.getConnection();
+    stmt=sqlConn.prepareStatement("select * from WebAppTestTable");
+    rs=stmt.executeQuery();
+    while (rs.next()) {
+      writer.write(rs.getInt(1));
+      writer.write(" - ");
+      writer.write(rs.getString(2) + "\n");
+    }
+  }
+ catch (  Exception e) {
+    throw new ServletException(e);
+  }
+ finally {
+    safeClose(rs);
+    safeClose(stmt);
+    safeClose(sqlConn);
+  }
+  QueueSession session=null;
+  try {
+    session=conn.createQueueSession(false,Session.AUTO_ACKNOWLEDGE);
+    QueueSender sender=session.createSender(queue);
+    TextMessage msg=session.createTextMessage(value);
+    sender.send(msg);
+  }
+ catch (  JMSException e) {
+    throw new ServletException(e);
+  }
+ finally {
+    try {
+      if (session != null) {
+        session.close();
+      }
+    }
+ catch (    Exception ignore) {
+    }
+  }
+}

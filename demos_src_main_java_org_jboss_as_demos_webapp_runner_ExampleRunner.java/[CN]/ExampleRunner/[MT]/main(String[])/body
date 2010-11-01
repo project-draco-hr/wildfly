@@ -1,14 +1,13 @@
 {
+  DeploymentUtils utils=null;
   QueueConnection conn=null;
   QueueSession session=null;
-  DeploymentUtils utils=null;
   try {
     utils=new DeploymentUtils("fakejndi.sar",FakeJndi.class.getPackage());
+    utils.addWarDeployment("webapp-example.war",SimpleServlet.class.getPackage());
     utils.deploy();
     QueueConnectionFactory qcf=lookup(utils,"RemoteConnectionFactory",QueueConnectionFactory.class);
     Queue queue=lookup(utils,"queue/test",Queue.class);
-    System.out.println("Got qcf " + qcf);
-    System.out.println("Got q " + queue);
     conn=qcf.createQueueConnection();
     conn.start();
     session=conn.createQueueSession(false,QueueSession.AUTO_ACKNOWLEDGE);
@@ -17,7 +16,7 @@
       @Override public void onMessage(      Message message){
         TextMessage msg=(TextMessage)message;
         try {
-          System.out.println("---->Received: " + msg.getText());
+          System.out.println("---->Received from queue: " + msg.getText());
         }
  catch (        JMSException e) {
           e.printStackTrace();
@@ -25,32 +24,13 @@
       }
     }
 );
-    QueueSender sender=session.createSender(queue);
-    for (int i=0; i < 10; i++) {
-      String s="Test" + i;
-      System.out.println("----> Sending: " + s);
-      TextMessage msg=session.createTextMessage(s);
-      sender.send(msg);
-    }
-    Thread.sleep(1000);
+    connect("other?value=One");
+    connect("simple?value=Two");
+    connect("simple?value=Three");
   }
   finally {
-    try {
-      conn.stop();
-    }
- catch (    Exception ignore) {
-    }
-    try {
-      session.close();
-    }
- catch (    Exception ignore) {
-    }
-    try {
-      conn.close();
-    }
- catch (    Exception ignore) {
-    }
     utils.undeploy();
     safeClose(utils);
+    conn.close();
   }
 }
