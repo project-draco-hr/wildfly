@@ -4,7 +4,7 @@
   List<DeploymentSetUpdates> updateSets=new ArrayList<DeploymentSetUpdates>(setPlans.size());
   for (  DeploymentSetPlan setPlan : setPlans) {
     try {
-      updateSets.add(createDeploymentSetUpdates(setPlan,getDomainModel()));
+      updateSets.add(createDeploymentSetUpdates(setPlan,getDomainModel(),setPlan.getDeploymentActions()));
     }
  catch (    InvalidDeploymentPlanException e) {
       logger.errorf(e,"Deployment plan %s is invalid",plan.getId());
@@ -14,23 +14,47 @@
   }
   List<DeploymentSetUpdates> rollbackSets=new ArrayList<DeploymentSetUpdates>(setPlans.size());
   boolean ok=true;
+  boolean rollbackFailed=false;
   for (  DeploymentSetUpdates updateSet : updateSets) {
     if (ok) {
-      ok=executeDeploymentSet(updateSet,responseQueue);
-      if (ok) {
-        rollbackSets.add(0,updateSet);
-      }
+      try {
+        ok=executeDeploymentSet(updateSet,responseQueue);
+        if (ok) {
+          rollbackSets.add(0,updateSet);
+        }
  else {
-        logger.debugf("Deployment set %s did not succeed",updateSet.setPlan.getId());
+          logger.debugf("Deployment set %s did not succeed",updateSet.setPlan.getId());
+        }
+      }
+ catch (      RollbackFailedException e) {
+        ok=false;
+        rollbackFailed=true;
+        logger.errorf("Rollback of deployment set %s did not succeed",updateSet.setPlan.getId());
       }
     }
  else {
-      cancelDeploymentSet(updateSet,responseQueue);
+      cancelDeploymentSet(updateSet,false,responseQueue);
     }
   }
-  if (!ok && plan.isGlobalRollback()) {
-    for (    DeploymentSetUpdates updateSet : rollbackSets) {
-      rollbackDeploymentSet(updateSet,responseQueue);
+  if (plan.isGlobalRollback()) {
+    if (!ok && !rollbackFailed) {
+      for (Iterator<DeploymentSetUpdates> iter=rollbackSets.iterator(); iter.hasNext(); ) {
+        DeploymentSetUpdates updateSet=iter.next();
+        try {
+          rollbackDeploymentSet(updateSet,responseQueue);
+          iter.remove();
+        }
+ catch (        RollbackFailedException e) {
+          rollbackFailed=true;
+          logger.errorf("Rollback of deployment set %s did not succeed",updateSet.setPlan.getId());
+          break;
+        }
+      }
+    }
+    if (rollbackFailed) {
+      for (      DeploymentSetUpdates updateSet : rollbackSets) {
+        cancelDeploymentSet(updateSet,true,responseQueue);
+      }
     }
   }
   pushSingleResponse(responseQueue,new StreamedResponse((byte)DomainClientProtocol.RETURN_DEPLOYMENT_PLAN_COMPLETE,null,true));

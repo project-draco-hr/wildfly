@@ -1,13 +1,24 @@
 {
   try {
     logger.debugf("Applying %s updates to  %s",updates.getServerUpdates().size(),serverId);
-    List<UpdateResultHandlerResponse<?>> rsps=domainController.applyUpdatesToServer(serverId,updates.getServerUpdates(),allowOverallRollback);
-    updates.serverResults.put(serverId,rsps);
+    List<UpdateResultHandlerResponse<?>> rsps=domainController.applyUpdatesToServer(serverId,serverUpdates,allowOverallRollback);
+    if (!forRollback) {
+      updates.serverResults.put(serverId,rsps);
+    }
     updatePolicy.recordServerResult(serverId,rsps);
     DeploymentAction lastResponseAction=null;
     for (int i=0; i < rsps.size(); i++) {
       UpdateResultHandlerResponse<?> urhr=rsps.get(i);
-      if (urhr.getFailureResult() != null || updates.isLastServerUpdateForAction(i)) {
+      boolean sendResponse=urhr.getFailureResult() != null;
+      if (!sendResponse) {
+        if (forRollback) {
+          sendResponse=updates.isLastServerRollbackUpdateForAction(i);
+        }
+ else {
+          sendResponse=updates.isLastServerUpdateForAction(i);
+        }
+      }
+      if (sendResponse) {
         DeploymentAction action=updates.getDeploymentActionForServerUpdate(i);
         if (action != lastResponseAction) {
           sendServerUpdateResult(action.getId(),urhr);

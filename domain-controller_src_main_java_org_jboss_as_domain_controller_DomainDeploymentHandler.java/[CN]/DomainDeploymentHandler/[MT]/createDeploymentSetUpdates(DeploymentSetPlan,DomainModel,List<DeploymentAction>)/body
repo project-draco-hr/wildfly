@@ -1,6 +1,5 @@
 {
   logger.debugf("Creating DeploymentSetUpdates for deployment set %s",plan.getId());
-  List<DeploymentAction> actions=plan.getDeploymentActions();
   if (actions.size() == 0) {
     throw new InvalidDeploymentPlanException(String.format("%s %s contains no deployment actions",DeploymentSetPlan.class.getSimpleName(),plan.getId()));
   }
@@ -25,17 +24,19 @@ case ADD:
           hash=de.getSha1Hash();
         }
  else         if (model.getDeployment(deploymentName) == null) {
-          au.domainUpdates.add(new DomainDeploymentAdd(deploymentName,runtimeName,hash,false));
+          DomainDeploymentAdd dda=new DomainDeploymentAdd(deploymentName,runtimeName,hash,false);
+          au.domainUpdates.add(dda);
+          addDomainRollbackUpdate(dda,au,model,true);
         }
         ServerGroupDeploymentAdd sgda=new ServerGroupDeploymentAdd(deploymentName,runtimeName,hash,false);
-        addServerGroupUpdates(plan,au,sgda);
+        addServerGroupUpdates(plan,au,sgda,model);
         break;
       }
 case DEPLOY:
 {
       logger.tracef("Deploy of deployment %s",dai.getDeploymentUnitUniqueName());
       ServerGroupDeploymentStartStopUpdate sgdssu=new ServerGroupDeploymentStartStopUpdate(dai.getDeploymentUnitUniqueName(),true);
-      addServerGroupUpdates(plan,au,sgdssu);
+      addServerGroupUpdates(plan,au,sgdssu,model);
       break;
     }
 case FULL_REPLACE:
@@ -62,6 +63,7 @@ case FULL_REPLACE:
     boolean start=deployment != null && deployment.isStart();
     DomainDeploymentFullReplaceUpdate update=new DomainDeploymentFullReplaceUpdate(deploymentName,dai.getNewContentFileName(),dai.getNewContentHash(),start);
     au.domainUpdates.add(update);
+    addDomainRollbackUpdate(update,au,model,true);
     au.serverUpdates.add(update.getServerModelUpdate());
     break;
   }
@@ -70,6 +72,7 @@ case REDEPLOY:
   logger.tracef("Redeploy of deployment %s",dai.getDeploymentUnitUniqueName());
   DomainDeploymentRedeployUpdate update=new DomainDeploymentRedeployUpdate(dai.getDeploymentUnitUniqueName());
   au.domainUpdates.add(update);
+  addDomainRollbackUpdate(update,au,model,true);
   au.serverUpdates.add(update.getServerModelUpdate());
   break;
 }
@@ -77,7 +80,7 @@ case REMOVE:
 {
 logger.tracef("Remove of deployment %s",dai.getDeploymentUnitUniqueName());
 ServerGroupDeploymentRemove sgdr=new ServerGroupDeploymentRemove(dai.getDeploymentUnitUniqueName());
-addServerGroupUpdates(plan,au,sgdr);
+addServerGroupUpdates(plan,au,sgdr,model);
 Set<String> names=model.getServerGroupNames();
 for (Set<ServerGroupDeploymentPlan> ssgp : plan.getServerGroupDeploymentPlans()) {
   for (  ServerGroupDeploymentPlan sgdp : ssgp) {
@@ -93,7 +96,9 @@ for (String name : names) {
   }
 }
 if (!left) {
-  au.domainUpdates.add(new DomainDeploymentRemove(dai.getDeploymentUnitUniqueName()));
+  DomainDeploymentRemove ddr=new DomainDeploymentRemove(dai.getDeploymentUnitUniqueName());
+  au.domainUpdates.add(ddr);
+  addDomainRollbackUpdate(ddr,au,model,true);
 }
 break;
 }
@@ -101,14 +106,14 @@ case REPLACE:
 {
 logger.tracef("Replace of deployment %s",dai.getDeploymentUnitUniqueName());
 ServerGroupDeploymentReplaceUpdate sgdru=new ServerGroupDeploymentReplaceUpdate(dai.getDeploymentUnitUniqueName(),dai.getNewContentFileName(),dai.getNewContentHash(),dai.getReplacedDeploymentUnitUniqueName());
-addServerGroupUpdates(plan,au,sgdru);
+addServerGroupUpdates(plan,au,sgdru,model);
 break;
 }
 case UNDEPLOY:
 {
 logger.tracef("Undeploy of deployment %s",dai.getDeploymentUnitUniqueName());
 ServerGroupDeploymentStartStopUpdate sgdssu=new ServerGroupDeploymentStartStopUpdate(dai.getDeploymentUnitUniqueName(),false);
-addServerGroupUpdates(plan,au,sgdssu);
+addServerGroupUpdates(plan,au,sgdssu,model);
 break;
 }
 default :

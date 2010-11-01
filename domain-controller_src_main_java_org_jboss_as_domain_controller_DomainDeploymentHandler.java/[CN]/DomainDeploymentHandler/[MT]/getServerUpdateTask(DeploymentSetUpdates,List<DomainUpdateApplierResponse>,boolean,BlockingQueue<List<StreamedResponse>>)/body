@@ -27,12 +27,44 @@
       if (servers == null) {
         servers=new TreeSet<ServerIdentity>();
       }
-      ServerUpdatePolicy policy=new ServerUpdatePolicy(parent,serverGroupName,servers,groupPlan);
-      updateSet.updatePolicies.put(serverGroupName,policy);
+      ServerUpdatePolicy policy=null;
+      if (forRollbacks) {
+        policy=new ServerUpdatePolicy(parent,serverGroupName,servers);
+        updateSet.rollbackPolicies.put(serverGroupName,policy);
+      }
+ else {
+        policy=new ServerUpdatePolicy(parent,serverGroupName,servers,groupPlan);
+        updateSet.updatePolicies.put(serverGroupName,policy);
+      }
       List<Runnable> groupTasks=new ArrayList<Runnable>(servers.size());
       if (shutdown) {
         for (        ServerIdentity server : servers) {
-          groupTasks.add(new ServerRestartTask(server,updateSet,policy,responseQueue,gracefulTimeout));
+          groupTasks.add(new ServerRestartTask(server,updateSet,forRollbacks,policy,responseQueue,gracefulTimeout));
+        }
+      }
+ else       if (forRollbacks) {
+        for (        ServerIdentity server : servers) {
+          List<AbstractServerModelUpdate<?>> serverRollbacks=null;
+          List<UpdateResultHandlerResponse<?>> origResults=updateSet.serverResults.get(server);
+          if (origResults == null) {
+            serverRollbacks=updateSet.getServerRollbacks();
+          }
+ else {
+            serverRollbacks=new ArrayList<AbstractServerModelUpdate<?>>();
+            boolean rollingBack=false;
+            for (int i=origResults.size() - 1; i >= 0; i--) {
+              UpdateResultHandlerResponse<?> origResult=origResults.get(i);
+              if (!rollingBack) {
+                rollingBack=!origResult.isCancelled() && !origResult.isRolledBack();
+              }
+              if (rollingBack) {
+                serverRollbacks.add(updateSet.getRollbackUpdateForServerUpdate(i));
+              }
+            }
+          }
+          if (serverRollbacks.size() > 0) {
+            groupTasks.add(new RunningServerUpdateTask(server,updateSet,serverRollbacks,policy,responseQueue));
+          }
         }
       }
  else {
