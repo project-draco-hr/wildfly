@@ -32,18 +32,14 @@ throw missingRequired(reader,required);
 }
 String levelName=null;
 String encoding=null;
-String suffix=null;
-FileSpec fileSpec=null;
-boolean append=true;
 AbstractFormatterSpec formatterSpec=null;
-final EnumSet<Element> requiredElem=EnumSet.of(Element.FILE,Element.SUFFIX);
+String target=null;
 final EnumSet<Element> encountered=EnumSet.noneOf(Element.class);
 while (reader.nextTag() != END_ELEMENT) {
 final Element element=Element.forName(reader.getLocalName());
 if (!encountered.add(element)) {
 throw unexpectedElement(reader);
 }
-requiredElem.remove(element);
 switch (element) {
 case LEVEL:
 {
@@ -60,19 +56,12 @@ case FORMATTER:
 formatterSpec=parseFormatterElement(reader);
 break;
 }
-case FILE:
+case TARGET:
 {
-fileSpec=parseFileElement(reader);
-break;
+target=readStringAttributeElement(reader,"name");
+if (!(target.equals("System.out") || target.equals("System.err"))) {
+throw new XMLStreamException("Invalid value for target name",reader.getLocation());
 }
-case APPEND:
-{
-append=Boolean.parseBoolean(readStringAttributeElement(reader,"value"));
-break;
-}
-case SUFFIX:
-{
-suffix=readStringAttributeElement(reader,"value");
 break;
 }
 default :
@@ -81,17 +70,14 @@ throw unexpectedElement(reader);
 }
 }
 }
-if (!requiredElem.isEmpty()) {
-throw missingRequired(reader,required);
+if (names.contains(name)) {
+throw duplicateNamedElement(reader,name);
 }
-final PeriodicRotatingFileHandlerAdd add=new PeriodicRotatingFileHandlerAdd(name);
+final ConsoleHandlerAdd add=new ConsoleHandlerAdd(name);
 add.setAutoflush(Boolean.valueOf(autoflush));
 add.setLevelName(levelName);
 add.setEncoding(encoding);
 add.setFormatter(formatterSpec);
-add.setPath(fileSpec.fileName);
-add.setRelativeTo(fileSpec.relativeTo);
-add.setAppend(append);
-add.setSuffix(suffix);
+if (target != null) add.setTarget(Target.fromString(target));
 list.add(add);
 }
