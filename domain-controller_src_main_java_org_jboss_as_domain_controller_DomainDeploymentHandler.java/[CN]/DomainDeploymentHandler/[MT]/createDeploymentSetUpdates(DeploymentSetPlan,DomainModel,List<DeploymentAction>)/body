@@ -7,100 +7,95 @@
   for (  DeploymentAction action : actions) {
     ActionUpdates au=new ActionUpdates(action);
     actionUpdates.add(au);
-    DeploymentActionImpl dai=(DeploymentActionImpl)action;
+    try {
+      DeploymentActionImpl dai=(DeploymentActionImpl)action;
 switch (action.getType()) {
 case ADD:
 {
-        String deploymentName=dai.getDeploymentUnitUniqueName();
-        logger.tracef("Add of deployment %s",deploymentName);
-        String runtimeName=dai.getNewContentFileName();
-        byte[] hash=dai.getNewContentHash();
-        if (runtimeName == null) {
-          DeploymentUnitElement de=model.getDeployment(deploymentName);
-          if (de == null) {
-            throw new InvalidDeploymentPlanException("Unknown deployment unit " + deploymentName);
+          String deploymentName=dai.getDeploymentUnitUniqueName();
+          logger.tracef("Add of deployment %s",deploymentName);
+          String runtimeName=dai.getNewContentFileName();
+          byte[] hash=dai.getNewContentHash();
+          if (runtimeName == null) {
+            DeploymentUnitElement de=model.getDeployment(deploymentName);
+            if (de == null) {
+              throw new InvalidDeploymentPlanException("Unknown deployment unit " + deploymentName);
+            }
+            runtimeName=de.getRuntimeName();
+            hash=de.getSha1Hash();
           }
-          runtimeName=de.getRuntimeName();
-          hash=de.getSha1Hash();
+ else           if (model.getDeployment(deploymentName) == null) {
+            DomainDeploymentAdd dda=new DomainDeploymentAdd(deploymentName,runtimeName,hash,false);
+            au.domainUpdates.add(new DomainUpdate(dda,model,true));
+          }
+          ServerGroupDeploymentAdd sgda=new ServerGroupDeploymentAdd(deploymentName,runtimeName,hash,false);
+          addServerGroupUpdates(plan,au,sgda,model);
+          break;
         }
- else         if (model.getDeployment(deploymentName) == null) {
-          DomainDeploymentAdd dda=new DomainDeploymentAdd(deploymentName,runtimeName,hash,false);
-          au.domainUpdates.add(dda);
-          addDomainRollbackUpdate(dda,au,model,true);
-        }
-        ServerGroupDeploymentAdd sgda=new ServerGroupDeploymentAdd(deploymentName,runtimeName,hash,false);
-        addServerGroupUpdates(plan,au,sgda,model);
-        break;
-      }
 case DEPLOY:
 {
-      logger.tracef("Deploy of deployment %s",dai.getDeploymentUnitUniqueName());
-      ServerGroupDeploymentStartStopUpdate sgdssu=new ServerGroupDeploymentStartStopUpdate(dai.getDeploymentUnitUniqueName(),true);
-      addServerGroupUpdates(plan,au,sgdssu,model);
-      break;
-    }
+        logger.tracef("Deploy of deployment %s",dai.getDeploymentUnitUniqueName());
+        ServerGroupDeploymentStartStopUpdate sgdssu=new ServerGroupDeploymentStartStopUpdate(dai.getDeploymentUnitUniqueName(),true);
+        addServerGroupUpdates(plan,au,sgdssu,model);
+        break;
+      }
 case FULL_REPLACE:
 {
-    logger.tracef("Full replace of deployment %s",dai.getDeploymentUnitUniqueName());
-    String deploymentName=dai.getDeploymentUnitUniqueName();
-    Set<String> names=new LinkedHashSet<String>(model.getServerGroupNames());
-    for (    Set<ServerGroupDeploymentPlan> ssgp : plan.getServerGroupDeploymentPlans()) {
-      for (      ServerGroupDeploymentPlan sgdp : ssgp) {
-        names.remove(sgdp.getServerGroupName());
+      logger.tracef("Full replace of deployment %s",dai.getDeploymentUnitUniqueName());
+      String deploymentName=dai.getDeploymentUnitUniqueName();
+      Set<String> names=new LinkedHashSet<String>(model.getServerGroupNames());
+      for (      Set<ServerGroupDeploymentPlan> ssgp : plan.getServerGroupDeploymentPlans()) {
+        for (        ServerGroupDeploymentPlan sgdp : ssgp) {
+          names.remove(sgdp.getServerGroupName());
+        }
       }
-    }
-    for (Iterator<String> it=names.iterator(); it.hasNext(); ) {
-      String name=it.next();
-      ServerGroupElement sge=model.getServerGroup(name);
-      if (sge.getDeployment(dai.getDeploymentUnitUniqueName()) == null) {
-        it.remove();
+      for (Iterator<String> it=names.iterator(); it.hasNext(); ) {
+        String name=it.next();
+        ServerGroupElement sge=model.getServerGroup(name);
+        if (sge.getDeployment(dai.getDeploymentUnitUniqueName()) == null) {
+          it.remove();
+        }
       }
+      if (names.size() > 0) {
+        throw new IncompleteDeploymentReplaceException(deploymentName,names.toArray(new String[names.size()]));
+      }
+      DeploymentUnitElement deployment=model.getDeployment(dai.getDeploymentUnitUniqueName());
+      boolean start=deployment != null && deployment.isStart();
+      DomainDeploymentFullReplaceUpdate ddfru=new DomainDeploymentFullReplaceUpdate(deploymentName,dai.getNewContentFileName(),dai.getNewContentHash(),start);
+      au.domainUpdates.add(new DomainUpdate(ddfru,model,true));
+      break;
     }
-    if (names.size() > 0) {
-      throw new IncompleteDeploymentReplaceException(deploymentName,names.toArray(new String[names.size()]));
-    }
-    DeploymentUnitElement deployment=model.getDeployment(dai.getDeploymentUnitUniqueName());
-    boolean start=deployment != null && deployment.isStart();
-    DomainDeploymentFullReplaceUpdate update=new DomainDeploymentFullReplaceUpdate(deploymentName,dai.getNewContentFileName(),dai.getNewContentHash(),start);
-    au.domainUpdates.add(update);
-    addDomainRollbackUpdate(update,au,model,true);
-    au.serverUpdates.add(update.getServerModelUpdate());
-    break;
-  }
 case REDEPLOY:
 {
-  logger.tracef("Redeploy of deployment %s",dai.getDeploymentUnitUniqueName());
-  DomainDeploymentRedeployUpdate update=new DomainDeploymentRedeployUpdate(dai.getDeploymentUnitUniqueName());
-  au.domainUpdates.add(update);
-  addDomainRollbackUpdate(update,au,model,true);
-  au.serverUpdates.add(update.getServerModelUpdate());
-  break;
-}
-case REMOVE:
-{
-logger.tracef("Remove of deployment %s",dai.getDeploymentUnitUniqueName());
-ServerGroupDeploymentRemove sgdr=new ServerGroupDeploymentRemove(dai.getDeploymentUnitUniqueName());
-addServerGroupUpdates(plan,au,sgdr,model);
-Set<String> names=model.getServerGroupNames();
-for (Set<ServerGroupDeploymentPlan> ssgp : plan.getServerGroupDeploymentPlans()) {
-  for (  ServerGroupDeploymentPlan sgdp : ssgp) {
-    names.remove(sgdp.getServerGroupName());
-  }
-}
-boolean left=false;
-for (String name : names) {
-  ServerGroupElement sge=model.getServerGroup(name);
-  if (sge.getDeployment(dai.getDeploymentUnitUniqueName()) != null) {
-    left=true;
+    logger.tracef("Redeploy of deployment %s",dai.getDeploymentUnitUniqueName());
+    DomainDeploymentRedeployUpdate ddru=new DomainDeploymentRedeployUpdate(dai.getDeploymentUnitUniqueName());
+    au.domainUpdates.add(new DomainUpdate(ddru,model,true));
     break;
   }
-}
-if (!left) {
-  DomainDeploymentRemove ddr=new DomainDeploymentRemove(dai.getDeploymentUnitUniqueName());
-  au.domainUpdates.add(ddr);
-  addDomainRollbackUpdate(ddr,au,model,true);
-}
-break;
+case REMOVE:
+{
+  logger.tracef("Remove of deployment %s",dai.getDeploymentUnitUniqueName());
+  ServerGroupDeploymentRemove sgdr=new ServerGroupDeploymentRemove(dai.getDeploymentUnitUniqueName());
+  addServerGroupUpdates(plan,au,sgdr,model);
+  Set<String> names=model.getServerGroupNames();
+  for (  Set<ServerGroupDeploymentPlan> ssgp : plan.getServerGroupDeploymentPlans()) {
+    for (    ServerGroupDeploymentPlan sgdp : ssgp) {
+      names.remove(sgdp.getServerGroupName());
+    }
+  }
+  boolean left=false;
+  for (  String name : names) {
+    ServerGroupElement sge=model.getServerGroup(name);
+    if (sge.getDeployment(dai.getDeploymentUnitUniqueName()) != null) {
+      left=true;
+      break;
+    }
+  }
+  if (!left) {
+    DomainDeploymentRemove ddr=new DomainDeploymentRemove(dai.getDeploymentUnitUniqueName());
+    au.domainUpdates.add(new DomainUpdate(ddr,model,true));
+  }
+  break;
 }
 case REPLACE:
 {
@@ -118,6 +113,13 @@ break;
 }
 default :
 throw new IllegalStateException(String.format("Unknown %s %s",DeploymentAction.class.getSimpleName(),action.getType()));
+}
+}
+ catch (InvalidDeploymentPlanException e) {
+throw e;
+}
+catch (Exception e) {
+throw new InvalidDeploymentPlanException(String.format("Deployment action %s of type %s primarily affecting deployment %s is invalid",action.getId(),action.getType(),action.getDeploymentUnitUniqueName()),e);
 }
 }
 logger.debugf("Created %s action updates",actionUpdates.size());
