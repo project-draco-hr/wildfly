@@ -3,9 +3,16 @@
   if (!methodName.startsWith("set") || methodInfo.args().length != 1) {
     throw new DeploymentUnitProcessingException("@Resource injection target is invalid.  Only setter methods are allowed: " + methodInfo);
   }
+  final Class<?> argClass;
+  try {
+    argClass=moduleClassLoader.loadClass(methodInfo.args()[0].name().toString());
+  }
+ catch (  ClassNotFoundException e) {
+    throw new DeploymentUnitProcessingException("Failed to load " + owningClass.getName() + "."+ methodName+ "'s argument type "+ methodInfo.args()[0].name(),e);
+  }
   final Method method;
   try {
-    method=owningClass.getMethod(methodName);
+    method=owningClass.getMethod(methodName,argClass);
     method.setAccessible(true);
   }
  catch (  NoSuchMethodException e) {
@@ -14,7 +21,7 @@
   final Resource resource=method.getAnnotation(Resource.class);
   if (resource != null) {
     final String contextNameSuffix=methodName.substring(3,4).toLowerCase() + methodName.substring(4);
-    final Class<?> injectionType=resource.type().equals(Object.class) ? method.getReturnType() : resource.type();
+    final Class<?> injectionType=resource.type().equals(Object.class) ? argClass : resource.type();
     final String localContextName=resource.name().isEmpty() ? contextNameSuffix : resource.name();
     return new ResourceConfiguration(methodName,method,ResourceConfiguration.TargetType.METHOD,injectionType,localContextName,getTargetContextName(resource,contextNameSuffix,injectionType));
   }
