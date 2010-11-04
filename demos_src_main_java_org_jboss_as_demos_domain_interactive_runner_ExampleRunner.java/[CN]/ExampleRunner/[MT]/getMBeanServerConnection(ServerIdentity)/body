@@ -1,0 +1,30 @@
+{
+  DomainModel domainModel=client.getDomainModel();
+  ServerElement se=client.getHostModel(server.getHostName()).getServer(server.getServerName());
+  String socketBindingGroupName=se.getSocketBindingGroupName();
+  int offset=se.getSocketBindingPortOffset();
+  if (socketBindingGroupName == null) {
+    ServerGroupElement sge=domainModel.getServerGroup(se.getServerGroup());
+    socketBindingGroupName=sge.getSocketBindingGroupName();
+  }
+  SocketBindingGroupElement sbge=domainModel.getSocketBindingGroup(socketBindingGroupName);
+  String address=null;
+  int port=-1;
+  for (  SocketBindingElement sbe : sbge.getSocketBindings()) {
+    if ("jmx-connector-registry".equals(sbe.getName())) {
+      address=sbe.getInterfaceName();
+      port=sbe.getPort() + offset;
+      break;
+    }
+  }
+  InetAddress addr=null;
+  try {
+    addr=InetAddress.getByName(address);
+    address=addr.getHostAddress();
+  }
+ catch (  UnknownHostException e) {
+    address="localhost";
+  }
+  String url=String.format("service:jmx:rmi:///jndi/rmi://%s:%d/jmxrmi",address,port);
+  return JMXConnectorFactory.connect(new JMXServiceURL(url),new HashMap<String,Object>()).getMBeanServerConnection();
+}
