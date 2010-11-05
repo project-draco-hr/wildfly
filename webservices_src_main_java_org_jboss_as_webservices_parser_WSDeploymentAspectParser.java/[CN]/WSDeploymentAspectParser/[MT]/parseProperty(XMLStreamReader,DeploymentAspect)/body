@@ -1,0 +1,63 @@
+{
+  Class<? extends DeploymentAspect> deploymentAspectClass=deploymentAspect.getClass();
+  String propName=reader.getAttributeValue(null,NAME);
+  if (propName == null) {
+    throw new IllegalStateException("Could not find property name attribute for deployment aspect: " + deploymentAspect);
+  }
+  String propClass=reader.getAttributeValue(null,CLASS);
+  if (propClass == null) {
+    throw new IllegalStateException("Could not find property class attribute for deployment aspect: " + deploymentAspect);
+  }
+ else {
+    try {
+      if (isSupportedPropertyClass(propClass)) {
+        Method m=selectMethod(deploymentAspectClass,propName,propClass);
+        m.invoke(deploymentAspect,parseSimpleValue(reader,propClass));
+        return;
+      }
+    }
+ catch (    Exception e) {
+      throw new IllegalStateException(e);
+    }
+  }
+  while (reader.hasNext()) {
+switch (reader.nextTag()) {
+case XMLStreamConstants.END_ELEMENT:
+{
+        if (match(reader,NS,PROPERTY)) {
+          return;
+        }
+ else {
+          throw new IllegalStateException("Unexpected end tag: " + reader.getLocalName());
+        }
+      }
+case XMLStreamConstants.START_ELEMENT:
+{
+      if (match(reader,NS,MAP)) {
+        try {
+          Method m=selectMethod(deploymentAspectClass,propName,propClass);
+          Map map=parseMapProperty(reader,propClass,reader.getAttributeValue(null,KEY_CLASS),reader.getAttributeValue(null,VALUE_CLASS));
+          m.invoke(deploymentAspect,map);
+        }
+ catch (        Exception e) {
+          throw new IllegalStateException(e);
+        }
+      }
+ else       if (match(reader,NS,LIST)) {
+        try {
+          Method m=selectMethod(deploymentAspectClass,propName,propClass);
+          List list=parseListProperty(reader,propClass,reader.getAttributeValue(null,ELEMENT_CLASS));
+          m.invoke(deploymentAspect,list);
+        }
+ catch (        Exception e) {
+          throw new IllegalStateException(e);
+        }
+      }
+ else {
+        throw new IllegalStateException("Unexpected element: " + reader.getLocalName());
+      }
+    }
+}
+}
+throw new IllegalStateException("Reached end of xml document unexpectedly");
+}
