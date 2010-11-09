@@ -18,8 +18,12 @@
   List<Runnable> masterList=new ArrayList<Runnable>();
   ConcurrentGroupServerUpdatePolicy predecessor=null;
   for (  Set<ServerGroupDeploymentPlan> groupPlans : updateSet.setPlan.getServerGroupDeploymentPlans()) {
+    Set<String> groupNames=new HashSet<String>(groupPlans.size());
+    for (    ServerGroupDeploymentPlan groupPlan : groupPlans) {
+      groupNames.add(groupPlan.getServerGroupName());
+    }
     List<Runnable> concurrentGroupsList=new ArrayList<Runnable>(groupPlans.size());
-    ConcurrentGroupServerUpdatePolicy parent=new ConcurrentGroupServerUpdatePolicy(predecessor,groupPlans);
+    ConcurrentGroupServerUpdatePolicy parent=new ConcurrentGroupServerUpdatePolicy(predecessor,groupNames);
     predecessor=parent;
     for (    ServerGroupDeploymentPlan groupPlan : groupPlans) {
       String serverGroupName=groupPlan.getServerGroupName();
@@ -33,7 +37,14 @@
         updateSet.rollbackPolicies.put(serverGroupName,policy);
       }
  else {
-        policy=new ServerUpdatePolicy(parent,serverGroupName,servers,groupPlan);
+        int maxFailures;
+        if (groupPlan.getMaxServerFailurePercentage() > 0) {
+          maxFailures=((servers.size() * groupPlan.getMaxServerFailurePercentage()) / 100);
+        }
+ else {
+          maxFailures=groupPlan.getMaxServerFailures();
+        }
+        policy=new ServerUpdatePolicy(parent,serverGroupName,servers,maxFailures);
         updateSet.updatePolicies.put(serverGroupName,policy);
       }
       List<Runnable> groupTasks=new ArrayList<Runnable>(servers.size());
