@@ -1,0 +1,66 @@
+{
+  QueueConnection conn=null;
+  QueueSession session=null;
+  StandaloneClient client=StandaloneClient.Factory.create(InetAddress.getByName("localhost"),9999);
+  boolean actionsApplied=false;
+  try {
+    final JMSQueueAdd queueAdd=new JMSQueueAdd(QUEUE_NAME);
+    queueAdd.setBindings(Collections.singleton(QUEUE_NAME));
+    applyUpdates(Collections.<AbstractServerModelUpdate<?>>singletonList(ServerSubsystemUpdate.create(queueAdd)),client);
+    actionsApplied=true;
+    QueueConnectionFactory qcf=lookup("RemoteConnectionFactory",QueueConnectionFactory.class);
+    Queue queue=lookup(QUEUE_NAME,Queue.class);
+    conn=qcf.createQueueConnection();
+    conn.start();
+    session=conn.createQueueSession(false,QueueSession.AUTO_ACKNOWLEDGE);
+    final CountDownLatch latch=new CountDownLatch(10);
+    final List<String> result=new ArrayList<String>();
+    QueueReceiver recv=session.createReceiver(queue);
+    recv.setMessageListener(new MessageListener(){
+      @Override public void onMessage(      Message message){
+        TextMessage msg=(TextMessage)message;
+        try {
+          result.add(msg.getText());
+          latch.countDown();
+        }
+ catch (        JMSException e) {
+          e.printStackTrace();
+        }
+      }
+    }
+);
+    QueueSender sender=session.createSender(queue);
+    for (int i=0; i < 10; i++) {
+      String s="Test" + i;
+      TextMessage msg=session.createTextMessage(s);
+      sender.send(msg);
+    }
+    Assert.assertTrue(latch.await(3,TimeUnit.SECONDS));
+    Assert.assertEquals(10,result.size());
+    for (int i=0; i < result.size(); i++) {
+      Assert.assertEquals("Test" + i,result.get(i));
+    }
+  }
+  finally {
+    try {
+      conn.stop();
+    }
+ catch (    Exception ignore) {
+    }
+    try {
+      session.close();
+    }
+ catch (    Exception ignore) {
+    }
+    try {
+      conn.close();
+    }
+ catch (    Exception ignore) {
+    }
+    if (actionsApplied) {
+      final JMSQueueRemove remove=new JMSQueueRemove(QUEUE_NAME);
+      applyUpdates(Collections.<AbstractServerModelUpdate<?>>singletonList(ServerSubsystemUpdate.create(remove)),client);
+    }
+    safeClose(client);
+  }
+}

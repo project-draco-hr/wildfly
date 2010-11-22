@@ -1,0 +1,28 @@
+{
+  final File standalone=new File(environment.getServerConfigurationDir(),STANDALONE_XML);
+  if (!standalone.isFile()) {
+    throw new ServerStartException("File " + standalone.getAbsolutePath() + " does not exist.");
+  }
+  if (!standalone.canWrite()) {
+    throw new ServerStartException("File " + standalone.getAbsolutePath() + " is not writable.");
+  }
+  final List<AbstractServerModelUpdate<?>> updates=new ArrayList<AbstractServerModelUpdate<?>>();
+  try {
+    final XMLMapper mapper=XMLMapper.Factory.create();
+    extensionRegistrar.registerStandardStandaloneReaders(mapper);
+    BufferedInputStream input=new BufferedInputStream(new FileInputStream(standalone));
+    XMLStreamReader streamReader=XMLInputFactory.newInstance().createXMLStreamReader(input);
+    mapper.parseDocument(updates,streamReader);
+  }
+ catch (  Exception e) {
+    throw new ServerStartException("Caught exception during processing of standalone.xml",e);
+  }
+  final ServerStartTask startTask=new ServerStartTask(0,serviceActivators,updates,environment);
+  startTask.run(Collections.<ServiceActivator>singletonList(new ServerStartupService()));
+  try {
+    startStopLatch.await(30,TimeUnit.SECONDS);
+  }
+ catch (  InterruptedException e) {
+  }
+  if (serviceContainer == null)   throw new ServerStartException("ServiceContainer not available");
+}
