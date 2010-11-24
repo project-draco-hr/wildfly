@@ -42,16 +42,10 @@
   DeploymentScannerFactoryService.addService(batchBuilder);
   batchBuilder.addService(SocketBindingManager.SOCKET_BINDING_MANAGER,new SocketBindingManagerService(portOffset)).setInitialMode(ServiceController.Mode.ON_DEMAND);
   batchBuilder.addService(ClassifyingModuleLoaderService.SERVICE_NAME,new ClassifyingModuleLoaderService());
-  final DeploymentModuleLoaderService deploymentModuleLoaderService=new DeploymentModuleLoaderService(new DeploymentModuleLoaderImpl());
-  batchBuilder.addService(DeploymentModuleLoaderService.SERVICE_NAME,deploymentModuleLoaderService).addDependency(ClassifyingModuleLoaderService.SERVICE_NAME,ClassifyingModuleLoaderService.class,new ClassifyingModuleLoaderInjector("deployment",deploymentModuleLoaderService));
   final DeploymentChain deploymentChain=new DeploymentChainImpl();
-  batchBuilder.addService(DeploymentChain.SERVICE_NAME,new DeploymentChainService(deploymentChain));
-  new JarDeploymentActivator().activate(new ServiceActivatorContext(){
-    public BatchBuilder getBatchBuilder(){
-      return batchBuilder;
-    }
-  }
-);
+  deploymentChain.addProcessor(new DeploymentModuleLoaderProcessor(new DeploymentModuleLoaderImpl()),Phase.DEPLOYMENT_MODULE_LOADER_PROCESSOR);
+  batchBuilder.addService(DeploymentChain.SERVICE_NAME,new DeploymentChainService(deploymentChain)).setInitialMode(ServiceController.Mode.ACTIVE);
+  new JarDeploymentActivator().activate(deploymentChain);
   for (  AbstractServerModelUpdate<?> update : updates) {
     try {
       serverModel.update(update);
@@ -60,12 +54,15 @@
       throw new IllegalStateException("Failed to start server",e);
     }
   }
-  final UpdateContext context=new UpdateContext(){
+  final BootUpdateContext context=new BootUpdateContext(){
     public BatchBuilder getBatchBuilder(){
       return batchBuilder;
     }
     public ServiceContainer getServiceContainer(){
       return container;
+    }
+    public void addDeploymentProcessor(    DeploymentUnitProcessor processor,    long priority){
+      deploymentChain.addProcessor(processor,priority);
     }
   }
 ;
@@ -74,9 +71,14 @@
       update.applyUpdateBootAction(context);
     }
   }
+  for (  AbstractServerModelUpdate<?> update : updates) {
+    if (update.isDeploymentUpdate()) {
+      update.applyUpdateBootAction(context);
+    }
+  }
   StandaloneServerManagementServices.addServices(serverModel,container,batchBuilder);
   try {
-    serverStartupListener.startBatch(createDeploymentTask(container,serverStartupListener));
+    serverStartupListener.finish();
     batchBuilder.install();
     serverStartupListener.finishBatch();
   }

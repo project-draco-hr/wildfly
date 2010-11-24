@@ -2,36 +2,38 @@
   final ConnectorXmlDescriptor connectorXmlDescriptor=context.getAttachment(ConnectorXmlDescriptor.ATTACHMENT_KEY);
   Module module=context.getAttachment(ModuleDeploymentProcessor.MODULE_ATTACHMENT_KEY);
   String deploymentName=connectorXmlDescriptor == null ? null : connectorXmlDescriptor.getDeploymentName();
-  DataSources datasources=null;
-  datasources=dsValue.getValue();
+  DataSources datasources=getDataSourcesAttachment(context);
   if (datasources == null || deploymentName == null || !deploymentName.startsWith("jdbc"))   return;
   log.tracef("Processing datasource deployement: %s",datasources);
   if (module == null)   throw new DeploymentUnitProcessingException("Failed to get module attachment for deployment: " + context.getName());
-  try {
-    if (deploymentName.indexOf("local") != -1) {
-      List<DataSource> dss=datasources.getDataSource();
-      if (dss != null && dss.size() > 0) {
-        AS7Deployer deployer=new AS7Deployer(jndiStrategy.getValue(),module.getClassLoader(),log);
-        String uniqueJdbcLocalId=deploymentName;
-        String uniqueJdbcXAId=null;
-        deployer.setTransactionManager(getTransactionManager());
-        deployer.setMetadataRepository(mdr.getValue());
-        deployer.doDeploy(new URL("file://DataSourceDeployment"),deploymentName,uniqueJdbcLocalId,uniqueJdbcXAId,datasources,module.getClassLoader());
-      }
-    }
- else {
-      List<XaDataSource> xadss=datasources.getXaDataSource();
-      if (xadss != null && xadss.size() > 0) {
-        AS7Deployer deployer=new AS7Deployer(jndiStrategy.getValue(),module.getClassLoader(),log);
-        String uniqueJdbcLocalId=null;
-        String uniqueJdbcXAId=deploymentName;
-        deployer.setTransactionManager(getTransactionManager());
-        deployer.setMetadataRepository(mdr.getValue());
-        deployer.doDeploy(new URL("file://DataSourceDeployment"),deploymentName,uniqueJdbcLocalId,uniqueJdbcXAId,datasources,module.getClassLoader());
-      }
+  String uniqueJdbcLocalId=null;
+  String uniqueJdbcXAId=null;
+  boolean shouldDeploy=false;
+  if (deploymentName.indexOf("local") != -1) {
+    List<DataSource> dss=datasources.getDataSource();
+    if (dss != null && dss.size() > 0) {
+      uniqueJdbcLocalId=deploymentName;
+      shouldDeploy=true;
     }
   }
- catch (  Throwable t) {
-    throw new DeploymentUnitProcessingException(t);
+ else {
+    List<XaDataSource> xadss=datasources.getXaDataSource();
+    if (xadss != null && xadss.size() > 0) {
+      uniqueJdbcXAId=deploymentName;
+      shouldDeploy=true;
+    }
+  }
+  if (shouldDeploy) {
+    final BatchBuilder batchBuilder=context.getBatchBuilder();
+    final DataSourceDeploymentService dataSourceDeploymentService=new DataSourceDeploymentService(deploymentName,uniqueJdbcLocalId,uniqueJdbcXAId,datasources,module);
+    BatchServiceBuilder<?> serviceBuilder=batchBuilder.addService(DataSourceDeploymentService.SERVICE_NAME_BASE.append(deploymentName),dataSourceDeploymentService).addDependency(ConnectorServices.IRONJACAMAR_MDR,MetadataRepository.class,dataSourceDeploymentService.getMdrInjector()).addDependency(ConnectorServices.RESOURCE_ADAPTER_REGISTRY_SERVICE,ResourceAdapterDeploymentRegistry.class,dataSourceDeploymentService.getRegistryInjector()).addDependency(ConnectorServices.JNDI_STRATEGY_SERVICE,JndiStrategy.class,dataSourceDeploymentService.getJndiInjector()).addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,com.arjuna.ats.jbossatx.jta.TransactionManagerService.class,dataSourceDeploymentService.getTxmInjector()).addDependency(JDBCRARDeployService.NAME).addDependency(NamingService.SERVICE_NAME).setInitialMode(ServiceController.Mode.ACTIVE);
+    if (uniqueJdbcLocalId != null) {
+      serviceBuilder.addOptionalDependencies(ConnectorServices.RESOURCE_ADAPTER_SERVICE_PREFIX.append(uniqueJdbcLocalId));
+      serviceBuilder.addOptionalDependencies(ConnectorServices.RESOURCE_ADAPTER_XML_SERVICE_PREFIX.append(uniqueJdbcLocalId));
+    }
+ else     if (uniqueJdbcXAId != null) {
+      serviceBuilder.addOptionalDependencies(ConnectorServices.RESOURCE_ADAPTER_SERVICE_PREFIX.append(uniqueJdbcXAId));
+      serviceBuilder.addOptionalDependencies(ConnectorServices.RESOURCE_ADAPTER_XML_SERVICE_PREFIX.append(uniqueJdbcXAId));
+    }
   }
 }

@@ -3,35 +3,28 @@
   if (connectorXmlDescriptor == null) {
     return;
   }
-  ResourceAdapters raxmls=null;
-  raxmls=raxmlValue.getValue();
+  final ResourceAdapters raxmls=getResourceAdaptersAttachment(context);
   if (raxmls == null)   return;
   log.tracef("processing Raxml");
   Module module=context.getAttachment(ModuleDeploymentProcessor.MODULE_ATTACHMENT_KEY);
   if (module == null)   throw new DeploymentUnitProcessingException("Failed to get module attachment for deployment: " + context.getName());
   try {
-    final ClassLoader classLoader=module.getClassLoader();
     final BatchBuilder batchBuilder=context.getBatchBuilder();
     for (    org.jboss.jca.common.api.metadata.resourceadapter.ResourceAdapter raxml : raxmls.getResourceAdapters()) {
       String archive=raxml.getArchive();
       URL deployment=null;
-      Set<String> deployments=mdr.getValue().getResourceAdapters();
+      Set<String> deployments=mdr.getResourceAdapters();
       for (      String s : deployments) {
         if (s.endsWith(archive) || s.endsWith(archive.substring(0,archive.indexOf(".rar"))))         deployment=new URL(s);
       }
       if (deployment != null) {
-        Connector cmd=mdr.getValue().getResourceAdapter(deployment.toExternalForm());
-        IronJacamar ijmd=mdr.getValue().getIronJacamar(deployment.toExternalForm());
-        File root=mdr.getValue().getRoot(deployment.toExternalForm());
+        Connector cmd=mdr.getResourceAdapter(deployment.toExternalForm());
+        IronJacamar ijmd=mdr.getIronJacamar(deployment.toExternalForm());
+        File root=mdr.getRoot(deployment.toExternalForm());
         cmd=(new Merger()).mergeConnectorWithCommonIronJacamar(raxml,cmd);
         String deploymentName=archive.substring(0,archive.indexOf(".rar"));
-        AS7RaDeployer raDeployer=new AS7RaDeployer();
-        raDeployer.setConfiguration(config.getValue());
-        CommonDeployment raxmlDeployment=raDeployer.doDeploy(connectorXmlDescriptor.getUrl(),deploymentName,root,classLoader,cmd,ijmd,raxml);
-        ResourceAdapterDeployment dply=new ResourceAdapterDeployment(module.getIdentifier(),raxmlDeployment);
-        ResourceAdapterXmlDeploymentService service=new ResourceAdapterXmlDeploymentService(dply);
-        batchBuilder.addService(ConnectorServices.RESOURCE_ADAPTER_XML_SERVICE_PREFIX.append(deploymentName),service).addDependency(ConnectorServices.IRONJACAMAR_MDR,MetadataRepository.class,service.getMdrInjector()).addDependency(ConnectorServices.RESOURCE_ADAPTER_REGISTRY_SERVICE,ResourceAdapterDeploymentRegistry.class,service.getRegistryInjector()).addDependency(ConnectorServices.JNDI_STRATEGY_SERVICE,JndiStrategy.class,service.getJndiInjector()).setInitialMode(Mode.ACTIVE);
-        registry.getValue().registerResourceAdapterDeployment(dply);
+        ResourceAdapterXmlDeploymentService service=new ResourceAdapterXmlDeploymentService(connectorXmlDescriptor,raxml,cmd,ijmd,module,deploymentName,root);
+        batchBuilder.addService(ConnectorServices.RESOURCE_ADAPTER_XML_SERVICE_PREFIX.append(deploymentName),service).addDependency(ConnectorServices.IRONJACAMAR_MDR,MetadataRepository.class,service.getMdrInjector()).addDependency(ConnectorServices.RESOURCE_ADAPTER_REGISTRY_SERVICE,ResourceAdapterDeploymentRegistry.class,service.getRegistryInjector()).addDependency(ConnectorServices.JNDI_STRATEGY_SERVICE,JndiStrategy.class,service.getJndiInjector()).addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,com.arjuna.ats.jbossatx.jta.TransactionManagerService.class,service.getTxmInjector()).addDependency(ConnectorServices.CONNECTOR_CONFIG_SERVICE,ConnectorSubsystemConfiguration.class,service.getConfigInjector()).addDependency(NamingService.SERVICE_NAME).setInitialMode(Mode.ACTIVE);
       }
     }
   }
