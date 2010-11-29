@@ -1,0 +1,40 @@
+{
+  log.infof("Starting process '%s'",processName);
+  log.debugf("Process name='%s' command='%s' workingDirectory='%s'",processName,command,workingDirectory);
+  final ProcessBuilder builder=new ProcessBuilder(command);
+  builder.environment().putAll(env);
+  builder.directory(new File(workingDirectory));
+  final Process process;
+  try {
+    process=builder.start();
+  }
+ catch (  IOException e) {
+    log.errorf(e,"Failed to start process '%s'",processName);
+    return;
+  }
+  final long startTime=System.currentTimeMillis();
+  final OutputStream stdin=process.getOutputStream();
+  final InputStream stderr=process.getErrorStream();
+  final InputStream stdout=process.getInputStream();
+  final Thread stderrThread=new Thread(new ReadTask(stderr,processController.getStderr()));
+  stderrThread.setName(String.format("stderr for %s",processName));
+  stderrThread.start();
+  final Thread stdoutThread=new Thread(new ReadTask(stdout,processController.getStdout()));
+  stdoutThread.setName(String.format("stdout for %s",processName));
+  stdoutThread.start();
+  final Thread joinThread=new Thread(new JoinTask(startTime));
+  joinThread.setName(String.format("reaper for %s",processName));
+  joinThread.start();
+  try {
+    stdin.write(authKey);
+    stdin.flush();
+  }
+ catch (  Exception e) {
+    log.warnf("Failed to send authentication key to process '%s': %s",processName,e);
+  }
+  state=State.STARTED;
+  this.process=process;
+  this.stdin=stdin;
+  processController.processStarted(processName);
+  return;
+}

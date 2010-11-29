@@ -1,0 +1,125 @@
+{
+  List<DomainUpdateApplierResponse> result=new ArrayList<DomainUpdateApplierResponse>(updates.size());
+  Map<String,Future<List<ModelUpdateResponse<List<ServerIdentity>>>>> futures=new HashMap<String,Future<List<ModelUpdateResponse<List<ServerIdentity>>>>>();
+  for (  Map.Entry<String,HostControllerClient> entry : clients.entrySet()) {
+    final HostControllerClient client=entry.getValue();
+    final Callable<List<ModelUpdateResponse<List<ServerIdentity>>>> callable=new Callable<List<ModelUpdateResponse<List<ServerIdentity>>>>(){
+      @Override public List<ModelUpdateResponse<List<ServerIdentity>>> call() throws Exception {
+        return client.updateDomainModel(updates);
+      }
+    }
+;
+    futures.put(entry.getKey(),scheduledExecutorService.getValue().submit(callable));
+  }
+  log.debugf("Domain updates pushed to %s host controller(s)",futures.size());
+  boolean ok=true;
+  for (int i=0; i < updates.size(); i++) {
+    Map<String,UpdateFailedException> hostFailures=new HashMap<String,UpdateFailedException>();
+    List<ServerIdentity> servers=new ArrayList<ServerIdentity>();
+    for (    Map.Entry<String,Future<List<ModelUpdateResponse<List<ServerIdentity>>>>> entry : futures.entrySet()) {
+      try {
+        List<ModelUpdateResponse<List<ServerIdentity>>> list=entry.getValue().get();
+        if (list.size() > i) {
+          ModelUpdateResponse<List<ServerIdentity>> hostResponse=list.get(i);
+          if (hostResponse.isSuccess()) {
+            servers.addAll(hostResponse.getResult());
+          }
+ else {
+            hostFailures.put(entry.getKey(),hostResponse.getUpdateException());
+          }
+        }
+      }
+ catch (      InterruptedException e) {
+        log.debug("Interrupted reading host controller response");
+        Thread.currentThread().interrupt();
+        hostFailures.put(entry.getKey(),new UpdateFailedException(e));
+      }
+catch (      ExecutionException e) {
+        log.debug("Execution exception reading host controller response",e);
+        hostFailures.put(entry.getKey(),new UpdateFailedException(e));
+      }
+    }
+    if (hostFailures.size() == 0) {
+      log.debugf("%s servers affected by update %s",servers.size(),i);
+      result.add(new DomainUpdateApplierResponse(servers));
+    }
+ else {
+      log.debugf("%s host controllers failed on update %s",hostFailures.size(),i);
+      result.add(new DomainUpdateApplierResponse(hostFailures));
+      ok=false;
+      break;
+    }
+  }
+  if (!ok) {
+    log.warn("One or more updates failed on some host controllers; rolling back");
+    for (int i=0; i < rollbacks.size(); i++) {
+      AbstractDomainModelUpdate<?> rollback=rollbacks.get(i);
+      try {
+        domainModel.update(rollback);
+      }
+ catch (      UpdateFailedException e) {
+      }
+    }
+    Set<String> outOfSync=new HashSet<String>();
+    Map<String,Future<Boolean>> rollbackFutures=new HashMap<String,Future<Boolean>>(futures.size());
+    for (    Map.Entry<String,Future<List<ModelUpdateResponse<List<ServerIdentity>>>>> entry : futures.entrySet()) {
+      try {
+        List<ModelUpdateResponse<List<ServerIdentity>>> rspList=entry.getValue().get();
+        int idx=rspList.size() - 1;
+        if (idx >= 0 && !rspList.get(idx).isSuccess()) {
+          idx--;
+        }
+        if (idx < 0) {
+          continue;
+        }
+        final List<AbstractDomainModelUpdate<?>> hostControllerRollbacks=(idx == rollbacks.size() - 1) ? rollbacks : new ArrayList<AbstractDomainModelUpdate<?>>(idx + 1);
+        if (hostControllerRollbacks != rollbacks) {
+          for (int j=rollbacks.size() - 1 - idx; j < rollbacks.size(); j++) {
+            hostControllerRollbacks.add(rollbacks.get(j));
+          }
+        }
+        final HostControllerClient client=clients.get(entry.getKey());
+        Callable<Boolean> callable=new Callable<Boolean>(){
+          @Override public Boolean call() throws Exception {
+            List<ModelUpdateResponse<List<ServerIdentity>>> rsp=client.updateDomainModel(hostControllerRollbacks);
+            return Boolean.valueOf(rsp.size() == hostControllerRollbacks.size() && rsp.get(rsp.size() - 1).isSuccess());
+          }
+        }
+;
+        rollbackFutures.put(entry.getKey(),scheduledExecutorService.getValue().submit(callable));
+      }
+ catch (      InterruptedException e) {
+        Thread.currentThread().interrupt();
+        outOfSync.add(entry.getKey());
+      }
+catch (      ExecutionException e) {
+        outOfSync.add(entry.getKey());
+      }
+    }
+    for (    Map.Entry<String,Future<Boolean>> entry : rollbackFutures.entrySet()) {
+      try {
+        if (!entry.getValue().get()) {
+          outOfSync.add(entry.getKey());
+        }
+      }
+ catch (      InterruptedException e) {
+        Thread.currentThread().interrupt();
+        outOfSync.add(entry.getKey());
+      }
+catch (      ExecutionException e) {
+        outOfSync.add(entry.getKey());
+      }
+    }
+    for (    String host : outOfSync) {
+      HostControllerClient client=clients.get(host);
+      client.updateDomainModel(domainModel);
+    }
+    for (int i=0; i < result.size(); i++) {
+      DomainUpdateApplierResponse rsp=result.get(i);
+      if (rsp.getHostFailures().size() < 0) {
+        result.set(i,new DomainUpdateApplierResponse(false));
+      }
+    }
+  }
+  return result;
+}

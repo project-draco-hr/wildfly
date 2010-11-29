@@ -1,0 +1,28 @@
+{
+  modelManager.start();
+  launchProcessControllerSlave();
+  final BatchBuilder batchBuilder=serviceContainer.batchBuilder();
+  batchBuilder.addListener(new AbstractServiceListener<Object>(){
+    @Override public void serviceFailed(    ServiceController<?> serviceController,    StartException reason){
+      log.errorf(reason,"Service [%s] failed.",serviceController.getName());
+    }
+  }
+);
+  final ServiceActivatorContext serviceActivatorContext=new ServiceActivatorContextImpl(batchBuilder);
+  activateManagementCommunication(serviceActivatorContext);
+  if (getHostModel().getLocalDomainControllerElement() != null) {
+    activateLocalDomainController(serviceActivatorContext);
+  }
+ else {
+    activateRemoteDomainControllerConnection(serviceActivatorContext);
+  }
+  final ManagementElement managementElement=getHostModel().getManagementElement();
+  final HostControllerService hostControllerService=new HostControllerService(this);
+  batchBuilder.addService(SERVICE_NAME_BASE,hostControllerService).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(managementElement.getInterfaceName()),NetworkInterfaceBinding.class,hostControllerService.getManagementInterfaceInjector()).addInjection(hostControllerService.getManagementPortInjector(),managementElement.getPort()).addDependency(DomainControllerConnection.SERVICE_NAME,DomainControllerConnection.class,hostControllerService.getDomainControllerConnectionInjector()).setInitialMode(ServiceController.Mode.ACTIVE);
+  try {
+    batchBuilder.install();
+  }
+ catch (  ServiceRegistryException e) {
+    throw new RuntimeException(e);
+  }
+}
