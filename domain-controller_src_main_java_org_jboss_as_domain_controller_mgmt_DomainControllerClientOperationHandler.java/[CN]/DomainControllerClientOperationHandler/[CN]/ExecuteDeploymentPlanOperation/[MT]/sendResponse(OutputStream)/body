@@ -1,28 +1,33 @@
 {
   final Marshaller marshaller=getMarshaller();
   marshaller.start(createByteOutput(output));
-  BlockingQueue<List<StreamedResponse>> responseQueue=new LinkedBlockingQueue<List<StreamedResponse>>();
-  domainController.executeDeploymentPlan(deploymentPlan,responseQueue);
-  StreamedResponse rsp;
-  do {
-    rsp=null;
-    List<StreamedResponse> rspList;
-    try {
-      rspList=responseQueue.take();
-    }
- catch (    InterruptedException ie) {
-      Thread.currentThread().interrupt();
-      throw new IOException("Interrupted while reading deployment plan execution responses",ie);
-    }
-    for (    StreamedResponse item : rspList) {
-      rsp=item;
-      marshaller.writeByte(rsp.getProtocolValue());
-      log.tracef("Marshalling StreamedResponse %s",rsp.getProtocolValue());
-      if (rsp.getValue() != null) {
-        marshaller.writeObject(rsp.getValue());
+  try {
+    BlockingQueue<List<StreamedResponse>> responseQueue=new LinkedBlockingQueue<List<StreamedResponse>>();
+    domainController.executeDeploymentPlan(deploymentPlan,responseQueue);
+    StreamedResponse rsp;
+    do {
+      rsp=null;
+      List<StreamedResponse> rspList;
+      try {
+        rspList=responseQueue.take();
+      }
+ catch (      InterruptedException ie) {
+        Thread.currentThread().interrupt();
+        throw new IOException("Interrupted while reading deployment plan execution responses",ie);
+      }
+      for (      StreamedResponse item : rspList) {
+        rsp=item;
+        marshaller.writeByte(rsp.getProtocolValue());
+        log.tracef("Marshalling StreamedResponse %s",rsp.getProtocolValue());
+        if (rsp.getValue() != null) {
+          marshaller.writeObject(rsp.getValue());
+        }
       }
     }
-  }
  while (rsp != null && !rsp.isLastInStream());
-  marshaller.finish();
+    marshaller.finish();
+  }
+  finally {
+    safeFinish(marshaller);
+  }
 }
