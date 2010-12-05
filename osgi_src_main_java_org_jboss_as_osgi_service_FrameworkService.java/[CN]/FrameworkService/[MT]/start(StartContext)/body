@@ -1,36 +1,12 @@
 {
   log.infof("Starting OSGi Framework");
   try {
-    final ServiceContainer serviceContainer=context.getController().getServiceContainer();
-    BundleManager bundleManager=injectedBundleManager.getValue();
+    final BundleManager bundleManager=injectedBundleManager.getValue();
     framework=bundleManager.getFrameworkState();
     framework.start();
     BundleContext sysContext=framework.getBundleContext();
     MBeanServer mbeanServer=injectedMBeanServer.getValue();
     sysContext.registerService(MBeanServer.class.getName(),mbeanServer,null);
-    BundleListener uninstallListener=new SynchronousBundleListener(){
-      @Override public void bundleChanged(      BundleEvent event){
-        if (event.getType() == BundleEvent.UNINSTALLED) {
-          AbstractUserBundle userBundle;
-          try {
-            userBundle=AbstractUserBundle.assertBundleState(event.getBundle());
-          }
- catch (          RuntimeException ex) {
-            return;
-          }
-          Deployment deployment=userBundle.getDeployment();
-          ServiceName serviceName=deployment.getAttachment(ServiceName.class);
-          if (serviceName != null) {
-            ServiceController<?> controller=serviceContainer.getService(serviceName);
-            if (controller != null) {
-              controller.setMode(ServiceController.Mode.REMOVE);
-            }
-          }
-        }
-      }
-    }
-;
-    sysContext.addBundleListener(uninstallListener);
     List<Deployment> deployments=new ArrayList<Deployment>();
     BundleDeploymentPlugin depPlugin=bundleManager.getPlugin(BundleDeploymentPlugin.class);
     for (    OSGiModule module : injectedConfig.getValue().getModules()) {
@@ -39,8 +15,13 @@
       dep.setAutoStart(module.isStart());
       deployments.add(dep);
     }
-    ServiceReference sref=sysContext.getServiceReference(DeployerService.class.getName());
-    DeployerService service=(DeployerService)sysContext.getService(sref);
+    DeployerService service=new SystemDeployerService(sysContext){
+      @Override protected Bundle installBundle(      Deployment dep) throws BundleException {
+        AbstractBundle bundleState=bundleManager.installBundle(dep);
+        return bundleState.getBundleWrapper();
+      }
+    }
+;
     service.deploy(deployments.toArray(new Deployment[deployments.size()]));
   }
  catch (  Throwable t) {

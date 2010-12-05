@@ -5,23 +5,37 @@
     if (handlerModules == null)     System.setProperty("jboss.protocol.handler.modules","org.jboss.osgi.framework");
     Configuration config=injectedConfig.getValue();
     Map<String,Object> props=new HashMap<String,Object>(config.getProperties());
-    ServiceContainer container=context.getController().getServiceContainer();
-    ModuleLoader moduleLoader=injectedModuleLoader.getValue().getModuleLoader();
-    Module frameworkModule=new FrameworkModuleLoader(moduleLoader,props).getFrameworkModule();
     props.put(IntegrationMode.class.getName(),IntegrationMode.CONTAINER);
+    ModuleLoader moduleLoader=injectedModuleLoader.getValue().getModuleLoader();
     props.put(ModuleLoader.class.getName(),moduleLoader);
+    ServiceContainer container=context.getController().getServiceContainer();
     props.put(ServiceContainer.class.getName(),container);
-    props.put(Module.class.getName(),frameworkModule);
     props.put("org.osgi.service.http.port","" + osgiHttpServerPortBinding.getValue().getSocketAddress().getPort());
     props.put(Constants.FRAMEWORK_STORAGE_CLEAN,Constants.FRAMEWORK_STORAGE_CLEAN_ONFIRSTINIT);
     bundleManager=new BundleManager(props);
-    ModuleManagerPlugin plugin=bundleManager.getPlugin(ModuleManagerPlugin.class);
-    ModuleLoader osgiModuleLoader=plugin.getModuleLoader();
+    Module frameworkModule=new FrameworkModuleLoader(bundleManager).getFrameworkModule();
+    bundleManager.setProperty(Module.class.getName(),frameworkModule);
+    ServerDeploymentManager deploymentManager=injectedDeploymentManager.getValue();
+    bundleManager.addPlugin(DeployerServicePlugin.class,new ServerDeployerServicePlugin(bundleManager,deploymentManager));
+    ModuleManagerPlugin moduleManagerPlugin=bundleManager.getPlugin(ModuleManagerPlugin.class);
     ServiceController<?> controller=container.getRequiredService(ClassifyingModuleLoaderService.SERVICE_NAME);
     ClassifyingModuleLoaderService moduleLoaderService=(ClassifyingModuleLoaderService)controller.getValue();
-    Value<ModuleLoader> value=new ImmediateValue<ModuleLoader>(osgiModuleLoader);
+    Value<ModuleLoader> value=new ImmediateValue<ModuleLoader>(moduleManagerPlugin.getModuleLoader());
     osgiModuleLoaderInjector=new ClassifyingModuleLoaderInjector(Constants.JBOSGI_PREFIX,value);
     osgiModuleLoaderInjector.inject(moduleLoaderService);
+    BundleManagerMBean bundleManagerMBean=new BundleManagerMBean(){
+      @Override public long installBundle(      ModuleIdentifier identifier) throws BundleException {
+        Bundle bundle=bundleManager.installBundle(identifier);
+        return bundle.getBundleId();
+      }
+      @Override public long installBundle(      String location,      ModuleIdentifier identifier) throws BundleException {
+        Bundle bundle=bundleManager.installBundle(location,identifier);
+        return bundle.getBundleId();
+      }
+    }
+;
+    StandardMBean mbean=new StandardMBean(bundleManagerMBean,BundleManagerMBean.class);
+    injectedMBeanServer.getValue().registerMBean(mbean,BundleManagerMBean.OBJECTNAME);
   }
  catch (  Throwable t) {
     throw new StartException("Failed to create BundleManager",t);
