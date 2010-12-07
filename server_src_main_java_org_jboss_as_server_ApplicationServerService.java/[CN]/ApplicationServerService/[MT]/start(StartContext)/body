@@ -1,18 +1,17 @@
 {
-  serviceTarget=new TrackingServiceTarget(context.getController().getServiceContainer());
+  final ServiceContainer container=context.getController().getServiceContainer();
+  final TrackingServiceTarget serviceTarget=new TrackingServiceTarget(container);
+  final DelegatingServiceRegistry serviceRegistry=new DelegatingServiceRegistry(container);
   final ServiceActivatorContext serviceActivatorContext=new ServiceActivatorContext(){
     public ServiceTarget getServiceTarget(){
       return serviceTarget;
     }
     public ServiceRegistry getServiceRegistry(){
-      return new DelegatingServiceRegistry(context.getController().getServiceContainer());
+      return serviceRegistry;
     }
   }
 ;
-  serverController=new ServerControllerImpl(new ServerModel(configuration.getName(),configuration.getPortOffset()),context.getController().getServiceContainer(),configuration.getServerEnvironment());
-  for (  ServiceActivator activator : services) {
-    activator.activate(serviceActivatorContext);
-  }
+  serverController=new ServerControllerImpl(new ServerModel(configuration.getName(),configuration.getPortOffset()),container,configuration.getServerEnvironment());
   final List<AbstractServerModelUpdate<?>> updates;
   try {
     updates=persister.load(serverController);
@@ -25,7 +24,10 @@
       return serviceTarget;
     }
     public ServiceContainer getServiceContainer(){
-      return null;
+      throw new UnsupportedOperationException();
+    }
+    public ServiceRegistry getServiceRegistry(){
+      return serviceRegistry;
     }
     public void addDeploymentProcessor(    DeploymentUnitProcessor processor,    long priority){
       deploymentChain.addProcessor(processor,priority);
@@ -35,4 +37,5 @@
   for (  AbstractServerModelUpdate<?> update : updates) {
     update.applyUpdateBootAction(bootUpdateContext);
   }
+  bootServices=serviceTarget.getSet();
 }
