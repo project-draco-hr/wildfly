@@ -9,31 +9,11 @@
   }
   final Bootstrap bootstrap=Bootstrap.Factory.newInstance();
   bootstrap.start(new Bootstrap.Configuration(),updates,startServices);
-  final ServiceContainer container=ServiceContainer.Factory.create();
-  final int threads=Runtime.getRuntime().availableProcessors();
-  container.setExecutor(new ThreadPoolExecutor(threads,threads,Long.MAX_VALUE,TimeUnit.NANOSECONDS,new LinkedBlockingQueue<Runnable>()));
   final BatchBuilder batchBuilder=container.batchBuilder();
-  final ServiceActivatorContext serviceActivatorContext=new ServiceActivatorContext(){
-    public ServiceTarget getServiceTarget(){
-      return container;
-    }
-    public ServiceRegistry getServiceRegistry(){
-      return container;
-    }
-  }
-;
-  batchBuilder.addService(AS_SERVER_SERVICE_NAME,Service.NULL).setInitialMode(ServiceController.Mode.ACTIVE).install();
-  for (  ServiceActivator service : startServices) {
-    service.activate(serviceActivatorContext);
-  }
-  for (  ServiceActivator service : runServices) {
-    service.activate(serviceActivatorContext);
-  }
-  final ServerModel serverModel=new ServerModel(serverName,portOffset);
   final Properties systemProperties=System.getProperties();
   final ServerEnvironment environment=providedEnvironment != null ? providedEnvironment : new ServerEnvironment(systemProperties,serverName,false);
   log.info("Activating core services");
-  ServerControllerImpl serverController=new ServerControllerImpl(serverModel,container,environment.isStandalone());
+  ServerControllerImpl serverController=new ServerControllerImpl(serverModel,container);
   batchBuilder.addService(ServerController.SERVICE_NAME,serverController).addDependency(ServerConfigurationPersister.SERVICE_NAME,ServerConfigurationPersister.class,serverController.getConfigurationPersisterValue()).addInjection(serverController.getExecutorValue(),Executors.newCachedThreadPool()).install();
   ServerEnvironmentServices.addServices(environment,batchBuilder);
   ServerDeploymentRepositoryImpl.addService(batchBuilder);
