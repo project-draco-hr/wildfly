@@ -9,8 +9,30 @@
     }
   }
 ;
-  serverController=new ServerControllerImpl(new ServerModel(configuration.getName(),configuration.getPortOffset()),context.getController().getServiceContainer());
+  serverController=new ServerControllerImpl(new ServerModel(configuration.getName(),configuration.getPortOffset()),context.getController().getServiceContainer(),configuration.getServerEnvironment());
   for (  ServiceActivator activator : services) {
     activator.activate(serviceActivatorContext);
+  }
+  final List<AbstractServerModelUpdate<?>> updates;
+  try {
+    updates=persister.load(serverController);
+  }
+ catch (  Exception e) {
+    throw new StartException(e);
+  }
+  final BootUpdateContext bootUpdateContext=new BootUpdateContext(){
+    public ServiceTarget getServiceTarget(){
+      return serviceTarget;
+    }
+    public ServiceContainer getServiceContainer(){
+      return null;
+    }
+    public void addDeploymentProcessor(    DeploymentUnitProcessor processor,    long priority){
+      deploymentChain.addProcessor(processor,priority);
+    }
+  }
+;
+  for (  AbstractServerModelUpdate<?> update : updates) {
+    update.applyUpdateBootAction(bootUpdateContext);
   }
 }
