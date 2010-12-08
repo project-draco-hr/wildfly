@@ -2,16 +2,9 @@
   final ServiceContainer container=context.getController().getServiceContainer();
   final TrackingServiceTarget serviceTarget=new TrackingServiceTarget(container);
   final DelegatingServiceRegistry serviceRegistry=new DelegatingServiceRegistry(container);
-  final ServiceActivatorContext serviceActivatorContext=new ServiceActivatorContext(){
-    public ServiceTarget getServiceTarget(){
-      return serviceTarget;
-    }
-    public ServiceRegistry getServiceRegistry(){
-      return serviceRegistry;
-    }
-  }
-;
-  serverController=new ServerControllerImpl(new ServerModel(configuration.getName(),configuration.getPortOffset()),container,configuration.getServerEnvironment());
+  final Bootstrap.Configuration configuration=this.configuration;
+  final ServerEnvironment serverEnvironment=configuration.getServerEnvironment();
+  final ServerControllerImpl serverController=new ServerControllerImpl(new ServerModel(serverEnvironment.getServerName(),configuration.getPortOffset()),container,serverEnvironment);
   final List<AbstractServerModelUpdate<?>> updates;
   try {
     updates=persister.load(serverController);
@@ -29,13 +22,18 @@
     public ServiceRegistry getServiceRegistry(){
       return serviceRegistry;
     }
-    public void addDeploymentProcessor(    DeploymentUnitProcessor processor,    long priority){
-      deploymentChain.addProcessor(processor,priority);
+    public void addDeploymentProcessor(    final Phase phase,    final DeploymentUnitProcessor processor,    final int priority){
+      serverController.registerDeployer(phase,processor,priority);
     }
   }
 ;
+  log.info("Activating core services");
+  ShutdownHandlerImpl.addService(serviceTarget);
+  ServerEnvironmentServices.addServices(serverEnvironment,serviceTarget);
+  serviceTarget.addService(SocketBindingManager.SOCKET_BINDING_MANAGER,new SocketBindingManagerService(configuration.getPortOffset())).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
   for (  AbstractServerModelUpdate<?> update : updates) {
     update.applyUpdateBootAction(bootUpdateContext);
   }
+  this.serverController=serverController;
   bootServices=serviceTarget.getSet();
 }

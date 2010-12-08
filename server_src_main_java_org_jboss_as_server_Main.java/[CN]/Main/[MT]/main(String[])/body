@@ -1,8 +1,25 @@
 {
+  SecurityActions.setSystemProperty("log4j.defaultInitOverride","true");
+  new BridgeRepositorySelector().start();
   StdioContext.install();
   final StdioContext context=StdioContext.create(new NullInputStream(),new LoggingOutputStream(Logger.getLogger("stdout"),Level.INFO),new LoggingOutputStream(Logger.getLogger("stderr"),Level.ERROR));
   StdioContext.setStdioContextSelector(new SimpleStdioContextSelector(context));
-  System.setProperty("log4j.defaultInitOverride","true");
-  new BridgeRepositorySelector().start();
-  create(args);
+  try {
+    ServerEnvironment serverEnvironment=determineEnvironment(args,new Properties(SecurityActions.getSystemProperties()),SecurityActions.getSystemEnvironment());
+    if (serverEnvironment == null) {
+      abort(null);
+    }
+ else {
+      final Bootstrap bootstrap=Bootstrap.Factory.newInstance();
+      final Bootstrap.Configuration configuration=new Bootstrap.Configuration();
+      configuration.setServerEnvironment(serverEnvironment);
+      configuration.setModuleLoader(Module.getSystemModuleLoader());
+      configuration.setPortOffset(0);
+      bootstrap.start(configuration,Collections.<ServiceActivator>emptyList()).get();
+      return;
+    }
+  }
+ catch (  Throwable t) {
+    abort(t);
+  }
 }

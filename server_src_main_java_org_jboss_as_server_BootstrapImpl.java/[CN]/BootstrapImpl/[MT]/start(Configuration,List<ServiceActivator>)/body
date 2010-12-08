@@ -1,0 +1,30 @@
+{
+  if (configuration == null) {
+    throw new IllegalArgumentException("configuration is null");
+  }
+  final ModuleLoader moduleLoader=configuration.getModuleLoader();
+  final ServerEnvironment serverEnvironment=configuration.getServerEnvironment();
+  final String name=serverEnvironment.getServerName();
+  final ServerConfigurationPersister configurationPersister=configuration.getConfigurationPersister();
+  if (moduleLoader == null) {
+    throw new IllegalArgumentException("moduleLoader is null");
+  }
+  if (name == null) {
+    throw new IllegalArgumentException("name is null");
+  }
+  if (serverEnvironment == null) {
+    throw new IllegalArgumentException("serverEnvironment is null");
+  }
+  if (configurationPersister == null) {
+    throw new IllegalArgumentException("configurationPersister is null");
+  }
+  final ServiceContainer container=ServiceContainer.Factory.create();
+  final int threads=Runtime.getRuntime().availableProcessors();
+  container.setExecutor(new ThreadPoolExecutor(threads,threads,Long.MAX_VALUE,TimeUnit.NANOSECONDS,new LinkedBlockingQueue<Runnable>()));
+  final StartTask future=new StartTask(container);
+  final ServiceTarget tracker=container.subTarget();
+  final Service<ServerController> serverControllerService=new ApplicationServerService(configuration,configurationPersister);
+  tracker.addListener(new BootstrapListener(future,serverControllerService,configuration.getStartTime()));
+  tracker.addService(ServiceName.JBOSS.append("as"),serverControllerService).install();
+  return future;
+}

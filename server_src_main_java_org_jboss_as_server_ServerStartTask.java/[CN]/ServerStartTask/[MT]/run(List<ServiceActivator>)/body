@@ -1,26 +1,9 @@
 {
-  if (serverName != null) {
-    MDC.put("process","server-" + serverName);
-    log.infof("Starting server \"%s\"",serverName);
-  }
- else {
-    MDC.put("process","standalone-server");
-    log.infof("Starting standalone server");
-  }
   final Bootstrap bootstrap=Bootstrap.Factory.newInstance();
-  bootstrap.start(new Bootstrap.Configuration(),updates,startServices);
-  final BatchBuilder batchBuilder=container.batchBuilder();
-  final Properties systemProperties=System.getProperties();
-  final ServerEnvironment environment=providedEnvironment != null ? providedEnvironment : new ServerEnvironment(systemProperties,serverName,false);
-  log.info("Activating core services");
-  ServerEnvironmentServices.addServices(environment,batchBuilder);
+  bootstrap.start(new Bootstrap.Configuration(),startServices);
   ServerDeploymentRepositoryImpl.addService(batchBuilder);
-  ShutdownHandlerImpl.addService(batchBuilder);
-  ServerModelService.addService(serverModel,batchBuilder);
   ServerDeploymentManagerImpl.addService(serverModel,container,batchBuilder);
-  StandaloneServerConfigurationPersister.addService(serverModel,batchBuilder);
   DeploymentScannerFactoryService.addService(batchBuilder);
-  batchBuilder.addService(SocketBindingManager.SOCKET_BINDING_MANAGER,new SocketBindingManagerService(portOffset)).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
   batchBuilder.addService(ClassifyingModuleLoaderService.SERVICE_NAME,new ClassifyingModuleLoaderService()).install();
   final DeploymentChain deploymentChain=new DeploymentChainImpl();
   deploymentChain.addProcessor(new DeploymentModuleLoaderProcessor(new DeploymentModuleLoaderImpl()),Phase.DEPLOYMENT_MODULE_LOADER_PROCESSOR);
@@ -39,18 +22,16 @@
       return batchBuilder;
     }
     public ServiceContainer getServiceContainer(){
-      return container;
+      throw new UnsupportedOperationException();
     }
-    public void addDeploymentProcessor(    DeploymentUnitProcessor processor,    long priority){
+    public void addDeploymentProcessor(    final Phase phase,    DeploymentUnitProcessor processor,    int priority){
       deploymentChain.addProcessor(processor,priority);
+    }
+    public ServiceRegistry getServiceRegistry(){
+      return getServiceContainer();
     }
   }
 ;
-  for (  AbstractServerModelUpdate<?> update : updates) {
-    if (!update.isDeploymentUpdate()) {
-      update.applyUpdateBootAction(context);
-    }
-  }
   DeploymentUpdateService.addService(batchBuilder,updates,serverStartupListener);
   StandaloneServerManagementServices.addServices(serverModel,container,batchBuilder);
   try {
