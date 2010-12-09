@@ -1,12 +1,38 @@
 {
   final DeployerChains chains=deployerChainsInjector.getValue();
+  final DeploymentUnit deploymentUnitContext=deploymentUnitContextInjector.getValue();
   final List<DeploymentUnitProcessor> list=chains.getChain(phase);
   final ListIterator<DeploymentUnitProcessor> iterator=list.listIterator();
-  final DeploymentPhaseContext processorContext=new DeploymentPhaseContext(){
-  }
-;
+  final ServiceContainer container=context.getController().getServiceContainer();
+  final TrackingServiceTarget serviceTarget=new TrackingServiceTarget(container.subTarget());
+  final DeploymentPhaseContext processorContext=new DeploymentPhaseContextImpl(serviceTarget,new DelegatingServiceRegistry(container),deploymentUnitContext);
   while (iterator.hasNext()) {
     final DeploymentUnitProcessor processor=iterator.next();
-    processor.deploy(processorContext);
+    try {
+      processor.deploy(processorContext);
+    }
+ catch (    Throwable e) {
+      final StartException cause=new StartException(String.format("Failed to process %s",deploymentUnitContext),e);
+      while (iterator.hasPrevious()) {
+        final DeploymentUnitProcessor prev=iterator.previous();
+        safeUndeploy(deploymentUnitContext,prev);
+      }
+      final MultipleRemoveListener<Throwable> listener=MultipleRemoveListener.create(new MultipleRemoveListener.Callback<Throwable>(){
+        public void handleDone(        final Throwable parameter){
+          context.failed(cause);
+        }
+      }
+,cause);
+      for (      ServiceName serviceName : serviceTarget.getSet()) {
+        final ServiceController<?> controller=container.getService(serviceName);
+        if (controller != null) {
+          controller.setMode(ServiceController.Mode.REMOVE);
+          controller.addListener(listener);
+        }
+      }
+      listener.done();
+      return;
+    }
   }
+  serviceNames=new HashSet<ServiceName>(serviceTarget.getSet());
 }
