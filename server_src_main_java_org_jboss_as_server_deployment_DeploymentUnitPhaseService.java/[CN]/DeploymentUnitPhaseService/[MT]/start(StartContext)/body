@@ -1,21 +1,22 @@
 {
   final DeployerChains chains=deployerChainsInjector.getValue();
-  final DeploymentUnit deploymentUnitContext=deploymentUnitContextInjector.getValue();
+  final DeploymentUnit deploymentUnit=deploymentUnitInjector.getValue();
   final List<DeploymentUnitProcessor> list=chains.getChain(phase);
   final ListIterator<DeploymentUnitProcessor> iterator=list.listIterator();
   final ServiceContainer container=context.getController().getServiceContainer();
   final TrackingServiceTarget serviceTarget=new TrackingServiceTarget(container.subTarget());
-  final DeploymentPhaseContext processorContext=new DeploymentPhaseContextImpl(serviceTarget,new DelegatingServiceRegistry(container),deploymentUnitContext);
+  final DeploymentPhaseContext processorContext=new DeploymentPhaseContextImpl(serviceTarget,new DelegatingServiceRegistry(container),deploymentUnit,phase);
   while (iterator.hasNext()) {
     final DeploymentUnitProcessor processor=iterator.next();
     try {
       processor.deploy(processorContext);
     }
  catch (    Throwable e) {
-      final StartException cause=new StartException(String.format("Failed to process %s",deploymentUnitContext),e);
+      context.asynchronous();
+      final StartException cause=new StartException(String.format("Failed to process phase %s of %s",phase,deploymentUnit),e);
       while (iterator.hasPrevious()) {
         final DeploymentUnitProcessor prev=iterator.previous();
-        safeUndeploy(deploymentUnitContext,prev);
+        safeUndeploy(deploymentUnit,phase,prev);
       }
       final MultipleRemoveListener<Throwable> listener=MultipleRemoveListener.create(new MultipleRemoveListener.Callback<Throwable>(){
         public void handleDone(        final Throwable parameter){
@@ -33,6 +34,17 @@
       listener.done();
       return;
     }
+  }
+  final Phase nextPhase=phase.next();
+  if (nextPhase != null) {
+    final String name=deploymentUnit.getName();
+    final ServiceName serviceName=Services.DEPLOYMENT_BASE.append(name).append(nextPhase.name());
+    final DeploymentUnitPhaseService<?> phaseService=DeploymentUnitPhaseService.create(nextPhase);
+    final ServiceBuilder<?> phaseServiceBuilder=serviceTarget.addService(serviceName,phaseService);
+    phaseServiceBuilder.addDependency(deploymentUnit.getServiceName(),DeploymentUnit.class,phaseService.getDeploymentUnitInjector());
+    phaseServiceBuilder.addDependency(Services.DEPLOYER_CHAINS,DeployerChains.class,phaseService.getDeployerChainsInjector());
+    phaseServiceBuilder.addDependency(context.getController().getName());
+    phaseServiceBuilder.install();
   }
   serviceNames=new HashSet<ServiceName>(serviceTarget.getSet());
 }
