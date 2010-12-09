@@ -1,0 +1,40 @@
+{
+  if (phaseContext.getAttachment(ManagedBeanConfigurations.ATTACHMENT_KEY) != null) {
+    return;
+  }
+  final Index index=phaseContext.getAttachment(Attachments.ANNOTATION_INDEX);
+  if (index == null)   return;
+  final List<AnnotationTarget> targets=index.getAnnotationTargets(MANAGED_BEAN_ANNOTATION_NAME);
+  if (targets == null)   return;
+  final Module module=phaseContext.getAttachment(ModuleDeploymentProcessor.MODULE_ATTACHMENT_KEY);
+  if (module == null)   return;
+  final ClassLoader classLoader=module.getClassLoader();
+  final ManagedBeanConfigurations managedBeanConfigurations=new ManagedBeanConfigurations();
+  phaseContext.putAttachment(ManagedBeanConfigurations.ATTACHMENT_KEY,managedBeanConfigurations);
+  for (  AnnotationTarget target : targets) {
+    if (!(target instanceof ClassInfo)) {
+      throw new DeploymentUnitProcessingException("The ManagedBean annotation is only allowed at the class level: " + target);
+    }
+    final ClassInfo classInfo=ClassInfo.class.cast(target);
+    final String beanClassName=classInfo.name().toString();
+    final Class<?> beanClass;
+    try {
+      beanClass=classLoader.loadClass(beanClassName);
+    }
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException("Failed to load managed bean class: " + beanClassName);
+    }
+    final ManagedBean managedBeanAnnotation=beanClass.getAnnotation(ManagedBean.class);
+    final String beanName=managedBeanAnnotation.value().isEmpty() ? beanClassName : managedBeanAnnotation.value();
+    if (managedBeanConfigurations.containsName(beanName)) {
+      ManagedBeanConfiguration first=managedBeanConfigurations.getConfigurations().get(beanName);
+      throw new DeploymentUnitProcessingException("Duplicate managed bean name '" + beanName + "': "+ beanClassName+ ", "+ first.getType().getName());
+    }
+    final ManagedBeanConfiguration managedBeanConfiguration=new ManagedBeanConfiguration(beanName,beanClass);
+    processLifecycleMethods(managedBeanConfiguration,beanClass,index);
+    final Map<DotName,List<AnnotationTarget>> classAnnotations=classInfo.annotations();
+    managedBeanConfiguration.setResourceConfigurations(processResources(classAnnotations,beanClass,classLoader));
+    managedBeanConfiguration.setInterceptorConfigurations(processInterceptors(index,classAnnotations,beanClass,classLoader));
+    managedBeanConfigurations.add(managedBeanConfiguration);
+  }
+}

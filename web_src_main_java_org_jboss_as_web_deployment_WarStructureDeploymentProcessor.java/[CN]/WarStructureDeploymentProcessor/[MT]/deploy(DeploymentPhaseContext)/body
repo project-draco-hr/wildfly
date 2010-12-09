@@ -1,0 +1,28 @@
+{
+  if (!isWarDeployment(phaseContext)) {
+    return;
+  }
+  final VirtualFile deploymentRoot=phaseContext.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  if (deploymentRoot == null) {
+    return;
+  }
+  final MountHandle mountHandle=phaseContext.getAttachment(MountHandle.ATTACHMENT_KEY);
+  try {
+    final ClassPathEntry[] entries=createResourceRoots(deploymentRoot,mountHandle);
+    final DeploymentStructure structure=new DeploymentStructure(entries);
+    phaseContext.putAttachment(DeploymentStructure.ATTACHMENT_KEY,structure);
+    final BatchBuilder builder=phaseContext.getBatchBuilder();
+    final ServiceName sName=ServiceName.JBOSS.append("deployment",phaseContext.getName(),"structure");
+    builder.addService(sName,new DeploymentStructureService(structure)).install();
+    builder.addDependency(sName);
+  }
+ catch (  Exception e) {
+    throw new DeploymentUnitProcessingException(e);
+  }
+  final WarMetaData warMetaData=new WarMetaData();
+  warMetaData.setSharedWebMetaData(sharedWebMetaData);
+  phaseContext.putAttachment(WarMetaData.ATTACHMENT_KEY,warMetaData);
+  final TldsMetaData tldsMetaData=new TldsMetaData();
+  tldsMetaData.setSharedTlds(sharedTldsMetaData);
+  phaseContext.putAttachment(TldsMetaData.ATTACHMENT_KEY,tldsMetaData);
+}

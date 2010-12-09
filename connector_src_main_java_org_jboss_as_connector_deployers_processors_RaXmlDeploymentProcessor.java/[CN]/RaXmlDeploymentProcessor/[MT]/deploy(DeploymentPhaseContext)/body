@@ -1,0 +1,34 @@
+{
+  final ConnectorXmlDescriptor connectorXmlDescriptor=phaseContext.getAttachment(ConnectorXmlDescriptor.ATTACHMENT_KEY);
+  if (connectorXmlDescriptor == null) {
+    return;
+  }
+  final ResourceAdapters raxmls=getResourceAdaptersAttachment(phaseContext);
+  if (raxmls == null)   return;
+  log.tracef("processing Raxml");
+  Module module=phaseContext.getAttachment(ModuleDeploymentProcessor.MODULE_ATTACHMENT_KEY);
+  if (module == null)   throw new DeploymentUnitProcessingException("Failed to get module attachment for deployment: " + phaseContext.getName());
+  try {
+    final ServiceTarget serviceTarget=phaseContext.getBatchBuilder();
+    for (    org.jboss.jca.common.api.metadata.resourceadapter.ResourceAdapter raxml : raxmls.getResourceAdapters()) {
+      String archive=raxml.getArchive();
+      URL deployment=null;
+      Set<String> deployments=mdr.getResourceAdapters();
+      for (      String s : deployments) {
+        if (s.endsWith(archive) || s.endsWith(archive.substring(0,archive.indexOf(".rar"))))         deployment=new URL(s);
+      }
+      if (deployment != null) {
+        Connector cmd=mdr.getResourceAdapter(deployment.toExternalForm());
+        IronJacamar ijmd=mdr.getIronJacamar(deployment.toExternalForm());
+        File root=mdr.getRoot(deployment.toExternalForm());
+        cmd=(new Merger()).mergeConnectorWithCommonIronJacamar(raxml,cmd);
+        String deploymentName=archive.substring(0,archive.indexOf(".rar"));
+        ResourceAdapterXmlDeploymentService service=new ResourceAdapterXmlDeploymentService(connectorXmlDescriptor,raxml,cmd,ijmd,module,deploymentName,root);
+        serviceTarget.addService(ConnectorServices.RESOURCE_ADAPTER_XML_SERVICE_PREFIX.append(deploymentName),service).addDependency(ConnectorServices.IRONJACAMAR_MDR,MetadataRepository.class,service.getMdrInjector()).addDependency(ConnectorServices.RESOURCE_ADAPTER_REGISTRY_SERVICE,ResourceAdapterDeploymentRegistry.class,service.getRegistryInjector()).addDependency(ConnectorServices.JNDI_STRATEGY_SERVICE,JndiStrategy.class,service.getJndiInjector()).addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,com.arjuna.ats.jbossatx.jta.TransactionManagerService.class,service.getTxmInjector()).addDependency(ConnectorServices.CONNECTOR_CONFIG_SERVICE,ConnectorSubsystemConfiguration.class,service.getConfigInjector()).addDependency(NamingService.SERVICE_NAME).setInitialMode(Mode.ACTIVE).install();
+      }
+    }
+  }
+ catch (  Throwable t) {
+    throw new DeploymentUnitProcessingException(t);
+  }
+}
