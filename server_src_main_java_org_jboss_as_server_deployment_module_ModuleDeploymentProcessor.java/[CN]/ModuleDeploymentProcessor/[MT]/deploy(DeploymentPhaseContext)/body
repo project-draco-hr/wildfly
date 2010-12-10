@@ -1,30 +1,57 @@
 {
-  if (phaseContext.getAttachment(MODULE_ATTACHMENT_KEY) != null)   return;
-  final ModuleConfig moduleConfig=phaseContext.getAttachment(ModuleConfig.ATTACHMENT_KEY);
-  if (moduleConfig == null)   return;
-  final ModuleIdentifier moduleIdentifier=moduleConfig.getIdentifier();
-  final ModuleSpec.Builder specBuilder=ModuleSpec.build(moduleIdentifier);
-  for (  ResourceRoot resource : moduleConfig.getResources()) {
-    try {
-      specBuilder.addResourceRoot(new VFSResourceLoader(specBuilder.getIdentifier(),resource.getRootName(),resource.getRoot(),resource.getMountHandle()));
-    }
- catch (    IOException e) {
-      throw new DeploymentUnitProcessingException("Failed to create VFSResourceLoader for root [" + resource.getRootName() + "]",e);
-    }
+  final ResourceRoot mainRoot=phaseContext.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  if (mainRoot == null) {
+    return;
   }
-  final DeploymentModuleLoader deploymentModuleLoader=phaseContext.getAttachment(DeploymentModuleLoaderProcessor.ATTACHMENT_KEY);
-  final ModuleDependency[] dependencies=moduleConfig.getDependencies();
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final List<ResourceRoot> additionalRoots=phaseContext.getAttachment(Attachments.RESOURCE_ROOTS);
+  final List<ModuleDependency> dependencies=phaseContext.getAttachment(Attachments.MODULE_DEPENDENCIES);
+  final ModuleIdentifier moduleIdentifier=ModuleIdentifier.create("deployment." + deploymentUnit.getName());
+  final ModuleSpec.Builder specBuilder=ModuleSpec.build(moduleIdentifier);
+  addResourceRoot(specBuilder,mainRoot);
+  for (  ResourceRoot additionalRoot : additionalRoots) {
+    addResourceRoot(specBuilder,additionalRoot);
+  }
+  final boolean childFirst=false;
+  if (childFirst) {
+    specBuilder.addDependency(DependencySpec.createLocalDependencySpec());
+  }
   for (  ModuleDependency dependency : dependencies) {
-    DependencySpec depSpec=DependencySpec.createModuleDependencySpec(dependency.getIdentifier(),dependency.isExport(),dependency.isOptional());
+    final List<FilterSpecification> importFilters=dependency.getImportFilters();
+    final List<FilterSpecification> exportFilters=dependency.getExportFilters();
+    final PathFilter importFilter;
+    final PathFilter exportFilter;
+    final MultiplePathFilterBuilder importBuilder=PathFilters.multiplePathFilterBuilder(true);
+    for (    FilterSpecification filter : importFilters) {
+      importBuilder.addFilter(filter.getPathFilter(),filter.isInclude());
+    }
+    importBuilder.addFilter(PathFilters.getMetaInfFilter(),false);
+    if (dependency.isImportServices()) {
+      importBuilder.addFilter(PathFilters.getMetaInfServicesFilter(),true);
+    }
+    importBuilder.addFilter(PathFilters.getMetaInfSubdirectoriesFilter(),false);
+    importFilter=importBuilder.create();
+    if (exportFilters.isEmpty()) {
+      exportFilter=PathFilters.acceptAll();
+    }
+ else {
+      final MultiplePathFilterBuilder exportBuilder=PathFilters.multiplePathFilterBuilder(dependency.isExport());
+      for (      FilterSpecification filter : exportFilters) {
+        exportBuilder.addFilter(filter.getPathFilter(),filter.isInclude());
+      }
+      exportFilter=exportBuilder.create();
+    }
+    DependencySpec depSpec=DependencySpec.createModuleDependencySpec(importFilter,exportFilter,dependency.getModuleLoader(),dependency.getIdentifier(),dependency.isOptional());
     specBuilder.addDependency(depSpec);
   }
-  specBuilder.addDependency(DependencySpec.createLocalDependencySpec());
+  if (!childFirst) {
+    specBuilder.addDependency(DependencySpec.createLocalDependencySpec());
+  }
   final ModuleSpec moduleSpec=specBuilder.create();
   deploymentModuleLoader.addModuleSpec(moduleSpec);
   try {
     final Module module=deploymentModuleLoader.loadModule(moduleIdentifier);
-    phaseContext.putAttachment(MODULE_ATTACHMENT_KEY,module);
-    phaseContext.getServiceBuilder().addListener(new ModuleRemoveListener(deploymentModuleLoader,module));
+    phaseContext.getDeploymentUnit().putAttachment(Attachments.MODULE,module);
   }
  catch (  ModuleLoadException e) {
     throw new DeploymentUnitProcessingException("Failed to load module: " + moduleIdentifier,e);
