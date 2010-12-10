@@ -1,0 +1,65 @@
+{
+  final ServiceContainer container=context.getController().getServiceContainer();
+  final TrackingServiceTarget serviceTarget=new TrackingServiceTarget(container);
+  final DelegatingServiceRegistry serviceRegistry=new DelegatingServiceRegistry(container);
+  final Bootstrap.Configuration configuration=this.configuration;
+  final ServerEnvironment serverEnvironment=configuration.getServerEnvironment();
+  final ServerConfigurationPersister persister=configuration.getConfigurationPersister();
+  final List<AbstractServerModelUpdate<?>> updates;
+  try {
+    updates=persister.load(serverController);
+  }
+ catch (  Exception e) {
+    throw new StartException(e);
+  }
+  final EnumMap<Phase,SortedSet<RegisteredProcessor>> deployers=new EnumMap<Phase,SortedSet<RegisteredProcessor>>(Phase.class);
+  for (  Phase phase : Phase.values()) {
+    deployers.put(phase,new ConcurrentSkipListSet<RegisteredProcessor>());
+  }
+  final BootUpdateContext bootUpdateContext=new BootUpdateContext(){
+    public ServiceTarget getServiceTarget(){
+      return serviceTarget;
+    }
+    public ServiceContainer getServiceContainer(){
+      throw new UnsupportedOperationException();
+    }
+    public ServiceRegistry getServiceRegistry(){
+      return serviceRegistry;
+    }
+    public void addDeploymentProcessor(    final Phase phase,    final int priority,    final DeploymentUnitProcessor processor){
+      if (phase == null) {
+        throw new IllegalArgumentException("phase is null");
+      }
+      if (processor == null) {
+        throw new IllegalArgumentException("processor is null");
+      }
+      if (priority < 0) {
+        throw new IllegalArgumentException("priority is invalid (must be >= 0)");
+      }
+      deployers.get(phase).add(new RegisteredProcessor(priority,processor));
+    }
+    public ServerEnvironment getServerEnvironment(){
+      return serverEnvironment;
+    }
+  }
+;
+  log.info("Activating core services");
+  ShutdownHandlerImpl.addService(serviceTarget);
+  ServerEnvironmentServices.addServices(serverEnvironment,serviceTarget);
+  serviceTarget.addService(SocketBindingManager.SOCKET_BINDING_MANAGER,new SocketBindingManagerService(configuration.getPortOffset())).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  for (  AbstractServerModelUpdate<?> update : updates) {
+    update.applyUpdateBootAction(bootUpdateContext);
+  }
+  final EnumMap<Phase,List<DeploymentUnitProcessor>> finalDeployers=new EnumMap<Phase,List<DeploymentUnitProcessor>>(Phase.class);
+  for (  Map.Entry<Phase,SortedSet<RegisteredProcessor>> entry : deployers.entrySet()) {
+    final SortedSet<RegisteredProcessor> processorSet=entry.getValue();
+    final List<DeploymentUnitProcessor> list=new ArrayList<DeploymentUnitProcessor>(processorSet.size());
+    for (    RegisteredProcessor processor : processorSet) {
+      list.add(processor.processor);
+    }
+    finalDeployers.put(entry.getKey(),list);
+  }
+  final ServerControllerImpl serverController=new ServerControllerImpl(new ServerModel(serverEnvironment.getServerName(),configuration.getPortOffset()),container,serverEnvironment,finalDeployers);
+  this.serverController=serverController;
+  bootServices=serviceTarget.getSet();
+}
