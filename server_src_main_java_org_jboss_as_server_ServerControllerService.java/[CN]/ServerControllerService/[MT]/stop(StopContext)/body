@@ -1,20 +1,14 @@
 {
   serverController=null;
   final ServiceContainer container=context.getController().getServiceContainer();
-  final AtomicInteger count=new AtomicInteger(1);
-  final ServiceListener<Object> removeListener=new AbstractServiceListener<Object>(){
-    public void listenerAdded(    final ServiceController<?> controller){
-      count.incrementAndGet();
-    }
-    public void serviceRemoved(    final ServiceController<?> controller){
-      if (count.decrementAndGet() == 0) {
-        context.complete();
-        Logger.getLogger("org.jboss.as").infof("Stopped JBoss AS in %dms",Integer.valueOf((int)(context.getElapsedTime() / 1000000L)));
-      }
+  context.asynchronous();
+  final MultipleRemoveListener<Runnable> removeListener=MultipleRemoveListener.create(new Runnable(){
+    public void run(){
+      context.complete();
+      Logger.getLogger("org.jboss.as").infof("Stopped JBoss AS in %dms",Integer.valueOf((int)(context.getElapsedTime() / 1000000L)));
     }
   }
-;
-  context.asynchronous();
+);
   for (  ServiceName serviceName : bootServices) {
     final ServiceController<?> controller=container.getService(serviceName);
     if (controller != null) {
