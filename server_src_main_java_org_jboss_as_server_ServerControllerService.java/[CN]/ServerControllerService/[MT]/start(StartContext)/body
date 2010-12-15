@@ -5,6 +5,18 @@
   final Bootstrap.Configuration configuration=this.configuration;
   final ServerEnvironment serverEnvironment=configuration.getServerEnvironment();
   serverEnvironment.install();
+  final ServiceActivatorContext serviceActivatorContext=new ServiceActivatorContext(){
+    public ServiceTarget getServiceTarget(){
+      return serviceTarget;
+    }
+    public ServiceRegistry getServiceRegistry(){
+      return container;
+    }
+  }
+;
+  for (  ServiceActivator activator : extraServices) {
+    activator.activate(serviceActivatorContext);
+  }
   final ServerControllerImpl serverController=new ServerControllerImpl(new ServerModel(serverEnvironment.getServerName(),configuration.getPortOffset()),container,serverEnvironment);
   final ServerConfigurationPersister persister=configuration.getConfigurationPersister();
   final List<AbstractServerModelUpdate<?>> updates;
@@ -52,6 +64,23 @@
   for (  AbstractServerModelUpdate<?> update : updates) {
     update.applyUpdateBootAction(bootUpdateContext);
   }
+  deploymentModuleLoader=new DeploymentModuleLoaderImpl(configuration.getModuleLoader());
+  deployers.get(Phase.MODULARIZE).add(new RegisteredProcessor(Phase.MODULARIZE_DEPLOYMENT_MODULE_LOADER,new DeploymentUnitProcessor(){
+    public void deploy(    DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
+      phaseContext.getDeploymentUnit().putAttachment(Attachments.DEPLOYMENT_MODULE_LOADER,deploymentModuleLoader);
+    }
+    public void undeploy(    DeploymentUnit context){
+      context.removeAttachment(Attachments.DEPLOYMENT_MODULE_LOADER);
+    }
+  }
+));
+  deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_MANIFEST,new ManifestAttachmentProcessor()));
+  deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_ANNOTATION_INDEX,new AnnotationIndexProcessor()));
+  deployers.get(Phase.DEPENDENCIES).add(new RegisteredProcessor(Phase.DEPENDENCIES_MODULE,new ModuleDependencyProcessor()));
+  deployers.get(Phase.MODULARIZE).add(new RegisteredProcessor(Phase.MODULARIZE_DEPLOYMENT,new ModuleDeploymentProcessor()));
+  deployers.get(Phase.INSTALL).add(new RegisteredProcessor(Phase.INSTALL_MODULE_CONTEXT,new ModuleContextProcessor()));
+  deployers.get(Phase.DEPENDENCIES).add(new RegisteredProcessor(Phase.DEPENDENCIES_SAR_MODULE,new ServiceActivatorDependencyProcessor()));
+  deployers.get(Phase.INSTALL).add(new RegisteredProcessor(Phase.INSTALL_SERVICE_ACTIVATOR,new ServiceActivatorProcessor()));
   final EnumMap<Phase,List<DeploymentUnitProcessor>> finalDeployers=new EnumMap<Phase,List<DeploymentUnitProcessor>>(Phase.class);
   for (  Map.Entry<Phase,SortedSet<RegisteredProcessor>> entry : deployers.entrySet()) {
     final SortedSet<RegisteredProcessor> processorSet=entry.getValue();
@@ -61,6 +90,7 @@
     }
     finalDeployers.put(entry.getKey(),list);
   }
+  DeployerChainsService.addService(serviceTarget,finalDeployers);
   this.serverController=serverController;
   bootServices=serviceTarget.getSet();
 }
