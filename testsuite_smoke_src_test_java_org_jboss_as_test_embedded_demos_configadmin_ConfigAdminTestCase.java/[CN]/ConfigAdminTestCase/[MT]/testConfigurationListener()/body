@@ -1,0 +1,31 @@
+{
+  final AtomicInteger invocationCount=new AtomicInteger();
+  final CountDownLatch[] latches=new CountDownLatch[]{new CountDownLatch(1),new CountDownLatch(1)};
+  final Dictionary[] dictionaries=new Dictionary[2];
+  ConfigAdminListener listener=new ConfigAdminListener(){
+    @Override public void configurationModified(    String pid,    Dictionary<String,String> props){
+      int index=invocationCount.getAndIncrement();
+      dictionaries[index]=props;
+      latches[index].countDown();
+    }
+    @Override public Set<String> getPIDs(){
+      return Collections.singleton(ConfiguredService.SERVICE_PID);
+    }
+  }
+;
+  ConfigAdminService configAdmin=getConfigAdminService();
+  configAdmin.addListener(listener);
+  latches[0].await();
+  assertNull("First invocation with null",dictionaries[0]);
+  Dictionary<String,String> config=new Hashtable<String,String>();
+  config.put("foo","bar");
+  configAdmin.putConfiguration(ConfiguredService.SERVICE_PID,config);
+  try {
+    latches[1].await();
+    assertNotNull("Second invocation not null",dictionaries[1]);
+  }
+  finally {
+    configAdmin.removeConfiguration(ConfiguredService.SERVICE_PID);
+    configAdmin.removeListener(listener);
+  }
+}
