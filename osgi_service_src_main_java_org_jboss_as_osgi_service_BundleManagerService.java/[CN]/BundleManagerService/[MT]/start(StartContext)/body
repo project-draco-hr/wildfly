@@ -1,0 +1,28 @@
+{
+  log.debugf("Starting OSGi BundleManager");
+  try {
+    String handlerModules=System.getProperty("jboss.protocol.handler.modules");
+    if (handlerModules == null)     System.setProperty("jboss.protocol.handler.modules","org.jboss.osgi.framework");
+    Map<String,Object> props=new HashMap<String,Object>(subsystemState.getProperties());
+    setupFrameworkProperties(context,props);
+    bundleManager=new BundleManager(props);
+    Module frameworkModule=new FrameworkModuleLoader(bundleManager).getFrameworkModule();
+    bundleManager.setProperty(Module.class.getName(),frameworkModule);
+    BundleManagerMBean bundleManagerMBean=new BundleManagerMBean(){
+      @Override public long installBundle(      ModuleIdentifier identifier) throws BundleException {
+        Bundle bundle=bundleManager.installBundle(identifier);
+        return bundle.getBundleId();
+      }
+      @Override public long installBundle(      String location,      ModuleIdentifier identifier) throws BundleException {
+        Bundle bundle=bundleManager.installBundle(location,identifier);
+        return bundle.getBundleId();
+      }
+    }
+;
+    StandardMBean mbean=new StandardMBean(bundleManagerMBean,BundleManagerMBean.class);
+    injectedMBeanServer.getValue().registerMBean(mbean,BundleManagerMBean.OBJECTNAME);
+  }
+ catch (  Throwable t) {
+    throw new StartException("Failed to create BundleManager",t);
+  }
+}
