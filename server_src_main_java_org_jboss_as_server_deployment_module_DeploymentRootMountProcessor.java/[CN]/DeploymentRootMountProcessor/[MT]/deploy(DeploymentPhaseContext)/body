@@ -1,0 +1,29 @@
+{
+  final ServerDeploymentRepository serverDeploymentRepository=phaseContext.getDeploymentUnit().getAttachment(Attachments.SERVER_DEPLOYMENT_REPOSITORY);
+  if (serverDeploymentRepository == null) {
+    throw new DeploymentUnitProcessingException("No deployment repository available.");
+  }
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final String deploymentName=deploymentUnit.getName();
+  final String deploymentRuntimeName=deploymentUnit.getAttachment(Attachments.RUNTIME_NAME);
+  final byte[] deploymentHash=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_HASH);
+  final VirtualFile deploymentRoot=VFS.getChild("content/" + deploymentRuntimeName);
+  boolean failed=false;
+  Closeable handle=null;
+  try {
+    handle=serverDeploymentRepository.mountDeploymentContent(deploymentName,deploymentRuntimeName,deploymentHash,deploymentRoot);
+    final MountHandle mountHandle=new MountHandle(handle);
+    final ResourceRoot resourceRoot=new ResourceRoot(deploymentRoot,mountHandle,false);
+    deploymentUnit.putAttachment(Attachments.DEPLOYMENT_ROOT,resourceRoot);
+    deploymentUnit.putAttachment(Attachments.DEPLOYMENT_ROOT_MOUNT_HANDLE,mountHandle);
+  }
+ catch (  IOException e) {
+    failed=true;
+    throw new DeploymentUnitProcessingException("Failed to mount deployment content");
+  }
+ finally {
+    if (failed) {
+      VFSUtils.safeClose(handle);
+    }
+  }
+}
