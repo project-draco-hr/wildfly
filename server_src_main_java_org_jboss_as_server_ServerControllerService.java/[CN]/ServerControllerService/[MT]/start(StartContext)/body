@@ -5,6 +5,9 @@
   final DelegatingServiceRegistry serviceRegistry=new DelegatingServiceRegistry(container);
   final Bootstrap.Configuration configuration=this.configuration;
   final ServerEnvironment serverEnvironment=configuration.getServerEnvironment();
+  final int threads=(int)(Runtime.getRuntime().availableProcessors() * 1.5f);
+  final ExecutorService executor=new ThreadPoolExecutor(threads,threads,Long.MAX_VALUE,TimeUnit.NANOSECONDS,new LinkedBlockingQueue<Runnable>());
+  container.setExecutor(executor);
   serverEnvironment.install();
   final ServiceActivatorContext serviceActivatorContext=new ServiceActivatorContext(){
     public ServiceTarget getServiceTarget(){
@@ -19,8 +22,8 @@
     activator.activate(serviceActivatorContext);
   }
   final ServerModel serverModel=new ServerModel(serverEnvironment.getServerName(),configuration.getPortOffset());
-  final ServerControllerImpl serverController=new ServerControllerImpl(serverModel,container,serverEnvironment);
   final ServerConfigurationPersister persister=configuration.getConfigurationPersister();
+  final ServerControllerImpl serverController=new ServerControllerImpl(serverModel,container,serverEnvironment,persister,executor);
   final List<AbstractServerModelUpdate<?>> updates;
   try {
     updates=persister.load(serverController);
@@ -70,6 +73,7 @@
   }
 ).install();
   serviceTarget.addService(SocketBindingManager.SOCKET_BINDING_MANAGER,new SocketBindingManagerService(configuration.getPortOffset())).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  serverController.applyUpdates(updates,false,true);
   for (  AbstractServerModelUpdate<?> update : updates) {
     update.applyUpdateBootAction(bootUpdateContext);
   }
