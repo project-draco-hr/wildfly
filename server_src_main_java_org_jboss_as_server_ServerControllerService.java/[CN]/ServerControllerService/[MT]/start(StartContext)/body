@@ -18,7 +18,8 @@
   for (  ServiceActivator activator : extraServices) {
     activator.activate(serviceActivatorContext);
   }
-  final ServerControllerImpl serverController=new ServerControllerImpl(new ServerModel(serverEnvironment.getServerName(),configuration.getPortOffset()),container,serverEnvironment);
+  final ServerModel serverModel=new ServerModel(serverEnvironment.getServerName(),configuration.getPortOffset());
+  final ServerControllerImpl serverController=new ServerControllerImpl(serverModel,container,serverEnvironment);
   final ServerConfigurationPersister persister=configuration.getConfigurationPersister();
   final List<AbstractServerModelUpdate<?>> updates;
   try {
@@ -61,10 +62,21 @@
   log.info("Activating core services");
   ShutdownHandlerImpl.addService(serviceTarget);
   ServerEnvironmentServices.addServices(serverEnvironment,serviceTarget);
+  serviceTarget.addService(ServerModel.SERVICE_NAME,new Service<ServerModel>(){
+    public void start(    StartContext context) throws StartException {
+    }
+    public void stop(    StopContext context){
+    }
+    public ServerModel getValue() throws IllegalStateException, IllegalArgumentException {
+      return serverModel;
+    }
+  }
+).install();
   serviceTarget.addService(SocketBindingManager.SOCKET_BINDING_MANAGER,new SocketBindingManagerService(configuration.getPortOffset())).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
   for (  AbstractServerModelUpdate<?> update : updates) {
     update.applyUpdateBootAction(bootUpdateContext);
   }
+  serviceTarget.addService(ServerDeploymentRepository.SERVICE_NAME,new ServerDeploymentRepositoryImpl(serverEnvironment.getServerDeployDir(),serverEnvironment.getServerSystemDeployDir())).install();
   deploymentModuleLoader=new DeploymentModuleLoaderImpl(configuration.getModuleLoader());
   deployers.get(Phase.MODULARIZE).add(new RegisteredProcessor(Phase.MODULARIZE_DEPLOYMENT_MODULE_LOADER,new DeploymentUnitProcessor(){
     public void deploy(    DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
