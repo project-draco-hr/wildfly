@@ -1,0 +1,38 @@
+{
+  log.infof("JBoss AS %s \"%s\" starting",Version.AS_VERSION,Version.AS_RELEASE_CODENAME);
+  final ServiceContainer container=context.getController().getServiceContainer();
+  final TrackingServiceTarget serviceTarget=new TrackingServiceTarget(container.subTarget());
+  serviceTarget.addDependency(context.getController().getName());
+  Bootstrap.Configuration configuration=this.configuration;
+  serviceTarget.addService(Services.JBOSS_SERVER_CONTROLLER,new ServerControllerService(configuration)).install();
+  final ServerEnvironment serverEnvironment=configuration.getServerEnvironment();
+  final ServiceActivatorContext serviceActivatorContext=new ServiceActivatorContext(){
+    public ServiceTarget getServiceTarget(){
+      return serviceTarget;
+    }
+    public ServiceRegistry getServiceRegistry(){
+      return container;
+    }
+  }
+;
+  for (  ServiceActivator activator : extraServices) {
+    activator.activate(serviceActivatorContext);
+  }
+  serviceTarget.addService(ShutdownHandler.SERVICE_NAME,new ShutdownHandlerImpl()).install();
+  ServerEnvironmentService.addService(serverEnvironment,serviceTarget);
+  AbsolutePathService.addService(ServerEnvironment.HOME_DIR,serverEnvironment.getHomeDir().getAbsolutePath(),serviceTarget);
+  AbsolutePathService.addService(ServerEnvironment.SERVER_BASE_DIR,serverEnvironment.getServerBaseDir().getAbsolutePath(),serviceTarget);
+  AbsolutePathService.addService(ServerEnvironment.SERVER_CONFIG_DIR,serverEnvironment.getServerConfigurationDir().getAbsolutePath(),serviceTarget);
+  AbsolutePathService.addService(ServerEnvironment.SERVER_DATA_DIR,serverEnvironment.getServerDataDir().getAbsolutePath(),serviceTarget);
+  AbsolutePathService.addService(ServerEnvironment.SERVER_LOG_DIR,serverEnvironment.getServerLogDir().getAbsolutePath(),serviceTarget);
+  AbsolutePathService.addService(ServerEnvironment.SERVER_TEMP_DIR,serverEnvironment.getServerTempDir().getAbsolutePath(),serviceTarget);
+  AbsolutePathService.addService("user.dir",System.getProperty("user.dir"),serviceTarget);
+  AbsolutePathService.addService("user.home",System.getProperty("user.home"),serviceTarget);
+  AbsolutePathService.addService("java.home",System.getProperty("java.home"),serviceTarget);
+  serviceTarget.addService(SocketBindingManager.SOCKET_BINDING_MANAGER,new SocketBindingManagerService(configuration.getPortOffset())).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  services=new ArrayList<ServiceName>(serviceTarget.getSet());
+  if (log.isDebugEnabled()) {
+    final long nanos=context.getElapsedTime();
+    log.debugf("JBoss AS root service started in %d.%06d ms",Long.valueOf(nanos / 1000000L),Long.valueOf(nanos % 1000000L));
+  }
+}
