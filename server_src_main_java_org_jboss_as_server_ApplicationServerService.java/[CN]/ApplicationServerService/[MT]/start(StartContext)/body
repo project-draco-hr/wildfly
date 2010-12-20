@@ -1,5 +1,26 @@
 {
+  final Bootstrap.Configuration configuration=this.configuration;
+  final ServerEnvironment serverEnvironment=configuration.getServerEnvironment();
+  serverEnvironment.install();
   log.infof("JBoss AS %s \"%s\" starting",Version.AS_VERSION,Version.AS_RELEASE_CODENAME);
+  if (configLog.isDebugEnabled()) {
+    final Properties properties=System.getProperties();
+    final StringBuilder b=new StringBuilder(8192);
+    b.append("Configured system properties:");
+    for (    String property : new TreeSet<String>(properties.stringPropertyNames())) {
+      b.append("\n\t").append(property).append(" = ").append(properties.getProperty(property,"<undefined>"));
+    }
+    configLog.debug(b);
+    if (configLog.isTraceEnabled()) {
+      b.setLength(0);
+      final Map<String,String> env=System.getenv();
+      b.append("Configured system environment:");
+      for (      String key : new TreeSet<String>(env.keySet())) {
+        b.append("\n\t").append(key).append(" = ").append(env.get(key));
+      }
+      configLog.trace(b);
+    }
+  }
   final ServiceController<?> myController=context.getController();
   final ServiceContainer container=myController.getServiceContainer();
   long startTime=this.startTime;
@@ -14,9 +35,7 @@
   myController.addListener(bootstrapListener);
   final TrackingServiceTarget serviceTarget=new TrackingServiceTarget(container.subTarget());
   serviceTarget.addDependency(myController.getName());
-  Bootstrap.Configuration configuration=this.configuration;
   serviceTarget.addService(Services.JBOSS_SERVER_CONTROLLER,new ServerControllerService(configuration)).install();
-  final ServerEnvironment serverEnvironment=configuration.getServerEnvironment();
   final ServiceActivatorContext serviceActivatorContext=new ServiceActivatorContext(){
     public ServiceTarget getServiceTarget(){
       return serviceTarget;
