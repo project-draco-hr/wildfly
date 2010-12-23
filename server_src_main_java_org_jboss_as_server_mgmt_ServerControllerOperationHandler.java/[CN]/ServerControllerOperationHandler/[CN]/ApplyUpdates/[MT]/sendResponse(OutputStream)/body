@@ -1,0 +1,41 @@
+{
+  boolean requiresRestart=false;
+  for (  final AbstractServerModelUpdate<?> update : updates) {
+    requiresRestart|=update.requiresRestart();
+  }
+  List<UpdateResultHandlerResponse<?>> results=serverController.applyUpdates(updates,true,false);
+  final Marshaller marshaller=getMarshaller();
+  marshaller.start(createByteOutput(output));
+  try {
+    marshaller.writeByte(StandaloneClientProtocol.PARAM_APPLY_UPDATES_RESULT_COUNT);
+    marshaller.writeInt(results.size());
+    for (    UpdateResultHandlerResponse<?> result : results) {
+      marshaller.writeByte(StandaloneClientProtocol.PARAM_APPLY_UPDATE_RESULT);
+      if (result.getFailureResult() != null) {
+        marshaller.writeByte(StandaloneClientProtocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION);
+        marshaller.writeObject(result.getFailureResult());
+      }
+ else       if (result.getSuccessResult() != null) {
+        marshaller.writeByte(StandaloneClientProtocol.APPLY_UPDATE_RESULT_SERVER_MODEL_SUCCESS);
+        marshaller.writeObject(result.getSuccessResult());
+      }
+ else {
+        marshaller.writeByte(StandaloneClientProtocol.PARAM_APPLY_UPDATE_RESULT_EXCEPTION);
+        marshaller.writeObject(new RuntimeException("Result unknown"));
+      }
+    }
+    marshaller.finish();
+  }
+  finally {
+    safeFinish(marshaller);
+  }
+  if (!preventShutdown && requiresRestart) {
+    executor.execute(new Runnable(){
+      public void run(){
+        serverController.shutdown();
+        SystemExiter.exit(10);
+      }
+    }
+);
+  }
+}
