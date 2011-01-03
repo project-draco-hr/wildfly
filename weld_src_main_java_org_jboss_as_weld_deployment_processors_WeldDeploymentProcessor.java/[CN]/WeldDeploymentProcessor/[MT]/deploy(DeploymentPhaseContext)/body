@@ -1,0 +1,44 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+  if (!WeldDeploymentMarker.isWeldDeployment(deploymentUnit)) {
+    return;
+  }
+  if (deploymentUnit.getParent() != null) {
+    return;
+  }
+  log.info("Starting Services for CDI deployment: " + phaseContext.getDeploymentUnit().getName());
+  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+  final List<BeanDeploymentArchiveImpl> beanDeploymentArchives=deploymentUnit.getAttachment(BeanDeploymentArchiveImpl.ATTACHMENT_KEY);
+  for (  BeanDeploymentArchiveImpl bda : beanDeploymentArchives) {
+    bda.addBeanDeploymentArchives(beanDeploymentArchives);
+  }
+  final ServiceLoader<Extension> loader=ServiceLoader.load(Extension.class,module.getClassLoader());
+  final HashSet<Metadata<Extension>> extensions=new HashSet<Metadata<Extension>>();
+  final Iterator<Metadata<Extension>> iterator=loader.iterator();
+  while (iterator.hasNext()) {
+    Metadata<Extension> extension=iterator.next();
+    extensions.add(extension);
+  }
+  final WeldDeployment deployment=new WeldDeployment(new HashSet<BeanDeploymentArchiveImpl>(beanDeploymentArchives),extensions,module);
+  final WeldContainer weldContainer=new WeldContainer(deployment,Environments.EE_INJECT);
+  final WeldService weldService=new WeldService(weldContainer);
+  final ServiceName weldServiceName=deploymentUnit.getServiceName().append(WeldService.SERVICE_NAME);
+  final ServiceBuilder<WeldContainer> weldServiceBuilder=serviceTarget.addService(weldServiceName,weldService);
+  installEjbInjectionService(serviceTarget,deploymentUnit,weldService,weldServiceBuilder);
+  installEjbService(serviceTarget,deploymentUnit,weldService,weldServiceBuilder);
+  installJpaInjectionService(serviceTarget,deploymentUnit,weldService,weldServiceBuilder);
+  installResourceInjectionService(serviceTarget,deploymentUnit,weldService,weldServiceBuilder);
+  installSecurityService(serviceTarget,deploymentUnit,weldService,weldServiceBuilder);
+  installTransactionService(serviceTarget,deploymentUnit,weldService,weldServiceBuilder);
+  installValidationService(serviceTarget,deploymentUnit,weldService,weldServiceBuilder);
+  weldServiceBuilder.install();
+  final ServiceName beanManagerServiceName=deploymentUnit.getServiceName().append(BeanManagerService.NAME);
+  BeanManagerService beanManagerService=new BeanManagerService(deployment.getAdditionalBeanDeploymentArchive().getId());
+  serviceTarget.addService(beanManagerServiceName,beanManagerService).addDependency(weldServiceName,WeldContainer.class,beanManagerService.getWeldContainer()).install();
+  final ServiceName moduleContextServiceName=ContextServiceNameBuilder.module(deploymentUnit);
+  final ServiceName beanManagerBindingServiceName=moduleContextServiceName.append("BeanManager");
+  InjectedValue<BeanManager> injectedBeanManager=new InjectedValue<BeanManager>();
+  BinderService<BeanManager> beanManagerBindingService=new BinderService<BeanManager>("BeanManager",injectedBeanManager);
+  serviceTarget.addService(beanManagerBindingServiceName,beanManagerBindingService).addDependency(moduleContextServiceName,Context.class,beanManagerBindingService.getContextInjector()).addDependency(beanManagerServiceName,BeanManager.class,injectedBeanManager).install();
+}

@@ -1,0 +1,44 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  BeansXmlParser parser=new BeansXmlParser();
+  Set<BeanArchiveMetadata> beanArchiveMetadata=new HashSet<BeanArchiveMetadata>();
+  ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  AttachmentList<ResourceRoot> structure=deploymentUnit.getAttachment(Attachments.RESOURCE_ROOTS);
+  if (deploymentRoot == null) {
+    return;
+  }
+  ResourceRoot classesRoot=null;
+  if (structure != null) {
+    for (    ResourceRoot resourceRoot : structure) {
+      if (resourceRoot.getRoot().getLowerCaseName().endsWith(".jar")) {
+        VirtualFile beansXml=resourceRoot.getRoot().getChild(META_INF_BEANS_XML);
+        if (beansXml.exists() && beansXml.isFile()) {
+          log.debugf("Found beans.xml: %s",beansXml.toString());
+          beanArchiveMetadata.add(new BeanArchiveMetadata(beansXml,resourceRoot,parseBeansXml(beansXml,parser),false));
+        }
+      }
+ else       if (resourceRoot.getRootName().equals("classes")) {
+        classesRoot=resourceRoot;
+      }
+    }
+  }
+  if (WarDeploymentMarker.isWarDeployment(deploymentUnit)) {
+    final VirtualFile rootBeansXml=deploymentRoot.getRoot().getChild(WEB_INF_BEANS_XML);
+    if (rootBeansXml.isFile()) {
+      log.debugf("Found beans.xml: %s",rootBeansXml);
+      beanArchiveMetadata.add(new BeanArchiveMetadata(rootBeansXml,classesRoot,parseBeansXml(rootBeansXml,parser),true));
+    }
+  }
+ else   if (!EarDeploymentMarker.isEarDeployment(deploymentUnit)) {
+    final VirtualFile rootBeansXml=deploymentRoot.getRoot().getChild(META_INF_BEANS_XML);
+    if (rootBeansXml.exists() && rootBeansXml.isFile()) {
+      log.debugf("Found beans.xml: %s",rootBeansXml.toString());
+      beanArchiveMetadata.add(new BeanArchiveMetadata(rootBeansXml,deploymentRoot,parseBeansXml(rootBeansXml,parser),true));
+    }
+  }
+  if (!beanArchiveMetadata.isEmpty()) {
+    WeldDeploymentMetadata deploymentMetadata=new WeldDeploymentMetadata(beanArchiveMetadata);
+    deploymentUnit.putAttachment(WeldDeploymentMetadata.ATTACHMENT_KEY,deploymentMetadata);
+    WeldDeploymentMarker.mark(phaseContext.getDeploymentUnit());
+  }
+}
