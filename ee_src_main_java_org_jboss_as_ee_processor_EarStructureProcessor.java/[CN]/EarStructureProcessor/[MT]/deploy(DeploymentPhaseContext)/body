@@ -1,0 +1,27 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final ResourceRoot resourceRoot=phaseContext.getDeploymentUnit().getAttachment(Attachments.DEPLOYMENT_ROOT);
+  final VirtualFile virtualFile=resourceRoot.getRoot();
+  if (!virtualFile.getName().toLowerCase().endsWith(EAR_EXTENSION)) {
+    return;
+  }
+  markDeployment(deploymentUnit);
+  try {
+    final List<VirtualFile> childArchives=virtualFile.getChildren(new SuffixMatchFilter(CHILD_ARCHIVE_EXTENSIONS,VisitorAttributes.RECURSE_LEAVES_ONLY));
+    for (    final VirtualFile child : childArchives) {
+      final Closeable closable;
+      if (child.isFile()) {
+        closable=VFS.mountZip(child,child,TempFileProviderService.provider());
+      }
+ else {
+        closable=NO_OP_CLOSEABLE;
+      }
+      final MountHandle mountHandle=new MountHandle(closable);
+      final ResourceRoot childResource=new ResourceRoot(child,mountHandle,false);
+      deploymentUnit.addToAttachmentList(Attachments.EAR_CHILD_ROOTS,childResource);
+    }
+  }
+ catch (  IOException e) {
+    throw new DeploymentUnitProcessingException("Failed to process children for EAR [" + virtualFile + "]",e);
+  }
+}
