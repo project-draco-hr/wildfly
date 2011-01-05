@@ -3,19 +3,25 @@
   if (!isWarDeployment(deploymentUnit)) {
     return;
   }
-  final VirtualFile deploymentRoot=phaseContext.getDeploymentUnit().getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
+  final ResourceRoot deploymentResourceRoot=phaseContext.getDeploymentUnit().getAttachment(Attachments.DEPLOYMENT_ROOT);
+  final VirtualFile deploymentRoot=deploymentResourceRoot.getRoot();
   if (deploymentRoot == null) {
     return;
   }
-  final MountHandle mountHandle=phaseContext.getDeploymentUnit().getAttachment(Attachments.DEPLOYMENT_ROOT).getMountHandle();
+  deploymentResourceRoot.putAttachment(Attachments.INDEX_RESOURCE_ROOT,false);
+  final MountHandle mountHandle=deploymentResourceRoot.getMountHandle();
   try {
-    final ClassPathEntry[] entries=createResourceRoots(deploymentRoot,mountHandle);
+    final ClassPathEntry[] entries=createClassPathEntries(deploymentRoot,mountHandle);
     final DeploymentStructure structure=new DeploymentStructure(entries);
     deploymentUnit.putAttachment(DeploymentStructure.ATTACHMENT_KEY,structure);
     final ServiceTarget target=phaseContext.getServiceTarget();
     final ServiceName sName=phaseContext.getPhaseServiceName().append("war","structure");
     target.addService(sName,new DeploymentStructureService(structure)).addDependency(phaseContext.getPhaseServiceName()).install();
     target.addDependency(sName);
+    final ResourceRoot[] resourceRoots=createResourceRoots(deploymentUnit.getAttachment(DeploymentStructure.ATTACHMENT_KEY));
+    for (    ResourceRoot root : resourceRoots) {
+      deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,root);
+    }
   }
  catch (  Exception e) {
     throw new DeploymentUnitProcessingException(e);
