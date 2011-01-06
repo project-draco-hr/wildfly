@@ -6,19 +6,25 @@
     return;
   }
   markDeployment(deploymentUnit);
+  resourceRoot.putAttachment(Attachments.INDEX_RESOURCE_ROOT,false);
+  ModuleRootMarker.markRoot(resourceRoot,false);
   try {
-    final List<VirtualFile> childArchives=virtualFile.getChildren(new SuffixMatchFilter(CHILD_ARCHIVE_EXTENSIONS,VisitorAttributes.RECURSE_LEAVES_ONLY));
+    final List<VirtualFile> childArchives=new ArrayList<VirtualFile>(virtualFile.getChildren(CHILD_ARCHIVE_FILTER));
+    final VirtualFile libDir=virtualFile.getChild(DEFAULT_LIB_DIR);
+    if (libDir.exists()) {
+      childArchives.addAll(libDir.getChildren(CHILD_ARCHIVE_FILTER));
+    }
     for (    final VirtualFile child : childArchives) {
-      final Closeable closable;
-      if (child.isFile()) {
-        closable=VFS.mountZip(child,child,TempFileProviderService.provider());
-      }
- else {
-        closable=NO_OP_CLOSEABLE;
-      }
+      final Closeable closable=child.isFile() ? VFS.mountZip(child,child,TempFileProviderService.provider()) : NO_OP_CLOSEABLE;
       final MountHandle mountHandle=new MountHandle(closable);
       final ResourceRoot childResource=new ResourceRoot(child,mountHandle,false);
-      deploymentUnit.addToAttachmentList(Attachments.EAR_CHILD_ROOTS,childResource);
+      if (child.getName().toLowerCase().endsWith(JAR_EXTENSION)) {
+        ModuleRootMarker.markRoot(childResource);
+      }
+ else {
+        SubDeploymentMarker.markRoot(childResource);
+      }
+      deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,childResource);
     }
   }
  catch (  IOException e) {
