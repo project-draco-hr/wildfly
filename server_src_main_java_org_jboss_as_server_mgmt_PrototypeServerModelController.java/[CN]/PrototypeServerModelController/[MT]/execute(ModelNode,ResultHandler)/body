@@ -1,0 +1,47 @@
+{
+  String operationName=operation.get("operation").asString();
+  if (!"echo".equals(operationName)) {
+    throw new RuntimeException("Unknown operation name " + operationName);
+  }
+  ModelNode sleepNode=operation.get("sleep");
+  final long sleep=sleepNode.isDefined() ? sleepNode.asLong() : 0;
+  if (sleep > 0) {
+    final Thread t=new Thread(new Runnable(){
+      @Override public void run(){
+        try {
+          Thread.sleep(sleep);
+        }
+ catch (        InterruptedException e) {
+          return;
+        }
+        handler.handleResultFragment(new String[]{"asynch-result"},operation);
+        try {
+          Thread.sleep(sleep * 2);
+        }
+ catch (        InterruptedException e) {
+          System.out.println("!!! Interrupted");
+          return;
+        }
+        handler.handleResultComplete();
+      }
+    }
+);
+    t.start();
+    return new ModelController.Operation(){
+      @Override public void cancel(){
+        t.interrupt();
+        handler.handleCancellation();
+      }
+    }
+;
+  }
+ else {
+    handler.handleResultFragment(new String[]{"result"},operation);
+    handler.handleResultComplete();
+    return new ModelController.Operation(){
+      @Override public void cancel(){
+      }
+    }
+;
+  }
+}
