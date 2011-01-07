@@ -1,0 +1,59 @@
+{
+  final AtomicInteger status=new AtomicInteger();
+  final ModelNode finalResult=new ModelNode();
+  final Cancellable handle=execute(operation,new ResultHandler(){
+    public void handleResultFragment(    final String[] location,    final ModelNode result){
+synchronized (finalResult) {
+        finalResult.get(location).set(result);
+      }
+    }
+    public void handleResultComplete(    final ModelNode compensatingOperation){
+synchronized (finalResult) {
+        status.set(1);
+        finalResult.notify();
+      }
+    }
+    public void handleFailed(    final ModelNode failureDescription){
+synchronized (finalResult) {
+        status.set(3);
+        finalResult.set(failureDescription);
+        finalResult.notify();
+      }
+    }
+    public void handleCancellation(){
+synchronized (finalResult) {
+        status.set(2);
+        finalResult.notify();
+      }
+    }
+  }
+);
+  boolean intr=false;
+  try {
+synchronized (finalResult) {
+      for (; ; ) {
+        try {
+          final int s=status.get();
+switch (s) {
+case 1:
+            return finalResult;
+case 2:
+          throw new CancellationException();
+case 3:
+        throw new OperationFailedException(finalResult);
+    }
+    finalResult.wait();
+  }
+ catch (  InterruptedException e) {
+    intr=true;
+    handle.cancel();
+  }
+}
+}
+}
+  finally {
+if (intr) {
+Thread.currentThread().interrupt();
+}
+}
+}

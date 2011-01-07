@@ -1,0 +1,42 @@
+{
+  final PathAddress address=PathAddress.pathAddress(operation.get("address"));
+  final String operationName=operation.get("operation").asString();
+  final OperationHandler operationHandler=registry.getHandler(address,operationName);
+  final ModelNode subModel;
+  try {
+    subModel=address.navigate(model,operationName.equals("add"));
+  }
+ catch (  NoSuchElementException e) {
+    handler.handleResultFragment(NO_STRINGS,getFailureResult(e));
+    return Cancellable.NULL;
+  }
+  final NewOperationContext context=getOperationContext(subModel,operation,operationHandler);
+  final ResultHandler persistingHandler=new ResultHandler(){
+    public void handleResultFragment(    final String[] location,    final ModelNode result){
+      handler.handleResultFragment(location,result);
+    }
+    public void handleResultComplete(    final ModelNode compensatingOperation){
+      handler.handleResultComplete(compensatingOperation);
+      try {
+        configurationPersister.store(model);
+      }
+ catch (      ConfigurationPersistenceException e) {
+        log.warnf("Failed to persist configuration change: %s",e);
+      }
+    }
+    public void handleFailed(    final ModelNode failureDescription){
+      handler.handleFailed(failureDescription);
+    }
+    public void handleCancellation(){
+      handler.handleCancellation();
+    }
+  }
+;
+  try {
+    return doExecute(context,operation,operationHandler,persistingHandler);
+  }
+ catch (  Throwable t) {
+    handler.handleFailed(getFailureResult(t));
+    return Cancellable.NULL;
+  }
+}
