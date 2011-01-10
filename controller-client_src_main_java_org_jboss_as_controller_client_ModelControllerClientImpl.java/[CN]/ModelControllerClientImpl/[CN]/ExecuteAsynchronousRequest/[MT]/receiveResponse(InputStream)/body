@@ -1,16 +1,18 @@
 {
-  final Unmarshaller unmarshaller=getUnmarshaller();
-  unmarshaller.start(createByteInput(input));
   try {
     LOOP:     while (true) {
-      byte command=unmarshaller.readByte();
+      int command=input.read();
 switch (command) {
 case ModelControllerClientProtocol.PARAM_HANDLE_RESULT_FRAGMENT:
 {
-          expectHeader(unmarshaller,ModelControllerClientProtocol.PARAM_LOCATION);
-          String[] location=unmarshal(unmarshaller,String[].class);
-          expectHeader(unmarshaller,ModelControllerClientProtocol.PARAM_OPERATION);
-          ModelNode node=unmarshal(unmarshaller,ModelNode.class);
+          expectHeader(input,ModelControllerClientProtocol.PARAM_LOCATION);
+          int length=StreamUtils.readInt(input);
+          String[] location=new String[length];
+          for (int i=0; i < length; i++) {
+            location[i]=StreamUtils.readUTFZBytes(input);
+          }
+          expectHeader(input,ModelControllerClientProtocol.PARAM_OPERATION);
+          ModelNode node=readNode(input);
           handler.handleResultFragment(location,node);
           break;
         }
@@ -21,14 +23,14 @@ case ModelControllerClientProtocol.PARAM_HANDLE_CANCELLATION:
       }
 case ModelControllerClientProtocol.PARAM_HANDLE_RESULT_COMPLETE:
 {
-      expectHeader(unmarshaller,ModelControllerClientProtocol.PARAM_OPERATION);
-      ModelNode node=unmarshal(unmarshaller,ModelNode.class);
+      expectHeader(input,ModelControllerClientProtocol.PARAM_OPERATION);
+      ModelNode node=readNode(input);
       handler.handleResultComplete(node);
       break LOOP;
     }
 case ModelControllerClientProtocol.PARAM_REQUEST_ID:
 {
-    result.setAsynchronousId(unmarshaller.readInt());
+    result.setAsynchronousId(StreamUtils.readInt(input));
     break;
   }
 default :
@@ -40,9 +42,6 @@ default :
 }
  catch (Exception e) {
 handler.handleException(e);
-}
- finally {
-safeFinish(unmarshaller);
 }
 return null;
 }
