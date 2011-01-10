@@ -1,0 +1,24 @@
+{
+  final ModelNode address=operation.get(ADDRESS);
+  final String name=address.get(address.asInt() - 1).asString();
+  if (context instanceof NewRuntimeOperationContext) {
+    final NewRuntimeOperationContext runtimeContext=(NewRuntimeOperationContext)context;
+    final ServiceTarget target=runtimeContext.getServiceTarget();
+    final ConnectorService connectorService=new ConnectorService();
+    connectorService.setOptionMap(createOptionMap(operation.get(REQUEST_PROPERTIES)));
+    final ServiceName connectorName=ConnectorElement.connectorName(name);
+    try {
+      target.addService(connectorName,connectorService).addDependency(connectorName.append("auth-provider"),ServerAuthenticationProvider.class,connectorService.getAuthenticationProviderInjector()).addDependency(RemotingSubsystemElement.JBOSS_REMOTING_ENDPOINT,Endpoint.class,connectorService.getEndpointInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    }
+ catch (    ServiceRegistryException e) {
+      resultHandler.handleFailed(null);
+    }
+  }
+  final ModelNode compensating=new ModelNode();
+  compensating.get(ADDRESS).set(operation.require(ADDRESS));
+  compensating.get(OPERATION).set("remove-connector");
+  compensating.get(REQUEST_PROPERTIES,NAME).set(name);
+  applyToModel(context.getSubModel(),operation.require(REQUEST_PROPERTIES));
+  resultHandler.handleResultComplete(compensating);
+  return Cancellable.NULL;
+}

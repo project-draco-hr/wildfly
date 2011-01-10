@@ -1,0 +1,26 @@
+{
+  final ModelNode address=operation.get(ADDRESS);
+  final String connectorName=address.get(address.asInt() - 1).asString();
+  final ModelNode connector=context.getSubModel();
+  final ModelNode compensating=new ModelNode();
+  compensating.get(ADDRESS).set(operation.require(ADDRESS));
+  compensating.get(OPERATION).set("add-connector");
+  compensating.get(REQUEST_PROPERTIES,SASL).set(connector.get(SASL));
+  compensating.get(REQUEST_PROPERTIES,AUTHENTICATION_PROVIDER).set(connector.get(AUTHENTICATION_PROVIDER));
+  compensating.get(REQUEST_PROPERTIES,PROPERTIES).set(connector.get(PROPERTIES));
+  if (context instanceof NewRuntimeOperationContext) {
+    final ServiceController<?> controller=((NewRuntimeOperationContext)context).getServiceRegistry().getService(ConnectorElement.connectorName(connectorName));
+    if (controller != null) {
+      controller.addListener(new AbstractServiceListener<Object>(){
+        public void listenerAdded(        ServiceController<? extends Object> controller){
+          controller.setMode(Mode.REMOVE);
+        }
+        public void serviceRemoved(        ServiceController<? extends Object> controller){
+        }
+      }
+);
+    }
+  }
+  resultHandler.handleResultComplete(compensating);
+  return Cancellable.NULL;
+}
