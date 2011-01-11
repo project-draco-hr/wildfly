@@ -8,6 +8,7 @@
   final JBossWebMetaData metaData=warMetaData.getMergedJBossWebMetaData();
   final StandardContext webContext=new StandardContext();
   final ContextConfig config=new JBossContextConfig(deploymentUnit);
+  webContext.addInstanceListener(NamingListener.class.getName());
   try {
     webContext.setDocBase(deploymentRoot.getPhysicalFile().getAbsolutePath());
   }
@@ -52,8 +53,14 @@ String metaDataSecurityDomain=metaData.getSecurityDomain();
 if (metaDataSecurityDomain != null) {
 metaDataSecurityDomain=metaDataSecurityDomain.trim();
 }
+ServiceName appNs=ContextServiceNameBuilder.app(deploymentUnit);
+ServiceName moduleNs=ContextServiceNameBuilder.module(deploymentUnit);
+ServiceName namespaceSelectorServiceName=deploymentUnit.getServiceName().append(NamespaceSelectorService.NAME);
+NamespaceSelectorService namespaceSelector=new NamespaceSelectorService();
+serviceTarget.addService(namespaceSelectorServiceName,namespaceSelector).addDependency(appNs,Context.class,namespaceSelector.getApp()).addDependency(moduleNs,Context.class,namespaceSelector.getModule()).addDependency(moduleNs,Context.class,namespaceSelector.getComp()).install();
 try {
-serviceTarget.addService(WebSubsystemElement.JBOSS_WEB.append(deploymentName),new WebDeploymentService(webContext)).addDependency(WebSubsystemElement.JBOSS_WEB_HOST.append(hostName),Host.class,new WebContextInjector(webContext)).setInitialMode(Mode.ACTIVE).install();
+WebDeploymentService webDeploymentService=new WebDeploymentService(webContext);
+serviceTarget.addService(WebSubsystemElement.JBOSS_WEB.append(deploymentName),webDeploymentService).addDependency(WebSubsystemElement.JBOSS_WEB_HOST.append(hostName),Host.class,new WebContextInjector(webContext)).addDependency(namespaceSelectorServiceName,NamespaceSelectorService.class,webDeploymentService.getNamespaceSelector()).setInitialMode(Mode.ACTIVE).install();
 }
  catch (ServiceRegistryException e) {
 throw new DeploymentUnitProcessingException("Failed to add JBoss web deployment service",e);

@@ -1,14 +1,13 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
-  if (!isEarDeployment(deploymentUnit)) {
+  if (deploymentUnit.getParent() != null) {
     return;
   }
   final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
-  final ServiceName applicationContextServiceName=ContextNames.GLOBAL_CONTEXT_SERVICE_NAME.append(deploymentUnit.getName());
-  final JndiName applicationContextJndiName=ContextNames.GLOBAL_CONTEXT_NAME.append(deploymentUnit.getName());
-  final ContextService contextService=new ContextService(applicationContextJndiName);
-  serviceTarget.addService(applicationContextServiceName,contextService).addDependency(ContextNames.GLOBAL_CONTEXT_SERVICE_NAME,Context.class,contextService.getParentContextInjector()).install();
+  final ServiceName applicationContextServiceName=ContextServiceNameBuilder.app(deploymentUnit);
+  final RootContextService contextService=new RootContextService();
+  serviceTarget.addService(applicationContextServiceName,contextService).install();
   final BinderService<String> applicationNameBinder=new BinderService<String>("AppName",Values.immediateValue(deploymentUnit.getName()));
   serviceTarget.addService(applicationContextServiceName.append("app-name"),applicationNameBinder).addDependency(applicationContextServiceName,Context.class,applicationNameBinder.getContextInjector()).install();
-  phaseContext.getDeploymentUnit().putAttachment(Attachments.APPLICATION_CONTEXT_CONFIG,new NamingContextConfig(applicationContextServiceName,applicationContextJndiName));
+  phaseContext.getDeploymentUnit().putAttachment(Attachments.APPLICATION_CONTEXT_CONFIG,new NamingContextConfig(applicationContextServiceName));
 }
