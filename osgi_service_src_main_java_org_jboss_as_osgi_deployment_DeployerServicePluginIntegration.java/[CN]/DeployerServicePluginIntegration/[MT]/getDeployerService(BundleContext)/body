@@ -9,6 +9,7 @@
         ServiceContainer serviceContainer=getBundleManager().getServiceContainer();
         BatchBuilder batchBuilder=serviceContainer.batchBuilder();
         InstallBundleInitiatorService.addService(batchBuilder,contextName,dep);
+        OSGiDeploymentLatchService.addService(batchBuilder,contextName);
         batchBuilder.install();
         InputStream inputStream=dep.getRoot().openStream();
         builder=builder.add(contextName,inputStream).andDeploy();
@@ -16,32 +17,32 @@
         DeploymentAction deployAction=builder.getLastAction();
         executeDeploymentPlan(plan,deployAction);
         final CountDownLatch latch=new CountDownLatch(1);
-        ServiceName serviceName=OSGiDeploymentService.getServiceName(contextName);
+        ServiceName serviceName=OSGiDeploymentLatchService.getServiceName(contextName);
         ServiceController<?> controller=serviceContainer.getService(serviceName);
-        if (controller != null) {
-          controller.addListener(new AbstractServiceListener<Object>(){
-            @Override public void listenerAdded(            ServiceController<? extends Object> controller){
-              if (controller.getState() == State.UP)               serviceStarted(controller);
- else               if (controller.getState() == State.START_FAILED)               serviceFailed(controller,controller.getStartException());
-            }
-            @Override public void serviceStarted(            ServiceController<? extends Object> controller){
-              log.tracef("Service started: %s",controller.getName());
-              controller.removeListener(this);
-              latch.countDown();
-            }
-            @Override public void serviceFailed(            ServiceController<? extends Object> controller,            StartException reason){
-              log.tracef(reason,"Service failed: %s",controller.getName());
-              controller.removeListener(this);
-              latch.countDown();
-            }
+        controller.addListener(new AbstractServiceListener<Object>(){
+          @Override public void listenerAdded(          ServiceController<? extends Object> controller){
+            if (controller.getState() == State.UP)             serviceStarted(controller);
+ else             if (controller.getState() == State.START_FAILED)             serviceFailed(controller,controller.getStartException());
           }
-);
-          latch.await(10,TimeUnit.SECONDS);
-          if (controller.getState() == State.START_FAILED)           throw controller.getStartException();
-          if (controller.getState() != State.UP)           throw new BundleException("OSGiDeploymentService not available: " + serviceName);
-          Deployment bundleDep=(Deployment)controller.getValue();
-          bundle=bundleDep.getAttachment(Bundle.class);
+          @Override public void serviceStarted(          ServiceController<? extends Object> controller){
+            log.tracef("Service started: %s",controller.getName());
+            controller.removeListener(this);
+            controller.setMode(Mode.REMOVE);
+            latch.countDown();
+          }
+          @Override public void serviceFailed(          ServiceController<? extends Object> controller,          StartException reason){
+            log.tracef(reason,"Service failed: %s",controller.getName());
+            controller.removeListener(this);
+            controller.setMode(Mode.REMOVE);
+            latch.countDown();
+          }
         }
+);
+        latch.await(10,TimeUnit.SECONDS);
+        if (controller.getState() == State.START_FAILED)         throw controller.getStartException();
+        if (controller.getState() != State.UP)         throw new BundleException("OSGiDeploymentService not available: " + serviceName);
+        Deployment bundleDep=(Deployment)controller.getValue();
+        bundle=bundleDep.getAttachment(Bundle.class);
       }
  catch (      RuntimeException rte) {
         throw rte;
@@ -63,9 +64,10 @@ catch (      Exception ex) {
         serviceName=Services.JBOSS_DEPLOYMENT.append(contextName);
         if (getBundleManager().getServiceContainer().getService(serviceName) == null)         log.warnf("Cannot find deployment service: %s",serviceName);
         DeploymentPlanBuilder builder=deploymentManager.newDeploymentPlan();
-        DeploymentPlan plan=builder.undeploy(contextName).remove(contextName).build();
-        Future<ServerDeploymentPlanResult> future=deploymentManager.execute(plan);
-        future.get();
+        builder=builder.undeploy(contextName).remove(contextName);
+        DeploymentPlan plan=builder.build();
+        DeploymentAction removeAction=builder.getLastAction();
+        executeDeploymentPlan(plan,removeAction);
       }
  catch (      RuntimeException rte) {
         throw rte;
