@@ -1,0 +1,30 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final ResourceRoot resourceRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  if (resourceRoot == null) {
+    return;
+  }
+  final VirtualFile deploymentRoot=resourceRoot.getRoot();
+  if (deploymentRoot == null || !deploymentRoot.exists()) {
+    return;
+  }
+  final String deploymentRootName=deploymentRoot.getName().toLowerCase();
+  if (!deploymentRootName.endsWith(RAR_EXTENSION)) {
+    return;
+  }
+  ModuleRootMarker.markRoot(resourceRoot);
+  try {
+    final List<VirtualFile> childArchives=deploymentRoot.getChildren(CHILD_ARCHIVE_FILTER);
+    for (    final VirtualFile child : childArchives) {
+      final Closeable closable=child.isFile() ? VFS.mountZip(child,child,TempFileProviderService.provider()) : NO_OP_CLOSEABLE;
+      final MountHandle mountHandle=new MountHandle(closable);
+      final ResourceRoot childResource=new ResourceRoot(child,mountHandle,false);
+      ModuleRootMarker.markRoot(childResource);
+      deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,childResource);
+      resourceRoot.addToAttachmentList(Attachments.INDEX_IGNORE_PATHS,child.getPathNameRelativeTo(deploymentRoot));
+    }
+  }
+ catch (  IOException e) {
+    throw new DeploymentUnitProcessingException("Failed to process RA child archives for [" + deploymentRoot + "]",e);
+  }
+}

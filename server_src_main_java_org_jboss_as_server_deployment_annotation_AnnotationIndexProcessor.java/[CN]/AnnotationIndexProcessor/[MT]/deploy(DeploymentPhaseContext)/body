@@ -13,10 +13,26 @@
     if (shouldIndexResource != null && !shouldIndexResource) {
       continue;
     }
+    final List<String> indexIgnorePathList=resourceRoot.getAttachment(Attachments.INDEX_IGNORE_PATHS);
+    final Set<String> indexIgnorePaths;
+    if (indexIgnorePathList != null && !indexIgnorePathList.isEmpty()) {
+      indexIgnorePaths=new HashSet<String>(indexIgnorePathList);
+    }
+ else {
+      indexIgnorePaths=null;
+    }
     final VirtualFile virtualFile=resourceRoot.getRoot();
     final Indexer indexer=new Indexer();
     try {
-      final List<VirtualFile> classChildren=virtualFile.getChildren(new SuffixMatchFilter(".class",VisitorAttributes.RECURSE_LEAVES_ONLY));
+      final VisitorAttributes visitorAttributes=new VisitorAttributes();
+      visitorAttributes.setLeavesOnly(true);
+      visitorAttributes.setRecurseFilter(new VirtualFileFilter(){
+        public boolean accepts(        VirtualFile file){
+          return indexIgnorePaths == null || !indexIgnorePaths.contains(file.getPathNameRelativeTo(virtualFile));
+        }
+      }
+);
+      final List<VirtualFile> classChildren=virtualFile.getChildren(new SuffixMatchFilter(".class",visitorAttributes));
       for (      VirtualFile classFile : classChildren) {
         InputStream inputStream=null;
         try {
