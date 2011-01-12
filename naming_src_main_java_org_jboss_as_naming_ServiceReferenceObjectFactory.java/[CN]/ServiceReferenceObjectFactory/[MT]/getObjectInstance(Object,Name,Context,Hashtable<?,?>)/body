@@ -1,0 +1,26 @@
+{
+  final Reference reference=asReference(obj);
+  final StringRefAddr nameAdr=(StringRefAddr)reference.get("srof");
+  if (nameAdr == null) {
+    throw new NamingException("Invalid context reference.  Not a 'srof' reference.");
+  }
+  final String sname=(String)nameAdr.getContent();
+  final ServiceName serviceName=ServiceName.parse(sname);
+  final ServiceController<?> controller=serviceRegistry.getRequiredService(serviceName);
+  ServiceReferenceListener listener=new ServiceReferenceListener();
+  controller.addListener(listener);
+synchronized (listener) {
+    if (!listener.finished) {
+      listener.wait();
+    }
+  }
+switch (listener.getState()) {
+case UP:
+    return getObjectInstance(listener.getValue(),obj,name,nameCtx,environment);
+case START_FAILED:
+  throw new NamingException("Could not resolve service reference to " + serviceName + " in factory "+ getClass().getName()+ ". Service was in state START_FAILED.");
+case REMOVED:
+throw new NamingException("Could not resolve service reference to " + serviceName + " in factory "+ getClass().getName()+ ". Service was in state START_FAILED.");
+}
+throw new NamingException("Could not resolve service reference to " + serviceName + " in factory "+ getClass().getName()+ ". This is a bug in ServiceReferenceObjectFactory. State was"+ listener.getState());
+}
