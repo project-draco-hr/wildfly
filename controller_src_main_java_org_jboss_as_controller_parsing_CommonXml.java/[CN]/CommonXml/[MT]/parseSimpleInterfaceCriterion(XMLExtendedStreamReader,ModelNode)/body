@@ -1,0 +1,72 @@
+{
+  if (Namespace.forUri(reader.getNamespaceURI()) != Namespace.DOMAIN_1_0) {
+    throw unexpectedElement(reader);
+  }
+  Element element=Element.forName(reader.getLocalName());
+  final String localName=element.getLocalName();
+switch (element) {
+case INET_ADDRESS:
+{
+      requireSingleAttribute(reader,Attribute.VALUE.getLocalName());
+      String value=reader.getAttributeValue(0);
+      requireNoContent(reader);
+      criteria.add(localName,value);
+      break;
+    }
+case LINK_LOCAL_ADDRESS:
+case LOOPBACK:
+case MULTICAST:
+case POINT_TO_POINT:
+case PUBLIC_ADDRESS:
+case SITE_LOCAL_ADDRESS:
+case UP:
+case VIRTUAL:
+{
+    criteria.add(localName);
+    break;
+  }
+case NIC:
+{
+  requireSingleAttribute(reader,Attribute.NAME.getLocalName());
+  String value=reader.getAttributeValue(0);
+  requireNoContent(reader);
+  criteria.add(localName,value);
+  break;
+}
+case NIC_MATCH:
+{
+requireSingleAttribute(reader,Attribute.PATTERN.getLocalName());
+String value=reader.getAttributeValue(0);
+requireNoContent(reader);
+criteria.add(localName,value);
+break;
+}
+case SUBNET_MATCH:
+{
+requireSingleAttribute(reader,Attribute.VALUE.getLocalName());
+final String value=reader.getAttributeValue(0);
+requireNoContent(reader);
+final String[] split=value.split("/");
+try {
+if (split.length != 2) {
+  throw new XMLStreamException("Invalid 'value' " + value + " -- must be of the form address/mask",reader.getLocation());
+}
+final InetAddress addr=InetAddress.getByName(split[1]);
+final byte[] net=addr.getAddress();
+final int mask=Integer.parseInt(split[1]);
+final ModelNode node=criteria.add().set(localName,new ModelNode()).get(localName);
+node.get("network").set(net);
+node.get("mask").set(mask);
+break;
+}
+ catch (NumberFormatException e) {
+throw new XMLStreamException("Invalid mask " + split[1] + " ("+ e.getLocalizedMessage()+ ")",reader.getLocation(),e);
+}
+catch (UnknownHostException e) {
+throw new XMLStreamException("Invalid address " + split[1] + " ("+ e.getLocalizedMessage()+ ")",reader.getLocation(),e);
+}
+}
+default :
+throw unexpectedElement(reader);
+}
+}

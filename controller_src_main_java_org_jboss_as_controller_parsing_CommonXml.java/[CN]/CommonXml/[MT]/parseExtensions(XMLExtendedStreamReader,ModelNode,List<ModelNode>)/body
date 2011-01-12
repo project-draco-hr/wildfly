@@ -1,0 +1,31 @@
+{
+  requireNoAttributes(reader);
+  final Set<String> found=new HashSet<String>();
+  final ExtensionParsingContextImpl context=new ExtensionParsingContextImpl(reader.getXMLMapper());
+  while (reader.nextTag() != END_ELEMENT) {
+    final String moduleName=readStringAttributeElement(reader,Attribute.MODULE.getLocalName());
+    if (!found.add(moduleName)) {
+      throw invalidAttributeValue(reader,0);
+    }
+    try {
+      Module module=moduleLoader.loadModule(ModuleIdentifier.fromString(moduleName));
+      boolean initialized=false;
+      for (      NewExtension extension : module.loadService(NewExtension.class)) {
+        extension.initializeParsers(context);
+        if (!initialized) {
+          initialized=true;
+        }
+      }
+      if (!initialized) {
+        throw new IllegalStateException("No META-INF/services/" + NewExtension.class.getName() + " found for "+ module.getIdentifier());
+      }
+      final ModelNode add=new ModelNode();
+      add.get("address").set(address).add("extension",moduleName);
+      add.get("operation").set("add-extension");
+      list.add(add);
+    }
+ catch (    ModuleLoadException e) {
+      throw new XMLStreamException("Failed to load module",e);
+    }
+  }
+}
