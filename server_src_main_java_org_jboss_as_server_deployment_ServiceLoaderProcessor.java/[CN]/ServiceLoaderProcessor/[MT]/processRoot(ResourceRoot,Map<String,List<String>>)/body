@@ -1,0 +1,41 @@
+{
+  final VirtualFile virtualFile=resourceRoot.getRoot();
+  final VirtualFile child=virtualFile.getChild("META-INF/services");
+  for (  VirtualFile serviceType : child.getChildren()) {
+    final String name=serviceType.getName();
+    if (VALID_NAME.matcher(name).matches())     try {
+      List<String> list=foundServices.get(name);
+      if (list == null) {
+        foundServices.put(name,list=new ArrayList<String>());
+      }
+      final InputStream stream=serviceType.openStream();
+      try {
+        final BufferedReader reader=new BufferedReader(new InputStreamReader(stream,"UTF-8"));
+        String line;
+        while ((line=reader.readLine()) != null) {
+          final int commentIdx=line.indexOf('#');
+          final String className;
+          if (commentIdx == -1) {
+            className=line.trim();
+          }
+ else {
+            className=line.substring(0,commentIdx).trim();
+          }
+          if (className.length() == 0) {
+            continue;
+          }
+          if (!VALID_NAME.matcher(className).matches()) {
+            log.warnf("Encountered invalid class name \"%s\" for service type \"%s\"",className,name);
+          }
+          list.add(className);
+        }
+      }
+  finally {
+        VFSUtils.safeClose(stream);
+      }
+    }
+ catch (    IOException e) {
+      throw new DeploymentUnitProcessingException("Failed to read '" + child + "'",e);
+    }
+  }
+}
