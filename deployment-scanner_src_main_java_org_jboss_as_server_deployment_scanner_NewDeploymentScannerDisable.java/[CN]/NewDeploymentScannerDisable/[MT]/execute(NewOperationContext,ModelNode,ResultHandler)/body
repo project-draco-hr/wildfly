@@ -1,0 +1,26 @@
+{
+  final ModelNode address=operation.require(ADDRESS);
+  final String name=address.get(address.asInt() - 1).asString();
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set("enable-scanner");
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  if (context instanceof NewRuntimeOperationContext) {
+    final NewRuntimeOperationContext updateContext=(NewRuntimeOperationContext)context;
+    final ServiceController<?> controller=updateContext.getServiceRegistry().getService(DeploymentScannerService.getServiceName(name));
+    if (controller == null) {
+      resultHandler.handleFailed(new ModelNode().set("scanner not configured"));
+    }
+ else {
+      try {
+        final DeploymentScanner scanner=(DeploymentScanner)controller.getValue();
+        scanner.stopScanner();
+        context.getSubModel().get(CommonAttributes.SCAN_ENABLED).set(false);
+        resultHandler.handleResultComplete(compensatingOperation);
+      }
+ catch (      Throwable t) {
+        resultHandler.handleFailed(getFailureResult(t));
+      }
+    }
+  }
+  return Cancellable.NULL;
+}
