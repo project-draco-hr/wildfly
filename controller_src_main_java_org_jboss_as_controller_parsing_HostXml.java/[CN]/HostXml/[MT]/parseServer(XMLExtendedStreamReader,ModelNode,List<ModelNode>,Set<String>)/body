@@ -1,0 +1,111 @@
+{
+  String name=null;
+  String group=null;
+  Boolean start=null;
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (reader.getAttributeNamespace(i) != null) {
+      throw unexpectedAttribute(reader,i);
+    }
+ else {
+      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+          if (!serverNames.add(value)) {
+            throw new XMLStreamException("Duplicate server declaration " + value,reader.getLocation());
+          }
+          name=value;
+          break;
+        }
+case GROUP:
+{
+        group=value;
+        break;
+      }
+case START:
+{
+      start=Boolean.valueOf(value);
+      break;
+    }
+default :
+  throw unexpectedAttribute(reader,i);
+}
+}
+}
+if (name == null) {
+throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.NAME));
+}
+if (group == null) {
+throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.GROUP));
+}
+final ModelNode address=parentAddress.clone().add(ModelDescriptionConstants.SERVER,name);
+final ModelNode addUpdate=new ModelNode();
+addUpdate.get("address").set(address);
+addUpdate.get("operation").set("add");
+addUpdate.get("name").set(name);
+addUpdate.get("group").set(group);
+list.add(addUpdate);
+boolean sawJvm=false;
+boolean sawSystemProperties=false;
+boolean sawSocketBinding=false;
+final Set<String> interfaceNames=new HashSet<String>();
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case DOMAIN_1_0:
+{
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case INTERFACE_SPECS:
+{
+    parseInterfaces(reader,interfaceNames,address,list,true);
+    break;
+  }
+case JVM:
+{
+  if (sawJvm) {
+    throw new XMLStreamException(element.getLocalName() + " already defined",reader.getLocation());
+  }
+  parseJvm(reader,address,list,new HashSet<String>());
+  sawJvm=true;
+  break;
+}
+case PATHS:
+{
+parsePaths(reader,address,list,true);
+}
+case SOCKET_BINDING_GROUP:
+{
+if (sawSocketBinding) {
+throw new XMLStreamException(element.getLocalName() + " already defined",reader.getLocation());
+}
+parseSocketBindingGroupRef(reader,address,list);
+sawSocketBinding=true;
+break;
+}
+case SYSTEM_PROPERTIES:
+{
+if (sawSystemProperties) {
+throw new XMLStreamException(element.getLocalName() + " already declared",reader.getLocation());
+}
+parseSystemProperties(reader,address,list);
+sawSystemProperties=true;
+break;
+}
+default :
+throw unexpectedElement(reader);
+}
+break;
+}
+default :
+throw unexpectedElement(reader);
+}
+}
+final boolean isStart=start == null ? true : start.booleanValue();
+final ModelNode startUpdate=new ModelNode();
+startUpdate.get("address").set(address);
+startUpdate.get("operation").set("set-start");
+startUpdate.get("start").set(isStart);
+list.add(startUpdate);
+}
