@@ -1,0 +1,65 @@
+{
+  requireNoAttributes(reader);
+  final Set<String> names=new HashSet<String>();
+  while (reader.nextTag() != END_ELEMENT) {
+    requireSingleAttribute(reader,Attribute.NAME.getLocalName());
+    final String name=reader.getAttributeValue(0);
+    if (!names.add(name)) {
+      throw new XMLStreamException("Duplicate profile declaration " + name,reader.getLocation());
+    }
+    final List<ModelNode> subsystems=new ArrayList<ModelNode>();
+    final Set<String> includes=new HashSet<String>();
+    final ModelNode profileIncludes=new ModelNode();
+    final Set<String> configuredSubsystemTypes=new HashSet<String>();
+    while (reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case UNKNOWN:
+{
+          if (Element.forName(reader.getLocalName()) != Element.SUBSYSTEM) {
+            throw unexpectedElement(reader);
+          }
+          if (!configuredSubsystemTypes.add(reader.getNamespaceURI())) {
+            throw new XMLStreamException("Duplicate subsystem declaration",reader.getLocation());
+          }
+          reader.handleAny(subsystems);
+          break;
+        }
+case DOMAIN_1_0:
+{
+        if (configuredSubsystemTypes.size() > 0) {
+          throw unexpectedElement(reader);
+        }
+        if (Element.forName(reader.getLocalName()) != Element.INCLUDE) {
+          throw unexpectedElement(reader);
+        }
+        final String includedName=readStringAttributeElement(reader,Attribute.PROFILE.getLocalName());
+        if (!names.contains(includedName)) {
+          throw new XMLStreamException("No profile found for inclusion",reader.getLocation());
+        }
+        if (!includes.add(includedName)) {
+          throw new XMLStreamException("Duplicate profile include",reader.getLocation());
+        }
+        profileIncludes.add(includedName);
+        break;
+      }
+default :
+{
+      throw unexpectedElement(reader);
+    }
+}
+}
+final ModelNode profile=new ModelNode();
+profile.get(OP).set("add-profile");
+profile.get(OP_ADDR).set(address.clone().add(name));
+profile.get(REQUEST_PROPERTIES).set(profileIncludes);
+list.add(profile);
+for (final ModelNode update : subsystems) {
+final ModelNode subsystemAddress=address.clone().add(name).add(update.require(OP_ADDR));
+update.get(OP_ADDR).set(subsystemAddress);
+list.add(update);
+}
+if (configuredSubsystemTypes.size() == 0) {
+throw new XMLStreamException("Profile has no subsystem configurations",reader.getLocation());
+}
+}
+}
