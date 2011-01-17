@@ -3,12 +3,12 @@
     @Override protected Bundle installBundle(    Deployment dep) throws BundleException {
       log.tracef("Install deployment: %s",dep);
       Bundle bundle=null;
-      String contextName=InstallBundleInitiatorService.getContextName(dep);
+      String contextName=DeploymentHolderService.getContextName(dep);
+      ServiceContainer serviceContainer=getBundleManager().getServiceContainer();
       DeploymentPlanBuilder builder=deploymentManager.newDeploymentPlan();
       try {
-        ServiceContainer serviceContainer=getBundleManager().getServiceContainer();
         BatchBuilder batchBuilder=serviceContainer.batchBuilder();
-        InstallBundleInitiatorService.addService(batchBuilder,contextName,dep);
+        DeploymentHolderService.addService(batchBuilder,contextName,dep);
         OSGiDeploymentLatchService.addService(batchBuilder,contextName);
         batchBuilder.install();
         InputStream inputStream=dep.getRoot().openStream();
@@ -56,12 +56,15 @@ catch (      BundleException ex) {
 catch (      Exception ex) {
         throw new BundleException("Cannot deploy bundle: " + dep,ex);
       }
+ finally {
+        DeploymentHolderService.removeService(serviceContainer,contextName);
+      }
       if (bundle == null)       throw new IllegalStateException("Cannot find bundle: " + contextName);
       return bundle;
     }
     @Override protected void uninstallBundle(    Deployment dep,    Bundle bundle) throws BundleException {
       try {
-        String contextName=InstallBundleInitiatorService.getContextName(dep);
+        String contextName=DeploymentHolderService.getContextName(dep);
         ServiceName serviceName=OSGiDeploymentService.getServiceName(contextName);
         ServiceController<?> controller=getBundleManager().getServiceContainer().getService(serviceName);
         if (controller == null) {
