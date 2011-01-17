@@ -1,0 +1,43 @@
+{
+  final Map<DotName,List<AnnotationInstance>> classAnnotations=classInfo.annotations();
+  if (classAnnotations == null) {
+    return Collections.emptyList();
+  }
+  final List<AnnotationInstance> interceptorAnnotations=classAnnotations.get(INTERCEPTORS_ANNOTATION_NAME);
+  if (interceptorAnnotations == null || interceptorAnnotations.isEmpty()) {
+    return Collections.emptyList();
+  }
+  final List<MethodInterceptorConfiguration> interceptorConfigurations=new ArrayList<MethodInterceptorConfiguration>(interceptorAnnotations.size());
+  final Interceptors interceptorsAnnotation=beanClass.getAnnotation(Interceptors.class);
+  final Class<?>[] interceptorTypes=interceptorsAnnotation.value();
+  for (  AnnotationInstance annotationInstance : interceptorAnnotations) {
+    final Class<?> interceptorType;
+    try {
+      interceptorType=beanClassLoader.loadClass(annotationInstance.name().toString());
+    }
+ catch (    ClassNotFoundException e) {
+      throw new IllegalArgumentException("Failed to interceptor class " + annotationInstance.name(),e);
+    }
+    final ClassInfo interceptorClassInfo=index.getClassByName(DotName.createSimple(interceptorType.getName()));
+    if (interceptorClassInfo == null) {
+      continue;
+    }
+    final AnnotationTarget target=annotationInstance.target();
+    final MethodInterceptorFilter methodFilter;
+    if (target instanceof MethodInfo) {
+      final MethodInfo methodInfo=MethodInfo.class.cast(target);
+      final List<String> argTypes=new ArrayList<String>(methodInfo.args().length);
+      for (      Type argType : methodInfo.args()) {
+        argTypes.add(argType.name().toString());
+      }
+      methodFilter=new MatchMethodInterceptorFilter(methodInfo.name(),argTypes.toArray(new String[argTypes.size()]));
+    }
+ else {
+      methodFilter=AllMethodInterceptorFilter.INSTANCE;
+    }
+    final Method aroundInvokeMethod=getSingleAnnotatedMethod(interceptorType,interceptorClassInfo,AroundInvoke.class,true);
+    final List<ResourceInjectionConfiguration> resourceConfigurations=ResourceInjectionConfiguration.from(interceptorClassInfo,interceptorType,beanClassLoader);
+    interceptorConfigurations.add(new MethodInterceptorConfiguration(interceptorType,aroundInvokeMethod,methodFilter,resourceConfigurations));
+  }
+  return interceptorConfigurations;
+}
