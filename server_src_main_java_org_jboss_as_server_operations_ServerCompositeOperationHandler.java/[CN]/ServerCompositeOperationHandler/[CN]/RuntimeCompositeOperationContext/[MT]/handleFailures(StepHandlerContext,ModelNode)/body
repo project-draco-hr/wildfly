@@ -1,0 +1,24 @@
+{
+  if (rollbackOnRuntimeFailure) {
+    super.handleFailures(stepHandlerContext,results);
+  }
+ else {
+    final ModelNode compensatingOp=new ModelNode();
+    compensatingOp.get(OP).set(COMPOSITE);
+    compensatingOp.get(OP_ADDR).setEmptyList();
+    final ModelNode compSteps=compensatingOp.get(STEPS);
+    compSteps.setEmptyList();
+    for (int i=results.asInt() - 1; i >= 0; i--) {
+      final ModelNode result=results.get(i);
+      result.get(SUCCESS).set(false);
+      if (!result.has(CANCELLED) || !result.get(CANCELLED).asBoolean()) {
+        final ModelNode compStep=stepHandlerContext.getCompensatingOperation(Integer.valueOf(i));
+        if (compStep != null && compStep.isDefined()) {
+          compSteps.add(compStep);
+        }
+      }
+    }
+    getResultHandler().handleResultFragment(EMPTY,results);
+    getResultHandler().handleResultComplete(compensatingOp);
+  }
+}
