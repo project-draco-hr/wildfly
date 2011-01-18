@@ -35,8 +35,6 @@
   }
   webContext.setPath(pathName);
   webContext.setIgnoreAnnotations(true);
-  Realm realm=new MemoryRealm();
-  webContext.setRealm(realm);
   final Loader loader=new WebCtxLoader(classLoader);
   final InstanceManager manager=new WebInjectionContainer(classLoader);
   webContext.setInstanceManager(manager);
@@ -52,6 +50,23 @@ break;
 String metaDataSecurityDomain=metaData.getSecurityDomain();
 if (metaDataSecurityDomain != null) {
 metaDataSecurityDomain=metaDataSecurityDomain.trim();
+}
+JBossWebRealm realm=new JBossWebRealm();
+String securityDomain=metaDataSecurityDomain == null ? SecurityConstants.DEFAULT_APPLICATION_POLICY : metaDataSecurityDomain;
+ClassLoader tcl=SecurityActions.getContextClassLoader();
+SecurityActions.setContextClassLoader(classLoader);
+try {
+AuthenticationManager authM=getAuthenticationManager(securityDomain);
+realm.setAuthenticationManager(authM);
+AuthorizationManager authzM=getAuthorizationManager(securityDomain);
+realm.setAuthorizationManager(authzM);
+webContext.setRealm(realm);
+}
+ catch (NamingException e1) {
+throw new RuntimeException(e1);
+}
+ finally {
+if (tcl != null) SecurityActions.setContextClassLoader(tcl);
 }
 try {
 ServiceName namespaceSelectorServiceName=deploymentUnit.getServiceName().append(NamespaceSelectorService.NAME);

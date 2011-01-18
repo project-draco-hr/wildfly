@@ -1,40 +1,46 @@
 {
   final List<AbstractSubsystemUpdate<SecuritySubsystemElement,?>> updates=new ArrayList<AbstractSubsystemUpdate<SecuritySubsystemElement,?>>();
-  String authenticationManagerClassName=null;
-  boolean deepCopySubjectMode=false;
-  String defaultCallbackHandlerClassName=null;
-  final int count=reader.getAttributeCount();
-  for (int i=0; i < count; i++) {
-    final String value=reader.getAttributeValue(i);
-    if (reader.getAttributeNamespace(i) != null) {
-      throw ParseUtils.unexpectedAttribute(reader,i);
-    }
- else {
-      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
-switch (attribute) {
-case AUTHENTICATION_MANAGER_CLASS_NAME:
+  ParseUtils.requireNoAttributes(reader);
+  boolean securityManagementParsed=false;
+  boolean subjectFactoryParsed=false;
+  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case SECURITY_1_0:
 {
-          authenticationManagerClassName=value;
+        final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case SECURITY_MANAGEMENT:
+{
+            updates.add(parseSecurityManagement(reader));
+            securityManagementParsed=true;
+            break;
+          }
+case SUBJECT_FACTORY:
+{
+          updates.add(parseSubjectFactory(reader));
+          subjectFactoryParsed=true;
           break;
         }
-case DEEP_COPY_SUBJECT_MODE:
+case JAAS:
 {
-        deepCopySubjectMode=Boolean.parseBoolean(value);
+        updates.add(parseJaas(reader));
         break;
       }
-case DEFAULT_CALLBACK_HANDLER_CLASS_NAME:
-{
-      defaultCallbackHandlerClassName=value;
-      break;
-    }
 default :
-  throw ParseUtils.unexpectedAttribute(reader,i);
+{
+      throw unexpectedElement(reader);
+    }
+}
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
 }
 }
 }
-if (authenticationManagerClassName == null) authenticationManagerClassName=SecuritySubsystemParser.defaultAuthenticationManagerClassName;
-if (defaultCallbackHandlerClassName == null) defaultCallbackHandlerClassName=SecuritySubsystemParser.defaultCallbackHandlerClassName;
-final SecuritySubsystemAdd subsystem=new SecuritySubsystemAdd(authenticationManagerClassName,deepCopySubjectMode,defaultCallbackHandlerClassName);
-ParseUtils.requireNoContent(reader);
+if (!securityManagementParsed) updates.add(new AddSecurityManagementUpdate("default",false,"default"));
+if (!subjectFactoryParsed) updates.add(new AddSubjectFactoryUpdate("default"));
+final SecuritySubsystemAdd subsystem=new SecuritySubsystemAdd();
 result.setResult(new ExtensionContext.SubsystemConfiguration<SecuritySubsystemElement>(subsystem,updates));
 }
