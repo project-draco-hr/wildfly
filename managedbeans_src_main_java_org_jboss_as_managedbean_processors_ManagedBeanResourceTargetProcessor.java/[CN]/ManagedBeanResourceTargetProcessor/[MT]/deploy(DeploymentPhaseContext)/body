@@ -1,0 +1,28 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final List<BeanContainerConfiguration> containerConfigs=deploymentUnit.getAttachment(Attachments.BEAN_CONTAINER_CONFIGS);
+  if (containerConfigs == null || containerConfigs.isEmpty()) {
+    return;
+  }
+  final CompositeIndex index=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.COMPOSITE_ANNOTATION_INDEX);
+  if (index == null) {
+    return;
+  }
+  for (  BeanContainerConfiguration containerConfig : containerConfigs) {
+    final List<ResourceInjectionConfiguration> resourceInjectionConfigurations=containerConfig.getResourceInjectionConfigs();
+    for (    ResourceInjectionConfiguration resourceConfig : resourceInjectionConfigurations) {
+      if (resourceConfig.getTargetContextName() != null)       continue;
+      final ClassInfo targetClass=index.getClassByName(DotName.createSimple(resourceConfig.getInjectedType()));
+      if (targetClass == null)       continue;
+      final Map<DotName,List<AnnotationInstance>> classAnnotations=targetClass.annotations();
+      if (classAnnotations == null)       continue;
+      final List<AnnotationInstance> managedBeanAnnotationInstances=classAnnotations.get(ManagedBeanAnnotationProcessor.MANAGED_BEAN_ANNOTATION_NAME);
+      if (managedBeanAnnotationInstances == null || managedBeanAnnotationInstances.isEmpty())       continue;
+      final AnnotationInstance instance=managedBeanAnnotationInstances.get(0);
+      final AnnotationValue declaredNameValue=instance.value("name");
+      final String declaredValue=declaredNameValue != null ? declaredNameValue.asString() : null;
+      final String targetName=declaredValue != null && !declaredValue.isEmpty() ? declaredValue : resourceConfig.getName();
+      resourceConfig.setTargetContextName(targetName);
+    }
+  }
+}

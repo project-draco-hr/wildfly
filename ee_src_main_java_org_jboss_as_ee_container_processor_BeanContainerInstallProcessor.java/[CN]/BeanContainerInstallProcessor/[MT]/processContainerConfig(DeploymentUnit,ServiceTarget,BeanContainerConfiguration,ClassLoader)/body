@@ -1,0 +1,73 @@
+{
+  final BeanContainerFactory containerFactory=containerConfig.getContainerFactory();
+  final String beanName=containerConfig.getName();
+  final Class<?> beanClass;
+  try {
+    beanClass=classLoader.loadClass(containerConfig.getBeanClass());
+  }
+ catch (  ClassNotFoundException e) {
+    throw new DeploymentUnitProcessingException("Failed to load bean class",e);
+  }
+  final ResourceInjectionResolver resolver=containerFactory.getResourceInjectionResolver();
+  final List<ResourceInjection> injections=new ArrayList<ResourceInjection>(containerConfig.getResourceInjectionConfigs().size());
+  final Set<ResourceInjectionResolver.ResolverDependency<?>> resourceDependencies=new HashSet<ResourceInjectionResolver.ResolverDependency<?>>();
+  for (  ResourceInjectionConfiguration resourceConfiguration : containerConfig.getResourceInjectionConfigs()) {
+    final ResourceInjectionResolver.ResolverResult result=resolver.resolve(deploymentUnit,beanName,beanClass,resourceConfiguration);
+    resourceDependencies.addAll(result.getDependencies());
+    injections.add(result.getInjection());
+    if (result.shouldBind()) {
+      resourceDependencies.add(bindResource(serviceTarget,result));
+    }
+  }
+  final InterceptorFactory methodInterceptorFactory=containerFactory.getMethodInterceptorFactory();
+  final List<LifecycleInterceptor> postConstructLifecycles=new ArrayList<LifecycleInterceptor>(containerConfig.getPostConstructLifecycles().size());
+  for (  LifecycleInterceptorConfiguration lifecycleConfiguration : containerConfig.getPostConstructLifecycles()) {
+    try {
+      postConstructLifecycles.add(methodInterceptorFactory.createLifecycleInterceptor(deploymentUnit,classLoader,containerConfig,lifecycleConfiguration));
+    }
+ catch (    Exception e) {
+      throw new DeploymentUnitProcessingException("Failed to create lifecycle interceptor instance: " + lifecycleConfiguration.getMethodName(),e);
+    }
+  }
+  final List<LifecycleInterceptor> preDestroyLifecycles=new ArrayList<LifecycleInterceptor>(containerConfig.getPreDestroyLifecycles().size());
+  for (  LifecycleInterceptorConfiguration lifecycleConfiguration : containerConfig.getPreDestroyLifecycles()) {
+    try {
+      preDestroyLifecycles.add(methodInterceptorFactory.createLifecycleInterceptor(deploymentUnit,classLoader,containerConfig,lifecycleConfiguration));
+    }
+ catch (    Exception e) {
+      throw new DeploymentUnitProcessingException("Failed to create lifecycle interceptor instance: " + lifecycleConfiguration.getMethodName(),e);
+    }
+  }
+  final List<MethodInterceptor> interceptors=new ArrayList<MethodInterceptor>(containerConfig.getMethodInterceptorConfigs().size());
+  for (  MethodInterceptorConfiguration interceptorConfiguration : containerConfig.getMethodInterceptorConfigs()) {
+    final List<ResourceInjection> interceptorInjections=new ArrayList<ResourceInjection>(interceptorConfiguration.getResourceInjectionConfigs().size());
+    for (    ResourceInjectionConfiguration resourceConfiguration : interceptorConfiguration.getResourceInjectionConfigs()) {
+      final ResourceInjectionResolver.ResolverResult result=resolver.resolve(deploymentUnit,beanName,beanClass,resourceConfiguration);
+      resourceDependencies.addAll(result.getDependencies());
+      interceptorInjections.add(result.getInjection());
+      if (result.shouldBind()) {
+        resourceDependencies.add(bindResource(serviceTarget,result));
+      }
+    }
+    try {
+      interceptors.add(methodInterceptorFactory.createMethodInterceptor(deploymentUnit,classLoader,interceptorConfiguration,interceptorInjections));
+    }
+ catch (    Exception e) {
+      throw new DeploymentUnitProcessingException("Failed to create interceptor instance: " + interceptorConfiguration.getInterceptorClassName() + "->"+ interceptorConfiguration.getMethodName(),e);
+    }
+  }
+  final BeanContainerFactory.ConstructedBeanContainer constructedContainer=containerFactory.createBeanContainer(deploymentUnit,beanName,beanClass,classLoader,injections,postConstructLifecycles,preDestroyLifecycles,interceptors);
+  final ServiceName beanEnvContextServiceName=constructedContainer.getEnvContextServiceName().append(beanName);
+  final ContextService actualBeanContext=new ContextService(beanName);
+  serviceTarget.addService(beanEnvContextServiceName,actualBeanContext).addDependency(constructedContainer.getEnvContextServiceName(),Context.class,actualBeanContext.getParentContextInjector()).install();
+  final ServiceName bindContextServiceName=constructedContainer.getBindContextServiceName();
+  final Reference containerFactoryReference=ServiceReferenceObjectFactory.createReference(constructedContainer.getContainerServiceName(),BeanContainerObjectFactory.class);
+  final ResourceBinder<Reference> factoryBinder=new ResourceBinder<Reference>(constructedContainer.getBindName(),Values.immediateValue(containerFactoryReference));
+  final ServiceName referenceBinderName=bindContextServiceName.append(constructedContainer.getBindName());
+  serviceTarget.addService(referenceBinderName,factoryBinder).addDependency(bindContextServiceName,Context.class,factoryBinder.getContextInjector()).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  final ServiceBuilder<?> serviceBuilder=serviceTarget.addService(constructedContainer.getContainerServiceName(),new BeanContainerService(constructedContainer.getBeanContainer())).addDependency(referenceBinderName).setInitialMode(ServiceController.Mode.ACTIVE);
+  for (  ResourceInjectionResolver.ResolverDependency<?> resolverDependency : resourceDependencies) {
+    addDependency(serviceBuilder,resolverDependency);
+  }
+  serviceBuilder.install();
+}

@@ -1,0 +1,26 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final List<BeanContainerConfiguration> containerConfigs=deploymentUnit.getAttachment(Attachments.BEAN_CONTAINER_CONFIGS);
+  if (containerConfigs == null || containerConfigs.isEmpty()) {
+    return;
+  }
+  final CompositeIndex index=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.COMPOSITE_ANNOTATION_INDEX);
+  if (index == null) {
+    return;
+  }
+  for (  BeanContainerConfiguration containerConfig : containerConfigs) {
+    DotName current=DotName.createSimple(containerConfig.getBeanClass());
+    while (current != null && !Object.class.getName().equals(current.toString())) {
+      final ClassInfo classInfo=index.getClassByName(current);
+      final LifecycleInterceptorConfiguration postConstructMethod=getLifeCycle(classInfo,POST_CONSTRUCT_ANNOTATION);
+      if (postConstructMethod != null) {
+        containerConfig.addPostConstructLifecycle(postConstructMethod);
+      }
+      final LifecycleInterceptorConfiguration preDestroyMethod=getLifeCycle(classInfo,PRE_DESTROY_ANNOTATION);
+      if (preDestroyMethod != null) {
+        containerConfig.addPreDestroyLifecycle(preDestroyMethod);
+      }
+      current=classInfo.superName();
+    }
+  }
+}
