@@ -1,0 +1,77 @@
+{
+  final ModelNode op=new ModelNode();
+  list.add(op);
+  op.get(OPERATION_NAME).set(ADD);
+  String name=null;
+  int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (reader.getAttributeNamespace(i) != null) {
+      throw ParseUtils.unexpectedAttribute(reader,i);
+    }
+ else {
+      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+          op.get(NAME).set(value);
+          name=value;
+          break;
+        }
+default :
+      throw unexpectedAttribute(reader,i);
+  }
+}
+}
+if (name == null) {
+throw missingRequired(reader,Collections.singleton(Attribute.NAME));
+}
+final ModelNode address=parentAddress.clone();
+address.add(SCHEDULED_THREAD_POOL);
+address.add(name);
+address.protect();
+op.get(ADDRESS).set(address);
+boolean foundMaxThreads=false;
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+switch (Element.forName(reader.getLocalName())) {
+case MAX_THREADS:
+{
+    ScaledCount maxThreads=parseScaledCount(reader);
+    op.get(MAX_THREADS_COUNT).set(maxThreads.getCount());
+    op.get(MAX_THREADS_PER_CPU).set(maxThreads.getPerCpu());
+    foundMaxThreads=true;
+    break;
+  }
+case KEEPALIVE_TIME:
+{
+  TimeSpec keepAliveTime=parseTimeSpec(reader);
+  op.get(KEEPALIVE_TIME_DURATION).set(keepAliveTime.getDuration());
+  op.get(KEEPALIVE_TIME_UNIT).set(keepAliveTime.getUnit().toString());
+  break;
+}
+case THREAD_FACTORY:
+{
+op.get(Constants.THREAD_FACTORY).set(parseRef(reader));
+break;
+}
+case PROPERTIES:
+{
+Map<String,String> props=parseProperties(reader);
+if (props != null && props.size() > 0) {
+ModelNode properties=op.get(PROPERTIES);
+for (Map.Entry<String,String> prop : props.entrySet()) {
+  properties.add(prop.getKey(),prop.getValue());
+}
+}
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+if (!foundMaxThreads) {
+throw missingRequiredElement(reader,Collections.singleton(Element.MAX_THREADS));
+}
+}
