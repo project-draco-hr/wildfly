@@ -1,4 +1,69 @@
 {
   final ModelNode connectors=new ModelNode();
-  return connectors;
+  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+    String name=null;
+    String socketBinding=null;
+    int serverId=0;
+    int count=reader.getAttributeCount();
+    for (int i=0; i < count; i++) {
+      final String attrValue=reader.getAttributeValue(i);
+      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+          name=attrValue;
+          break;
+        }
+case SOCKET_BINDING:
+{
+        socketBinding=attrValue;
+        break;
+      }
+case SERVER_ID:
+{
+      serverId=Integer.valueOf(attrValue);
+      break;
+    }
+default :
+{
+    throw ParseUtils.unexpectedAttribute(reader,i);
+  }
+}
+}
+if (name == null) {
+ParseUtils.missingRequired(reader,Collections.singleton(Attribute.NAME));
+}
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case CONNECTOR:
+{
+final ModelNode connector=connectors.get(name);
+connector.get(TYPE).set(TransportConfigType.Generic.toString());
+if (socketBinding != null) connector.get(SOCKET_BINDING).set(socketBinding);
+parseTransportConfigurationParams(reader,connector,true);
+break;
+}
+case NETTY_CONNECTOR:
+{
+final ModelNode connector=connectors.get(name);
+connector.get(TYPE).set(TransportConfigType.Remote.toString());
+if (socketBinding != null) connector.get(SOCKET_BINDING).set(socketBinding);
+parseTransportConfigurationParams(reader,connector,false);
+break;
+}
+case IN_VM_CONNECTOR:
+{
+final ModelNode connector=connectors.get(name);
+connector.get(TYPE).set(TransportConfigType.InVM.toString());
+connector.get(SERVER_ID).set(serverId);
+parseTransportConfigurationParams(reader,connector,false);
+break;
+}
+default :
+{
+throw ParseUtils.unexpectedElement(reader);
+}
+}
+}
+return connectors;
 }

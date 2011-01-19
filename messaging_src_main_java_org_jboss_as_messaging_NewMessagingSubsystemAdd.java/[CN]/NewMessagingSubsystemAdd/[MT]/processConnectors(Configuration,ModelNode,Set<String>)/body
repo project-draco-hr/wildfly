@@ -1,0 +1,43 @@
+{
+  if (params.has(CONNECTOR)) {
+    final Map<String,TransportConfiguration> connectors=new HashMap<String,TransportConfiguration>();
+    for (    final Property property : params.get(CONNECTOR).asPropertyList()) {
+      final String connectorName=property.getName();
+      final ModelNode config=property.getValue();
+      final Map<String,Object> parameters=new HashMap<String,Object>();
+      for (      final Property parameter : config.get(PARAM).asPropertyList()) {
+        parameters.put(parameter.getName(),parameter.getValue().asString());
+      }
+      final TransportConfigType type=TransportConfigType.valueOf(config.get(TYPE).asString());
+      final String clazz;
+switch (type) {
+case Remote:
+{
+          clazz=NettyConnectorFactory.class.getName();
+          final String binding=config.get(SOCKET_BINDING).asString();
+          parameters.put(SOCKET_BINDING,binding);
+          bindings.add(binding);
+          break;
+        }
+case InVM:
+{
+        clazz=InVMConnectorFactory.class.getName();
+        parameters.put(SERVER_ID,config.get(SERVER_ID).asInt());
+        break;
+      }
+case Generic:
+{
+      clazz=config.get(FACTORY_CLASS).asString();
+      break;
+    }
+default :
+{
+    clazz=null;
+    break;
+  }
+}
+connectors.put(connectorName,new TransportConfiguration(clazz,parameters,connectorName));
+}
+configuration.setConnectorConfigurations(connectors);
+}
+}
