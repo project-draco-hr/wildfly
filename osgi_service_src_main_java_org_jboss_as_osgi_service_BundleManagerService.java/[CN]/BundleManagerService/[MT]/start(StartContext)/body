@@ -1,8 +1,8 @@
 {
   log.debugf("Starting OSGi BundleManager");
   try {
-    String handlerModules=System.getProperty("jboss.protocol.handler.modules");
-    if (handlerModules == null)     System.setProperty("jboss.protocol.handler.modules","org.jboss.osgi.framework");
+    String handlerModules=SecurityActions.getSystemProperty("jboss.protocol.handler.modules");
+    if (handlerModules == null)     SecurityActions.setSystemProperty("jboss.protocol.handler.modules","org.jboss.osgi.framework");
     Map<String,Object> props=new HashMap<String,Object>(subsystemState.getProperties());
     setupIntegrationProperties(context,props);
     bundleManager=new BundleManager(props);
@@ -11,18 +11,23 @@
     ServerDeploymentManager deploymentManager=injectedDeploymentManager.getValue();
     bundleManager.addPlugin(DeployerServicePlugin.class,new DeployerServicePluginIntegration(bundleManager,deploymentManager));
     BundleManagerMBean bundleManagerMBean=new BundleManagerMBean(){
-      @Override public long installBundle(      ModuleIdentifier identifier) throws BundleException {
-        Bundle bundle=bundleManager.installBundle(identifier);
-        return bundle.getBundleId();
-      }
-      @Override public long installBundle(      String location,      ModuleIdentifier identifier) throws BundleException {
-        Bundle bundle=bundleManager.installBundle(location,identifier);
+      @Override public long installBundle(      ModuleIdentifier identifier) throws BundleException, ModuleLoadException {
+        Bundle bundle;
+        if (identifier.getName().startsWith("deployment.")) {
+          ModuleLoader moduleLoader=injectedDeploymentModuleLoader.getValue();
+          Module module=moduleLoader.loadModule(identifier);
+          bundle=bundleManager.installBundle(module);
+        }
+ else {
+          bundle=bundleManager.installBundle(identifier);
+        }
         return bundle.getBundleId();
       }
     }
 ;
     StandardMBean mbean=new StandardMBean(bundleManagerMBean,BundleManagerMBean.class);
-    injectedMBeanServer.getValue().registerMBean(mbean,BundleManagerMBean.OBJECTNAME);
+    ObjectName oname=ObjectNameFactory.create(BundleManagerMBean.OBJECT_NAME);
+    injectedMBeanServer.getValue().registerMBean(mbean,oname);
   }
  catch (  Throwable t) {
     throw new StartException("Failed to create BundleManager",t);
