@@ -1,0 +1,32 @@
+{
+  try {
+    ModelNode param=operation.get(NAMESPACE);
+    ModelNode namespaces=context.getSubModel().get(NAMESPACES);
+    ModelNode toRemove=null;
+    String failure=typeValidator.validateParameter(NAMESPACE,param);
+    if (failure == null) {
+      ModelNode newList=new ModelNode().setEmptyList();
+      if (namespaces.isDefined()) {
+        String name=param.asProperty().getName();
+        for (        Property namespace : namespaces.asPropertyList()) {
+          if (!name.equals(namespace.getName())) {
+            toRemove=newList.add(namespace.getName(),namespace.getValue());
+            break;
+          }
+        }
+      }
+      if (toRemove != null) {
+        namespaces.set(newList);
+        ModelNode compensating=AddNamespaceHandler.getAddNamespaceOperation(operation.get(OP_ADDR),toRemove);
+        resultHandler.handleResultComplete(compensating);
+      }
+    }
+    if (failure != null) {
+      resultHandler.handleFailed(new ModelNode().set(failure));
+    }
+  }
+ catch (  Exception e) {
+    resultHandler.handleFailed(new ModelNode().set(e.getLocalizedMessage()));
+  }
+  return Cancellable.NULL;
+}
