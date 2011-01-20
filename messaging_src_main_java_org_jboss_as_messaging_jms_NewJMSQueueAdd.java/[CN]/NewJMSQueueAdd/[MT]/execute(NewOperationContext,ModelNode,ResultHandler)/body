@@ -1,0 +1,19 @@
+{
+  final ModelNode address=operation.get(OP_ADDR);
+  final String name=address.get(address.asInt() - 1).asString();
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(REMOVE);
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  if (context instanceof NewRuntimeOperationContext) {
+    final NewRuntimeOperationContext runtimeContext=(NewRuntimeOperationContext)context;
+    final JMSQueueService service=new JMSQueueService(name,operation.get(SELECTOR).asString(),operation.get(DURABLE).asBoolean(true),jndiBindings(operation));
+    final ServiceName serviceName=JMSServices.JMS_QUEUE_BASE.append(name);
+    runtimeContext.getServiceTarget().addService(serviceName,service).addDependency(JMSServices.JMS_MANAGER,JMSServerManager.class,service.getJmsServer()).setInitialMode(Mode.ACTIVE).install();
+  }
+  final ModelNode subModel=context.getSubModel();
+  subModel.get(SELECTOR).set(operation.get(SELECTOR));
+  subModel.get(DURABLE).set(operation.get(DURABLE));
+  subModel.get(ENTRIES).set(operation.get(ENTRIES));
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}

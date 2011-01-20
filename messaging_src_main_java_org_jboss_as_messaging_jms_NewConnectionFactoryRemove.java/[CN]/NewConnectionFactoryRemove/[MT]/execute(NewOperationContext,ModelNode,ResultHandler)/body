@@ -1,0 +1,22 @@
+{
+  final ModelNode address=operation.get(OP_ADDR);
+  final String name=address.get(address.asInt() - 1).asString();
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(ADD);
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  final ModelNode subModel=context.getSubModel();
+  for (  final String attribute : JMSServices.CF_ATTRIBUTES) {
+    if (subModel.has(attribute)) {
+      compensatingOperation.get(attribute).set(subModel);
+    }
+  }
+  if (context instanceof NewRuntimeOperationContext) {
+    final NewRuntimeOperationContext runtimeContext=(NewRuntimeOperationContext)context;
+    final ServiceController<?> service=runtimeContext.getServiceRegistry().getService(JMSServices.JMS_CF_BASE.append(name));
+    if (service != null) {
+      service.setMode(Mode.REMOVE);
+    }
+  }
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}
