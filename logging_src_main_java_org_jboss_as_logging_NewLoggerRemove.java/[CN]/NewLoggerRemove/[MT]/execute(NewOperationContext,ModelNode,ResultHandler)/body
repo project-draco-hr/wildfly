@@ -1,0 +1,23 @@
+{
+  final ModelNode address=operation.get(OP_ADDR);
+  final String name=address.get(address.asInt() - 1).asString();
+  final ModelNode subModel=context.getSubModel();
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  compensatingOperation.get(OP).set(ADD);
+  compensatingOperation.get(CommonAttributes.LEVEL).set(subModel.get(CommonAttributes.LEVEL));
+  compensatingOperation.get(CommonAttributes.HANDLERS).set(subModel.get(CommonAttributes.HANDLERS));
+  if (context instanceof NewRuntimeOperationContext) {
+    final NewRuntimeOperationContext runtimeContext=(NewRuntimeOperationContext)context;
+    final ServiceRegistry registry=runtimeContext.getServiceRegistry();
+    final ServiceController<?> controller=runtimeContext.getServiceRegistry().getService(LogServices.loggerName(name));
+    if (controller != null) {
+      controller.setMode(ServiceController.Mode.REMOVE);
+    }
+    if (subModel.has(CommonAttributes.HANDLERS)) {
+      LogServices.uninstallLoggerHandlers(registry,name,subModel.get(CommonAttributes.HANDLERS));
+    }
+  }
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}

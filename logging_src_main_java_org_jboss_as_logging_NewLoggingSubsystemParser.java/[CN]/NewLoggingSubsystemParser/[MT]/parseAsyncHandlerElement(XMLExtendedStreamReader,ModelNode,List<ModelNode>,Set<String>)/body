@@ -1,0 +1,77 @@
+{
+  String name=null;
+  boolean autoflush=true;
+  final EnumSet<Attribute> required=EnumSet.of(Attribute.FILE_NAME,Attribute.NAME);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (reader.getAttributeNamespace(i) != null) {
+      throw unexpectedAttribute(reader,i);
+    }
+ else {
+      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+      required.remove(attribute);
+switch (attribute) {
+case NAME:
+{
+          name=value;
+          break;
+        }
+default :
+      throw unexpectedAttribute(reader,i);
+  }
+}
+}
+if (!required.isEmpty()) {
+throw missingRequired(reader,required);
+}
+if (!names.add(name)) {
+throw duplicateNamedElement(reader,name);
+}
+String levelName=null;
+ModelNode subhandlers=null;
+int queueLength=0;
+OverflowAction overflowAction=OverflowAction.BLOCK;
+final EnumSet<Element> encountered=EnumSet.noneOf(Element.class);
+while (reader.nextTag() != END_ELEMENT) {
+final Element element=Element.forName(reader.getLocalName());
+if (!encountered.add(element)) {
+  throw unexpectedElement(reader);
+}
+switch (element) {
+case LEVEL:
+{
+    levelName=readStringAttributeElement(reader,"name");
+    break;
+  }
+case SUBHANDLERS:
+{
+  subhandlers=parseHandlersElement(reader);
+  break;
+}
+case QUEUE_LENGTH:
+{
+queueLength=Integer.parseInt(readStringAttributeElement(reader,"value"));
+break;
+}
+case OVERFLOW_ACTION:
+{
+overflowAction=OverflowAction.valueOf(readStringAttributeElement(reader,"value").toUpperCase(Locale.US));
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+final ModelNode node=new ModelNode();
+node.get(OP).set(ADD);
+node.get(OP_ADDR).set(address).set(HANDLER,name);
+node.get(LEVEL).set(levelName);
+node.get(SUBHANDLERS).set(subhandlers);
+node.get(AUTOFLUSH).set(Boolean.valueOf(autoflush));
+node.get(QUEUE_LENGTH).set(queueLength);
+node.get(OVERFLOW_ACTION).set(overflowAction.toString());
+list.add(node);
+}
