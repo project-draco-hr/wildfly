@@ -1,0 +1,57 @@
+{
+  context.getController().compareAndSetMode(ServiceController.Mode.ON_DEMAND,ServiceController.Mode.ACTIVE);
+  extensions.clear();
+  boolean startOk=false;
+  try {
+    for (    File root : extensionRoots) {
+      final File[] jars=root.listFiles(new FileFilter(){
+        public boolean accept(        final File file){
+          return file.getName().endsWith(".jar") && !file.isDirectory();
+        }
+      }
+);
+      if (jars != null)       for (      File jar : jars)       try {
+        final JarFile jarFile=new JarFile(jar);
+        boolean ok=false;
+        try {
+          final Manifest manifest=jarFile.getManifest();
+          final Attributes mainAttributes=manifest.getMainAttributes();
+          final String extensionName=mainAttributes.getValue(Attributes.Name.EXTENSION_NAME);
+          if (extensionName == null) {
+            continue;
+          }
+          final String implVersion=mainAttributes.getValue(Attributes.Name.IMPLEMENTATION_VERSION);
+          final String specVersion=mainAttributes.getValue(Attributes.Name.SPECIFICATION_VERSION);
+          final String implVendorId=mainAttributes.getValue(Attributes.Name.IMPLEMENTATION_VENDOR_ID);
+          ok=true;
+          jarFile.close();
+          final VirtualFile virtualFile=VFS.getChild(jar.getAbsolutePath());
+          final Closeable handle=VFS.mountZip(jar,virtualFile,TempFileProviderService.provider());
+          List<ExtensionJar> extensionJarList=extensions.get(extensionName);
+          if (extensionJarList == null)           extensions.put(extensionName,extensionJarList=new ArrayList<ExtensionJar>());
+          extensionJarList.add(new ExtensionJar(virtualFile,implVersion,implVendorId,specVersion,handle));
+        }
+  finally {
+          if (!ok) {
+            VFSUtils.safeClose(jarFile);
+          }
+        }
+      }
+ catch (      IOException e) {
+        log.debugf("Failed to process JAR manifest for %s: %s",jar,e);
+        continue;
+      }
+    }
+    startOk=true;
+  }
+  finally {
+    if (!startOk) {
+      for (      List<ExtensionJar> jars : extensions.values()) {
+        for (        ExtensionJar jar : jars) {
+          VFSUtils.safeClose(jar.handle);
+        }
+      }
+      extensions.clear();
+    }
+  }
+}
