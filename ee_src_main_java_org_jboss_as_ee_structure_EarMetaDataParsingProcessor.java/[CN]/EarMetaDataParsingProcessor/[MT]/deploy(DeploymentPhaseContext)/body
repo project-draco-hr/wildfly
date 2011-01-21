@@ -1,0 +1,29 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (!isEarDeployment(deploymentUnit)) {
+    return;
+  }
+  final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.DEPLOYMENT_ROOT);
+  final VirtualFile deploymentFile=deploymentRoot.getRoot();
+  final VirtualFile applicationXmlFile=deploymentFile.getChild(APPLICATION_XML);
+  if (!applicationXmlFile.exists()) {
+    return;
+  }
+  InputStream inputStream=null;
+  try {
+    inputStream=applicationXmlFile.openStream();
+    final XMLInputFactory inputFactory=XMLInputFactory.newInstance();
+    inputFactory.setXMLResolver(NoopXmlResolver.create());
+    XMLStreamReader xmlReader=inputFactory.createXMLStreamReader(inputStream);
+    final EarMetaData earMetaData=EarMetaDataParser.parse(xmlReader);
+    if (earMetaData != null) {
+      deploymentUnit.putAttachment(Attachments.EAR_METADATA,earMetaData);
+    }
+  }
+ catch (  Exception e) {
+    throw new DeploymentUnitProcessingException("Failed to parse " + applicationXmlFile,e);
+  }
+ finally {
+    VFSUtils.safeClose(inputStream);
+  }
+}
