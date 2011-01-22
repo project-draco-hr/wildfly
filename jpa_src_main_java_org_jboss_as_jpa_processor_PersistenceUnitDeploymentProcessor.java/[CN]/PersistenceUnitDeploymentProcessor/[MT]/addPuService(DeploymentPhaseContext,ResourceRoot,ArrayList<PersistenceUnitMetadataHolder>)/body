@@ -1,0 +1,42 @@
+{
+  if (puList.size() > 0) {
+    final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+    final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+    final HashSet<ServiceName> serviceDependencies=new HashSet<ServiceName>();
+    if (module == null)     throw new DeploymentUnitProcessingException("Failed to get module attachment for " + phaseContext.getDeploymentUnit());
+    final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+    final ModuleClassLoader classLoader=module.getClassLoader();
+    for (    PersistenceUnitMetadataHolder holder : puList) {
+      for (      PersistenceUnitMetadata pu : holder.getPersistenceUnits()) {
+        pu.setClassLoader(classLoader);
+        pu.setTempClassloader(new TempClassLoader(classLoader));
+        if (pu.getJtaDataSourceName() != null) {
+          serviceDependencies.add(AbstractDataSourceService.SERVICE_NAME_BASE.append(pu.getJtaDataSourceName()));
+        }
+        if (pu.getNonJtaDataSourceName() != null) {
+          serviceDependencies.add(AbstractDataSourceService.SERVICE_NAME_BASE.append(pu.getNonJtaDataSourceName()));
+        }
+        try {
+          PersistenceUnitService service=new PersistenceUnitService(pu,resourceRoot);
+          final Injector<TransactionManager> injector=new Injector<TransactionManager>(){
+            public void inject(            final TransactionManager value) throws InjectionException {
+              TransactionLocal.setTransactionManager(value);
+            }
+            public void uninject(){
+            }
+          }
+;
+          final HashMap properties=new HashMap();
+          properties.put("javax.persistence.validation.factory",ValidatorFactoryProvider.getInstance().getValidatorFactory());
+          addHibernateProps(properties);
+          final ServiceName serviceName=PersistenceUnitService.getPUServiceName(pu);
+          serviceTarget.addService(serviceName,service).addDependencies(serviceDependencies).addDependency(TransactionManagerService.SERVICE_NAME,new CastingInjector<TransactionManager>(injector,TransactionManager.class)).setInitialMode(ServiceController.Mode.ACTIVE).addInjection(service.getPropertiesInjector(),properties).install();
+          log.trace("added PersistenceUnitService for '" + serviceName + "'.  PU is ready for injector action. ");
+        }
+ catch (        ServiceRegistryException e) {
+          throw new DeploymentUnitProcessingException("Failed to add persistence unit service for " + pu.getPersistenceUnitName(),e);
+        }
+      }
+    }
+  }
+}

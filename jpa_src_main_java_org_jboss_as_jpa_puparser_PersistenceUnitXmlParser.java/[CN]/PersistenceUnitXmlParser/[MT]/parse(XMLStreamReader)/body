@@ -1,0 +1,71 @@
+{
+  reader.require(START_DOCUMENT,null,null);
+  Version version=null;
+  while (reader.hasNext() && reader.next() != START_ELEMENT) {
+    if (reader.getEventType() == DTD) {
+      final String dtdLocation=readDTDLocation(reader);
+      if (dtdLocation != null) {
+        version=Version.forLocation(dtdLocation);
+      }
+    }
+  }
+  final String schemaLocation=readSchemaLocation(reader);
+  if (schemaLocation != null) {
+    version=Version.forLocation(schemaLocation);
+  }
+  if (version == null || Version.UNKNOWN.equals(version)) {
+    String versionString=null;
+    final int count=reader.getAttributeCount();
+    for (int i=0; i < count; i++) {
+      if (reader.getAttributeNamespace(i) != null) {
+        continue;
+      }
+      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+      if (attribute == Attribute.VERSION) {
+        versionString=reader.getAttributeValue(i);
+      }
+    }
+    if ("1.0".equals(versionString)) {
+      version=Version.JPA_1_0;
+    }
+ else     if ("1".equals(versionString)) {
+      version=Version.JPA_1_0;
+    }
+ else     if ("2.0".equals(versionString)) {
+      version=Version.JPA_2_0;
+    }
+ else     if ("2".equals(versionString)) {
+      version=Version.JPA_2_0;
+    }
+  }
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (reader.getAttributeNamespace(i) != null) {
+      continue;
+    }
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case VERSION:
+      break;
+default :
+    throw unexpectedAttribute(reader,i);
+}
+}
+final List<PersistenceUnitMetadata> PUs=new ArrayList<PersistenceUnitMetadata>();
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case PERSISTENCEUNIT:
+  PersistenceUnitMetadata pu=parsePU(reader,version);
+PUs.add(pu);
+log.info("read persistence.xml for " + pu.getPersistenceUnitName());
+break;
+default :
+throw unexpectedElement(reader);
+}
+}
+PersistenceUnitMetadataHolder result=new PersistenceUnitMetadataHolder().setPersistenceUnits(PUs);
+if (log.isLoggable(Level.FINEST)) log.finest(result.toString());
+return result;
+}
