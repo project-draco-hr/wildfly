@@ -1,0 +1,54 @@
+{
+  Property prop=node.asProperty();
+  String propName=prop.getName();
+  final Element element=Element.forName(propName);
+switch (element) {
+case ANY:
+{
+      return parseCompoundCriteria(prop.getValue(),true);
+    }
+case NOT:
+{
+    return parseCompoundCriteria(prop.getValue(),true);
+  }
+case INET_ADDRESS:
+{
+  checkStringType(prop.getValue(),element.getLocalName());
+  return new InetAddressMatchInterfaceCriteria(prop.getValue().asString());
+}
+case NIC:
+{
+checkStringType(prop.getValue(),element.getLocalName());
+return new NicInterfaceCriteria(prop.getValue().asString());
+}
+case NIC_MATCH:
+{
+checkStringType(prop.getValue(),element.getLocalName());
+try {
+Pattern pattern=Pattern.compile(prop.getValue().asString());
+return new NicMatchInterfaceCriteria(pattern);
+}
+ catch (PatternSyntaxException e) {
+throw new ParsingException(String.format("Invalid pattern %s for interface criteria %s",prop.getValue().asString(),element.getLocalName()));
+}
+}
+case SUBNET_MATCH:
+{
+String key="network";
+ModelType type=ModelType.BYTES;
+try {
+ModelNode value=prop.getValue();
+byte[] net=value.require(key).asBytes();
+key="mask";
+type=ModelType.INT;
+int mask=value.require(key).asInt();
+return new SubnetMatchInterfaceCriteria(net,mask);
+}
+ catch (Exception e) {
+throw new ParsingException(String.format("Interface criteria %s must have field %s of type %s",element.getLocalName(),key,type));
+}
+}
+default :
+throw new ParsingException("Unknown complex interface criteria type " + node.asString());
+}
+}
