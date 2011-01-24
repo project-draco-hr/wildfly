@@ -1,0 +1,79 @@
+{
+  final Set<String> socketBindings=new HashSet<String>();
+  String name=null;
+  String defaultInterface=null;
+  String portOffset=null;
+  final EnumSet<Attribute> required=EnumSet.of(Attribute.NAME,Attribute.DEFAULT_INTERFACE);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (reader.getAttributeNamespace(i) != null) {
+      throw ParseUtils.unexpectedAttribute(reader,i);
+    }
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+        name=value;
+        required.remove(attribute);
+        break;
+      }
+case DEFAULT_INTERFACE:
+{
+      defaultInterface=value;
+      required.remove(attribute);
+      break;
+    }
+case PORT_OFFSET:
+{
+    portOffset=value;
+    try {
+      int offset=Integer.parseInt(value);
+      if (offset < 0) {
+        throw new XMLStreamException(portOffset + " is not a valid " + attribute.getLocalName()+ " -- must be greater than zero",reader.getLocation());
+      }
+    }
+ catch (    final NumberFormatException e) {
+      if (!Util.isExpression(value)) {
+        throw new XMLStreamException(portOffset + " is not a valid " + attribute.getLocalName(),reader.getLocation(),e);
+      }
+    }
+    break;
+  }
+default :
+throw ParseUtils.unexpectedAttribute(reader,i);
+}
+}
+if (!required.isEmpty()) {
+throw missingRequired(reader,required);
+}
+ModelNode groupAddress=address.clone().add(SOCKET_BINDING_GROUP,name);
+ModelNode op=Util.getEmptyOperation(ADD,groupAddress);
+op.get(DEFAULT_INTERFACE).set(defaultInterface);
+op.get(PORT_OFFSET).set(portOffset == null ? "0" : portOffset);
+updates.add(op);
+while (reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case DOMAIN_1_0:
+{
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case SOCKET_BINDING:
+{
+    final String bindingName=parseSocketBinding(reader,interfaces,groupAddress,defaultInterface,updates);
+    if (socketBindings.contains(bindingName)) {
+      throw new XMLStreamException("socket-binding " + bindingName + " already declared",reader.getLocation());
+    }
+    socketBindings.add(bindingName);
+    break;
+  }
+default :
+throw unexpectedElement(reader);
+}
+break;
+}
+default :
+throw unexpectedElement(reader);
+}
+}
+}
