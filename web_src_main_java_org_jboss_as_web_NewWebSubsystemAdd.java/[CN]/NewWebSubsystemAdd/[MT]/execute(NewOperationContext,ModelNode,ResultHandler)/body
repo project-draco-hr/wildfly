@@ -6,6 +6,14 @@
   if (updateContext instanceof NewBootOperationContext) {
     final NewBootOperationContext ctx=(NewBootOperationContext)updateContext;
     final String defaultHost=operation.has(CommonAttributes.DEFAULT_HOST) ? operation.get(CommonAttributes.DEFAULT_HOST).asString() : DEFAULT_HOST;
+    try {
+      final WebServerService service=new WebServerService(defaultHost);
+      ctx.getServiceTarget().addService(WebSubsystemElement.JBOSS_WEB,service).addDependency(AbstractPathService.pathNameOf(TEMP_DIR),String.class,service.getPathInjector()).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,service.getMbeanServer()).setInitialMode(Mode.ON_DEMAND).install();
+    }
+ catch (    Throwable t) {
+      resultHandler.handleFailed(new ModelNode().set(t.getLocalizedMessage()));
+      return Cancellable.NULL;
+    }
     final NewSharedWebMetaDataBuilder sharedWebBuilder=new NewSharedWebMetaDataBuilder(config.clone());
     final NewSharedTldsMetaDataBuilder sharedTldsBuilder=new NewSharedTldsMetaDataBuilder(config.clone());
     ctx.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_WAR_DEPLOYMENT_INIT,new WarDeploymentInitializingProcessor());
@@ -22,8 +30,8 @@
   }
   final ModelNode subModel=updateContext.getSubModel();
   subModel.get(CommonAttributes.CONTAINER_CONFIG).set(config);
-  subModel.get(CommonAttributes.CONNECTOR).setEmptyList();
-  subModel.get(CommonAttributes.VIRTUAL_SERVER).setEmptyList();
+  subModel.get(CommonAttributes.CONNECTOR).setEmptyObject();
+  subModel.get(CommonAttributes.VIRTUAL_SERVER).setEmptyObject();
   resultHandler.handleResultComplete(compensatingOperation);
   return Cancellable.NULL;
 }
