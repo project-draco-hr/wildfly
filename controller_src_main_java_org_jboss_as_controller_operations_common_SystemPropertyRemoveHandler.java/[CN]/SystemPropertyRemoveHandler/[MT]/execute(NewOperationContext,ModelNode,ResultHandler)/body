@@ -1,0 +1,38 @@
+{
+  try {
+    ModelNode param=operation.get(NAME);
+    String failure=typeValidator.validateParameter(NAME,param);
+    if (failure == null) {
+      ModelNode properties=context.getSubModel().get(SYSTEM_PROPERTIES);
+      ModelNode toRemove=null;
+      ModelNode newMap=new ModelNode().setEmptyObject();
+      String name=param.asString();
+      if (properties.isDefined()) {
+        for (        Property property : properties.asPropertyList()) {
+          if (!name.equals(property.getName())) {
+            toRemove=newMap.get(property.getName()).set(property.getValue());
+          }
+ else {
+            toRemove=property.getValue();
+          }
+        }
+      }
+      if (toRemove != null) {
+        properties.set(newMap);
+        String value=toRemove.isDefined() ? toRemove.asString() : null;
+        ModelNode compensating=SystemPropertyAddHandler.getOperation(operation.get(OP_ADDR),name,value);
+        removeSystemProperty(name,context,resultHandler,compensating);
+      }
+ else {
+        failure="No property with " + name + "found";
+      }
+    }
+    if (failure != null) {
+      resultHandler.handleFailed(new ModelNode().set(failure));
+    }
+  }
+ catch (  Exception e) {
+    resultHandler.handleFailed(new ModelNode().set(e.getLocalizedMessage()));
+  }
+  return Cancellable.NULL;
+}
