@@ -1,0 +1,36 @@
+{
+  try {
+    String failure=validator.validate(operation);
+    if (failure == null) {
+      ModelNode deployments=context.getSubModel().get(DEPLOYMENT);
+      String name=operation.require(NAME).asString();
+      String toReplace=operation.require(TO_REPLACE).asString();
+      ModelNode deployNode=has(deployments,name) ? deployments.get(name) : null;
+      ModelNode replaceNode=has(deployments,toReplace) ? deployments.get(toReplace) : null;
+      if (deployNode == null) {
+        failure=String.format("No deployment with name %s found",name);
+      }
+ else       if (deployNode.get(START).asBoolean()) {
+        failure=String.format("Deployment %s is already started",toReplace);
+      }
+ else       if (replaceNode == null) {
+        failure=String.format("No deployment with name %s found",toReplace);
+      }
+      if (failure == null) {
+        deployNode.get(START).set(true);
+        replaceNode.get(START).set(false);
+        ModelNode compensatingOp=operation.clone();
+        compensatingOp.get(NAME).set(toReplace);
+        compensatingOp.get(TO_REPLACE).set(name);
+        DeploymentHandlerUtil.replace(deployNode,toReplace,context,resultHandler,compensatingOp);
+      }
+    }
+    if (failure != null) {
+      resultHandler.handleFailed(new ModelNode().set(failure));
+    }
+  }
+ catch (  Exception e) {
+    resultHandler.handleFailed(new ModelNode().set(e.getLocalizedMessage()));
+  }
+  return Cancellable.NULL;
+}
