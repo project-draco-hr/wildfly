@@ -1,40 +1,9 @@
 {
-  final Map<DotName,List<AnnotationInstance>> classAnnotations=classInfo.annotations();
-  if (classAnnotations == null) {
-    return Collections.emptyList();
-  }
-  final List<AnnotationInstance> interceptorAnnotations=classAnnotations.get(INTERCEPTORS_ANNOTATION_NAME);
-  if (interceptorAnnotations == null || interceptorAnnotations.isEmpty()) {
-    return Collections.emptyList();
-  }
-  final List<MethodInterceptorConfiguration> interceptorConfigurations=new ArrayList<MethodInterceptorConfiguration>(interceptorAnnotations.size());
-  for (  AnnotationInstance annotationInstance : interceptorAnnotations) {
-    final AnnotationValue value=annotationInstance.value();
-    if (value != null)     for (    Type interceptorClass : value.asClassArray()) {
-      final ClassInfo interceptorClassInfo=index.getClassByName(interceptorClass.name());
-      if (interceptorClassInfo == null) {
-        continue;
-      }
-      final AnnotationTarget target=annotationInstance.target();
-      final MethodInterceptorFilter methodFilter;
-      if (target instanceof MethodInfo) {
-        final MethodInfo methodInfo=MethodInfo.class.cast(target);
-        final List<String> argTypes=new ArrayList<String>(methodInfo.args().length);
-        for (        Type argType : methodInfo.args()) {
-          argTypes.add(argType.name().toString());
-        }
-        methodFilter=new MethodInterceptorMatchFilter(methodInfo.name(),argTypes.toArray(new String[argTypes.size()]));
-      }
- else {
-        methodFilter=MethodInterceptorAllFilter.INSTANCE;
-      }
-      final MethodInfo methodInfo=getAroundInvokeMethod(interceptorClassInfo);
-      interceptorConfigurations.add(new MethodInterceptorConfiguration(annotationInstance.name().toString(),methodInfo.name(),acceptsInvocationContext(interceptorClassInfo,methodInfo),methodFilter));
-    }
-  }
-  final MethodInfo methodInfo=getAroundInvokeMethod(classInfo);
-  if (methodInfo != null) {
-    interceptorConfigurations.add(new MethodInterceptorConfiguration(classInfo.name().toString(),methodInfo.name(),acceptsInvocationContext(classInfo,methodInfo),MethodInterceptorAllFilter.INSTANCE));
-  }
+  final List<MethodInterceptorConfiguration> interceptorConfigurations=new ArrayList<MethodInterceptorConfiguration>();
+  final List<MethodInterceptorConfiguration> methodLevelInterceptorConfigurations=new ArrayList<MethodInterceptorConfiguration>();
+  final List<MethodInterceptorConfiguration> componentDefinedInterceptors=new ArrayList<MethodInterceptorConfiguration>();
+  getInterceptorConfigs(classInfo,index,interceptorConfigurations,methodLevelInterceptorConfigurations,componentDefinedInterceptors);
+  interceptorConfigurations.addAll(methodLevelInterceptorConfigurations);
+  interceptorConfigurations.addAll(componentDefinedInterceptors);
   return interceptorConfigurations;
 }
