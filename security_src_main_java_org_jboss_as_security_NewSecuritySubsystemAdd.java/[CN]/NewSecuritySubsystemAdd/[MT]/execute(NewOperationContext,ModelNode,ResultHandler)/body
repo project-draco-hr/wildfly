@@ -1,0 +1,27 @@
+{
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(REMOVE);
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  String authenticationManagerClassName=operation.has(AUTHENTICATION_MANAGER_CLASS_NAME) ? operation.get(AUTHENTICATION_MANAGER_CLASS_NAME).asString() : DEFAULT_AUTHENTICATION_MANAGER;
+  boolean deepCopySubjectMode=operation.has(DEEP_COPY_SUBJECT_MODE) ? operation.get(DEEP_COPY_SUBJECT_MODE).asBoolean() : DEFAULT_DEEP_COPY_OPERATION_MODE;
+  String defaultCallbackHandlerClassName=operation.has(DEFAULT_CALLBACK_HANDLER_CLASS_NAME) ? operation.get(DEFAULT_CALLBACK_HANDLER_CLASS_NAME).asString() : DEFAULT_CALLBACK_HANDLER;
+  if (context instanceof NewRuntimeOperationContext) {
+    final NewRuntimeOperationContext updateContext=(NewRuntimeOperationContext)context;
+    final ServiceTarget target=updateContext.getServiceTarget();
+    final SecurityBootstrapService bootstrapService=new SecurityBootstrapService();
+    target.addService(SecurityBootstrapService.SERVICE_NAME,bootstrapService).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    final SecurityManagementService securityManagementService=new SecurityManagementService(authenticationManagerClassName,deepCopySubjectMode,defaultCallbackHandlerClassName);
+    target.addService(SecurityManagementService.SERVICE_NAME,securityManagementService).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    final Reference reference=SecurityDomainObjectFactory.createReference("JSM");
+    final JaasBinderService binderService=new JaasBinderService(Values.immediateValue(reference));
+    target.addService(JaasBinderService.SERVICE_NAME,binderService).addDependency(JavaContextService.SERVICE_NAME,Context.class,binderService.getContextInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    final SubjectFactoryService subjectFactoryService=new SubjectFactoryService();
+    target.addService(SubjectFactoryService.SERVICE_NAME,subjectFactoryService).addDependency(SecurityManagementService.SERVICE_NAME,ISecurityManagement.class,subjectFactoryService.getSecurityManagementInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  }
+  final ModelNode subModel=context.getSubModel();
+  subModel.get(AUTHENTICATION_MANAGER_CLASS_NAME).set(operation.get(AUTHENTICATION_MANAGER_CLASS_NAME));
+  subModel.get(DEEP_COPY_SUBJECT_MODE).set(operation.get(DEEP_COPY_SUBJECT_MODE));
+  subModel.get(DEFAULT_CALLBACK_HANDLER_CLASS_NAME).set(operation.get(DEFAULT_CALLBACK_HANDLER_CLASS_NAME));
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}
