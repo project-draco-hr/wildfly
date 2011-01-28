@@ -1,0 +1,28 @@
+{
+  if (context instanceof NewRuntimeOperationContext) {
+    final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+    final String name=address.getLastElement().getValue();
+    final String attributeName=operation.require(NAME).asString();
+    final NewRuntimeOperationContext runtimeContext=(NewRuntimeOperationContext)context;
+    final ServiceController<?> controller=runtimeContext.getServiceRegistry().getService(WebSubsystemElement.JBOSS_WEB_CONNECTOR.append(name));
+    if (controller != null) {
+      try {
+        final Connector connector=(Connector)controller.getValue();
+        final int port=connector.getPort();
+        final ModelNode result=new ModelNode();
+        result.set("" + getAttribute("http-" + port,attributeName));
+        resultHandler.handleResultFragment(new String[0],result);
+        resultHandler.handleResultComplete(null);
+        return Cancellable.NULL;
+      }
+ catch (      Exception e) {
+        e.printStackTrace();
+        resultHandler.handleFailed(new ModelNode().set("failed to get metrics" + e.getMessage()));
+        return Cancellable.NULL;
+      }
+    }
+  }
+  resultHandler.handleResultFragment(NO_LOCATION,new ModelNode().set("no metrics available"));
+  resultHandler.handleResultComplete(null);
+  return Cancellable.NULL;
+}

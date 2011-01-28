@@ -1,0 +1,71 @@
+{
+  try {
+    final PathAddress address=PathAddress.pathAddress(operation.require(ADDRESS));
+    final ModelNode result;
+    if (operation.get(RECURSIVE).asBoolean(false)) {
+      result=context.getSubModel().clone();
+      addProxyNodes(address,result,context.getRegistry());
+    }
+ else {
+      result=new ModelNode();
+      final Set<String> childNames=context.getRegistry().getChildNames(address);
+      final ModelNode subModel=context.getSubModel().clone();
+      for (      final String key : subModel.keys()) {
+        final ModelNode child=subModel.get(key);
+        if (childNames.contains(key)) {
+          if (subModel.get(key).isDefined()) {
+            for (            final String childKey : child.keys()) {
+              subModel.get(key,childKey).set(new ModelNode());
+            }
+          }
+          result.get(key).set(child);
+        }
+ else {
+          result.get(key).set(child);
+        }
+      }
+      final boolean queryRuntime=operation.get(INCLUDE_RUNTIME).asBoolean(false);
+      final Set<String> attributeNames=context.getRegistry().getAttributeNames(address);
+      for (      final String attributeName : attributeNames) {
+        final AttributeAccess access=context.getRegistry().getAttributeAccess(address,attributeName);
+        if (access == null) {
+          continue;
+        }
+ else {
+          final AttributeAccess.Storage storage=access.getStorageType();
+          if (!queryRuntime && storage != AttributeAccess.Storage.CONFIGURATION) {
+            continue;
+          }
+          final AccessType type=access.getAccessType();
+          final OperationHandler handler=access.getReadHandler();
+          if (handler != null) {
+            final ModelNode attributeOperation=operation.clone();
+            attributeOperation.get(NAME).set(attributeName);
+            handler.execute(context,attributeOperation,new ResultHandler(){
+              public void handleResultFragment(              final String[] location,              final ModelNode attributeResult){
+                result.get(attributeName).set(attributeResult);
+              }
+              public void handleResultComplete(              final ModelNode compensatingOperation){
+              }
+              public void handleFailed(              ModelNode failureDescription){
+                if (type != AccessType.METRIC) {
+                  resultHandler.handleFailed(failureDescription);
+                }
+              }
+              public void handleCancellation(){
+                resultHandler.handleCancellation();
+              }
+            }
+);
+          }
+        }
+      }
+    }
+    resultHandler.handleResultFragment(NO_LOCATION,result);
+    resultHandler.handleResultComplete(null);
+  }
+ catch (  final Exception e) {
+    resultHandler.handleFailed(createErrorResult(e));
+  }
+  return Cancellable.NULL;
+}
