@@ -1,0 +1,31 @@
+{
+  log.infof("Activating OSGi Subsystem");
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(REMOVE);
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  String value=SecurityActions.getSystemProperty("jboss.protocol.handler.modules","org.jboss.osgi.framework");
+  if (!value.equals("org.jboss.osgi.framework"))   value=value + "|org.jboss.osgi.framework";
+  SecurityActions.setSystemProperty("jboss.protocol.handler.modules",value);
+  if (context instanceof NewRuntimeOperationContext) {
+    final NewRuntimeOperationContext updateContext=(NewRuntimeOperationContext)context;
+    final ServiceTarget target=updateContext.getServiceTarget();
+    SubsystemState subsystemState=createSubsystemState(operation);
+    Activation policy=subsystemState.getActivationPolicy();
+    BundleManagerService.addService(target,subsystemState);
+    FrameworkService.addService(target,subsystemState);
+    BundleContextService.addService(target,policy);
+    PackageAdminService.addService(target);
+    StartLevelService.addService(target);
+    ConfigAdminServiceImpl.addService(target,subsystemState);
+  }
+  if (context instanceof NewBootOperationContext) {
+    final NewBootOperationContext ctx=(NewBootOperationContext)context;
+    ctx.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_OSGI_MANIFEST,new OSGiManifestStructureProcessor());
+    ctx.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_OSGI_BUNDLE_INFO,new OSGiBundleInfoParseProcessor());
+    ctx.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_OSGI_PROPERTIES,new OSGiXServiceParseProcessor());
+    ctx.addDeploymentProcessor(Phase.INSTALL,Phase.INSTALL_OSGI_DEPLOYMENT,new OSGiDeploymentInstallProcessor());
+  }
+  populateSubModel(context.getSubModel(),operation);
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}
