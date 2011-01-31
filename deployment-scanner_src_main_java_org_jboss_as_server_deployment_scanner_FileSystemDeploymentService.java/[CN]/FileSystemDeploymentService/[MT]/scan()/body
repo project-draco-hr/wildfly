@@ -9,28 +9,30 @@
   try {
     if (scanEnabled) {
       log.tracef("Scanning directory %s for deployment content changes",deploymentDir.getAbsolutePath());
-      final List<AbstractServerModelUpdate<?>> updates=new ArrayList<AbstractServerModelUpdate<?>>();
+      final List<ModelNode> updates=new ArrayList<ModelNode>();
       Map<String,File> foundDeployed=new HashMap<String,File>();
       Set<String> newlyAdded=new HashSet<String>();
-      scanDirectory(deploymentDir,updates,foundDeployed,newlyAdded);
+      Set<String> registeredDeployments=getDeploymentNames();
+      scanDirectory(deploymentDir,updates,foundDeployed,newlyAdded,registeredDeployments);
       Set<String> toRemove=new HashSet<String>(deployed);
       toRemove.removeAll(foundDeployed.keySet());
       toRemove.removeAll(newlyAdded);
       for (      String missing : toRemove) {
-        updates.add(new ServerModelDeploymentStopUpdate(missing));
-        updates.add(new ServerModelDeploymentRemove(missing));
+        updates.add(getUndeployOperation(missing));
+        updates.add(getRemoveOperation(missing));
+      }
+      if (updates.size() > 0) {
+        if (log.isDebugEnabled()) {
+          for (          ModelNode update : updates) {
+            log.debugf("Deployment scan of [%s] found update action [%s]",deploymentDir,update);
+          }
+        }
+        ModelNode composite=getCompositeUpdate(updates);
+        ModelNode results=serverController.execute(composite);
       }
       Set<String> validFinds=cleanSpuriousMarkerFiles(foundDeployed);
       validFinds.addAll(newlyAdded);
       this.deployed=validFinds;
-      if (updates.size() > 0) {
-        if (log.isDebugEnabled()) {
-          for (          AbstractServerModelUpdate<?> update : updates) {
-            log.debugf("Deployment scan of [%s] found upate action [%s]",deploymentDir,update);
-          }
-        }
-        List<UpdateResultHandlerResponse<?>> results=serverController.applyUpdates(updates,true,false);
-      }
       log.tracef("Scan complete");
     }
   }

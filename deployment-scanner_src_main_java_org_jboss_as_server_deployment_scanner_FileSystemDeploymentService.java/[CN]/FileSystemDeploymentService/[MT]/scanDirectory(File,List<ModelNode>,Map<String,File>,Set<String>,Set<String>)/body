@@ -15,23 +15,22 @@
         log.warnf("%s is an exploded deployment and exploded deployments are not currently handled by %s",child.getName(),getClass().getSimpleName());
       }
  else {
-        scanDirectory(child,updates,foundDeployed,newlyAdded);
+        scanDirectory(child,updates,foundDeployed,newlyAdded,registeredDeployments);
       }
     }
  else {
       boolean uploaded=false;
-      ServerGroupDeploymentElement deployment=serverModel.getDeployment(fileName);
-      if (deployment != null) {
+      if (registeredDeployments.contains(fileName)) {
         byte[] hash=new byte[0];
         try {
           final InputStream inputStream=new FileInputStream(child);
-          hash=deploymentRepository.addDeploymentContent(deployment.getUniqueName(),deployment.getRuntimeName(),inputStream);
+          hash=deploymentRepository.addDeploymentContent(fileName,fileName,inputStream);
         }
  catch (        IOException e) {
           log.error("Failed to add content to deployment repository for [" + fileName + "]",e);
           continue;
         }
-        updates.add(new ServerModelDeploymentFullReplaceUpdate(deployment.getUniqueName(),deployment.getRuntimeName(),hash,true));
+        updates.add(getFullReplaceOperation(fileName,hash));
         uploaded=true;
       }
  else {
@@ -44,8 +43,8 @@
           log.error("Failed to add content to deployment repository for [" + fileName + "]",e);
           continue;
         }
-        updates.add(new ServerModelDeploymentAdd(fileName,fileName,hash));
-        updates.add(new ServerModelDeploymentStartUpdate(fileName));
+        updates.add(getAddOperation(fileName,hash));
+        updates.add(getDeployOperation(fileName));
         uploaded=true;
       }
       if (uploaded && replaceWithDeployedMarker(child)) {
