@@ -1,0 +1,50 @@
+{
+  List<HostUpdateResult<?>> result;
+  final Map<AbstractHostModelUpdate<?>,AbstractServerModelUpdate<?>> serverByHost=new HashMap<AbstractHostModelUpdate<?>,AbstractServerModelUpdate<?>>();
+  final Map<AbstractServerModelUpdate<?>,HostUpdateResult<Object>> resultsByUpdate=new HashMap<AbstractServerModelUpdate<?>,HostUpdateResult<Object>>();
+  for (int i=0; i < updates.size(); i++) {
+    final AbstractHostModelUpdate<?> hostUpdate=updates.get(i);
+    final AbstractServerModelUpdate<?> serverUpdate=hostUpdate.getServerModelUpdate();
+    if (serverUpdate != null) {
+      serverByHost.put(hostUpdate,serverUpdate);
+      resultsByUpdate.put(serverUpdate,new HostUpdateResult<Object>());
+    }
+  }
+  final Map<ServerIdentity,List<AbstractServerModelUpdate<?>>> updatesByServer=getUpdatesByServer(updates,hostResults,serverByHost);
+  for (  final Map.Entry<ServerIdentity,List<AbstractServerModelUpdate<?>>> entry : updatesByServer.entrySet()) {
+    final ServerIdentity server=entry.getKey();
+    final List<AbstractServerModelUpdate<?>> serverUpdates=entry.getValue();
+    final List<UpdateResultHandlerResponse<?>> rsps=applyUpdatesToServer(server,serverUpdates,allowOverallRollback);
+    for (int i=0; i < serverUpdates.size(); i++) {
+      final UpdateResultHandlerResponse<?> rsp=rsps.get(i);
+      final AbstractServerModelUpdate<?> serverUpdate=entry.getValue().get(i);
+      HostUpdateResult<Object> hur=resultsByUpdate.get(serverUpdate);
+      if (rsp.isCancelled()) {
+        hur=hur.newWithAddedCancellation(server);
+      }
+ else       if (rsp.isTimedOut()) {
+        hur=hur.newWithAddedTimeout(server);
+      }
+ else       if (rsp.isRolledBack()) {
+        hur=hur.newWithAddedRollback(server);
+      }
+ else       if (rsp.getFailureResult() != null) {
+        hur=hur.newWithAddedFailure(server,rsp.getFailureResult());
+      }
+ else {
+        hur=hur.newWithAddedResult(server,rsp.getSuccessResult());
+      }
+      resultsByUpdate.put(serverUpdate,hur);
+    }
+  }
+  result=new ArrayList<HostUpdateResult<?>>();
+  for (  final AbstractHostModelUpdate<?> hostUpdate : updates) {
+    final AbstractServerModelUpdate<?> serverUpdate=serverByHost.get(hostUpdate);
+    HostUpdateResult<?> hur=resultsByUpdate.get(serverUpdate);
+    if (hur == null) {
+      hur=new HostUpdateResult<Object>();
+    }
+    result.add(hur);
+  }
+  return result;
+}
