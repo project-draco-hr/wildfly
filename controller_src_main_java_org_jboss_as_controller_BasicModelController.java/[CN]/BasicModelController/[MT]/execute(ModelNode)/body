@@ -4,19 +4,22 @@
   final Cancellable handle=execute(operation,new ResultHandler(){
     @Override public void handleResultFragment(    final String[] location,    final ModelNode result){
 synchronized (finalResult) {
-        finalResult.get(location).set(result);
+        finalResult.get(RESULT).get(location).set(result);
       }
     }
     @Override public void handleResultComplete(    final ModelNode compensatingOperation){
 synchronized (finalResult) {
         status.set(1);
+        if (compensatingOperation != null) {
+          finalResult.get(COMPENSATING_OPERATION).set(compensatingOperation);
+        }
         finalResult.notify();
       }
     }
     @Override public void handleFailed(    final ModelNode failureDescription){
 synchronized (finalResult) {
         status.set(3);
-        finalResult.set(failureDescription);
+        finalResult.get(FAILURE_DESCRIPTION).set(failureDescription);
         finalResult.notify();
       }
     }
@@ -36,18 +39,21 @@ synchronized (finalResult) {
           final int s=status.get();
 switch (s) {
 case 1:
-            return finalResult;
+            finalResult.get(OUTCOME).set("success");
+          return finalResult;
 case 2:
-          throw new CancellationException();
+        finalResult.get(OUTCOME).set("cancelled");
+      throw new CancellationException();
 case 3:
-        throw new OperationFailedException(finalResult);
-    }
-    finalResult.wait();
-  }
- catch (  final InterruptedException e) {
-    intr=true;
-    handle.cancel();
-  }
+    finalResult.get(OUTCOME).set("failed");
+  throw new OperationFailedException(finalResult);
+}
+finalResult.wait();
+}
+ catch (final InterruptedException e) {
+intr=true;
+handle.cancel();
+}
 }
 }
 }
