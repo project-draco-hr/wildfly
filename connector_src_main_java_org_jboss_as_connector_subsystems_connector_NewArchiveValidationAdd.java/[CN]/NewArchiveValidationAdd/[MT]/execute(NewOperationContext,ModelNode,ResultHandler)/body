@@ -1,0 +1,30 @@
+{
+  boolean archiveValidationEnabled=NewParamsUtils.parseBooleanParameter(operation,ENABLED,false);
+  boolean failOnError=NewParamsUtils.parseBooleanParameter(operation,FAIL_ON_ERROR,true);
+  boolean failOnWarn=NewParamsUtils.parseBooleanParameter(operation,FAIL_ON_WARN,false);
+  if (context instanceof NewRuntimeOperationContext) {
+    ServiceTarget target=((NewRuntimeOperationContext)context).getServiceTarget();
+    final ConnectorSubsystemConfiguration config=new ConnectorSubsystemConfiguration();
+    config.setArchiveValidation(archiveValidationEnabled);
+    config.setArchiveValidationFailOnError(failOnError);
+    config.setArchiveValidationFailOnWarn(failOnWarn);
+    final ConnectorConfigService connectorConfigService=new ConnectorConfigService(config);
+    final ServiceBuilder<ConnectorSubsystemConfiguration> serviceBuilder=target.addService(ConnectorServices.CONNECTOR_CONFIG_SERVICE,connectorConfigService).addDependency(ConnectorServices.DEFAULT_BOOTSTRAP_CONTEXT_SERVICE,CloneableBootstrapContext.class,connectorConfigService.getDefaultBootstrapContextInjector()).setInitialMode(Mode.ACTIVE);
+    serviceBuilder.install();
+  }
+  final ModelNode model=context.getSubModel();
+  if (NewParamsUtils.has(operation,ENABLED)) {
+    model.get(ENABLED).set(archiveValidationEnabled);
+  }
+  if (NewParamsUtils.has(operation,FAIL_ON_ERROR)) {
+    model.get(FAIL_ON_ERROR).set(failOnError);
+  }
+  if (NewParamsUtils.has(operation,FAIL_ON_WARN)) {
+    model.get(FAIL_ON_WARN).set(failOnWarn);
+  }
+  final ModelNode compensating=new ModelNode();
+  compensating.get(OP_ADDR).set(operation.require(ADDRESS));
+  compensating.get(OP).set(REMOVE);
+  resultHandler.handleResultComplete(compensating);
+  return Cancellable.NULL;
+}

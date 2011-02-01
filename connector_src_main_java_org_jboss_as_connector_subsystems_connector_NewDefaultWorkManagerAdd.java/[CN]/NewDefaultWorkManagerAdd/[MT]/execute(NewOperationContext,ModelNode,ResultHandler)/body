@@ -1,0 +1,25 @@
+{
+  String shortRunningThreadPool=NewParamsUtils.parseStringParameter(operation,SHORT_RUNNING_THREAD_POOL);
+  String longRunningThreadPool=NewParamsUtils.parseStringParameter(operation,LONG_RUNNING_THREAD_POOL);
+  if (context instanceof NewRuntimeOperationContext) {
+    ServiceTarget serviceTarget=((NewRuntimeOperationContext)context).getServiceTarget();
+    WorkManager wm=new WorkManagerImpl();
+    final WorkManagerService wmService=new WorkManagerService(wm);
+    serviceTarget.addService(ConnectorServices.WORKMANAGER_SERVICE,wmService).addDependency(ThreadsServices.EXECUTOR.append(shortRunningThreadPool),Executor.class,wmService.getExecutorShortInjector()).addDependency(ThreadsServices.EXECUTOR.append(longRunningThreadPool),Executor.class,wmService.getExecutorLongInjector()).addDependency(TxnServices.JBOSS_TXN_XA_TERMINATOR,JBossXATerminator.class,wmService.getXaTerminatorInjector()).setInitialMode(Mode.ACTIVE).install();
+    CloneableBootstrapContext ctx=new BaseCloneableBootstrapContext();
+    final DefaultBootStrapContextService defaultBootCtxService=new DefaultBootStrapContextService(ctx);
+    serviceTarget.addService(ConnectorServices.DEFAULT_BOOTSTRAP_CONTEXT_SERVICE,defaultBootCtxService).addDependency(ConnectorServices.WORKMANAGER_SERVICE,WorkManager.class,defaultBootCtxService.getWorkManagerValueInjector()).addDependency(TxnServices.JBOSS_TXN_XA_TERMINATOR,JBossXATerminator.class,defaultBootCtxService.getXaTerminatorInjector()).addDependency(TxnServices.JBOSS_TXN_ARJUNA_TRANSACTION_MANAGER,com.arjuna.ats.jbossatx.jta.TransactionManagerService.class,defaultBootCtxService.getTxManagerInjector()).setInitialMode(Mode.ACTIVE).install();
+  }
+  final ModelNode model=context.getSubModel();
+  if (shortRunningThreadPool != null) {
+    model.get(SHORT_RUNNING_THREAD_POOL).set(shortRunningThreadPool);
+  }
+  if (longRunningThreadPool != null) {
+    model.get(LONG_RUNNING_THREAD_POOL).set(longRunningThreadPool);
+  }
+  final ModelNode compensating=new ModelNode();
+  compensating.get(OP_ADDR).set(operation.require(ADDRESS));
+  compensating.get(OP).set(REMOVE);
+  resultHandler.handleResultComplete(compensating);
+  return Cancellable.NULL;
+}
