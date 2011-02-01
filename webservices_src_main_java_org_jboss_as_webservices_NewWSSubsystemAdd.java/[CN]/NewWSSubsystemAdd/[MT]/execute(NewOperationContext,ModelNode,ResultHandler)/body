@@ -1,0 +1,24 @@
+{
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(REMOVE);
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  if (context instanceof NewRuntimeOperationContext) {
+    final NewRuntimeOperationContext updateContext=(NewRuntimeOperationContext)context;
+    ServiceTarget serviceTarget=updateContext.getServiceTarget();
+    addConfigService(serviceTarget,createWSConfigurtionElement(operation));
+    addRegistryService(serviceTarget);
+  }
+  if (context instanceof NewBootOperationContext) {
+    final NewBootOperationContext operationContext=(NewBootOperationContext)context;
+    int priority=Phase.INSTALL_WAR_METADATA + 10;
+    operationContext.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_WEBSERVICES_XML,new WSDescriptorDeploymentProcessor());
+    operationContext.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_WS,new WSDependenciesProcessor());
+    operationContext.addDeploymentProcessor(Phase.INSTALL,priority++,new WSTypeDeploymentProcessor());
+    operationContext.addDeploymentProcessor(Phase.INSTALL,priority++,new WSModelDeploymentProcessor());
+    addDeploymentProcessors(NewWSSubsystemAdd.class.getClassLoader(),operationContext,priority);
+  }
+  final ModelNode subModel=context.getSubModel();
+  subModel.get(CONFIGURATION).set(operation.require(CONFIGURATION));
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}
