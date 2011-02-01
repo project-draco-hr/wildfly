@@ -1,0 +1,53 @@
+{
+  final ComponentInterceptorFactories interceptorFactories=componentConfiguration.getComponentInterceptorFactories();
+  final List<Method> allMethods=new ArrayList<Method>();
+  Class<?> current=componentClass;
+  while (current != null) {
+    final ClassReflectionIndex classReflectionIndex=deploymentReflectionIndex.getClassIndex(current);
+    allMethods.addAll(classReflectionIndex.getMethods());
+    current=current.getSuperclass();
+  }
+  for (  MethodInterceptorConfiguration interceptorConfiguration : componentConfiguration.getMethodInterceptorConfigs()) {
+    final Class<?> interceptorClass;
+    try {
+      interceptorClass=classLoader.loadClass(interceptorConfiguration.getInterceptorClassName());
+    }
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException("Failed to load interceptors class " + interceptorConfiguration.getInterceptorClassName(),e);
+    }
+    final Method interceptorMethod;
+    try {
+      interceptorMethod=interceptorClass.getMethod(interceptorConfiguration.getMethodName(),InvocationContext.class);
+    }
+ catch (    NoSuchMethodException e) {
+      throw new DeploymentUnitProcessingException("Unable to find interceptor method [" + interceptorConfiguration.getMethodName() + "] on interceptor class ["+ interceptorClass+ "]");
+    }
+    final MethodInterceptorFilter methodFilter=interceptorConfiguration.getMethodFilter();
+    final InterceptorInstanceFactory interceptorInstanceFactory;
+    if (interceptorClass.equals(componentClass)) {
+      interceptorInstanceFactory=new ComponentInstanceInterceptorInstanceFactory(componentClass);
+    }
+ else {
+      final List<ResourceInjection> interceptorInjections=new ArrayList<ResourceInjection>(interceptorConfiguration.getResourceInjectionConfigs().size());
+      final ServiceName envContextServiceName=componentConfiguration.getEnvContextServiceName();
+      for (      ResourceInjectionConfiguration resourceConfiguration : interceptorConfiguration.getResourceInjectionConfigs()) {
+        final NamingLookupValue<Object> lookupValue=new NamingLookupValue<Object>(resourceConfiguration.getLocalContextName());
+        final ResourceInjection injection=ResourceInjection.Factory.create(resourceConfiguration,interceptorClass,lookupValue);
+        if (injection != null) {
+          interceptorInjections.add(injection);
+        }
+        componentConfiguration.addDependency(new ResourceInjectionDependency<Context>(envContextServiceName,Context.class,lookupValue.getContextInjector()));
+      }
+      interceptorInstanceFactory=new InjectingInterceptorInstanceFactory(new SimpleInterceptorInstanceFactory(interceptorClass),interceptorInjections);
+    }
+    final InterceptorFactory interceptorFactory=new MethodInterceptorFactory(interceptorInstanceFactory,interceptorMethod);
+    for (    Method method : allMethods) {
+      if (methodFilter.intercepts(method)) {
+        interceptorFactories.addInterceptorFactory(method,interceptorFactory);
+      }
+    }
+  }
+  for (  Method method : allMethods) {
+    interceptorFactories.addInterceptorFactory(method,Interceptors.getInvokingInterceptorFactory());
+  }
+}

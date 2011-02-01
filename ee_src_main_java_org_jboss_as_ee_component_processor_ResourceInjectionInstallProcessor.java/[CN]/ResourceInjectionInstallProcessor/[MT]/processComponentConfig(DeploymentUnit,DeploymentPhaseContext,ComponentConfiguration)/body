@@ -1,11 +1,13 @@
 {
-  final Class<?> componentClass=componentConfiguration.getAttachment(Attachments.COMPONENT_CLASS);
-  final ResourceInjectionResolver resolver=componentConfiguration.getAttachment(Attachments.RESOURCE_INJECTION_RESOLVER);
+  final Class<?> componentClass=componentConfiguration.getComponentClass();
+  final ServiceName envContextServiceName=componentConfiguration.getEnvContextServiceName();
   for (  ResourceInjectionConfiguration resourceConfiguration : componentConfiguration.getResourceInjectionConfigs()) {
-    final ResourceInjectionResolver.ResolverResult result=resolver.resolve(deploymentUnit,componentConfiguration.getName(),componentClass,resourceConfiguration);
-    if (result.getInjection() != null) {
-      componentConfiguration.addToAttachmentList(Attachments.RESOURCE_INJECTIONS,result.getInjection());
+    final NamingLookupValue<Object> lookupValue=new NamingLookupValue<Object>(resourceConfiguration.getLocalContextName());
+    final ResourceInjection injection=ResourceInjection.Factory.create(resourceConfiguration,componentClass,lookupValue);
+    if (injection != null) {
+      componentConfiguration.addResourceInjection(injection);
+      componentConfiguration.addDependency(bindResource(phaseContext.getServiceTarget(),componentConfiguration,resourceConfiguration));
     }
-    componentConfiguration.addToAttachmentList(Attachments.RESOLVED_RESOURCES,result);
+    componentConfiguration.addDependency(new ResourceInjectionDependency<Context>(envContextServiceName,Context.class,lookupValue.getContextInjector()));
   }
 }

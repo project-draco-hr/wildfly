@@ -1,25 +1,21 @@
 {
   final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
-  final ComponentFactory componentFactory=componentConfiguration.getAttachment(Attachments.COMPONENT_FACTORY);
-  final ComponentFactory.ConstructedComponent constructedComponent=componentFactory.createComponent(deploymentUnit,componentConfiguration);
-  final ServiceName beanEnvContextServiceName=constructedComponent.getEnvContextServiceName().append(componentConfiguration.getName());
+  final ComponentFactory componentFactory=componentConfiguration.getComponentFactory();
+  final Component component=componentFactory.createComponent(deploymentUnit,componentConfiguration);
+  final ServiceName componentServiceName=deploymentUnit.getServiceName().append("component").append(componentConfiguration.getName());
+  final ServiceName beanEnvContextServiceName=componentConfiguration.getEnvContextServiceName().append(componentConfiguration.getName());
   final ContextService actualBeanContext=new ContextService(componentConfiguration.getName());
-  serviceTarget.addService(beanEnvContextServiceName,actualBeanContext).addDependency(constructedComponent.getEnvContextServiceName(),Context.class,actualBeanContext.getParentContextInjector()).install();
-  final ServiceName bindContextServiceName=constructedComponent.getBindContextServiceName();
-  final Reference componentFactoryReference=ServiceReferenceObjectFactory.createReference(constructedComponent.getComponentServiceName(),ComponentObjectFactory.class);
-  final ResourceBinder<Reference> factoryBinder=new ResourceBinder<Reference>(constructedComponent.getBindName(),Values.immediateValue(componentFactoryReference));
-  final ServiceName referenceBinderName=bindContextServiceName.append(constructedComponent.getBindName());
+  serviceTarget.addService(beanEnvContextServiceName,actualBeanContext).addDependency(componentConfiguration.getEnvContextServiceName(),Context.class,actualBeanContext.getParentContextInjector()).install();
+  final ServiceName bindContextServiceName=componentConfiguration.getBindContextServiceName();
+  final Reference componentFactoryReference=ServiceReferenceObjectFactory.createReference(componentServiceName,ComponentObjectFactory.class);
+  final ResourceBinder<Reference> factoryBinder=new ResourceBinder<Reference>(componentConfiguration.getBindName(),Values.immediateValue(componentFactoryReference));
+  final ServiceName referenceBinderName=bindContextServiceName.append(componentConfiguration.getBindName());
   serviceTarget.addService(referenceBinderName,factoryBinder).addDependency(bindContextServiceName,Context.class,factoryBinder.getContextInjector()).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
-  final ComponentService componentService=new ComponentService(constructedComponent.getComponent());
-  final ServiceBuilder<?> serviceBuilder=serviceTarget.addService(constructedComponent.getComponentServiceName(),componentService).addDependency(referenceBinderName).addDependency(constructedComponent.getCompContextServiceName(),Context.class,componentService.getCompContextInjector()).addDependency(constructedComponent.getModuleContextServiceName(),Context.class,componentService.getModuleContextInjector()).addDependency(constructedComponent.getAppContextServiceName(),Context.class,componentService.getAppContextInjector()).setInitialMode(ServiceController.Mode.ACTIVE);
-  final List<ResourceInjectionResolver.ResolverResult> resolverResults=componentConfiguration.getAttachment(Attachments.RESOLVED_RESOURCES);
-  if (resolverResults != null)   for (  ResourceInjectionResolver.ResolverResult resolverResult : resolverResults) {
-    for (    ResourceInjectionResolver.ResolverDependency<?> dependency : resolverResult.getDependencies()) {
-      addDependency(serviceBuilder,dependency);
-    }
-    if (resolverResult.shouldBind()) {
-      addDependency(serviceBuilder,bindResource(serviceTarget,resolverResult));
-    }
+  final ComponentService componentService=new ComponentService(component);
+  final ServiceBuilder<?> serviceBuilder=serviceTarget.addService(componentServiceName,componentService).addDependency(referenceBinderName).addDependency(componentConfiguration.getCompContextServiceName(),Context.class,componentService.getCompContextInjector()).addDependency(componentConfiguration.getModuleContextServiceName(),Context.class,componentService.getModuleContextInjector()).addDependency(componentConfiguration.getAppContextServiceName(),Context.class,componentService.getAppContextInjector()).setInitialMode(ServiceController.Mode.ACTIVE);
+  final Collection<ResourceInjectionDependency<?>> dependencies=componentConfiguration.getDependencies();
+  if (dependencies != null)   for (  ResourceInjectionDependency<?> dependency : dependencies) {
+    addDependency(serviceBuilder,dependency);
   }
   serviceBuilder.install();
 }
