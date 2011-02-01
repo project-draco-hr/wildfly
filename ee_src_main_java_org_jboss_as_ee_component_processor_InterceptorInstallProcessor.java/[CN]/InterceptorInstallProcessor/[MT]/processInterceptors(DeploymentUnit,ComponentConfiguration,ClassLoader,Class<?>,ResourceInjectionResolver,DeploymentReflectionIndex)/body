@@ -1,0 +1,65 @@
+{
+  final Map<Method,List<InterceptorFactory>> methodInterceptorFactories=new HashMap<Method,List<InterceptorFactory>>();
+  final List<Method> allMethods=new ArrayList<Method>();
+  Class<?> current=componentClass;
+  while (current != null) {
+    final ClassReflectionIndex classReflectionIndex=deploymentReflectionIndex.getClassIndex(current);
+    allMethods.addAll(classReflectionIndex.getMethods());
+    current=current.getSuperclass();
+  }
+  for (  MethodInterceptorConfiguration interceptorConfiguration : componentConfiguration.getMethodInterceptorConfigs()) {
+    final Class<?> interceptorClass;
+    try {
+      interceptorClass=classLoader.loadClass(interceptorConfiguration.getInterceptorClassName());
+    }
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException("Failed to load interceptors class " + interceptorConfiguration.getInterceptorClassName(),e);
+    }
+    final Method interceptorMethod;
+    try {
+      interceptorMethod=interceptorClass.getMethod(interceptorConfiguration.getMethodName(),InvocationContext.class);
+    }
+ catch (    NoSuchMethodException e) {
+      throw new DeploymentUnitProcessingException("Unable to find interceptor method [" + interceptorConfiguration.getMethodName() + "] on interceptor class ["+ interceptorClass+ "]");
+    }
+    final MethodInterceptorFilter methodFilter=interceptorConfiguration.getMethodFilter();
+    final InterceptorInstanceFactory interceptorInstanceFactory;
+    if (interceptorClass.equals(componentClass)) {
+      interceptorInstanceFactory=new ComponentInstanceInterceptorInstanceFactory(componentClass);
+    }
+ else {
+      final List<ResourceInjection> interceptorInjections=new ArrayList<ResourceInjection>(interceptorConfiguration.getResourceInjectionConfigs().size());
+      for (      ResourceInjectionConfiguration resourceConfiguration : interceptorConfiguration.getResourceInjectionConfigs()) {
+        final ResourceInjectionResolver.ResolverResult result=resolver.resolve(deploymentUnit,componentConfiguration.getName(),componentClass,resourceConfiguration);
+        if (result.getInjection() != null) {
+          interceptorInjections.add(result.getInjection());
+        }
+        componentConfiguration.addToAttachmentList(Attachments.RESOLVED_RESOURCES,result);
+      }
+      interceptorInstanceFactory=new InjectingInterceptorInstanceFactory(new SimpleInterceptorInstanceFactory(interceptorClass),interceptorInjections);
+    }
+    final InterceptorFactory interceptorFactory=new MethodInterceptorFactory(interceptorInstanceFactory,interceptorMethod);
+    for (    Method method : allMethods) {
+      if (methodFilter.intercepts(method)) {
+        List<InterceptorFactory> methodFactories=methodInterceptorFactories.get(method);
+        if (methodFactories == null) {
+          methodFactories=new ArrayList<InterceptorFactory>();
+          methodInterceptorFactories.put(method,methodFactories);
+        }
+        methodFactories.add(interceptorFactory);
+      }
+    }
+  }
+  final Map<Method,InterceptorFactory> result=new HashMap<Method,InterceptorFactory>();
+  for (  Method method : allMethods) {
+    final List<InterceptorFactory> interceptorFactories=methodInterceptorFactories.get(method);
+    if (interceptorFactories != null) {
+      interceptorFactories.add(Interceptors.getInvokingInterceptorFactory());
+      result.put(method,Interceptors.getChainedInterceptorFactory(interceptorFactories));
+    }
+ else {
+      result.put(method,Interceptors.getInvokingInterceptorFactory());
+    }
+  }
+  return result;
+}
