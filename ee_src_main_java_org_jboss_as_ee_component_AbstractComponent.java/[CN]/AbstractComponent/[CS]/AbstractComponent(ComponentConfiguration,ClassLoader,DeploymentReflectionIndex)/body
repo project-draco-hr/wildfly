@@ -1,0 +1,55 @@
+{
+  componentClass=configuration.getComponentClass();
+  resourceInjections=configuration.getResourceInjections();
+  postConstructInterceptors=configuration.getPostConstructLifecycles();
+  preDestroyInterceptors=configuration.getPreDestroyLifecycles();
+  final ArrayList<Interceptor> rootInterceptors=new ArrayList<Interceptor>();
+  final SimpleInterceptorFactoryContext interceptorFactoryContext=new SimpleInterceptorFactoryContext();
+  for (  InterceptorFactory factory : configuration.getComponentSystemInterceptorFactories()) {
+    rootInterceptors.add(factory.create(interceptorFactoryContext));
+  }
+  rootInterceptors.add(DISPATCHER);
+  componentInterceptor=Interceptors.getChainedInterceptor(rootInterceptors);
+  final Map<MethodIdentifier,Method> componentMethods=new HashMap<MethodIdentifier,Method>();
+  final Map<Method,InterceptorFactory> componentToInterceptorFactory=new IdentityHashMap<Method,InterceptorFactory>();
+  Class<?> currentClass=componentClass;
+  do {
+    final ClassReflectionIndex classIndex=index.getClassIndex(currentClass);
+    for (    Method method : classIndex.getMethods()) {
+      int modifiers=method.getModifiers();
+      if (!Modifier.isStatic(modifiers) && !Modifier.isFinal(modifiers)) {
+        componentMethods.put(MethodIdentifier.getIdentifierForMethod(method),method);
+        final List<InterceptorFactory> finalFactories=new ArrayList<InterceptorFactory>();
+        finalFactories.add(new MethodInvokingInterceptorFactory(INSTANCE_FACTORY,method));
+        componentToInterceptorFactory.put(method,Interceptors.getChainedInterceptorFactory(finalFactories));
+      }
+    }
+    currentClass=currentClass.getSuperclass();
+  }
+ while (currentClass != null);
+  final Map<Class<?>,InvocationHandler> views=new HashMap<Class<?>,InvocationHandler>();
+  final Map<Method,InterceptorFactory> viewToInterceptorFactory=new IdentityHashMap<Method,InterceptorFactory>();
+  for (  String viewClassName : configuration.getViewClassNames()) {
+    final Class<?> viewClass;
+    try {
+      viewClass=Class.forName(viewClassName,false,deploymentClassLoader);
+    }
+ catch (    ClassNotFoundException e) {
+      NoClassDefFoundError error=new NoClassDefFoundError(e.getMessage());
+      error.setStackTrace(e.getStackTrace());
+      throw error;
+    }
+    ProxyFactory<?> factory=getProxyFactory(viewClass);
+    final List<Method> methods=new ArrayList<Method>();
+    for (    Method viewMethod : factory.getCachedMethods()) {
+      methods.add(viewMethod);
+      Method componentMethod=componentMethods.get(MethodIdentifier.getIdentifierForMethod(viewMethod));
+      if (componentMethod != null) {
+        viewToInterceptorFactory.put(viewMethod,componentToInterceptorFactory.get(componentMethod));
+      }
+    }
+    views.put(viewClass,new InvocationHandler(viewClass,factory,Collections.unmodifiableCollection(methods)));
+  }
+  this.views=views;
+  interceptorFactoryMap=viewToInterceptorFactory;
+}
