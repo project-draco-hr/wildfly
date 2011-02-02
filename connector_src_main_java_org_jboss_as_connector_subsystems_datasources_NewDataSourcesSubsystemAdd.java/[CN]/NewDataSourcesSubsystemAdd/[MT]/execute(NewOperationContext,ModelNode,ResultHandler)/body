@@ -1,0 +1,37 @@
+{
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(REMOVE);
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  if (context instanceof NewRuntimeOperationContext) {
+    final NewRuntimeOperationContext updateContext=(NewRuntimeOperationContext)context;
+    final ServiceTarget serviceTarget=updateContext.getServiceTarget();
+    DataSources datasources=buildDataSourcesObject(operation);
+    serviceTarget.addService(ConnectorServices.DATASOURCES_SERVICE,new DataSourcesService(datasources)).setInitialMode(Mode.ACTIVE).install();
+  }
+  final ModelNode subModel=context.getSubModel();
+  subModel.setEmptyObject();
+  for (  ModelNode dataSourceNode : operation.get(DATASOURCES).asList()) {
+    Map<String,String> connectionProperties=new HashMap<String,String>(dataSourceNode.get(CONNECTION_PROPERTIES).asList().size());
+    for (    ModelNode property : dataSourceNode.get(CONNECTION_PROPERTIES).asList()) {
+      subModel.get(CONNECTION_PROPERTIES,property.asProperty().getName()).set(property.asString());
+    }
+    for (    final String attribute : NewDataSourcesSubsystemProviders.DATASOURCE_ATTRIBUTE) {
+      if (operation.get(attribute).isDefined()) {
+        subModel.get(attribute).set(operation.get(attribute));
+      }
+    }
+  }
+  for (  ModelNode dataSourceNode : operation.get(XA_DATASOURCES).asList()) {
+    Map<String,String> connectionProperties=new HashMap<String,String>(dataSourceNode.get(XADATASOURCEPROPERTIES).asList().size());
+    for (    ModelNode property : dataSourceNode.get(XADATASOURCEPROPERTIES).asList()) {
+      subModel.get(XADATASOURCEPROPERTIES,property.asProperty().getName()).set(property.asString());
+    }
+    for (    final String attribute : NewDataSourcesSubsystemProviders.XA_DATASOURCE_ATTRIBUTE) {
+      if (operation.get(attribute).isDefined()) {
+        subModel.get(attribute).set(operation.get(attribute));
+      }
+    }
+  }
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}
