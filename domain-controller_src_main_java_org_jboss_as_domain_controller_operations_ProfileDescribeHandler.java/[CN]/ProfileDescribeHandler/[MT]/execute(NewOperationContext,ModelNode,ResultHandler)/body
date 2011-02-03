@@ -1,0 +1,42 @@
+{
+  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  final ModelNode result=new ModelNode();
+  final ModelNode profile=context.getSubModel();
+  if (profile.has(INCLUDES) && profile.get(INCLUDES).isDefined()) {
+    for (    ModelNode include : profile.get(INCLUDES).asList()) {
+      final ModelNode includeAddress=address.subAddress(0,address.size() - 1).append(PathElement.pathElement(PROFILE,include.asString())).toModelNode();
+      final ModelNode newOp=operation.clone();
+      newOp.get(OP_ADDR).set(includeAddress);
+      try {
+        final ModelNode newOpResult=context.getController().execute(newOp);
+        for (        ModelNode op : newOpResult.require(RESULT).asList()) {
+          result.add(op);
+        }
+      }
+ catch (      OperationFailedException e) {
+        resultHandler.handleFailed(Util.createErrorResult(e));
+        return Cancellable.NULL;
+      }
+    }
+  }
+  if (profile.has(SUBSYSTEM) && profile.get(SUBSYSTEM).isDefined()) {
+    for (    String subsystemName : profile.get(SUBSYSTEM).keys()) {
+      final ModelNode subsystemAddress=address.append(PathElement.pathElement(SUBSYSTEM,subsystemName)).toModelNode();
+      final ModelNode newOp=operation.clone();
+      newOp.get(OP_ADDR).set(subsystemAddress);
+      try {
+        final ModelNode newOpResult=context.getController().execute(newOp);
+        for (        ModelNode op : newOpResult.require(RESULT).asList()) {
+          result.add(op);
+        }
+      }
+ catch (      OperationFailedException e) {
+        resultHandler.handleFailed(Util.createErrorResult(e));
+        return Cancellable.NULL;
+      }
+    }
+  }
+  resultHandler.handleResultFragment(Util.NO_LOCATION,result);
+  resultHandler.handleResultComplete(new ModelNode());
+  return Cancellable.NULL;
+}
