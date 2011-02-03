@@ -1,10 +1,20 @@
 {
-  final DomainControllerConnection domainControllerConnection=this.domainControllerConnection.getValue();
-  hostController.setDomainControllerConnection(domainControllerConnection);
-  final DomainModel domainModel=domainControllerConnection.register();
-  hostController.setDomain(domainModel);
-  final NetworkInterfaceBinding interfaceBinding=managementInterface.getValue();
-  final InetSocketAddress managementSocketAddress=new InetSocketAddress(interfaceBinding.getAddress(),managementPort.getValue());
-  hostController.setManagementSocketAddress(managementSocketAddress);
-  hostController.startServers();
+  final NewDomainControllerConnection connection=this.connection.getValue();
+  final NewServerInventory serverInventory=this.serverInventory.getValue();
+  final NewHostControllerImpl controller=new NewHostControllerImpl(name,hostModel,serverInventory,repository);
+  try {
+    final ModelNode domainModel=connection.register(controller);
+    final FileRepository remoteRepository=connection.getRemoteFileRepository();
+    controller.initDomainConnection(domainModel,remoteRepository);
+    if (hostModel.getModel().has(SERVER) && hostModel.getModel().get(SERVER).isDefined()) {
+      final ModelNode servers=hostModel.getModel().get(SERVER).clone();
+      for (      final String serverName : servers.keys()) {
+        controller.startServer(serverName);
+      }
+    }
+  }
+ catch (  IOException e) {
+    throw new StartException(e);
+  }
+  this.controller=controller;
 }
