@@ -5,30 +5,54 @@
   if (context instanceof NewRuntimeOperationContext) {
     final NewRuntimeOperationContext updateContext=(NewRuntimeOperationContext)context;
     final ServiceTarget serviceTarget=updateContext.getServiceTarget();
-    DataSources datasources=buildDataSourcesObject(operation);
-    serviceTarget.addService(ConnectorServices.DATASOURCES_SERVICE,new DataSourcesService(datasources)).setInitialMode(Mode.ACTIVE).install();
+    try {
+      DataSources datasources=buildDataSourcesObject(operation);
+      serviceTarget.addService(ConnectorServices.DATASOURCES_SERVICE,new DataSourcesService(datasources)).setInitialMode(Mode.ACTIVE).install();
+    }
+ catch (    Exception e) {
+    }
   }
   final ModelNode subModel=context.getSubModel();
   subModel.setEmptyObject();
-  for (  ModelNode dataSourceNode : operation.get(DATASOURCES).asList()) {
-    Map<String,String> connectionProperties=new HashMap<String,String>(dataSourceNode.get(CONNECTION_PROPERTIES).asList().size());
-    for (    ModelNode property : dataSourceNode.get(CONNECTION_PROPERTIES).asList()) {
-      subModel.get(CONNECTION_PROPERTIES,property.asProperty().getName()).set(property.asString());
-    }
-    for (    final String attribute : NewDataSourcesSubsystemProviders.DATASOURCE_ATTRIBUTE) {
-      if (operation.get(attribute).isDefined()) {
-        subModel.get(attribute).set(operation.get(attribute));
-      }
+  boolean workaround=true;
+  if (workaround) {
+    if (operation.has(DATASOURCES)) {
+      ModelNode datasources=operation.get(DATASOURCES);
+      subModel.get(DATASOURCES).set(datasources);
     }
   }
-  for (  ModelNode dataSourceNode : operation.get(XA_DATASOURCES).asList()) {
-    Map<String,String> connectionProperties=new HashMap<String,String>(dataSourceNode.get(XADATASOURCEPROPERTIES).asList().size());
-    for (    ModelNode property : dataSourceNode.get(XADATASOURCEPROPERTIES).asList()) {
-      subModel.get(XADATASOURCEPROPERTIES,property.asProperty().getName()).set(property.asString());
+ else {
+    if (operation.has(DATASOURCES)) {
+      for (      ModelNode dataSourceNode : operation.get(DATASOURCES).asList()) {
+        if (dataSourceNode.has(CONNECTION_PROPERTIES)) {
+          for (          ModelNode property : dataSourceNode.get(CONNECTION_PROPERTIES).asList()) {
+            subModel.get(CONNECTION_PROPERTIES,property.asProperty().getName()).set(property.asString());
+          }
+        }
+        for (        final String attribute : NewDataSourcesSubsystemProviders.DATASOURCE_ATTRIBUTE) {
+          if (operation.get(attribute).isDefined()) {
+            subModel.get(attribute).set(operation.get(attribute));
+          }
+        }
+      }
     }
-    for (    final String attribute : NewDataSourcesSubsystemProviders.XA_DATASOURCE_ATTRIBUTE) {
-      if (operation.get(attribute).isDefined()) {
-        subModel.get(attribute).set(operation.get(attribute));
+    if (operation.has(XA_DATASOURCES)) {
+      for (      ModelNode dataSourceNode : operation.get(XA_DATASOURCES).asList()) {
+        Map<String,String> connectionProperties;
+        if (dataSourceNode.has(XADATASOURCEPROPERTIES)) {
+          connectionProperties=new HashMap<String,String>(dataSourceNode.get(XADATASOURCEPROPERTIES).asList().size());
+          for (          ModelNode property : dataSourceNode.get(XADATASOURCEPROPERTIES).asList()) {
+            subModel.get(XADATASOURCEPROPERTIES,property.asProperty().getName()).set(property.asString());
+          }
+        }
+ else {
+          connectionProperties=Collections.emptyMap();
+        }
+        for (        final String attribute : NewDataSourcesSubsystemProviders.XA_DATASOURCE_ATTRIBUTE) {
+          if (operation.get(attribute).isDefined()) {
+            subModel.get(attribute).set(operation.get(attribute));
+          }
+        }
       }
     }
   }
