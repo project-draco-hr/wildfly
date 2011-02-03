@@ -1,0 +1,58 @@
+{
+  final File configDir=environment.getDomainConfigurationDir();
+  final ExtensibleConfigurationPersister configurationPersister=createHostConfigurationPersister(configDir);
+  final NewHostModel hostModel=new NewHostModel(configurationPersister);
+  final List<ModelNode> operations=configurationPersister.load();
+  final AtomicInteger count=new AtomicInteger(1);
+  final ResultHandler resultHandler=new ResultHandler(){
+    @Override public void handleResultFragment(    final String[] location,    final ModelNode result){
+    }
+    @Override public void handleResultComplete(    final ModelNode compensatingOperation){
+      if (count.decrementAndGet() == 0) {
+      }
+    }
+    @Override public void handleFailed(    final ModelNode failureDescription){
+      if (count.decrementAndGet() == 0) {
+      }
+    }
+    @Override public void handleCancellation(){
+      if (count.decrementAndGet() == 0) {
+      }
+    }
+  }
+;
+  for (  final ModelNode operation : operations) {
+    count.incrementAndGet();
+    hostModel.execute(operation,resultHandler);
+  }
+  if (count.decrementAndGet() == 0) {
+  }
+  final BatchBuilder batch=serviceContainer.batchBuilder();
+  batch.addListener(new AbstractServiceListener<Object>(){
+    public void serviceFailed(    final ServiceController<?> serviceController,    final StartException reason){
+      log.errorf(reason,"Service [%s] failed.",serviceController.getName());
+    }
+  }
+);
+  final ModelNode rawModel=hostModel.getModel();
+  final String mgmtNetwork=rawModel.get(MANAGEMENT,INTERFACE).asString();
+  final int mgmtPort=rawModel.get(MANAGEMENT,PORT).asInt();
+  final ProcessControllerConnectionService processControllerClient=new ProcessControllerConnectionService(environment,authCode);
+  batch.addService(ProcessControllerConnectionService.SERVICE_NAME,processControllerClient).install();
+  activateNetworkInterfaces(rawModel,batch);
+  activateDomainControllerConnection(environment,rawModel,batch);
+  final NewServerInventoryService inventory=new NewServerInventoryService(environment,mgmtPort);
+  batch.addService(NewServerInventoryService.SERVICE_NAME,inventory).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(mgmtNetwork),NetworkInterfaceBinding.class,inventory.getInterface()).install();
+  final String name=rawModel.get(NAME).asString();
+  final FileRepository repository=new LocalFileRepository(environment);
+  final NewHostControllerService hc=new NewHostControllerService(name,hostModel,repository);
+  batch.addService(NewHostController.SERVICE_NAME,hc).addDependency(NewDomainControllerConnection.SERVICE_NAME,NewDomainControllerConnection.class,hc.getConnection()).addDependency(NewServerInventoryService.SERVICE_NAME,NewServerInventory.class,hc.getServerInventory()).setInitialMode(Mode.ACTIVE).install();
+  final ServiceName threadFactoryServiceName=SERVICE_NAME_BASE.append("thread-factory");
+  final ServiceName executorServiceName=SERVICE_NAME_BASE.append("executor");
+  batch.addService(threadFactoryServiceName,new ThreadFactoryService()).install();
+  final HostControllerExecutorService executorService=new HostControllerExecutorService();
+  batch.addService(executorServiceName,executorService).addDependency(threadFactoryServiceName,ThreadFactory.class,executorService.threadFactoryValue).install();
+  final ManagementCommunicationService managementCommunicationService=new ManagementCommunicationService();
+  batch.addService(ManagementCommunicationService.SERVICE_NAME,managementCommunicationService).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(mgmtNetwork),NetworkInterfaceBinding.class,managementCommunicationService.getInterfaceInjector()).addInjection(managementCommunicationService.getPortInjector(),mgmtPort).addDependency(executorServiceName,ExecutorService.class,managementCommunicationService.getExecutorServiceInjector()).addDependency(threadFactoryServiceName,ThreadFactory.class,managementCommunicationService.getThreadFactoryInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  batch.install();
+}
