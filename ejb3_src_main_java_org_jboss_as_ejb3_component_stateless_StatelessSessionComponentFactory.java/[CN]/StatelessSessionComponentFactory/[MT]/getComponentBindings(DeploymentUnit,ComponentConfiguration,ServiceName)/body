@@ -1,7 +1,18 @@
 {
   String appName=null;
-  String moduleName=deploymentUnit.getName();
+  String moduleName=stripSuffix(deploymentUnit.getName());
   String beanName=componentConfiguration.getName();
   String globalJNDIName=(appName != null ? appName + "/" : "") + moduleName + "/"+ beanName;
-  return Arrays.asList(new ComponentBinding(ContextNames.GLOBAL_CONTEXT_SERVICE_NAME,globalJNDIName,ComponentObjectFactory.createReference(componentServiceName,componentConfiguration.getComponentClass())));
+  Collection<ComponentBinding> bindings=new LinkedList<ComponentBinding>();
+  try {
+    ClassLoader classLoader=getClassLoader(deploymentUnit);
+    for (    String viewClassName : componentConfiguration.getViewClassNames()) {
+      Class<?> viewClass=Class.forName(viewClassName,true,classLoader);
+      bindings.add(new ComponentBinding(ContextNames.GLOBAL_CONTEXT_SERVICE_NAME,globalJNDIName + "!" + viewClass.getName(),ComponentObjectFactory.createReference(componentServiceName,viewClass)));
+    }
+  }
+ catch (  ClassNotFoundException e) {
+    throw new RuntimeException(e);
+  }
+  return bindings;
 }
