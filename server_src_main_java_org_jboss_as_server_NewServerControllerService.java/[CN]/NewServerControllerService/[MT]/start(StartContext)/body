@@ -17,10 +17,6 @@
  catch (  Exception e) {
     throw new StartException(e);
   }
-  final EnumMap<Phase,SortedSet<RegisteredProcessor>> deployers=new EnumMap<Phase,SortedSet<RegisteredProcessor>>(Phase.class);
-  for (  Phase phase : Phase.values()) {
-    deployers.put(phase,new ConcurrentSkipListSet<RegisteredProcessor>());
-  }
   log.info("Activating core services");
   final AtomicInteger count=new AtomicInteger(1);
   final ResultHandler resultHandler=new ResultHandler(){
@@ -46,7 +42,7 @@
   }
   if (count.decrementAndGet() == 0) {
   }
-  serverController.finishBoot();
+  final EnumMap<Phase,SortedSet<RegisteredProcessor>> deployers=serverController.finishBoot();
   final File[] extDirs=serverEnvironment.getJavaExtDirs();
   final File[] newExtDirs=Arrays.copyOf(extDirs,extDirs.length + 1);
   newExtDirs[extDirs.length]=new File(serverEnvironment.getServerBaseDir(),"lib/ext");
@@ -74,13 +70,14 @@
   deployers.get(Phase.DEPENDENCIES).add(new RegisteredProcessor(Phase.DEPENDENCIES_EXTENSION_LIST,new ModuleExtensionListProcessor()));
   deployers.get(Phase.CONFIGURE_MODULE).add(new RegisteredProcessor(Phase.CONFIGURE_MODULE_SPEC,new ModuleSpecProcessor()));
   deployers.get(Phase.MODULARIZE).add(new RegisteredProcessor(Phase.MODULARIZE_DEPLOYMENT,new ModuleDeploymentProcessor()));
+  deployers.get(Phase.INSTALL).add(new RegisteredProcessor(Phase.INSTALL_REFLECTION_INDEX,new InstallReflectionIndexProcessor()));
   deployers.get(Phase.INSTALL).add(new RegisteredProcessor(Phase.INSTALL_SERVICE_ACTIVATOR,new ServiceActivatorProcessor()));
   final EnumMap<Phase,List<DeploymentUnitProcessor>> finalDeployers=new EnumMap<Phase,List<DeploymentUnitProcessor>>(Phase.class);
   for (  Map.Entry<Phase,SortedSet<RegisteredProcessor>> entry : deployers.entrySet()) {
     final SortedSet<RegisteredProcessor> processorSet=entry.getValue();
     final List<DeploymentUnitProcessor> list=new ArrayList<DeploymentUnitProcessor>(processorSet.size());
     for (    RegisteredProcessor processor : processorSet) {
-      list.add(processor.processor);
+      list.add(processor.getProcessor());
     }
     finalDeployers.put(entry.getKey(),list);
   }
