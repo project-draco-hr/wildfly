@@ -1,14 +1,17 @@
 {
   final String queueName="queue.standalone";
   final ClientSessionFactory sf=createClientSessionFactory("localhost",5445);
-  final StandaloneClient client=StandaloneClient.Factory.create(InetAddress.getByName("localhost"),9999);
+  final ModelControllerClient client=ModelControllerClient.Factory.create(InetAddress.getByName("localhost"),9999);
   try {
     if (queueExists(queueName,sf)) {
       throw new IllegalStateException();
     }
-    final QueueAdd add=new QueueAdd(queueName);
-    add.setAddress(queueName);
-    applyUpdates(Collections.<AbstractServerModelUpdate<?>>singletonList(ServerSubsystemUpdate.create(add)),client);
+    ModelNode op=new ModelNode();
+    op.get("operation").set("add");
+    op.get("address").add("subsystem","messaging");
+    op.get("address").add("queue",queueName);
+    op.get("queue-address").set(queueName);
+    applyUpdate(op,client);
     if (!queueExists(queueName,sf)) {
       throw new IllegalStateException();
     }
@@ -29,8 +32,11 @@
         session.close();
       }
     }
-    final QueueRemove remove=new QueueRemove(queueName);
-    applyUpdates(Collections.<AbstractServerModelUpdate<?>>singletonList(ServerSubsystemUpdate.create(remove)),client);
+    op=new ModelNode();
+    op.get("operation").set("remove");
+    op.get("address").add("subsystem","messaging");
+    op.get("address").add("queue",queueName);
+    applyUpdate(op,client);
     if (queueExists(queueName,sf)) {
       throw new IllegalStateException();
     }
