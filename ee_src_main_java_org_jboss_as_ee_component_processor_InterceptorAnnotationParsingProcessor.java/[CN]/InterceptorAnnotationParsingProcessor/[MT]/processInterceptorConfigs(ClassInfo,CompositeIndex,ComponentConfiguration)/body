@@ -1,0 +1,41 @@
+{
+  final ClassInfo superClassInfo=index.getClassByName(classInfo.superName());
+  if (superClassInfo != null) {
+    processInterceptorConfigs(superClassInfo,index,componentConfiguration);
+  }
+  final Map<DotName,List<AnnotationInstance>> classAnnotations=classInfo.annotations();
+  if (classAnnotations == null) {
+    return;
+  }
+  final List<AnnotationInstance> interceptorAnnotations=classAnnotations.get(INTERCEPTORS_ANNOTATION_NAME);
+  if (interceptorAnnotations == null || interceptorAnnotations.isEmpty()) {
+    return;
+  }
+  for (  AnnotationInstance annotationInstance : interceptorAnnotations) {
+    final AnnotationValue value=annotationInstance.value();
+    if (value != null)     for (    Type interceptorClass : value.asClassArray()) {
+      final ClassInfo interceptorClassInfo=index.getClassByName(interceptorClass.name());
+      if (interceptorClassInfo == null) {
+        continue;
+      }
+      final MethodInfo aroundInvokeMethod=getAroundInvokeMethod(interceptorClassInfo);
+      validateArgumentType(classInfo,aroundInvokeMethod);
+      final AnnotationTarget target=annotationInstance.target();
+      if (target instanceof MethodInfo) {
+        final MethodInfo methodInfo=MethodInfo.class.cast(target);
+        final List<String> argTypes=new ArrayList<String>(methodInfo.args().length);
+        for (        Type argType : methodInfo.args()) {
+          argTypes.add(argType.name().toString());
+        }
+        componentConfiguration.addMethodInterceptorConfig(new MethodInterceptorConfiguration(interceptorClassInfo.name().toString(),aroundInvokeMethod.name(),new MethodInterceptorMatchFilter(methodInfo.name(),argTypes.toArray(new String[argTypes.size()]))));
+      }
+ else {
+        componentConfiguration.addClassInterceptorConfig(new MethodInterceptorConfiguration(interceptorClassInfo.name().toString(),aroundInvokeMethod.name(),MethodInterceptorAllFilter.INSTANCE));
+      }
+    }
+  }
+  final MethodInfo methodInfo=getAroundInvokeMethod(classInfo);
+  if (methodInfo != null) {
+    componentConfiguration.addComponentInterceptorConfig(new MethodInterceptorConfiguration(classInfo.name().toString(),methodInfo.name(),MethodInterceptorAllFilter.INSTANCE));
+  }
+}
