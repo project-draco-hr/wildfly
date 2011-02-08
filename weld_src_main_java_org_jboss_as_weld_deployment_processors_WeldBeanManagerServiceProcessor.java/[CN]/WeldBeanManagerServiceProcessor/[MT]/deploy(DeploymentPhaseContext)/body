@@ -1,0 +1,24 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final DeploymentUnit topLevelDeployment=deploymentUnit.getParent() == null ? deploymentUnit : deploymentUnit.getParent();
+  final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+  if (!WeldDeploymentMarker.isWeldDeployment(topLevelDeployment)) {
+    return;
+  }
+  BeanDeploymentArchiveImpl rootBda=deploymentUnit.getAttachment(BeanDeploymentArchiveImpl.ROOT_ARCHIVE_ATTACHMENT_KEY);
+  if (rootBda == null) {
+    rootBda=topLevelDeployment.getAttachment(BeanDeploymentArchiveImpl.ROOT_ARCHIVE_ATTACHMENT_KEY);
+  }
+  if (rootBda == null) {
+    throw new RuntimeException("Could not find BeanManager for deployment " + deploymentUnit.getName());
+  }
+  final ServiceName weldServiceName=deploymentUnit.getServiceName().append(WeldService.SERVICE_NAME);
+  final ServiceName beanManagerServiceName=deploymentUnit.getServiceName().append(BeanManagerService.NAME);
+  BeanManagerService beanManagerService=new BeanManagerService(rootBda.getId());
+  serviceTarget.addService(beanManagerServiceName,beanManagerService).addDependency(weldServiceName,WeldContainer.class,beanManagerService.getWeldContainer()).install();
+  final ServiceName moduleContextServiceName=ContextServiceNameBuilder.module(deploymentUnit);
+  final ServiceName beanManagerBindingServiceName=moduleContextServiceName.append("BeanManager");
+  InjectedValue<BeanManager> injectedBeanManager=new InjectedValue<BeanManager>();
+  BinderService<BeanManager> beanManagerBindingService=new BinderService<BeanManager>("BeanManager",injectedBeanManager);
+  serviceTarget.addService(beanManagerBindingServiceName,beanManagerBindingService).addDependency(moduleContextServiceName,Context.class,beanManagerBindingService.getContextInjector()).addDependency(beanManagerServiceName,BeanManager.class,injectedBeanManager).install();
+}
