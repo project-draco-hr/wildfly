@@ -1,0 +1,71 @@
+{
+  ModelNode op=new ModelNode();
+  op.get(OP).set(ADD);
+  ModelNode address=op.get(OP_ADDR);
+  EnumSet<Attribute> required=EnumSet.of(Attribute.NAME);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    requireNoNamespaceAttribute(reader,i);
+    final String value=reader.getAttributeValue(i);
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+    required.remove(attribute);
+switch (attribute) {
+case NAME:
+{
+        address.set(parentAddress).add(JAAS_APPLICATION_POLICY,value);
+        break;
+      }
+case EXTENDS:
+{
+      op.get(attribute.getLocalName()).set(value);
+      break;
+    }
+default :
+  throw unexpectedAttribute(reader,i);
+}
+}
+if (required.size() > 0) {
+throw missingRequired(reader,required);
+}
+final EnumSet<Element> visited=EnumSet.noneOf(Element.class);
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case SECURITY_1_0:
+{
+  final Element element=Element.forName(reader.getLocalName());
+  if (!visited.add(element)) {
+    throw unexpectedElement(reader);
+  }
+switch (element) {
+case AUTHENTICATION:
+{
+      parseAuthentication(reader,op.get(Element.AUTHENTICATION.getLocalName()));
+      break;
+    }
+case AUTHORIZATION:
+{
+    visited.remove(element);
+  }
+case ACL:
+case AUDIT:
+case IDENTITY_TRUST:
+case MAPPING:
+case AUTHENTICATION_JASPI:
+{
+  throw new UnsupportedOperationException("NYI: full parsing of application policy");
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+return op;
+}
