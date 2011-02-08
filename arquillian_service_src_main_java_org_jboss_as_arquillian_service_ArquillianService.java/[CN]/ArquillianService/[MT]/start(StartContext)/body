@@ -11,39 +11,21 @@
     jmxTestRunner=new JMXTestRunner(){
       @Override public TestResult runTestMethod(      String className,      String methodName,      Map<String,String> props){
         final ContextManagerBuilder builder=new ContextManagerBuilder();
-        ContextManager contextManager=null;
         ArquillianConfig config=getConfig(className);
         if (config != null) {
           final DeploymentUnit deployment=config.getDeploymentUnitContext();
           final Module module=deployment.getAttachment(Attachments.MODULE);
           builder.add(new TCCLSetup(module.getClassLoader()));
-          ServiceController<?> weldService=deployment.getServiceRegistry().getService(deployment.getServiceName().append("beanmanager"));
-          if (weldService != null) {
-            DeploymentListener listener=new DeploymentListener();
-            weldService.addListener(listener);
-            listener.waitOnDeployment();
-          }
-          ServiceName NamespaceContextSelectorServiceName=config.getDeploymentUnitContext().getServiceName().append(NamespaceSelectorService.NAME);
-          ServiceController<?> serviceController=serviceContainer.getService(NamespaceContextSelectorServiceName);
-          if (serviceController != null) {
-            DeploymentListener listener=new DeploymentListener();
-            serviceController.addListener(listener);
-            listener.waitOnDeployment();
-            builder.add(new JavaNamespaceSetup((NamespaceSelectorService)serviceController.getValue()));
-          }
-          if (weldService != null) {
-            builder.add(new WeldContextSetup());
-          }
+          builder.addAll(deployment);
         }
-        contextManager=builder.build();
-        contextManager.setup();
+        Map<String,Object> properties=Collections.<String,Object>singletonMap(TEST_CLASS_PROPERTY,className);
+        ContextManager contextManager=builder.build();
+        contextManager.setup(properties);
         try {
           return super.runTestMethod(className,methodName,props);
         }
   finally {
-          if (contextManager != null) {
-            contextManager.teardown();
-          }
+          contextManager.teardown(properties);
         }
       }
       @Override protected TestClassLoader getTestClassLoader(){
