@@ -1,0 +1,24 @@
+{
+  final ProtocolServer.Configuration config=new ProtocolServer.Configuration();
+  config.setBindAddress(new InetSocketAddress(InetAddress.getByName("localhost"),0));
+  final AtomicInteger increment=new AtomicInteger();
+  config.setThreadFactory(new ThreadFactory(){
+    @Override public Thread newThread(    Runnable r){
+      return new Thread(r,"Server-" + increment.incrementAndGet());
+    }
+  }
+);
+  config.setReadExecutor(Executors.newCachedThreadPool());
+  config.setSocketFactory(ServerSocketFactory.getDefault());
+  config.setBacklog(50);
+  config.setConnectionHandler(this);
+  server=new ProtocolServer(config);
+  server.start();
+  int port=server.getBoundAddress().getPort();
+  Connection clientConn=new ManagementRequestConnectionStrategy.EstablishConnectingStrategy(InetAddress.getByName("localhost"),port,5000,Executors.newCachedThreadPool(),Executors.defaultThreadFactory()).getConnection();
+  connectionLatch.await();
+  System.out.println("connected");
+  MessageHandler handler=new RemoteModelControllerSetup.SetupManagementHeaderMessageHandler(proxyController);
+  clientConn.setMessageHandler(handler);
+  testController.setDelegate(RemoteProxyController.create(ModelControllerClient.Type.STANDALONE,serverConn,proxyNodeAddress));
+}
