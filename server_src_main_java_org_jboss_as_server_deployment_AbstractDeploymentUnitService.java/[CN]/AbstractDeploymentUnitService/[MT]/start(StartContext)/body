@@ -1,11 +1,14 @@
 {
-  final ServiceContainer container=context.getController().getServiceContainer();
-  deploymentUnit=createAndInitializeDeploymentUnit(container);
+  ServiceTarget target=context.getChildTarget();
+  final String deploymentName=context.getController().getName().getSimpleName();
+  final DeploymentServiceListener listener=new DeploymentServiceListener(System.nanoTime(),target,deploymentName);
+  log.infof("Starting deployment of \"%s\"",deploymentName);
+  target.addListener(listener);
+  deploymentUnit=createAndInitializeDeploymentUnit(context.getController().getServiceContainer());
   final ServiceName serviceName=deploymentUnit.getServiceName().append(FIRST_PHASE_NAME);
   final Phase firstPhase=Phase.values()[0];
   final DeploymentUnitPhaseService<?> phaseService=DeploymentUnitPhaseService.create(firstPhase);
-  final ServiceBuilder<?> phaseServiceBuilder=container.addService(serviceName,phaseService);
-  phaseServiceBuilder.addDependency(deploymentUnit.getServiceName(),DeploymentUnit.class,phaseService.getDeploymentUnitInjector());
+  final ServiceBuilder<?> phaseServiceBuilder=target.addService(serviceName,phaseService);
   phaseServiceBuilder.addDependency(Services.JBOSS_DEPLOYMENT_CHAINS,DeployerChains.class,phaseService.getDeployerChainsInjector());
   phaseServiceBuilder.install();
 }
