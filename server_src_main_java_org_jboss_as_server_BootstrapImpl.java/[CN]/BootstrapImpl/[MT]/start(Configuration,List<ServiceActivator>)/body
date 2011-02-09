@@ -4,50 +4,50 @@
   }
   final ModuleLoader moduleLoader=configuration.getModuleLoader();
   final ServerEnvironment serverEnvironment=configuration.getServerEnvironment();
+  if (serverEnvironment == null) {
+    throw new IllegalArgumentException("serverEnvironment is null");
+  }
   final String name=serverEnvironment.getServerName();
-  final ServerConfigurationPersister configurationPersister=configuration.getConfigurationPersister();
+  final NewConfigurationPersister configurationPersister=configuration.getConfigurationPersister();
   if (moduleLoader == null) {
     throw new IllegalArgumentException("moduleLoader is null");
   }
   if (name == null) {
     throw new IllegalArgumentException("name is null");
   }
-  if (serverEnvironment == null) {
-    throw new IllegalArgumentException("serverEnvironment is null");
-  }
   if (configurationPersister == null) {
     throw new IllegalArgumentException("configurationPersister is null");
   }
-  final FutureServerController future=new FutureServerController(container);
+  final FutureServiceContainer future=new FutureServiceContainer(container);
   final ServiceTarget tracker=container.subTarget();
   final Service<?> applicationServerService=new ApplicationServerService(extraServices,configuration);
   tracker.addService(Services.JBOSS_AS,applicationServerService).install();
   final ServiceController<?> rootService=container.getRequiredService(Services.JBOSS_AS);
   rootService.addListener(new AbstractServiceListener<Object>(){
-    public void serviceStarted(    final ServiceController<?> controller){
+    @Override public void serviceStarted(    final ServiceController<?> controller){
       controller.removeListener(this);
       final ServiceController<?> controllerServiceController=controller.getServiceContainer().getRequiredService(Services.JBOSS_SERVER_CONTROLLER);
       controllerServiceController.addListener(new AbstractServiceListener<Object>(){
-        public void serviceStarted(        final ServiceController<?> controller){
+        @Override public void serviceStarted(        final ServiceController<?> controller){
           future.done((ServerController)controller.getValue());
           controller.removeListener(this);
         }
-        public void serviceFailed(        final ServiceController<?> controller,        final StartException reason){
+        @Override public void serviceFailed(        final ServiceController<?> controller,        final StartException reason){
           future.failed(reason);
           controller.removeListener(this);
         }
-        public void serviceRemoved(        final ServiceController<?> controller){
+        @Override public void serviceRemoved(        final ServiceController<?> controller){
           future.failed(new ServiceNotFoundException("Server controller service was removed"));
           controller.removeListener(this);
         }
       }
 );
     }
-    public void serviceFailed(    final ServiceController<?> controller,    final StartException reason){
+    @Override public void serviceFailed(    final ServiceController<?> controller,    final StartException reason){
       controller.removeListener(this);
       future.failed(reason);
     }
-    public void serviceRemoved(    final ServiceController<?> controller){
+    @Override public void serviceRemoved(    final ServiceController<?> controller){
       controller.removeListener(this);
       future.failed(new ServiceNotFoundException("Root service was removed"));
     }
