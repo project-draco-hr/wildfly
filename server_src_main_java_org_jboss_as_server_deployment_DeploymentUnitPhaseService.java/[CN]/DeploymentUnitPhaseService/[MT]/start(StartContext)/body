@@ -6,6 +6,21 @@
   final ServiceContainer container=context.getController().getServiceContainer();
   final TrackingServiceTarget serviceTarget=new TrackingServiceTarget(container.subTarget());
   final DeploymentPhaseContext processorContext=new DeploymentPhaseContextImpl(serviceTarget,new DelegatingServiceRegistry(container),deploymentUnit,phase);
+  for (  AttachedDependency attachedDependency : injectedAttachedDepenendencies) {
+    final Attachable target;
+    if (attachedDependency.isDeploymentUnit()) {
+      target=deploymentUnit;
+    }
+ else {
+      target=processorContext;
+    }
+    if (attachedDependency.getAttachmentKey() instanceof ListAttachmentKey) {
+      target.addToAttachmentList((AttachmentKey)attachedDependency.getAttachmentKey(),attachedDependency.getValue().getValue());
+    }
+ else {
+      target.putAttachment((AttachmentKey)attachedDependency.getAttachmentKey(),attachedDependency.getValue().getValue());
+    }
+  }
   while (iterator.hasNext()) {
     final DeploymentUnitProcessor processor=iterator.next();
     try {
@@ -48,6 +63,14 @@
     final List<ServiceName> nextPhaseDeps=processorContext.getAttachment(Attachments.NEXT_PHASE_DEPS);
     if (nextPhaseDeps != null) {
       phaseServiceBuilder.addDependencies(nextPhaseDeps);
+    }
+    final List<AttachableDependency> nextPhaseAttachableDeps=processorContext.getAttachment(Attachments.NEXT_PHASE_ATTACHABLE_DEPS);
+    if (nextPhaseAttachableDeps != null) {
+      for (      AttachableDependency attachableDep : nextPhaseAttachableDeps) {
+        AttachedDependency result=new AttachedDependency(attachableDep.getAttachmentKey(),attachableDep.isDeploymentUnit());
+        phaseServiceBuilder.addDependency(attachableDep.getServiceName(),result.getValue());
+        phaseService.injectedAttachedDepenendencies.add(result);
+      }
     }
     phaseServiceBuilder.install();
   }
