@@ -7,6 +7,8 @@
   ModelNode dmr=null;
   ModelNode response;
   int status=200;
+  Headers requestHeaders=http.getRequestHeaders();
+  boolean encode="application/dmr-encoded".equals(requestHeaders.getFirst("Accept")) || "application/dmr-encoded".equals(requestHeaders.getFirst("Content-Type"));
   try {
     dmr=convertToRequest(request);
     response=modelController.execute(dmr);
@@ -20,14 +22,23 @@ catch (  Throwable t) {
     http.sendResponseHeaders(500,-1);
     return;
   }
-  http.getResponseHeaders().add("Content-Type","application/json");
+  Headers responseHeaders=http.getResponseHeaders();
+  responseHeaders.add("Content-Type",encode ? "application/dmr-encoded" : "application/json");
+  responseHeaders.add("Access-Control-Allow-Origin","*");
   http.sendResponseHeaders(status,0);
   OutputStream out=http.getResponseBody();
   PrintStream print=new PrintStream(out);
+  if (status == 200)   response=response.get("result");
   try {
-    print.println(response.toJSONString(false));
+    if (encode) {
+      response.writeBase64(out);
+    }
+ else {
+      print.println(response.toJSONString(false));
+    }
   }
   finally {
+    out.flush();
     print.flush();
     print.close();
   }
