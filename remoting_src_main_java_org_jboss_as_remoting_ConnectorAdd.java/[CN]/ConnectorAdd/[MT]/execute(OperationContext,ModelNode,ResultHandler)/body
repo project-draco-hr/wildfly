@@ -1,0 +1,21 @@
+{
+  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  final String name=address.getLastElement().getValue();
+  if (context instanceof RuntimeOperationContext) {
+    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
+    final ServiceTarget target=runtimeContext.getServiceTarget();
+    final ConnectorService connectorService=new ConnectorService();
+    connectorService.setOptionMap(createOptionMap(operation));
+    final ServiceName connectorName=RemotingServices.connectorServiceName(name);
+    try {
+      target.addService(connectorName,connectorService).addDependency(connectorName.append("auth-provider"),ServerAuthenticationProvider.class,connectorService.getAuthenticationProviderInjector()).addDependency(RemotingServices.ENDPOINT,Endpoint.class,connectorService.getEndpointInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    }
+ catch (    ServiceRegistryException e) {
+      resultHandler.handleFailed(null);
+    }
+  }
+  final ModelNode compensating=Util.getResourceRemoveOperation(operation.require(OP_ADDR));
+  applyToModel(context.getSubModel(),operation);
+  resultHandler.handleResultComplete(compensating);
+  return Cancellable.NULL;
+}

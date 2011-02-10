@@ -1,0 +1,29 @@
+{
+  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  final String name=address.getLastElement().getValue();
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(REMOVE);
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  if (context instanceof RuntimeOperationContext) {
+    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
+    final ServiceTarget serviceTarget=runtimeContext.getServiceTarget();
+    final WebVirtualHostService service=new WebVirtualHostService(name,aliases(operation));
+    final ServiceBuilder<?> serviceBuilder=serviceTarget.addService(WebSubsystemServices.JBOSS_WEB_HOST.append(name),service).addDependency(AbstractPathService.pathNameOf(TEMP_DIR),String.class,service.getTempPathInjector()).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,service.getWebServer());
+    if (operation.has(CommonAttributes.ACCESS_LOG)) {
+      final ModelNode accessLog=operation.get(CommonAttributes.ACCESS_LOG);
+      service.setAccessLog(accessLog.clone());
+      accessLogService(name,accessLog,serviceTarget);
+      serviceBuilder.addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(name,CommonAttributes.ACCESS_LOG),String.class,service.getAccessLogPathInjector());
+    }
+    if (operation.has(CommonAttributes.REWRITE)) {
+      service.setRewrite(operation.get(CommonAttributes.REWRITE).clone());
+    }
+    serviceBuilder.install();
+  }
+  final ModelNode subModel=context.getSubModel();
+  subModel.get(CommonAttributes.ALIAS).set(operation.get(CommonAttributes.ALIAS));
+  subModel.get(CommonAttributes.ACCESS_LOG).set(operation.get(CommonAttributes.ACCESS_LOG));
+  subModel.get(CommonAttributes.REWRITE).set(operation.get(CommonAttributes.REWRITE));
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}

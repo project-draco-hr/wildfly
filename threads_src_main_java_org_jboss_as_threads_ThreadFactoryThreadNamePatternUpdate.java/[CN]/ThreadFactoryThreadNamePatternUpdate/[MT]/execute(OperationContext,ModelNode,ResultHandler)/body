@@ -1,0 +1,40 @@
+{
+  String failure=validator.validate(operation);
+  if (failure != null) {
+    resultHandler.handleFailed(new ModelNode().set(failure));
+    return Cancellable.NULL;
+  }
+  final String name=Util.getNameFromAddress(operation.require(OP_ADDR));
+  ModelNode model=context.getSubModel();
+  if (!model.isDefined()) {
+    resultHandler.handleFailed(notConfigured(name));
+    return Cancellable.NULL;
+  }
+  ModelNode oldValue=model.get(CommonAttributes.THREAD_NAME_PATTERN);
+  String newNamePattern=null;
+  ModelNode newValue;
+  if (operation.hasDefined(VALUE)) {
+    newValue=operation.get(VALUE);
+    newNamePattern=newValue.resolve().asString();
+  }
+ else {
+    newValue=new ModelNode();
+  }
+  model.get(CommonAttributes.THREAD_NAME_PATTERN).set(newValue);
+  if (context instanceof RuntimeOperationContext) {
+    final RuntimeOperationContext updateContext=(RuntimeOperationContext)context;
+    final ServiceController<?> service=updateContext.getServiceRegistry().getService(ThreadsServices.threadFactoryName(name));
+    if (service == null) {
+      resultHandler.handleFailed(notConfigured(name));
+      return Cancellable.NULL;
+    }
+ else {
+      final ThreadFactoryService threadFactoryService=(ThreadFactoryService)service.getValue();
+      threadFactoryService.setNamePattern(newNamePattern);
+    }
+  }
+  final ModelNode compensatingOp=operation.clone();
+  compensatingOp.get(VALUE).set(oldValue);
+  resultHandler.handleResultComplete(compensatingOp);
+  return Cancellable.NULL;
+}

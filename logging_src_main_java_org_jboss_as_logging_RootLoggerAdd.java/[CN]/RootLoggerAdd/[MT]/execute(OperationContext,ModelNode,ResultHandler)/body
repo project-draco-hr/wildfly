@@ -1,0 +1,34 @@
+{
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  compensatingOperation.get(OP).set("remove-root-logger");
+  final String level=operation.require(CommonAttributes.LEVEL).asString();
+  final ModelNode handlers=operation.get(CommonAttributes.HANDLERS);
+  if (context instanceof RuntimeOperationContext) {
+    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
+    final ServiceTarget target=runtimeContext.getServiceTarget();
+    try {
+      final RootLoggerService service=new RootLoggerService();
+      service.setLevel(Level.parse(level));
+      target.addService(LogServices.ROOT_LOGGER,service).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    }
+ catch (    Throwable t) {
+      resultHandler.handleFailed(new ModelNode().set(t.getLocalizedMessage()));
+      return Cancellable.NULL;
+    }
+    try {
+      if (handlers.getType() != ModelType.UNDEFINED) {
+        LogServices.installLoggerHandlers(target,"",handlers);
+      }
+    }
+ catch (    Throwable t) {
+      resultHandler.handleFailed(new ModelNode().set(t.getLocalizedMessage()));
+      return Cancellable.NULL;
+    }
+  }
+  final ModelNode subModel=context.getSubModel();
+  subModel.get(CommonAttributes.ROOT_LOGGER,CommonAttributes.LEVEL).set(level);
+  subModel.get(CommonAttributes.ROOT_LOGGER,CommonAttributes.HANDLERS).set(handlers);
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}

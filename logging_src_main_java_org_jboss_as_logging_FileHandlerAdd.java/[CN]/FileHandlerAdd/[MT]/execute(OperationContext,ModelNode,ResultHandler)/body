@@ -1,0 +1,47 @@
+{
+  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  final String name=address.getLastElement().getValue();
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  compensatingOperation.get(OP).set(REMOVE);
+  final String handlerType=operation.require(HANDLER_TYPE).asString();
+  final LoggerHandlerType type=LoggerHandlerType.valueOf(handlerType);
+  if (type != LoggerHandlerType.FILE_HANDLER) {
+    resultHandler.handleFailed(new ModelNode().set("invalid operation for handler-type: " + type));
+  }
+  if (context instanceof RuntimeOperationContext) {
+    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
+    final ServiceTarget serviceTarget=runtimeContext.getServiceTarget();
+    try {
+      final FileHandlerService service=new FileHandlerService();
+      final ServiceBuilder<Handler> serviceBuilder=serviceTarget.addService(LogServices.handlerName(name),service);
+      if (operation.hasDefined(FILE)) {
+        if (operation.get(FILE).hasDefined(RELATIVE_TO)) {
+          serviceBuilder.addDependency(AbstractPathService.pathNameOf(operation.get(FILE,RELATIVE_TO).asString()),String.class,service.getRelativeToInjector());
+        }
+        service.setPath(operation.get(FILE,PATH).asString());
+      }
+      service.setLevel(Level.parse(operation.get(LEVEL).asString()));
+      final Boolean autoFlush=operation.get(AUTOFLUSH).asBoolean();
+      if (autoFlush != null)       service.setAutoflush(autoFlush.booleanValue());
+      if (operation.hasDefined(ENCODING))       service.setEncoding(operation.get(ENCODING).asString());
+      if (operation.hasDefined(FORMATTER))       service.setFormatterSpec(createFormatterSpec(operation));
+      serviceBuilder.setInitialMode(ServiceController.Mode.ACTIVE);
+      serviceBuilder.install();
+    }
+ catch (    Throwable t) {
+      resultHandler.handleFailed(new ModelNode().set(t.getLocalizedMessage()));
+      return Cancellable.NULL;
+    }
+  }
+  final ModelNode subModel=context.getSubModel();
+  subModel.get(AUTOFLUSH).set(operation.get(AUTOFLUSH));
+  subModel.get(ENCODING).set(operation.get(ENCODING));
+  subModel.get(HANDLER_TYPE).set(handlerType);
+  subModel.get(FORMATTER).set(operation.get(FORMATTER));
+  subModel.get(LEVEL).set(operation.get(LEVEL));
+  subModel.get(FILE).set(operation.get(FILE));
+  subModel.get(QUEUE_LENGTH).set(operation.get(QUEUE_LENGTH));
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}

@@ -1,0 +1,49 @@
+{
+  final ModelNode model=context.getSubModel();
+  PathAddress rootAddress=PathAddress.pathAddress(PathAddress.pathAddress(operation.require(OP_ADDR)).getLastElement());
+  final ModelNode result=new ModelNode();
+  result.add(LoggingExtension.NewLoggingSubsystemAdd.createOperation(rootAddress.toModelNode()));
+  if (model.hasDefined(ROOT_LOGGER)) {
+    ModelNode add=Util.getEmptyOperation(RootLoggerAdd.OPERATION_NAME,rootAddress.toModelNode());
+    add.get(LEVEL).set(model.get(ROOT_LOGGER,LEVEL));
+    add.get(HANDLERS).set(model.get(ROOT_LOGGER,HANDLERS));
+    result.add(add);
+  }
+  if (model.hasDefined(LOGGER)) {
+    for (    Property prop : model.get(LOGGER).asPropertyList()) {
+      ModelNode add=Util.getEmptyOperation(ADD,rootAddress.append(PathElement.pathElement(LOGGER,prop.getName())).toModelNode());
+      add.get(HANDLERS).set(prop.getValue().get(HANDLERS));
+      add.get(LEVEL).set(prop.getValue().get(LEVEL));
+      result.add(add);
+    }
+  }
+  if (model.hasDefined(HANDLER)) {
+    for (    Property prop : model.get(HANDLER).asPropertyList()) {
+      final String name=prop.getName();
+      final ModelNode handler=prop.getValue();
+      final LoggerHandlerType type=Enum.valueOf(LoggerHandlerType.class,handler.get(HANDLER_TYPE).asString());
+switch (type) {
+case ASYNC_HANDLER:
+        result.add(defineAsynchHandler(name,handler,rootAddress));
+      break;
+case CONSOLE_HANDLER:
+    result.add(defineConsoleHandler(name,handler,rootAddress));
+  break;
+case FILE_HANDLER:
+result.add(defineFileHandler(name,handler,rootAddress));
+break;
+case PERIODIC_ROTATING_FILE_HANDLER:
+result.add(definePeriodicRotatingFileHandler(name,handler,rootAddress));
+break;
+case SIZE_ROTATING_FILE_HANDLER:
+result.add(defineSizeRotatingFileHandler(name,handler,rootAddress));
+break;
+default :
+break;
+}
+}
+}
+resultHandler.handleResultFragment(Util.NO_LOCATION,result);
+resultHandler.handleResultComplete(new ModelNode());
+return Cancellable.NULL;
+}

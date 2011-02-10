@@ -1,0 +1,26 @@
+{
+  log.infof("Activating OSGi Subsystem");
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(REMOVE);
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  if (context instanceof BootOperationContext) {
+    log.infof("Activating OSGi Subsystem");
+    final BootOperationContext updateContext=(BootOperationContext)context;
+    final ServiceTarget target=updateContext.getServiceTarget();
+    SubsystemState subsystemState=createSubsystemState(operation);
+    String value=SecurityActions.getSystemProperty("jboss.protocol.handler.modules","org.jboss.osgi.framework");
+    if (!value.equals("org.jboss.osgi.framework"))     value=value + "|org.jboss.osgi.framework";
+    SecurityActions.setSystemProperty("jboss.protocol.handler.modules",value);
+    Activation policy=subsystemState.getActivationPolicy();
+    BundleManagerService.addService(target,subsystemState);
+    FrameworkService.addService(target,subsystemState);
+    BundleContextService.addService(target,policy);
+    PackageAdminService.addService(target);
+    StartLevelService.addService(target);
+    ConfigAdminServiceImpl.addService(target,subsystemState);
+    new OSGiDeploymentActivator().activate(updateContext);
+  }
+  populateSubModel(context.getSubModel(),operation);
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}

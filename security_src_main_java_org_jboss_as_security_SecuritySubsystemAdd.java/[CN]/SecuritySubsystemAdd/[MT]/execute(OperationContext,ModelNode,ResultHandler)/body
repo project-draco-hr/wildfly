@@ -1,0 +1,51 @@
+{
+  final ModelNode compensatingOperation=Util.getResourceRemoveOperation(operation.require(OP_ADDR));
+  String authManagerClassName="default";
+  String callbackHandlerClassName="default";
+  boolean deepCopySubject=DEFAULT_DEEP_COPY_OPERATION_MODE;
+  String subjectFactoryClassName="default";
+  final ModelNode subModel=context.getSubModel();
+  if (operation.hasDefined(AUTHENTICATION_MANAGER_CLASS_NAME)) {
+    authManagerClassName=operation.get(AUTHENTICATION_MANAGER_CLASS_NAME).asString();
+    subModel.get(AUTHENTICATION_MANAGER_CLASS_NAME).set(authManagerClassName);
+  }
+  if (operation.hasDefined(DEEP_COPY_SUBJECT_MODE)) {
+    deepCopySubject=operation.get(DEEP_COPY_SUBJECT_MODE).asBoolean();
+    subModel.get(DEEP_COPY_SUBJECT_MODE).set(deepCopySubject);
+  }
+  if (operation.hasDefined(DEFAULT_CALLBACK_HANDLER_CLASS_NAME)) {
+    callbackHandlerClassName=operation.get(DEFAULT_CALLBACK_HANDLER_CLASS_NAME).asString();
+    subModel.get(DEFAULT_CALLBACK_HANDLER_CLASS_NAME).set(callbackHandlerClassName);
+  }
+  if (operation.hasDefined(SUBJECT_FACTORY_CLASS_NAME)) {
+    subjectFactoryClassName=operation.get(SUBJECT_FACTORY_CLASS_NAME).asString();
+    subModel.get(SUBJECT_FACTORY_CLASS_NAME).set(SUBJECT_FACTORY_CLASS_NAME);
+  }
+  subModel.get(JAAS_APPLICATION_POLICY).setEmptyObject();
+  if (context instanceof BootOperationContext) {
+    final BootOperationContext updateContext=(BootOperationContext)context;
+    updateContext.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_MODULE,new SecurityDependencyProcessor());
+    final ServiceTarget target=updateContext.getServiceTarget();
+    final SecurityBootstrapService bootstrapService=new SecurityBootstrapService();
+    target.addService(SecurityBootstrapService.SERVICE_NAME,bootstrapService).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    final Reference reference=SecurityDomainObjectFactory.createReference("JSM");
+    final JaasBinderService binderService=new JaasBinderService(Values.immediateValue(reference));
+    target.addService(JaasBinderService.SERVICE_NAME,binderService).addDependency(JavaContextService.SERVICE_NAME,Context.class,binderService.getContextInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    if ("default".equals(authManagerClassName)) {
+      authManagerClassName=AUTHENTICATION_MANAGER;
+    }
+    if ("default".equals(callbackHandlerClassName)) {
+      callbackHandlerClassName=CALLBACK_HANDLER;
+    }
+    final SecurityManagementService securityManagementService=new SecurityManagementService(authManagerClassName,deepCopySubject,callbackHandlerClassName,AUTHORIZATION_MANAGER);
+    target.addService(SecurityManagementService.SERVICE_NAME,securityManagementService).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    if ("default".equals(subjectFactoryClassName))     subjectFactoryClassName=SUBJECT_FACTORY;
+    final SubjectFactoryService subjectFactoryService=new SubjectFactoryService(subjectFactoryClassName);
+    target.addService(SubjectFactoryService.SERVICE_NAME,subjectFactoryService).addDependency(SecurityManagementService.SERVICE_NAME,ISecurityManagement.class,subjectFactoryService.getSecurityManagementInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    Configuration loginConfig=XMLLoginConfigImpl.getInstance();
+    final JaasConfigurationService jaasConfigurationService=new JaasConfigurationService(loginConfig);
+    target.addService(JaasConfigurationService.SERVICE_NAME,jaasConfigurationService).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  }
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}

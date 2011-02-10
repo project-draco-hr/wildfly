@@ -1,0 +1,37 @@
+{
+  final ModelNode config=operation.get(CommonAttributes.CONTAINER_CONFIG);
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(REMOVE);
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  if (updateContext instanceof BootOperationContext) {
+    final BootOperationContext ctx=(BootOperationContext)updateContext;
+    final String defaultHost=operation.has(CommonAttributes.DEFAULT_HOST) ? operation.get(CommonAttributes.DEFAULT_HOST).asString() : DEFAULT_HOST;
+    try {
+      final WebServerService service=new WebServerService(defaultHost);
+      ctx.getServiceTarget().addService(WebSubsystemServices.JBOSS_WEB,service).addDependency(AbstractPathService.pathNameOf(TEMP_DIR),String.class,service.getPathInjector()).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,service.getMbeanServer()).setInitialMode(Mode.ON_DEMAND).install();
+    }
+ catch (    Throwable t) {
+      resultHandler.handleFailed(new ModelNode().set(t.getLocalizedMessage()));
+      return Cancellable.NULL;
+    }
+    final SharedWebMetaDataBuilder sharedWebBuilder=new SharedWebMetaDataBuilder(config.clone());
+    final SharedTldsMetaDataBuilder sharedTldsBuilder=new SharedTldsMetaDataBuilder(config.clone());
+    ctx.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_WAR_DEPLOYMENT_INIT,new WarDeploymentInitializingProcessor());
+    ctx.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_WAR,new WarStructureDeploymentProcessor(sharedWebBuilder.create(),sharedTldsBuilder.create()));
+    ctx.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_WEB_DEPLOYMENT,new WebParsingDeploymentProcessor());
+    ctx.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_WEB_DEPLOYMENT_FRAGMENT,new WebFragmentParsingDeploymentProcessor());
+    ctx.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_JBOSS_WEB_DEPLOYMENT,new JBossWebParsingDeploymentProcessor());
+    ctx.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_TLD_DEPLOYMENT,new TldParsingDeploymentProcessor());
+    ctx.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_WAR_MODULE,new WarClassloadingDependencyProcessor());
+    ctx.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_ANNOTATION_WAR,new WarAnnotationDeploymentProcessor());
+    ctx.addDeploymentProcessor(Phase.INSTALL,Phase.INSTALL_SERVLET_INIT_DEPLOYMENT,new ServletContainerInitializerDeploymentProcessor());
+    ctx.addDeploymentProcessor(Phase.INSTALL,Phase.INSTALL_WAR_METADATA,new WarMetaDataProcessor());
+    ctx.addDeploymentProcessor(Phase.INSTALL,Phase.INSTALL_WAR_DEPLOYMENT,new WarDeploymentProcessor(defaultHost));
+  }
+  final ModelNode subModel=updateContext.getSubModel();
+  subModel.get(CommonAttributes.CONTAINER_CONFIG).set(config);
+  subModel.get(CommonAttributes.CONNECTOR).setEmptyObject();
+  subModel.get(CommonAttributes.VIRTUAL_SERVER).setEmptyObject();
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}

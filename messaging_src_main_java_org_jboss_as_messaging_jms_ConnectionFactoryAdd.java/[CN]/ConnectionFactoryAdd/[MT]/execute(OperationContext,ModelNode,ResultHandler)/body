@@ -1,0 +1,21 @@
+{
+  ModelNode opAddr=operation.require(OP_ADDR);
+  final PathAddress address=PathAddress.pathAddress(opAddr);
+  final String name=address.getLastElement().getValue();
+  final ModelNode compensatingOperation=Util.getResourceRemoveOperation(opAddr);
+  final ModelNode subModel=context.getSubModel();
+  for (  final String attribute : JMSServices.CF_ATTRIBUTES) {
+    if (operation.hasDefined(attribute)) {
+      subModel.get(attribute).set(operation.get(attribute));
+    }
+  }
+  if (context instanceof RuntimeOperationContext) {
+    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
+    final ConnectionFactoryConfiguration configuration=createConfiguration(name,operation);
+    final ConnectionFactoryService service=new ConnectionFactoryService(configuration);
+    final ServiceName serviceName=JMSServices.JMS_CF_BASE.append(name);
+    runtimeContext.getServiceTarget().addService(serviceName,service).addDependency(JMSServices.JMS_MANAGER,JMSServerManager.class,service.getJmsServer()).setInitialMode(Mode.ACTIVE).install();
+  }
+  resultHandler.handleResultComplete(compensatingOperation);
+  return Cancellable.NULL;
+}
