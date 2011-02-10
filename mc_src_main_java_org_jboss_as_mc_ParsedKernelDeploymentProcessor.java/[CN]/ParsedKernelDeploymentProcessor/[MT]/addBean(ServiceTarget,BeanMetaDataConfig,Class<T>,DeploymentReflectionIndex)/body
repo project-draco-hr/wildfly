@@ -1,0 +1,32 @@
+{
+  final ClassReflectionIndex<T> index=deploymentIndex.getClassIndex(clazz);
+  final Constructor<T> constructor=index.getConstructor();
+  final List<? extends Value<?>> args=Collections.emptyList();
+  final ServiceName beanServiceName=JBOSS_MC_POJO.append(beanConfig.getName());
+  final ServiceName instantiatedServiceName=beanServiceName.append(BeanState.INSTANTIATED.name());
+  final ValueService<T> instantiatedService=new ValueService<T>(new ConstructedValue(Values.immediateValue(constructor),args));
+  final ServiceBuilder<T> instantiatedServiceBuilder=serviceTarget.addService(instantiatedServiceName,instantiatedService);
+  instantiatedServiceBuilder.install();
+  final ServiceName configuredServiceName=beanServiceName.append(BeanState.CONFIGURED.name());
+  final ServiceBuilder<T> configuredServiceBuilder=serviceTarget.addService(configuredServiceName,new ValueService<T>(instantiatedService));
+  configuredServiceBuilder.addDependency(instantiatedServiceName).install();
+  final String createName="create";
+  final String destroyName="destroy";
+  final Method create=getInstanceMethod(index,createName);
+  final Method destroy=getInstanceMethod(index,destroyName);
+  final McLifecycleService<T> createService=new McLifecycleService<T>(create,destroy);
+  final ServiceName createServiceName=beanServiceName.append(BeanState.CREATE.name());
+  final ServiceBuilder<T> createServiceBuilder=serviceTarget.addService(createServiceName,createService);
+  createServiceBuilder.addDependency(configuredServiceName,clazz,createService.getValueInjector()).install();
+  final String startName="start";
+  final String stopName="stop";
+  final Method start=getInstanceMethod(index,startName);
+  final Method stop=getInstanceMethod(index,stopName);
+  final McLifecycleService<T> startService=new McLifecycleService<T>(start,stop);
+  final ServiceName startServiceName=beanServiceName.append(BeanState.START.name());
+  final ServiceBuilder<T> startServiceBuilder=serviceTarget.addService(startServiceName,startService);
+  startServiceBuilder.addDependency(createServiceName,clazz,startService.getValueInjector()).install();
+  final ServiceName installedServiceName=beanServiceName.append(BeanState.INSTALLED.name());
+  final ServiceBuilder<T> installedServiceBuilder=serviceTarget.addService(installedServiceName,new ValueService<T>(startService));
+  installedServiceBuilder.addDependency(startServiceName).install();
+}
