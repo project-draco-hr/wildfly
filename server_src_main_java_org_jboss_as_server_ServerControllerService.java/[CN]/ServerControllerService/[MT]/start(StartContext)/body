@@ -46,21 +46,25 @@
   final File[] extDirs=serverEnvironment.getJavaExtDirs();
   final File[] newExtDirs=Arrays.copyOf(extDirs,extDirs.length + 1);
   newExtDirs[extDirs.length]=new File(serverEnvironment.getServerBaseDir(),"lib/ext");
-  serviceTarget.addService(org.jboss.as.server.deployment.Services.JBOSS_DEPLOYMENT_EXTENSION_INDEX,new ExtensionIndexService(newExtDirs)).setInitialMode(ServiceController.Mode.ON_DEMAND);
-  deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_DEPLOYMENT_MODULE_LOADER,new DeploymentUnitProcessor(){
+  serviceTarget.addService(org.jboss.as.server.deployment.Services.JBOSS_DEPLOYMENT_EXTENSION_INDEX,new ExtensionIndexService(newExtDirs)).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_SERVICE_MODULE_LOADER,new DeploymentUnitProcessor(){
     @Override public void deploy(    DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
-      phaseContext.getDeploymentUnit().putAttachment(Attachments.DEPLOYMENT_MODULE_LOADER,injectedModuleLoader.getValue());
+      phaseContext.getDeploymentUnit().putAttachment(Attachments.SERVICE_MODULE_LOADER,injectedModuleLoader.getValue());
+      phaseContext.getDeploymentUnit().putAttachment(Attachments.EXTERNAL_MODULE_SERVICE,injectedExternalModuleServie.getValue());
     }
     @Override public void undeploy(    DeploymentUnit context){
-      context.removeAttachment(Attachments.DEPLOYMENT_MODULE_LOADER);
+      context.removeAttachment(Attachments.SERVICE_MODULE_LOADER);
     }
   }
 ));
   deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_MOUNT,new DeploymentRootMountProcessor()));
   deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_MANIFEST,new ManifestAttachmentProcessor()));
   deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_SUB_DEPLOYMENT,new SubDeploymentProcessor()));
+  deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_MODULE_IDENTIFIERS,new ModuleIdentifierProcessor()));
   deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_ANNOTATION_INDEX,new AnnotationIndexProcessor()));
   deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_COMPOSITE_ANNOTATION_INDEX,new CompositeIndexProcessor()));
+  deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_EAR_LIB_CLASS_PATH,new EarLibManifestClassPathProcessor()));
+  deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_ADDITIONAL_MODULES,new AdditionalModuleProcessor()));
   deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_CLASS_PATH,new ManifestClassPathProcessor()));
   deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_EXTENSION_LIST,new ManifestExtensionListProcessor()));
   deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_SERVICE_LOADER_DEPLOYMENT,new ServiceLoaderProcessor()));
@@ -69,7 +73,6 @@
   deployers.get(Phase.DEPENDENCIES).add(new RegisteredProcessor(Phase.DEPENDENCIES_CLASS_PATH,new ModuleClassPathProcessor()));
   deployers.get(Phase.DEPENDENCIES).add(new RegisteredProcessor(Phase.DEPENDENCIES_EXTENSION_LIST,new ModuleExtensionListProcessor()));
   deployers.get(Phase.CONFIGURE_MODULE).add(new RegisteredProcessor(Phase.CONFIGURE_MODULE_SPEC,new ModuleSpecProcessor()));
-  deployers.get(Phase.MODULARIZE).add(new RegisteredProcessor(Phase.MODULARIZE_DEPLOYMENT,new ModuleDeploymentProcessor()));
   deployers.get(Phase.INSTALL).add(new RegisteredProcessor(Phase.INSTALL_REFLECTION_INDEX,new InstallReflectionIndexProcessor()));
   deployers.get(Phase.INSTALL).add(new RegisteredProcessor(Phase.INSTALL_SERVICE_ACTIVATOR,new ServiceActivatorProcessor()));
   final EnumMap<Phase,List<DeploymentUnitProcessor>> finalDeployers=new EnumMap<Phase,List<DeploymentUnitProcessor>>(Phase.class);

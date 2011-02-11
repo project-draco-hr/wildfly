@@ -1,0 +1,56 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final List<ResourceRoot> resourceRoots=DeploymentUtils.allResourceRoots(deploymentUnit);
+  final Boolean ear=deploymentUnit.getAttachment(Attachments.EAR_DEPLOYMENT_MARKER);
+  if (ear == null || !ear) {
+    return;
+  }
+  final DeploymentUnit parent=deploymentUnit.getParent();
+  final DeploymentUnit topLevelDeployment=parent == null ? deploymentUnit : parent;
+  final VirtualFile toplevelRoot=topLevelDeployment.getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
+  final ExternalModuleService externalModuleService=topLevelDeployment.getAttachment(Attachments.EXTERNAL_MODULE_SERVICE);
+  final Map<VirtualFile,ResourceRoot> files=new HashMap<VirtualFile,ResourceRoot>();
+  for (  ResourceRoot resourceRoot : resourceRoots) {
+    files.put(resourceRoot.getRoot(),resourceRoot);
+  }
+  final Deque<ResourceRoot> libResourceRoots=new ArrayDeque<ResourceRoot>();
+  for (  ResourceRoot resourceRoot : resourceRoots) {
+    final Boolean marker=resourceRoot.getAttachment(Attachments.EAR_LIB_RESOURCE_MARKER);
+    if (marker != null && marker) {
+      libResourceRoots.add(resourceRoot);
+    }
+  }
+  while (!libResourceRoots.isEmpty()) {
+    final ResourceRoot resourceRoot=libResourceRoots.pop();
+    final String[] items=getClassPathEntries(resourceRoot);
+    for (    String item : items) {
+      final VirtualFile classPathFile=resourceRoot.getRoot().getParent().getChild(item);
+      if (!classPathFile.exists()) {
+        throw new DeploymentUnitProcessingException("Class Path entry " + item + " in "+ resourceRoot.getRoot()+ "  not found. ");
+      }
+      if (isInside(classPathFile,toplevelRoot)) {
+        if (!files.containsKey(classPathFile)) {
+          throw new DeploymentUnitProcessingException("Class Path entry " + item + " in "+ resourceRoot.getRoot()+ "  does not point to a valid jar for a Class-Path reference.");
+        }
+ else {
+          final ResourceRoot target=files.get(classPathFile);
+          final Boolean marker=target.getAttachment(Attachments.EAR_LIB_RESOURCE_MARKER);
+          if (SubDeploymentMarker.isSubDeployment(target)) {
+            throw new DeploymentUnitProcessingException("Class Path entry " + item + " in "+ resourceRoot.getRoot()+ "  may not point to a sub deployment.");
+          }
+ else           if (marker == null || !marker) {
+            target.putAttachment(Attachments.EAR_LIB_RESOURCE_MARKER,true);
+            ModuleRootMarker.markRoot(target);
+            libResourceRoots.push(target);
+            log.debugf("Resource %s added to logical lib directory due to Class-Path entry in %s",classPathFile,target.getRoot());
+          }
+        }
+      }
+ else {
+        ModuleIdentifier moduleIdentifier=externalModuleService.addExternalModule(classPathFile);
+        deploymentUnit.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES,moduleIdentifier);
+        log.debugf("Resource %s added as external jar %s",classPathFile,resourceRoot.getRoot());
+      }
+    }
+  }
+}

@@ -1,31 +1,23 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
-  final AttachmentList<ClassPathEntry> entries=deploymentUnit.getAttachment(Attachments.CLASS_PATH_ENTRIES);
-  if (entries == null || entries.isEmpty()) {
-    return;
-  }
-  final AttachmentList<ResourceRoot> resourceRoots=deploymentUnit.getAttachment(Attachments.RESOURCE_ROOTS);
-  final DeploymentUnit parent=deploymentUnit.getParent();
-  if (parent == null) {
-    AttachmentList<ServiceName> deps=phaseContext.getAttachment(Attachments.NEXT_PHASE_DEPS);
-    if (deps == null)     phaseContext.putAttachment(Attachments.NEXT_PHASE_DEPS,deps=new AttachmentList<ServiceName>(ServiceName.class));
-    for (    ClassPathEntry entry : entries) {
-      final String classPath=entry.getRelativeUrl();
-      final String deploymentName;
-      int firstSlash=classPath.indexOf('/');
-      if (firstSlash != -1) {
-        deploymentName=classPath.substring(0,firstSlash);
-      }
- else {
-        deploymentName=classPath;
-      }
-      if (deploymentName.equals(".") || deploymentName.equals("..")) {
-        throw new DeploymentUnitProcessingException("Invalid relative path '" + classPath + "' in class path entry");
-      }
-      deps.add(Services.deploymentUnitName(deploymentName,phaseContext.getPhase()));
+  final ModuleLoader moduleLoader=deploymentUnit.getAttachment(Attachments.SERVICE_MODULE_LOADER);
+  final AttachmentList<ModuleIdentifier> entries=deploymentUnit.getAttachment(Attachments.CLASS_PATH_ENTRIES);
+  if (entries != null) {
+    for (    ModuleIdentifier entry : entries) {
+      deploymentUnit.addToAttachmentList(Attachments.MODULE_DEPENDENCIES,new ModuleDependency(moduleLoader,entry,false,false,true));
     }
   }
- else {
-    throw new DeploymentUnitProcessingException("Class-Path on subdeployments not yet supported");
+  final List<AdditionalModule> additionalModules=deploymentUnit.getAttachment(Attachments.ADDITIONAL_MODULES);
+  if (additionalModules != null) {
+    for (    AdditionalModule additionalModule : additionalModules) {
+      final AttachmentList<ModuleIdentifier> dependencies=additionalModule.getAttachment(Attachments.CLASS_PATH_ENTRIES);
+      if (dependencies == null || dependencies.isEmpty()) {
+        continue;
+      }
+      for (      ModuleIdentifier entry : dependencies) {
+        additionalModule.addDependency(new ModuleDependency(moduleLoader,entry,false,true,true));
+      }
+      additionalModule.addDependency(new ModuleDependency(moduleLoader,deploymentUnit.getAttachment(Attachments.MODULE_IDENTIFIER),false,false,true));
+    }
   }
 }

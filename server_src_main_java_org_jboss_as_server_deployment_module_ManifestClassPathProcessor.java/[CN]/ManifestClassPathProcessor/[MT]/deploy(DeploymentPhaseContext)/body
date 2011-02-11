@@ -1,15 +1,66 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
-  final Manifest manifest=deploymentUnit.getAttachment(Attachments.MANIFEST);
-  if (manifest == null) {
-    return;
+  final List<ResourceRoot> resourceRoots=DeploymentUtils.allResourceRoots(deploymentUnit);
+  final DeploymentUnit parent=deploymentUnit.getParent();
+  final DeploymentUnit topLevelDeployment=parent == null ? deploymentUnit : parent;
+  final VirtualFile toplevelRoot=topLevelDeployment.getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
+  final ExternalModuleService externalModuleService=topLevelDeployment.getAttachment(Attachments.EXTERNAL_MODULE_SERVICE);
+  final List<AdditionalModule> additionalModuleList=topLevelDeployment.getAttachment(Attachments.ADDITIONAL_MODULES);
+  final List<ResourceRoot> topLevelResourceRoots=topLevelDeployment.getAttachment(Attachments.RESOURCE_ROOTS);
+  final Map<VirtualFile,AdditionalModule> additionalModules;
+  if (additionalModuleList == null) {
+    additionalModules=Collections.emptyMap();
   }
-  final String classPathString=manifest.getMainAttributes().getValue(Attributes.Name.CLASS_PATH);
-  if (classPathString == null) {
-    return;
+ else {
+    additionalModules=new HashMap<VirtualFile,AdditionalModule>();
+    for (    AdditionalModule module : additionalModuleList) {
+      additionalModules.put(module.getResourceRoot().getRoot(),module);
+    }
   }
-  final String[] items=classPathString.split("\\s+");
-  for (  String item : items) {
-    deploymentUnit.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES,new ClassPathEntry(item));
+  final Set<VirtualFile> earLibJars=new HashSet<VirtualFile>();
+  if (topLevelResourceRoots != null) {
+    for (    ResourceRoot resourceRoot : topLevelResourceRoots) {
+      final Boolean marker=resourceRoot.getAttachment(Attachments.EAR_LIB_RESOURCE_MARKER);
+      if (marker != null && marker) {
+        earLibJars.add(resourceRoot.getRoot());
+      }
+    }
+  }
+  for (  ResourceRoot resourceRoot : resourceRoots) {
+    final Boolean marker=resourceRoot.getAttachment(Attachments.EAR_LIB_RESOURCE_MARKER);
+    if (marker != null && marker) {
+      continue;
+    }
+    final Attachable target;
+    if (additionalModules.containsKey(resourceRoot.getRoot())) {
+      target=additionalModules.get(resourceRoot.getRoot());
+    }
+ else {
+      target=deploymentUnit;
+    }
+    final String[] items=getClassPathEntries(resourceRoot);
+    for (    String item : items) {
+      final VirtualFile classPathFile=resourceRoot.getRoot().getParent().getChild(item);
+      if (!classPathFile.exists()) {
+        throw new DeploymentUnitProcessingException("Class Path entry " + item + " in "+ resourceRoot.getRoot()+ "  not found. ");
+      }
+      if (isInside(classPathFile,toplevelRoot)) {
+        if (earLibJars.contains(classPathFile)) {
+          log.debugf("Class-Path entry %s in %s ignored, as target is in or referenced by /lib",classPathFile,resourceRoot.getRoot());
+          continue;
+        }
+ else         if (additionalModules.containsKey(classPathFile)) {
+          target.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES,additionalModules.get(classPathFile).getModuleIdentifier());
+        }
+ else {
+          throw new DeploymentUnitProcessingException("Class Path entry " + item + " in "+ resourceRoot.getRoot()+ "  does not point to a valid jar for a Class-Path reference.");
+        }
+      }
+ else {
+        ModuleIdentifier moduleIdentifier=externalModuleService.addExternalModule(classPathFile);
+        target.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES,moduleIdentifier);
+        log.debugf("Resource %s added as external jar %s",classPathFile,resourceRoot.getRoot());
+      }
+    }
   }
 }

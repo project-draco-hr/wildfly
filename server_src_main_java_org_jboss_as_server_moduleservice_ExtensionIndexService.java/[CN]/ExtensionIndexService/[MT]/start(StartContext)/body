@@ -1,0 +1,44 @@
+{
+  serviceContainer=context.getController().getServiceContainer();
+  context.getController().compareAndSetMode(ServiceController.Mode.ON_DEMAND,ServiceController.Mode.ACTIVE);
+  extensions.clear();
+  for (  File root : extensionRoots) {
+    final File[] jars=root.listFiles(new FileFilter(){
+      public boolean accept(      final File file){
+        return file.getName().endsWith(".jar") && !file.isDirectory();
+      }
+    }
+);
+    if (jars != null)     for (    File jar : jars)     try {
+      final JarFile jarFile=new JarFile(jar);
+      try {
+        final Manifest manifest=jarFile.getManifest();
+        final Attributes mainAttributes=manifest.getMainAttributes();
+        final String extensionName=mainAttributes.getValue(Attributes.Name.EXTENSION_NAME);
+        if (extensionName == null) {
+          continue;
+        }
+        final String implVersion=mainAttributes.getValue(Attributes.Name.IMPLEMENTATION_VERSION);
+        final String specVersion=mainAttributes.getValue(Attributes.Name.SPECIFICATION_VERSION);
+        final String implVendorId=mainAttributes.getValue(Attributes.Name.IMPLEMENTATION_VENDOR_ID);
+        jarFile.close();
+        Set<ExtensionJar> extensionJarSet=extensions.get(extensionName);
+        if (extensionJarSet == null)         extensions.put(extensionName,extensionJarSet=new LinkedHashSet<ExtensionJar>());
+        ModuleIdentifier moduleIdentifier=moduleIdentifier(extensionName,specVersion,implVersion,implVendorId);
+        ExtensionJar extensionJar=new ExtensionJar(moduleIdentifier,implVersion,implVendorId,specVersion,jar.getAbsolutePath());
+        if (extensionJarSet.contains(extensionJar))         continue;
+        ExternalModuleSpecService service=new ExternalModuleSpecService(moduleIdentifier,jar);
+        serviceContainer.addService(ServiceModuleLoader.moduleSpecServiceName(moduleIdentifier),service).addDependency(org.jboss.as.server.deployment.Services.JBOSS_DEPLOYMENT_EXTENSION_INDEX).setInitialMode(Mode.ON_DEMAND).install();
+        ModuleLoadService.install(serviceContainer,moduleIdentifier,Collections.<ModuleDependency>emptyList());
+        extensionJarSet.add(extensionJar);
+      }
+  finally {
+        VFSUtils.safeClose(jarFile);
+      }
+    }
+ catch (    IOException e) {
+      log.debugf("Failed to process JAR manifest for %s: %s",jar,e);
+      continue;
+    }
+  }
+}

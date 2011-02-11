@@ -1,0 +1,50 @@
+{
+  final ModuleSpec.Builder specBuilder=ModuleSpec.build(moduleIdentifier);
+  for (  ResourceRoot resourceRoot : resourceRoots) {
+    addResourceRoot(specBuilder,resourceRoot);
+  }
+  final boolean childFirst=false;
+  if (childFirst) {
+    specBuilder.addDependency(DependencySpec.createLocalDependencySpec());
+  }
+  if (dependencies != null)   for (  ModuleDependency dependency : dependencies) {
+    final List<FilterSpecification> importFilters=dependency.getImportFilters();
+    final List<FilterSpecification> exportFilters=dependency.getExportFilters();
+    final PathFilter importFilter;
+    final PathFilter exportFilter;
+    final MultiplePathFilterBuilder importBuilder=PathFilters.multiplePathFilterBuilder(true);
+    for (    FilterSpecification filter : importFilters) {
+      importBuilder.addFilter(filter.getPathFilter(),filter.isInclude());
+    }
+    if (dependency.isImportServices()) {
+      importBuilder.addFilter(PathFilters.getMetaInfServicesFilter(),true);
+    }
+    importBuilder.addFilter(PathFilters.getMetaInfSubdirectoriesFilter(),false);
+    importBuilder.addFilter(PathFilters.getMetaInfFilter(),false);
+    importFilter=importBuilder.create();
+    if (exportFilters.isEmpty()) {
+      exportFilter=PathFilters.acceptAll();
+    }
+ else {
+      final MultiplePathFilterBuilder exportBuilder=PathFilters.multiplePathFilterBuilder(dependency.isExport());
+      for (      FilterSpecification filter : exportFilters) {
+        exportBuilder.addFilter(filter.getPathFilter(),filter.isInclude());
+      }
+      exportFilter=exportBuilder.create();
+    }
+    DependencySpec depSpec=DependencySpec.createModuleDependencySpec(importFilter,exportFilter,dependency.getModuleLoader(),dependency.getIdentifier(),dependency.isOptional());
+    specBuilder.addDependency(depSpec);
+    final String depName=dependency.getIdentifier().getName();
+    if (depName.startsWith(ServiceModuleLoader.MODULE_PREFIX)) {
+      phaseContext.addToAttachmentList(Attachments.NEXT_PHASE_DEPS,ServiceModuleLoader.moduleSpecServiceName(dependency.getIdentifier()));
+    }
+  }
+  if (!childFirst) {
+    specBuilder.addDependency(DependencySpec.createLocalDependencySpec());
+  }
+  final ModuleSpec moduleSpec=specBuilder.create();
+  final ServiceName moduleSpecServiceName=ServiceModuleLoader.moduleSpecServiceName(moduleIdentifier);
+  final ValueService<ModuleSpec> moduleSpecService=new ValueService<ModuleSpec>(new ImmediateValue<ModuleSpec>(moduleSpec));
+  phaseContext.getServiceTarget().addService(moduleSpecServiceName,moduleSpecService).addDependencies(deploymentUnit.getServiceName()).addDependencies(phaseContext.getPhaseServiceName()).setInitialMode(Mode.ON_DEMAND).install();
+  return ModuleLoadService.install(phaseContext.getServiceTarget(),moduleIdentifier,dependencies);
+}
