@@ -5,13 +5,31 @@
   this.serverModel=hostModel.require(SERVER).require(serverName);
   this.domainControllerConnection=domainControllerConnection;
   this.environment=environment;
-  String serverGroupName=serverModel.require(GROUP).asString();
-  this.profileName=domainModel.require(SERVER_GROUP).require(serverGroupName).require(PROFILE).asString();
-  if (serverModel.hasDefined(SOCKET_BINDING_PORT_OFFSET)) {
-    this.portOffSet=serverModel.get(SOCKET_BINDING_PORT_OFFSET).asInt();
+  final String serverGroupName=serverModel.require(GROUP).asString();
+  this.serverGroup=domainModel.require(SERVER_GROUP).require(serverGroupName);
+  this.profileName=serverGroup.require(PROFILE).asString();
+  String serverVMName=null;
+  ModelNode serverVM=null;
+  if (serverModel.hasDefined(JVM)) {
+    for (    final String jvm : serverModel.get(JVM).keys()) {
+      serverVMName=jvm;
+      serverVM=serverModel.get(JVM,jvm);
+      break;
+    }
   }
- else {
-    final ModelNode groupNode=domainModel.require(SERVER_GROUP).require(serverGroupName);
-    this.portOffSet=groupNode.hasDefined(SOCKET_BINDING_PORT_OFFSET) ? groupNode.get(SOCKET_BINDING_PORT_OFFSET).asInt() : 0;
+  String groupVMName=null;
+  ModelNode groupVM=null;
+  if (serverGroup.hasDefined(JVM)) {
+    for (    final String jvm : serverGroup.get(JVM).keys()) {
+      groupVMName=jvm;
+      groupVM=serverGroup.get(JVM,jvm);
+      break;
+    }
   }
+  final String jvmName=serverVMName != null ? serverVMName : groupVMName;
+  if (jvmName == null) {
+    throw new IllegalStateException("Neither " + Element.SERVER_GROUP.getLocalName() + " nor "+ Element.SERVER.getLocalName()+ " has declared a JVM configuration; one or the other must");
+  }
+  final ModelNode hostVM=hostModel.get(JVM,jvmName);
+  this.jvmElement=new JvmElement(jvmName,hostVM,groupVM,serverVM);
 }
