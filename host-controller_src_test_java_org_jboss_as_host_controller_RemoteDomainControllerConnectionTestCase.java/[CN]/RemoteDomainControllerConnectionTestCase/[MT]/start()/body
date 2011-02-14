@@ -1,0 +1,36 @@
+{
+  domainController=new DomainControllerImpl(new ExtensibleConfigurationPersister(){
+    @Override public void registerSubsystemWriter(    String name,    XMLElementWriter<SubsystemMarshallingContext> writer){
+    }
+    @Override public void registerSubsystemDeploymentWriter(    String name,    XMLElementWriter<SubsystemMarshallingContext> writer){
+    }
+    @Override public void store(    ModelNode model) throws ConfigurationPersistenceException {
+    }
+    @Override public void marshallAsXml(    ModelNode model,    OutputStream output) throws ConfigurationPersistenceException {
+    }
+    @Override public List<ModelNode> load() throws ConfigurationPersistenceException {
+      return null;
+    }
+  }
+);
+  domainControllerOperationHandlerImpl=new DomainControllerOperationHandlerImpl(ModelControllerClient.Type.HOST,domainController,new ServerConnectionHandler());
+  ModelNode add=new ModelNode();
+  add.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.ADD);
+  add.get(ModelDescriptionConstants.OP_ADDR).set(PathAddress.pathAddress(PathElement.pathElement(ModelDescriptionConstants.PROFILE,"test")).toModelNode());
+  domainController.execute(add);
+  final ProtocolServer.Configuration config=new ProtocolServer.Configuration();
+  config.setBindAddress(new InetSocketAddress(InetAddress.getByName("localhost"),0));
+  final AtomicInteger increment=new AtomicInteger();
+  config.setThreadFactory(new ThreadFactory(){
+    @Override public Thread newThread(    Runnable r){
+      return new Thread(r,"Server-" + increment.incrementAndGet());
+    }
+  }
+);
+  config.setReadExecutor(Executors.newCachedThreadPool());
+  config.setSocketFactory(ServerSocketFactory.getDefault());
+  config.setBacklog(50);
+  config.setConnectionHandler(new ServerConnectionHandler());
+  server=new ProtocolServer(config);
+  server.start();
+}
