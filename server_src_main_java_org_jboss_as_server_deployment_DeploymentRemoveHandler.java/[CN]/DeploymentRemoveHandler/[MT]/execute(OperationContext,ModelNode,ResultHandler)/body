@@ -1,12 +1,30 @@
 {
   try {
-    ModelNode model=context.getSubModel();
+    final ModelNode model=context.getSubModel();
     if (model.get(START).asBoolean()) {
       String msg=String.format("Deployment %s must be undeployed before being removed",model.get(NAME).asString());
       resultHandler.handleFailed(new ModelNode().set(msg));
     }
  else {
-      resultHandler.handleResultComplete(DeploymentAddHandler.getOperation(operation.get(OP_ADDR),model));
+      final ModelNode compensatingOp=DeploymentAddHandler.getOperation(operation.get(OP_ADDR),model);
+      if (context instanceof RuntimeOperationContext) {
+        RuntimeOperationContext updateContext=(RuntimeOperationContext)context;
+        String deploymentUnitName=model.require(NAME).asString();
+        final ServiceName deploymentUnitServiceName=Services.deploymentUnitName(deploymentUnitName);
+        final ServiceRegistry serviceRegistry=updateContext.getServiceRegistry();
+        final ServiceController<?> controller=serviceRegistry.getService(deploymentUnitServiceName);
+        controller.addListener(new AbstractServiceListener<Object>(){
+          @Override public void serviceRemoved(          ServiceController<? extends Object> controller){
+            resultHandler.handleResultComplete(compensatingOp);
+            controller.removeListener(this);
+          }
+        }
+);
+        controller.setMode(ServiceController.Mode.REMOVE);
+      }
+ else {
+        resultHandler.handleResultComplete(compensatingOp);
+      }
     }
   }
  catch (  Exception e) {
