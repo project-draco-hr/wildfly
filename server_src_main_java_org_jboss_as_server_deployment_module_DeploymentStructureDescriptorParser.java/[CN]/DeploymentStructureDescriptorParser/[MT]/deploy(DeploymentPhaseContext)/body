@@ -1,0 +1,61 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final ResourceRoot resourceRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  final ServiceModuleLoader moduleLoader=deploymentUnit.getAttachment(Attachments.SERVICE_MODULE_LOADER);
+  VirtualFile deploymentFile=null;
+  for (  String loc : DEPLOYMENT_STRUCTURE_DESCRIPTOR_LOCATIONS) {
+    VirtualFile file=resourceRoot.getRoot().getChild(loc);
+    if (file.exists()) {
+      deploymentFile=file;
+      break;
+    }
+  }
+  if (deploymentFile == null) {
+    return;
+  }
+  if (deploymentUnit.getParent() != null) {
+    log.warnf("%s in subdeployment ignored. jboss-deployment.xml is only parsed for top level deployments.",deploymentFile.getPathName());
+    return;
+  }
+  try {
+    ParseResult result=parse(deploymentFile.getPhysicalFile(),resourceRoot.getRoot(),moduleLoader);
+    if (result.rootDeploymentSpecification != null) {
+      ModuleSpecification moduleSpec=deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
+      moduleSpec.addDependencies(result.rootDeploymentSpecification.getModuleDependencies());
+      for (      ResourceRoot additionalResourceRoot : result.rootDeploymentSpecification.getResourceRoots()) {
+        deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,additionalResourceRoot);
+      }
+      moduleSpec.setChildFirst(result.rootDeploymentSpecification.getChildFirst());
+    }
+    final AttachmentList<DeploymentUnit> subDeployments=deploymentUnit.getAttachment(Attachments.SUB_DEPLOYMENTS);
+    final Map<String,DeploymentUnit> subDeploymentMap=new HashMap<String,DeploymentUnit>();
+    for (    final DeploymentUnit subDeployment : subDeployments) {
+      final ResourceRoot subDeploymentRoot=subDeployment.getAttachment(Attachments.DEPLOYMENT_ROOT);
+      String path=subDeploymentRoot.getRoot().getPathNameRelativeTo(resourceRoot.getRoot());
+      subDeploymentMap.put(path,subDeployment);
+    }
+    for (    Entry<String,ModuleStructureSpec> subDeploymentResult : result.subDeploymentSpecifications.entrySet()) {
+      final String path=subDeploymentResult.getKey();
+      final ModuleStructureSpec spec=subDeploymentResult.getValue();
+      if (!subDeploymentMap.containsKey(path)) {
+        throw subDeploymentNotFound(path,subDeploymentMap.keySet());
+      }
+      final DeploymentUnit subDeployment=subDeploymentMap.get(path);
+      ModuleSpecification moduleSpec=subDeployment.getAttachment(Attachments.MODULE_SPECIFICATION);
+      moduleSpec.addDependencies(spec.getModuleDependencies());
+      for (      ResourceRoot additionalResourceRoot : spec.getResourceRoots()) {
+        subDeployment.addToAttachmentList(Attachments.RESOURCE_ROOTS,additionalResourceRoot);
+      }
+      moduleSpec.setChildFirst(spec.getChildFirst());
+    }
+    for (    final ModuleStructureSpec additionalModule : result.additionalModules) {
+      AdditionalModuleSpecification additional=new AdditionalModuleSpecification(additionalModule.getModuleIdentifier(),additionalModule.getResourceRoots());
+      additional.addDependencies(additionalModule.getModuleDependencies());
+      deploymentUnit.addToAttachmentList(Attachments.ADDITIONAL_MODULES,additional);
+      additional.setChildFirst(additionalModule.getChildFirst());
+    }
+  }
+ catch (  IOException e) {
+    throw new DeploymentUnitProcessingException(e);
+  }
+}

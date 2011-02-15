@@ -1,0 +1,81 @@
+{
+  String name=null;
+  String slot=null;
+  boolean export=false;
+  boolean optional=false;
+  Disposition services=Disposition.NONE;
+  final Set<Attribute> required=EnumSet.of(Attribute.NAME);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final Attribute attribute=Attribute.of(reader.getAttributeName(i));
+    required.remove(attribute);
+switch (attribute) {
+case NAME:
+      name=reader.getAttributeValue(i);
+    break;
+case SLOT:
+  slot=reader.getAttributeValue(i);
+break;
+case EXPORT:
+export=Boolean.parseBoolean(reader.getAttributeValue(i));
+break;
+case SERVICES:
+services=Disposition.of(reader.getAttributeValue(i));
+break;
+case OPTIONAL:
+optional=Boolean.parseBoolean(reader.getAttributeValue(i));
+break;
+default :
+throw unexpectedContent(reader);
+}
+}
+if (!required.isEmpty()) {
+throw missingAttributes(reader.getLocation(),required);
+}
+ModuleDependency dependency=new ModuleDependency(moduleLoader,ModuleIdentifier.create(name,slot),optional,export,services == Disposition.IMPORT);
+specBuilder.addModuleDependency(dependency);
+while (reader.hasNext()) {
+switch (reader.nextTag()) {
+case XMLStreamConstants.END_ELEMENT:
+{
+if (services == Disposition.EXPORT) {
+dependency.addExportFilter(PathFilters.getMetaInfServicesFilter(),true);
+}
+if (export) {
+dependency.addExportFilter(PathFilters.getMetaInfSubdirectoriesFilter(),false);
+dependency.addExportFilter(PathFilters.getMetaInfFilter(),false);
+}
+if (dependency.getImportFilters().isEmpty()) {
+dependency.addImportFilter(services == Disposition.NONE ? PathFilters.getDefaultImportFilter() : PathFilters.getDefaultImportFilterWithServices(),true);
+}
+ else {
+if (services != Disposition.NONE) {
+dependency.addImportFilter(PathFilters.getMetaInfServicesFilter(),true);
+}
+dependency.addImportFilter(PathFilters.getMetaInfSubdirectoriesFilter(),false);
+dependency.addImportFilter(PathFilters.getMetaInfFilter(),false);
+}
+specBuilder.addModuleDependency(dependency);
+return;
+}
+case XMLStreamConstants.START_ELEMENT:
+{
+switch (Element.of(reader.getName())) {
+case EXPORTS:
+parseFilterList(reader,dependency.getExportFilters());
+break;
+case IMPORTS:
+parseFilterList(reader,dependency.getImportFilters());
+break;
+default :
+throw unexpectedContent(reader);
+}
+break;
+}
+default :
+{
+throw unexpectedContent(reader);
+}
+}
+}
+}
