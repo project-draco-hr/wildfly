@@ -6,7 +6,7 @@
   final ResourceRoot resourceRoot=phaseContext.getDeploymentUnit().getAttachment(Attachments.DEPLOYMENT_ROOT);
   final VirtualFile virtualFile=resourceRoot.getRoot();
   resourceRoot.putAttachment(Attachments.INDEX_RESOURCE_ROOT,false);
-  ResourceRootTypeMarker.setType(ResourceRootType.EAR,resourceRoot);
+  ModuleRootMarker.mark(resourceRoot,false);
   String libDirName=DEFAULT_LIB_DIR;
   final JBossAppMetaData appMetaData=deploymentUnit.getAttachment(org.jboss.as.ee.structure.Attachments.JBOSS_APP_METADATA);
   final EarMetaData earMetaData=deploymentUnit.getAttachment(org.jboss.as.ee.structure.Attachments.EAR_METADATA);
@@ -37,7 +37,7 @@
           final MountHandle mountHandle=new MountHandle(closable);
           final ResourceRoot childResource=new ResourceRoot(child,mountHandle);
           if (child.getName().toLowerCase().endsWith(JAR_EXTENSION)) {
-            ResourceRootTypeMarker.setType(ResourceRootType.EAR_LIB_JAR,childResource);
+            ModuleRootMarker.mark(childResource);
             deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,childResource);
           }
         }
@@ -70,7 +70,7 @@
         final ResourceRoot childResource=new ResourceRoot(child,mountHandle);
         deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,childResource);
         if (child.getName().toLowerCase().endsWith(WAR_EXTENSION)) {
-          ResourceRootTypeMarker.setType(ResourceRootType.WAR,childResource);
+          SubDeploymentMarker.mark(childResource);
           childResource.putAttachment(Attachments.INDEX_RESOURCE_ROOT,false);
         }
       }
@@ -88,41 +88,25 @@
         deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,childResource);
         childResource.putAttachment(org.jboss.as.ee.structure.Attachments.MODULE_META_DATA,module);
         subDeploymentFiles.add(moduleFile);
-switch (module.getType()) {
-case Web:
+        SubDeploymentMarker.mark(childResource);
+        if (module.getType() == ModuleType.Web) {
           childResource.putAttachment(Attachments.INDEX_RESOURCE_ROOT,false);
-        ResourceRootTypeMarker.setType(ResourceRootType.WAR,childResource);
-      break;
-case Ejb:
-    ResourceRootTypeMarker.setType(ResourceRootType.EJB_JAR,childResource);
-  break;
-case Client:
-ResourceRootTypeMarker.setType(ResourceRootType.APPLICATION_CLIENT,childResource);
-break;
-case Connector:
-ResourceRootTypeMarker.setType(ResourceRootType.CONNECTOR,childResource);
-break;
-case Service:
-ResourceRootTypeMarker.setType(ResourceRootType.SERVICE,childResource);
-break;
-default :
-throw new DeploymentUnitProcessingException("Unkown sub deployment type: " + module.getType());
-}
-}
-for (final VirtualFile child : childArchives) {
-if (subDeploymentFiles.contains(child)) {
-continue;
-}
-if (child.getName().toLowerCase().endsWith(JAR_EXTENSION)) {
-final Closeable closable=child.isFile() ? VFS.mountZip(child,child,TempFileProviderService.provider()) : null;
-final MountHandle mountHandle=new MountHandle(closable);
-final ResourceRoot childResource=new ResourceRoot(child,mountHandle);
-deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,childResource);
-}
-}
-}
-}
- catch (IOException e) {
-throw new DeploymentUnitProcessingException("Failed to process children for EAR [" + virtualFile + "]",e);
-}
+        }
+      }
+      for (      final VirtualFile child : childArchives) {
+        if (subDeploymentFiles.contains(child)) {
+          continue;
+        }
+        if (child.getName().toLowerCase().endsWith(JAR_EXTENSION)) {
+          final Closeable closable=child.isFile() ? VFS.mountZip(child,child,TempFileProviderService.provider()) : null;
+          final MountHandle mountHandle=new MountHandle(closable);
+          final ResourceRoot childResource=new ResourceRoot(child,mountHandle);
+          deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,childResource);
+        }
+      }
+    }
+  }
+ catch (  IOException e) {
+    throw new DeploymentUnitProcessingException("Failed to process children for EAR [" + virtualFile + "]",e);
+  }
 }
