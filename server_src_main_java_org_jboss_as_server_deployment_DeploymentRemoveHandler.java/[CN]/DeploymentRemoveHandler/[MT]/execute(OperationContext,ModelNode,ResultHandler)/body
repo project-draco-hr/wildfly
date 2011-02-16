@@ -1,34 +1,36 @@
 {
+  final ModelNode model=context.getSubModel();
+  final ModelNode compensatingOp=DeploymentAddHandler.getOperation(operation.get(OP_ADDR),model);
   try {
-    final ModelNode model=context.getSubModel();
     if (model.get(START).asBoolean()) {
       String msg=String.format("Deployment %s must be undeployed before being removed",model.get(NAME).asString());
-      resultHandler.handleFailed(new ModelNode().set(msg));
+      throw new OperationFailedException(new ModelNode().set(msg));
     }
  else {
-      final ModelNode compensatingOp=DeploymentAddHandler.getOperation(operation.get(OP_ADDR),model);
       if (context instanceof RuntimeOperationContext) {
-        RuntimeOperationContext updateContext=(RuntimeOperationContext)context;
-        String deploymentUnitName=model.require(NAME).asString();
-        final ServiceName deploymentUnitServiceName=Services.deploymentUnitName(deploymentUnitName);
-        final ServiceRegistry serviceRegistry=updateContext.getServiceRegistry();
-        final ServiceController<?> controller=serviceRegistry.getService(deploymentUnitServiceName);
-        controller.addListener(new AbstractServiceListener<Object>(){
-          @Override public void serviceRemoved(          ServiceController<? extends Object> controller){
-            resultHandler.handleResultComplete(compensatingOp);
-            controller.removeListener(this);
+        RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+          public void execute(          RuntimeTaskContext context,          final ResultHandler resultHandler) throws OperationFailedException {
+            String deploymentUnitName=model.require(NAME).asString();
+            final ServiceName deploymentUnitServiceName=Services.deploymentUnitName(deploymentUnitName);
+            final ServiceRegistry serviceRegistry=context.getServiceRegistry();
+            final ServiceController<?> controller=serviceRegistry.getService(deploymentUnitServiceName);
+            if (controller != null) {
+              controller.addListener(new ResultHandler.ServiceRemoveListener(resultHandler));
+            }
+ else {
+              resultHandler.handleResultComplete();
+            }
           }
         }
-);
-        controller.setMode(ServiceController.Mode.REMOVE);
+,resultHandler);
       }
  else {
-        resultHandler.handleResultComplete(compensatingOp);
+        resultHandler.handleResultComplete();
       }
     }
   }
  catch (  Exception e) {
-    resultHandler.handleFailed(new ModelNode().set(e.toString()));
+    throw new OperationFailedException(new ModelNode().set(e.toString()));
   }
-  return Cancellable.NULL;
+  return new BasicOperationResult(compensatingOp);
 }

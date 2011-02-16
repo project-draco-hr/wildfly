@@ -1,21 +1,27 @@
 {
   final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
   final String name=address.getLastElement().getValue();
+  applyToModel(context.getSubModel(),operation);
   if (context instanceof RuntimeOperationContext) {
-    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
-    final ServiceTarget target=runtimeContext.getServiceTarget();
-    final ConnectorService connectorService=new ConnectorService();
-    connectorService.setOptionMap(createOptionMap(operation));
-    final ServiceName connectorName=RemotingServices.connectorServiceName(name);
-    try {
-      target.addService(connectorName,connectorService).addDependency(connectorName.append("auth-provider"),ServerAuthenticationProvider.class,connectorService.getAuthenticationProviderInjector()).addDependency(RemotingServices.ENDPOINT,Endpoint.class,connectorService.getEndpointInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      ResultHandler resultHandler) throws OperationFailedException {
+        final ServiceTarget target=context.getServiceTarget();
+        final ConnectorService connectorService=new ConnectorService();
+        connectorService.setOptionMap(createOptionMap(operation));
+        final ServiceName connectorName=RemotingServices.connectorServiceName(name);
+        try {
+          target.addService(connectorName,connectorService).addDependency(connectorName.append("auth-provider"),ServerAuthenticationProvider.class,connectorService.getAuthenticationProviderInjector()).addDependency(RemotingServices.ENDPOINT,Endpoint.class,connectorService.getEndpointInjector()).setInitialMode(ServiceController.Mode.ACTIVE).addListener(new ResultHandler.ServiceStartListener(resultHandler)).install();
+        }
+ catch (        ServiceRegistryException e) {
+          throw new OperationFailedException(new ModelNode().set(e.getLocalizedMessage()));
+        }
+      }
     }
- catch (    ServiceRegistryException e) {
-      resultHandler.handleFailed(null);
-    }
+,resultHandler);
+  }
+ else {
+    resultHandler.handleResultComplete();
   }
   final ModelNode compensating=Util.getResourceRemoveOperation(operation.require(OP_ADDR));
-  applyToModel(context.getSubModel(),operation);
-  resultHandler.handleResultComplete(compensating);
-  return Cancellable.NULL;
+  return new BasicOperationResult(compensating);
 }

@@ -31,18 +31,8 @@ synchronized (model) {
       @Override public void handleResultFragment(      final String[] location,      final ModelNode result){
         handler.handleResultFragment(location,result);
       }
-      @Override public void handleResultComplete(      final ModelNode compensatingOperation){
-        final ModelNode model=BasicModelController.this.model;
-synchronized (model) {
-          if (operationHandler instanceof ModelRemoveOperationHandler) {
-            address.remove(model);
-          }
- else {
-            address.navigate(model,true).set(subModel);
-          }
-          persistConfiguration(model);
-        }
-        handler.handleResultComplete(compensatingOperation);
+      @Override public void handleResultComplete(){
+        handler.handleResultComplete();
       }
       @Override public void handleFailed(      final ModelNode failureDescription){
         handler.handleFailed(failureDescription);
@@ -52,11 +42,30 @@ synchronized (model) {
       }
     }
  : handler;
-    return doExecute(context,operation,operationHandler,useHandler);
+    try {
+      final OperationResult result=doExecute(context,operation,operationHandler,useHandler);
+      if (operationHandler instanceof ModelUpdateOperationHandler) {
+        final ModelNode model=this.model;
+synchronized (model) {
+          if (operationHandler instanceof ModelRemoveOperationHandler) {
+            address.remove(model);
+          }
+ else {
+            address.navigate(model,true).set(subModel);
+          }
+          persistConfiguration(model);
+        }
+      }
+      return result;
+    }
+ catch (    OperationFailedException e) {
+      useHandler.handleFailed(e.getFailureDescription());
+      return new BasicOperationResult();
+    }
   }
  catch (  final Throwable t) {
     log.errorf(t,"operation (%s) failed - address: (%s)",operation.get(OP),operation.get(OP_ADDR));
     handler.handleFailed(getFailureResult(t));
-    return Cancellable.NULL;
+    return new BasicOperationResult();
   }
 }

@@ -4,32 +4,30 @@
     ModelNode includes=context.getSubModel().get(INCLUDE);
     ModelNode toRemove=null;
     String failure=typeValidator.validateParameter(INCLUDE,param);
-    if (failure == null) {
-      ModelNode newList=new ModelNode().setEmptyList();
-      String group=param.asString();
-      if (includes.isDefined()) {
-        for (        ModelNode included : includes.asList()) {
-          if (!group.equals(included.asString())) {
-            toRemove=newList.add(included);
-            break;
-          }
+    if (failure != null) {
+      throw new OperationFailedException(new ModelNode().set(failure));
+    }
+    ModelNode newList=new ModelNode().setEmptyList();
+    String group=param.asString();
+    if (includes.isDefined()) {
+      for (      ModelNode included : includes.asList()) {
+        if (!group.equals(included.asString())) {
+          toRemove=newList.add(included);
+          break;
         }
       }
-      if (toRemove != null) {
-        includes.set(newList);
-        ModelNode compensating=SocketBindingGroupIncludeAddHandler.getOperation(operation.get(OP_ADDR),group);
-        resultHandler.handleResultComplete(compensating);
-      }
- else {
-        failure="No included group with name " + group + "found";
-      }
     }
-    if (failure != null) {
-      resultHandler.handleFailed(new ModelNode().set(failure));
+    if (toRemove != null) {
+      includes.set(newList);
+      resultHandler.handleResultComplete();
+      ModelNode compensating=SocketBindingGroupIncludeAddHandler.getOperation(operation.get(OP_ADDR),group);
+      return new BasicOperationResult(compensating);
+    }
+ else {
+      throw new OperationFailedException(new ModelNode().set("No included group with name " + group + "found"));
     }
   }
  catch (  Exception e) {
-    resultHandler.handleFailed(new ModelNode().set(e.getLocalizedMessage()));
+    throw new OperationFailedException(new ModelNode().set(e.getLocalizedMessage()));
   }
-  return Cancellable.NULL;
 }

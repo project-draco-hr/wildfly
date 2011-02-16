@@ -5,12 +5,21 @@
   final ModelNode subModel=context.getSubModel();
   final ModelNode compensatingOperation=JMSTopicAdd.getOperation(opAddr,subModel);
   if (context instanceof RuntimeOperationContext) {
-    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
-    final ServiceController<?> service=runtimeContext.getServiceRegistry().getService(JMSServices.JMS_TOPIC_BASE.append(name));
-    if (service != null) {
-      service.setMode(Mode.REMOVE);
+    RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      ResultHandler resultHandler) throws OperationFailedException {
+        final ServiceController<?> service=context.getServiceRegistry().getService(JMSServices.JMS_TOPIC_BASE.append(name));
+        if (service != null) {
+          service.addListener(new ResultHandler.ServiceRemoveListener(resultHandler));
+        }
+ else {
+          resultHandler.handleResultComplete();
+        }
+      }
     }
+,resultHandler);
   }
-  resultHandler.handleResultComplete(compensatingOperation);
-  return Cancellable.NULL;
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensatingOperation);
 }

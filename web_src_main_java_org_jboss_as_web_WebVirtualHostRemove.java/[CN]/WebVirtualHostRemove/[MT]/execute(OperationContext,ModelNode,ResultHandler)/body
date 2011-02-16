@@ -4,12 +4,21 @@
   final ModelNode subModel=context.getSubModel();
   final ModelNode compensatingOperation=WebVirtualHostAdd.getAddOperation(operation.require(OP_ADDR),subModel);
   if (context instanceof RuntimeOperationContext) {
-    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
-    final ServiceController<?> service=runtimeContext.getServiceRegistry().getService(WebSubsystemServices.JBOSS_WEB_HOST.append(name));
-    if (service != null) {
-      service.setMode(Mode.REMOVE);
+    RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      final ResultHandler resultHandler) throws OperationFailedException {
+        final ServiceController<?> service=context.getServiceRegistry().getService(WebSubsystemServices.JBOSS_WEB_HOST.append(name));
+        if (service != null) {
+          service.addListener(new ResultHandler.ServiceRemoveListener(resultHandler));
+        }
+ else {
+          resultHandler.handleResultComplete();
+        }
+      }
     }
+,resultHandler);
   }
-  resultHandler.handleResultComplete(compensatingOperation);
-  return Cancellable.NULL;
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensatingOperation);
 }

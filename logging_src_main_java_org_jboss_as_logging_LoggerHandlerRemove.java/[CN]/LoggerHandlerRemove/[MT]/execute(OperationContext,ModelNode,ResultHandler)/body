@@ -9,18 +9,24 @@
     compensatingOperation.get(property.getName()).set(property.getValue());
   }
   if (context instanceof RuntimeOperationContext) {
-    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
-    final ServiceRegistry registry=runtimeContext.getServiceRegistry();
-    try {
-      final ServiceController<?> controller=registry.getService(LogServices.handlerName(name));
-      if (controller != null) {
-        controller.setMode(ServiceController.Mode.REMOVE);
+    RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      ResultHandler resultHandler) throws OperationFailedException {
+        final ServiceRegistry registry=context.getServiceRegistry();
+        try {
+          final ServiceController<?> controller=registry.getService(LogServices.handlerName(name));
+          if (controller != null) {
+            controller.addListener(new ResultHandler.ServiceRemoveListener(resultHandler));
+          }
+        }
+ catch (        Throwable t) {
+          throw new OperationFailedException(new ModelNode().set(t.getLocalizedMessage()));
+        }
       }
     }
- catch (    Throwable t) {
-      resultHandler.handleFailed(new ModelNode().set(t.getLocalizedMessage()));
-    }
+,resultHandler);
   }
-  resultHandler.handleResultComplete(compensatingOperation);
-  return Cancellable.NULL;
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensatingOperation);
 }

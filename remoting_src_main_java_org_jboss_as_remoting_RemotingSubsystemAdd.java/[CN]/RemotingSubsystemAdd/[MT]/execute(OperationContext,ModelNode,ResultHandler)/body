@@ -1,15 +1,21 @@
 {
-  String threadPoolName=operation.require(THREAD_POOL).asString();
+  final String threadPoolName=operation.require(THREAD_POOL).asString();
   context.getSubModel().get(THREAD_POOL).set(threadPoolName);
   context.getSubModel().get(CONNECTOR).setEmptyObject();
   final ModelNode compensating=Util.getResourceRemoveOperation(operation.require(OP_ADDR));
   if (context instanceof RuntimeOperationContext) {
-    final RuntimeOperationContext updateContext=(RuntimeOperationContext)context;
-    final EndpointService endpointService=new EndpointService();
-    endpointService.setOptionMap(OptionMap.EMPTY);
-    final Injector<Executor> executorInjector=endpointService.getExecutorInjector();
-    updateContext.getServiceTarget().addService(RemotingServices.ENDPOINT,endpointService).addDependency(ThreadsServices.executorName(threadPoolName),new CastingInjector<Executor>(executorInjector,Executor.class)).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      ResultHandler resultHandler) throws OperationFailedException {
+        final EndpointService endpointService=new EndpointService();
+        endpointService.setOptionMap(OptionMap.EMPTY);
+        final Injector<Executor> executorInjector=endpointService.getExecutorInjector();
+        context.getServiceTarget().addService(RemotingServices.ENDPOINT,endpointService).addDependency(ThreadsServices.executorName(threadPoolName),new CastingInjector<Executor>(executorInjector,Executor.class)).setInitialMode(ServiceController.Mode.ACTIVE).addListener(new ResultHandler.ServiceStartListener(resultHandler)).install();
+      }
+    }
+,resultHandler);
   }
-  resultHandler.handleResultComplete(compensating);
-  return Cancellable.NULL;
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensating);
 }

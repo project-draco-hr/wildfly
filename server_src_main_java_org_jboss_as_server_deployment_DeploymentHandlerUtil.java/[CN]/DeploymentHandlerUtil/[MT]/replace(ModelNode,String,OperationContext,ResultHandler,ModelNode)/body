@@ -1,21 +1,32 @@
 {
-  if (context instanceof RuntimeOperationContext) {
-    RuntimeOperationContext updateContext=(RuntimeOperationContext)context;
-    final ServiceController<?> controller=updateContext.getServiceRegistry().getService(Services.JBOSS_DEPLOYMENT_UNIT.append(toReplace));
-    if (controller != null) {
-      controller.addListener(new AbstractServiceListener<Object>(){
-        @Override public void serviceRemoved(        ServiceController<? extends Object> serviceController){
-          deploy(deploymentModel,context,resultHandler,compensatingOp);
+  if (operationContext instanceof RuntimeOperationContext) {
+    RuntimeOperationContext.class.cast(operationContext).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      final ResultHandler resultHandler) throws OperationFailedException {
+        final ServiceController<?> controller=context.getServiceRegistry().getService(Services.JBOSS_DEPLOYMENT_UNIT.append(toReplace));
+        if (controller != null) {
+          controller.addListener(new AbstractServiceListener<Object>(){
+            public void listenerAdded(            ServiceController<? extends Object> serviceController){
+              controller.setMode(ServiceController.Mode.REMOVE);
+            }
+            public void serviceRemoved(            ServiceController<? extends Object> serviceController){
+              try {
+                deploy(deploymentModel,operationContext,resultHandler,compensatingOp);
+              }
+ catch (              OperationFailedException e) {
+                throw new RuntimeException(e);
+              }
+            }
+          }
+);
+        }
+ else {
+          deploy(deploymentModel,operationContext,resultHandler,compensatingOp);
         }
       }
-);
-      controller.setMode(ServiceController.Mode.REMOVE);
     }
- else {
-      deploy(deploymentModel,context,resultHandler,compensatingOp);
-    }
+,resultHandler);
   }
  else {
-    resultHandler.handleResultComplete(compensatingOp);
+    resultHandler.handleResultComplete();
   }
 }

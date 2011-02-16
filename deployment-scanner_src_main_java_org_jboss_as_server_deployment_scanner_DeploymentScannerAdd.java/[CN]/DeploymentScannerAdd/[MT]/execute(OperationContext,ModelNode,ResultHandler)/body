@@ -4,23 +4,33 @@
   final String path=operation.require(CommonAttributes.PATH).asString();
   final boolean enabled=operation.get(CommonAttributes.SCAN_ENABLED).asBoolean(true);
   final int interval=operation.get(CommonAttributes.SCAN_INTERVAL).asInt(5000);
-  String relativeTo=null;
+  final String relativeTo;
   if (operation.has(CommonAttributes.RELATIVE_TO)) {
     relativeTo=operation.get(CommonAttributes.RELATIVE_TO).asString();
+  }
+ else {
+    relativeTo=null;
   }
   final ModelNode compensatingOperation=new ModelNode();
   compensatingOperation.get(OP).set(REMOVE);
   compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
-  if (context instanceof RuntimeOperationContext) {
-    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
-    final ServiceTarget serviceTarget=runtimeContext.getServiceTarget();
-    DeploymentScannerService.addService(serviceTarget,name,relativeTo,path,interval,TimeUnit.MILLISECONDS,enabled);
-  }
   final ModelNode subModel=context.getSubModel();
   subModel.get(CommonAttributes.PATH).set(path);
   subModel.get(CommonAttributes.SCAN_ENABLED).set(enabled);
   subModel.get(CommonAttributes.SCAN_INTERVAL).set(interval);
   if (relativeTo != null)   subModel.get(CommonAttributes.RELATIVE_TO).set(relativeTo);
-  resultHandler.handleResultComplete(compensatingOperation);
-  return Cancellable.NULL;
+  if (context instanceof RuntimeOperationContext) {
+    RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      ResultHandler resultHandler) throws OperationFailedException {
+        final ServiceTarget serviceTarget=context.getServiceTarget();
+        DeploymentScannerService.addService(serviceTarget,name,relativeTo,path,interval,TimeUnit.MILLISECONDS,enabled);
+        resultHandler.handleResultComplete();
+      }
+    }
+,resultHandler);
+  }
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensatingOperation);
 }

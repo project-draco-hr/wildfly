@@ -2,17 +2,6 @@
   final ModelNode opAddr=operation.require(OP_ADDR);
   final PathAddress address=PathAddress.pathAddress(opAddr);
   final String name=address.getLastElement().getValue();
-  if (context instanceof RuntimeOperationContext) {
-    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
-    final ServiceController<?> controller=runtimeContext.getServiceRegistry().getService(ThreadsServices.threadFactoryName(name));
-    if (controller == null) {
-      resultHandler.handleResultComplete(null);
-      return Cancellable.NULL;
-    }
- else {
-      controller.setMode(Mode.REMOVE);
-    }
-  }
   final ModelNode threadFactory=context.getSubModel();
   final ModelNode compensating=Util.getEmptyOperation(ADD,opAddr);
   compensating.get(GROUP_NAME).set(threadFactory.get(GROUP_NAME));
@@ -20,6 +9,22 @@
   compensating.get(PRIORITY).set(threadFactory.get(PRIORITY));
   compensating.get(PROPERTIES).set(threadFactory.get(PROPERTIES).clone());
   threadFactory.clear();
-  resultHandler.handleResultComplete(compensating);
-  return Cancellable.NULL;
+  if (context instanceof RuntimeOperationContext) {
+    RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      final ResultHandler resultHandler) throws OperationFailedException {
+        final ServiceController<?> controller=context.getServiceRegistry().getService(ThreadsServices.threadFactoryName(name));
+        if (controller != null) {
+          controller.addListener(new ResultHandler.ServiceRemoveListener(resultHandler));
+        }
+ else {
+          resultHandler.handleResultComplete();
+        }
+      }
+    }
+,resultHandler);
+  }
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensating);
 }

@@ -2,14 +2,22 @@
   ModelNode opAddr=operation.require(OP_ADDR);
   PathAddress address=PathAddress.pathAddress(opAddr);
   String securityDomain=address.getLastElement().getValue();
-  final ModelNode compensatingOperation=Util.getResourceRemoveOperation(opAddr);
   Util.copyParamsToModel(operation,context.getSubModel());
-  ApplicationPolicy applicationPolicy=createApplicationPolicy(securityDomain,operation);
+  final ApplicationPolicy applicationPolicy=createApplicationPolicy(securityDomain,operation);
   if (context instanceof RuntimeOperationContext) {
     final RuntimeOperationContext updateContext=(RuntimeOperationContext)context;
-    final ApplicationPolicyRegistration loginConfig=getConfiguration(updateContext);
-    loginConfig.addApplicationPolicy(applicationPolicy.getName(),applicationPolicy);
+    updateContext.executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      ResultHandler resultHandler) throws OperationFailedException {
+        final ApplicationPolicyRegistration loginConfig=getConfiguration(context.getServiceRegistry());
+        loginConfig.addApplicationPolicy(applicationPolicy.getName(),applicationPolicy);
+        resultHandler.handleResultComplete();
+      }
+    }
+,resultHandler);
   }
-  resultHandler.handleResultComplete(compensatingOperation);
-  return Cancellable.NULL;
+ else {
+    resultHandler.handleResultComplete();
+  }
+  final ModelNode compensatingOperation=Util.getResourceRemoveOperation(opAddr);
+  return new BasicOperationResult(compensatingOperation);
 }

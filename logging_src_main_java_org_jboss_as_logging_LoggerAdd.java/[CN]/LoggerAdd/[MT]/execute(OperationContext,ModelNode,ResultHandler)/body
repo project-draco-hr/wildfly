@@ -6,32 +6,37 @@
   compensatingOperation.get(OP).set(REMOVE);
   final String level=operation.require(CommonAttributes.LEVEL).asString();
   final ModelNode handlers=operation.hasDefined(CommonAttributes.HANDLERS) ? operation.get(CommonAttributes.HANDLERS) : new ModelNode();
-  if (context instanceof RuntimeOperationContext) {
-    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
-    final ServiceTarget target=runtimeContext.getServiceTarget();
-    final String loggerName=name;
-    try {
-      final LoggerService service=new LoggerService(loggerName);
-      service.setLevel(Level.parse(level));
-      target.addService(LogServices.loggerName(loggerName),service).setInitialMode(ServiceController.Mode.ACTIVE).install();
-    }
- catch (    Throwable t) {
-      resultHandler.handleFailed(new ModelNode().set(t.getLocalizedMessage()));
-      return Cancellable.NULL;
-    }
-    try {
-      if (handlers.isDefined()) {
-        LogServices.installLoggerHandlers(target,loggerName,handlers);
-      }
-    }
- catch (    Throwable t) {
-      resultHandler.handleFailed(new ModelNode().set(t.getLocalizedMessage()));
-      return Cancellable.NULL;
-    }
-  }
   final ModelNode subModel=context.getSubModel();
   subModel.get(CommonAttributes.LEVEL).set(level);
   subModel.get(CommonAttributes.HANDLERS).set(handlers);
-  resultHandler.handleResultComplete(compensatingOperation);
-  return Cancellable.NULL;
+  if (context instanceof RuntimeOperationContext) {
+    RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      ResultHandler resultHandler) throws OperationFailedException {
+        final ServiceTarget target=context.getServiceTarget();
+        final String loggerName=name;
+        try {
+          final LoggerService service=new LoggerService(loggerName);
+          service.setLevel(Level.parse(level));
+          target.addService(LogServices.loggerName(loggerName),service).setInitialMode(ServiceController.Mode.ACTIVE).install();
+        }
+ catch (        Throwable t) {
+          throw new OperationFailedException(new ModelNode().set(t.getLocalizedMessage()));
+        }
+        try {
+          if (handlers.isDefined()) {
+            LogServices.installLoggerHandlers(target,loggerName,handlers);
+          }
+        }
+ catch (        Throwable t) {
+          throw new OperationFailedException(new ModelNode().set(t.getLocalizedMessage()));
+        }
+        resultHandler.handleResultComplete();
+      }
+    }
+,resultHandler);
+  }
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensatingOperation);
 }

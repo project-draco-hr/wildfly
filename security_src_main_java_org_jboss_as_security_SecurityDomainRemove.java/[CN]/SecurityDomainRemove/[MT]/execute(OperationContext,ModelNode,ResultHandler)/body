@@ -1,16 +1,24 @@
 {
   ModelNode opAddr=operation.require(OP_ADDR);
   PathAddress address=PathAddress.pathAddress(opAddr);
-  String securityDomain=address.getLastElement().getValue();
+  final String securityDomain=address.getLastElement().getValue();
   final ModelNode compensatingOperation=SecurityDomainAdd.getRecreateOperation(opAddr,context.getSubModel());
   if (context instanceof RuntimeOperationContext) {
     final RuntimeOperationContext updateContext=(RuntimeOperationContext)context;
-    final ServiceController<?> jaasConfigurationService=updateContext.getServiceRegistry().getService(JaasConfigurationService.SERVICE_NAME);
-    if (jaasConfigurationService != null) {
-      ApplicationPolicyRegistration config=(ApplicationPolicyRegistration)jaasConfigurationService.getValue();
-      config.removeApplicationPolicy(securityDomain);
+    RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      ResultHandler resultHandler) throws OperationFailedException {
+        final ServiceController<?> jaasConfigurationService=context.getServiceRegistry().getService(JaasConfigurationService.SERVICE_NAME);
+        if (jaasConfigurationService != null) {
+          ApplicationPolicyRegistration config=(ApplicationPolicyRegistration)jaasConfigurationService.getValue();
+          config.removeApplicationPolicy(securityDomain);
+        }
+        resultHandler.handleResultComplete();
+      }
     }
+,resultHandler);
   }
-  resultHandler.handleResultComplete(compensatingOperation);
-  return Cancellable.NULL;
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensatingOperation);
 }

@@ -2,15 +2,19 @@
   final ModelNode model=context.getSubModel();
   final String name=model.require(NAME).asString();
   if (context instanceof RuntimeOperationContext) {
-    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
-    final ServiceController<?> controller=runtimeContext.getServiceRegistry().getService(ConnectorServices.CONNECTOR_CONFIG_SERVICE);
-    if (controller == null) {
-      resultHandler.handleResultComplete(null);
-      return Cancellable.NULL;
+    RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      ResultHandler resultHandler) throws OperationFailedException {
+        final ServiceController<?> controller=context.getServiceRegistry().getService(ConnectorServices.CONNECTOR_CONFIG_SERVICE);
+        if (controller != null) {
+          controller.addListener(new ResultHandler.ServiceRemoveListener(resultHandler));
+          controller.setMode(Mode.REMOVE);
+        }
+      }
     }
+,resultHandler);
+  }
  else {
-      controller.setMode(Mode.REMOVE);
-    }
+    resultHandler.handleResultComplete();
   }
   final ModelNode compensating=new ModelNode();
   compensating.get(OP_ADDR).set(operation.require(ADDRESS));
@@ -34,6 +38,5 @@
   if (model.has(DEFAULT_WORKMANAGER_SHORT_RUNNING_THREAD_POOL)) {
     compensating.get(DEFAULT_WORKMANAGER_SHORT_RUNNING_THREAD_POOL).set(model.get(DEFAULT_WORKMANAGER_SHORT_RUNNING_THREAD_POOL));
   }
-  resultHandler.handleResultComplete(compensating);
-  return Cancellable.NULL;
+  return new BasicOperationResult(compensating);
 }

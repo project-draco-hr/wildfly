@@ -3,15 +3,21 @@
   final PathAddress address=PathAddress.pathAddress(opAddr);
   final String name=address.getLastElement().getValue();
   if (context instanceof RuntimeOperationContext) {
-    final RuntimeOperationContext runtimeContext=(RuntimeOperationContext)context;
-    final ServiceController<?> controller=runtimeContext.getServiceRegistry().getService(ThreadsServices.threadFactoryName(name));
-    if (controller == null) {
-      resultHandler.handleResultComplete(null);
-      return Cancellable.NULL;
-    }
+    RuntimeOperationContext.class.cast(context).executeRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context,      final ResultHandler resultHandler) throws OperationFailedException {
+        final ServiceController<?> controller=context.getServiceRegistry().getService(ThreadsServices.threadFactoryName(name));
+        if (controller != null) {
+          controller.addListener(new ResultHandler.ServiceRemoveListener(resultHandler));
+        }
  else {
-      controller.setMode(Mode.REMOVE);
+          resultHandler.handleResultComplete();
+        }
+      }
     }
+,resultHandler);
+  }
+ else {
+    resultHandler.handleResultComplete();
   }
   final ModelNode model=context.getSubModel();
   final ModelNode compensating=Util.getEmptyOperation(ADD,opAddr);
@@ -33,6 +39,5 @@
   if (model.hasDefined(HANDOFF_EXECUTOR)) {
     compensating.get(HANDOFF_EXECUTOR).set(model.get(HANDOFF_EXECUTOR));
   }
-  resultHandler.handleResultComplete(compensating);
-  return Cancellable.NULL;
+  return new BasicOperationResult(compensating);
 }
