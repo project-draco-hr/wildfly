@@ -1,12 +1,10 @@
 {
   log.infof("Activating OSGi Subsystem");
-  final ModelNode compensatingOperation=new ModelNode();
-  compensatingOperation.get(OP).set(REMOVE);
-  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  populateSubModel(context.getSubModel(),operation);
   if (context instanceof BootOperationContext) {
     log.infof("Activating OSGi Subsystem");
     final BootOperationContext updateContext=(BootOperationContext)context;
-    final ServiceTarget target=updateContext.getServiceTarget();
+    final ServiceTarget target=context.getRuntimeContext().getServiceTarget();
     SubsystemState subsystemState=createSubsystemState(operation);
     String value=SecurityActions.getSystemProperty("jboss.protocol.handler.modules","org.jboss.osgi.framework");
     if (!value.equals("org.jboss.osgi.framework"))     value=value + "|org.jboss.osgi.framework";
@@ -19,8 +17,13 @@
     StartLevelService.addService(target);
     ConfigAdminServiceImpl.addService(target,subsystemState);
     new OSGiDeploymentActivator().activate(updateContext);
+    resultHandler.handleResultComplete();
   }
-  populateSubModel(context.getSubModel(),operation);
-  resultHandler.handleResultComplete();
+ else {
+    resultHandler.handleResultComplete();
+  }
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(REMOVE);
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
   return new BasicOperationResult(compensatingOperation);
 }
