@@ -1,0 +1,29 @@
+{
+  StatefulSessionComponent component=getComponent(context,StatefulSessionComponent.class);
+  Serializable sessionId=context.getPrivateData(Serializable.class);
+  StatefulSessionComponentInstance instance=component.getCache().get(sessionId);
+  try {
+    context.putPrivateData(ComponentInstance.class,instance);
+    return context.proceed();
+  }
+ catch (  Exception ex) {
+    if (ex instanceof RuntimeException || ex instanceof RemoteException) {
+      if (log.isTraceEnabled())       log.trace("Removing bean " + sessionId + " because of exception",ex);
+      component.getCache().discard(sessionId);
+    }
+    throw ex;
+  }
+catch (  final Error e) {
+    if (log.isTraceEnabled())     log.trace("Removing bean " + sessionId + " because of error",e);
+    component.getCache().discard(sessionId);
+    throw e;
+  }
+catch (  final Throwable t) {
+    if (log.isTraceEnabled())     log.trace("Removing bean " + sessionId + " because of Throwable",t);
+    component.getCache().discard(sessionId);
+    throw new RuntimeException(t);
+  }
+ finally {
+    component.getCache().release(instance);
+  }
+}
