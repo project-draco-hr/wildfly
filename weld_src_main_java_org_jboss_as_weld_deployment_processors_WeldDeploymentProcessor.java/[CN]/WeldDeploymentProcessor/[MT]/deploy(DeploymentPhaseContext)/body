@@ -9,28 +9,31 @@
   }
   log.info("Starting Services for CDI deployment: " + phaseContext.getDeploymentUnit().getName());
   final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
-  final List<BeanDeploymentArchiveImpl> beanDeploymentArchives=deploymentUnit.getAttachment(BeanDeploymentArchiveImpl.ATTACHMENT_KEY);
-  deploymentUnit.removeAttachment(BeanDeploymentArchiveImpl.ATTACHMENT_KEY);
-  if (beanDeploymentArchives == null) {
-    return;
-  }
-  BeanDeploymentArchiveImpl rootBda=deploymentUnit.getAttachment(BeanDeploymentArchiveImpl.ROOT_ARCHIVE_ATTACHMENT_KEY);
-  for (  BeanDeploymentArchiveImpl bda : beanDeploymentArchives) {
-    for (    BeanDeploymentArchiveImpl accessableBda : beanDeploymentArchives) {
-      if (accessableBda.isIsolatedModule() && !accessableBda.getModule().equals(bda.getModule())) {
-        continue;
+  final Set<BeanDeploymentModule> beanDeploymentModules=new HashSet<BeanDeploymentModule>();
+  final Set<BeanDeploymentModule> globalBeanDeploymentModules=new HashSet<BeanDeploymentModule>();
+  final Set<BeanDeploymentArchiveImpl> beanDeploymentArchives=new HashSet<BeanDeploymentArchiveImpl>();
+  final BeanDeploymentModule rootBeanDeploymentModule=deploymentUnit.getAttachment(WeldAttachments.BEAN_DEPLOYMENT_MODULE);
+  globalBeanDeploymentModules.add(rootBeanDeploymentModule);
+  beanDeploymentArchives.addAll(rootBeanDeploymentModule.getBeanDeploymentArchives());
+  final List<DeploymentUnit> subDeployments=deploymentUnit.getAttachmentList(Attachments.SUB_DEPLOYMENTS);
+  for (  DeploymentUnit subDeployment : subDeployments) {
+    final BeanDeploymentModule bdm=subDeployment.getAttachment(WeldAttachments.BEAN_DEPLOYMENT_MODULE);
+    beanDeploymentArchives.addAll(bdm.getBeanDeploymentArchives());
+    if (bdm != null) {
+      beanDeploymentModules.add(bdm);
+      if (!PrivateSubDeploymentMarker.isPrivate(subDeployment)) {
+        globalBeanDeploymentModules.add(bdm);
       }
-      bda.addBeanDeploymentArchive(accessableBda);
     }
   }
-  final ServiceLoader<Extension> loader=ServiceLoader.load(Extension.class,module.getClassLoader());
-  final HashSet<Metadata<Extension>> extensions=new HashSet<Metadata<Extension>>();
-  final Iterator<Metadata<Extension>> iterator=loader.iterator();
-  while (iterator.hasNext()) {
-    Metadata<Extension> extension=iterator.next();
-    extensions.add(extension);
+  for (  BeanDeploymentModule bdm : beanDeploymentModules) {
+    if (bdm == rootBeanDeploymentModule) {
+      continue;
+    }
+    bdm.addBeanDeploymentModules(globalBeanDeploymentModules);
   }
-  final WeldDeployment deployment=new WeldDeployment(new HashSet<BeanDeploymentArchiveImpl>(beanDeploymentArchives),rootBda,extensions,module);
+  final List<Metadata<Extension>> extensions=deploymentUnit.getAttachmentList(WeldAttachments.PORTABLE_EXTENSIONS);
+  final WeldDeployment deployment=new WeldDeployment(beanDeploymentArchives,extensions,module);
   final WeldContainer weldContainer=new WeldContainer(deployment,Environments.EE_INJECT);
   final WeldService weldService=new WeldService(weldContainer);
   final ServiceName weldServiceName=deploymentUnit.getServiceName().append(WeldService.SERVICE_NAME);
