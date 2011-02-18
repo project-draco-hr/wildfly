@@ -1,0 +1,29 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+  final ServicesAttachment servicesAttachment=deploymentUnit.getAttachment(Attachments.SERVICES);
+  if (module != null && servicesAttachment != null) {
+    final ModuleClassLoader classLoader=module.getClassLoader();
+    final List<String> driverNames=servicesAttachment.getServiceImplementations(Driver.class.getName());
+    for (    String driverName : driverNames) {
+      try {
+        final Class<? extends Driver> driverClass=classLoader.loadClass(driverName).asSubclass(Driver.class);
+        final Constructor<? extends Driver> constructor=driverClass.getConstructor();
+        final Driver driver=constructor.newInstance();
+        final int majorVersion=driver.getMajorVersion();
+        final int minorVersion=driver.getMinorVersion();
+        final boolean compliant=driver.jdbcCompliant();
+        if (compliant) {
+          log.infof("Deploying JDBC-compliant driver %s (version %d.%d)",driverClass,Integer.valueOf(majorVersion),Integer.valueOf(minorVersion));
+        }
+ else {
+          log.infof("Deploying non-JDBC-compliant driver %s (version %d.%d)",driverClass,Integer.valueOf(majorVersion),Integer.valueOf(minorVersion));
+        }
+        phaseContext.getServiceTarget().addService(ServiceName.JBOSS.append("jdbc-driver",driverName,Integer.toString(majorVersion),Integer.toString(minorVersion)),new ValueService<Driver>(new ImmediateValue<Driver>(driver))).setInitialMode(Mode.ACTIVE).install();
+      }
+ catch (      Exception e) {
+        log.warnf("Unable to instantiate driver class \"%s\": %s",driverName,e);
+      }
+    }
+  }
+}

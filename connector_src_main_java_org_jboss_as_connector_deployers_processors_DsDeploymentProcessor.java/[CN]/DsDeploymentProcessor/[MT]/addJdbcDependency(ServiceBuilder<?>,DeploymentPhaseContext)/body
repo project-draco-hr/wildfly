@@ -1,0 +1,69 @@
+{
+  final ConnectorXmlDescriptor connectorXmlDescriptor=phaseContext.getDeploymentUnit().getAttachment(ConnectorXmlDescriptor.ATTACHMENT_KEY);
+  final String deploymentName=connectorXmlDescriptor == null ? null : connectorXmlDescriptor.getDeploymentName();
+  final DataSources datasources=getDataSourcesAttachment(phaseContext.getDeploymentUnit());
+  if (datasources == null || deploymentName == null || !deploymentName.startsWith("jdbc"))   return;
+  log.tracef("Processing datasource deployment: %s",datasources);
+  String driverName=null;
+  Integer majorVersion=null;
+  Integer minorVersion=null;
+  List<String> modules=new ArrayList<String>();
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  try {
+    if (deploymentName.indexOf("local") != -1) {
+      List<DataSource> dss=datasources.getDataSource();
+      if (dss != null && dss.size() > 0) {
+        for (        DataSource ds : dss) {
+          if (ds.getModule() != null && !ds.getModule().trim().equals("")) {
+            modules.add(ds.getModule());
+          }
+ else {
+            log.warnf("No module defined for %s",ds.getJndiName());
+          }
+        }
+      }
+    }
+ else {
+      List<XaDataSource> xadss=datasources.getXaDataSource();
+      if (xadss != null && xadss.size() > 0) {
+        for (        XaDataSource xads : xadss) {
+          log.tracef("Processing xa-datasource deployment: %s",xads);
+          if (xads.getModule() != null && !xads.getModule().trim().equals("")) {
+            modules.add(xads.getModule());
+          }
+ else {
+            log.warnf("No module defined for %s",xads.getJndiName());
+          }
+        }
+      }
+    }
+    for (    String module : modules) {
+      String[] strings=Strings.split(module,"#");
+      if (strings.length != 2) {
+        throw new IllegalArgumentException("module should define jdbc driver with this format: <driver-name>#<major-version>.<minor-version>");
+      }
+      driverName=strings[0];
+      strings=Strings.split(strings[1],".",2);
+      if (strings.length != 2) {
+        throw new IllegalArgumentException("module should define jdbc driver with this format: <driver-name>#<major-version>.<minor-version>");
+      }
+      try {
+        majorVersion=Integer.valueOf(strings[0]);
+        minorVersion=Integer.valueOf(strings[1]);
+      }
+ catch (      NumberFormatException nfe) {
+        throw new IllegalArgumentException("module should define jdbc driver with this format: <driver-name>#<major-version>.<minor-version> " + "version number should be valid Integer");
+      }
+      if (driverName != null & majorVersion != null && minorVersion != null) {
+        ServiceName serviceName=ServiceName.JBOSS.append("jdbc-driver",driverName,Integer.toString(majorVersion),Integer.toString(minorVersion));
+        serviceBuilder.addDependency(serviceName);
+      }
+ else {
+        break;
+      }
+    }
+  }
+ catch (  Throwable t) {
+    throw new DeploymentUnitProcessingException(t);
+  }
+}
