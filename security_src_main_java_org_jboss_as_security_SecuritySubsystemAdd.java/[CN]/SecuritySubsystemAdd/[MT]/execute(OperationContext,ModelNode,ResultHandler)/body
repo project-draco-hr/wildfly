@@ -1,13 +1,17 @@
 {
   final ModelNode compensatingOperation=Util.getResourceRemoveOperation(operation.require(OP_ADDR));
-  String authManagerClassName="default";
+  String authenticationManagerClassName="default";
   String callbackHandlerClassName="default";
   boolean deepCopySubject=DEFAULT_DEEP_COPY_OPERATION_MODE;
   String subjectFactoryClassName="default";
+  String authorizationManagerClassName="default";
+  String auditManagerClassName="default";
+  String identityTrustManagerClassName="default";
+  String mappingManagerClassName="default";
   final ModelNode subModel=context.getSubModel();
   if (operation.hasDefined(AUTHENTICATION_MANAGER_CLASS_NAME)) {
-    authManagerClassName=operation.get(AUTHENTICATION_MANAGER_CLASS_NAME).asString();
-    subModel.get(AUTHENTICATION_MANAGER_CLASS_NAME).set(authManagerClassName);
+    authenticationManagerClassName=operation.get(AUTHENTICATION_MANAGER_CLASS_NAME).asString();
+    subModel.get(AUTHENTICATION_MANAGER_CLASS_NAME).set(authenticationManagerClassName);
   }
   if (operation.hasDefined(DEEP_COPY_SUBJECT_MODE)) {
     deepCopySubject=operation.get(DEEP_COPY_SUBJECT_MODE).asBoolean();
@@ -19,9 +23,25 @@
   }
   if (operation.hasDefined(SUBJECT_FACTORY_CLASS_NAME)) {
     subjectFactoryClassName=operation.get(SUBJECT_FACTORY_CLASS_NAME).asString();
-    subModel.get(SUBJECT_FACTORY_CLASS_NAME).set(SUBJECT_FACTORY_CLASS_NAME);
+    subModel.get(SUBJECT_FACTORY_CLASS_NAME).set(subjectFactoryClassName);
   }
-  subModel.get(JAAS_APPLICATION_POLICY).setEmptyObject();
+  if (operation.hasDefined(AUTHORIZATION_MANAGER_CLASS_NAME)) {
+    authorizationManagerClassName=operation.get(AUTHORIZATION_MANAGER_CLASS_NAME).asString();
+    subModel.get(AUTHORIZATION_MANAGER_CLASS_NAME).set(authorizationManagerClassName);
+  }
+  if (operation.hasDefined(AUDIT_MANAGER_CLASS_NAME)) {
+    auditManagerClassName=operation.get(AUDIT_MANAGER_CLASS_NAME).asString();
+    subModel.get(AUDIT_MANAGER_CLASS_NAME).set(auditManagerClassName);
+  }
+  if (operation.hasDefined(IDENTITY_TRUST_MANAGER_CLASS_NAME)) {
+    identityTrustManagerClassName=operation.get(IDENTITY_TRUST_MANAGER_CLASS_NAME).asString();
+    subModel.get(IDENTITY_TRUST_MANAGER_CLASS_NAME).set(identityTrustManagerClassName);
+  }
+  if (operation.hasDefined(MAPPING_MANAGER_CLASS_NAME)) {
+    mappingManagerClassName=operation.get(MAPPING_MANAGER_CLASS_NAME).asString();
+    subModel.get(MAPPING_MANAGER_CLASS_NAME).set(mappingManagerClassName);
+  }
+  subModel.get(SECURITY_DOMAIN).setEmptyObject();
   if (context instanceof BootOperationContext) {
     final BootOperationContext updateContext=(BootOperationContext)context;
     updateContext.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_MODULE,new SecurityDependencyProcessor());
@@ -31,13 +51,25 @@
     final Reference reference=SecurityDomainObjectFactory.createReference("JSM");
     final JaasBinderService binderService=new JaasBinderService(Values.immediateValue(reference));
     target.addService(JaasBinderService.SERVICE_NAME,binderService).addDependency(JavaContextService.SERVICE_NAME,Context.class,binderService.getContextInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
-    if ("default".equals(authManagerClassName)) {
-      authManagerClassName=AUTHENTICATION_MANAGER;
+    if ("default".equals(authenticationManagerClassName)) {
+      authenticationManagerClassName=AUTHENTICATION_MANAGER;
     }
     if ("default".equals(callbackHandlerClassName)) {
       callbackHandlerClassName=CALLBACK_HANDLER;
     }
-    final SecurityManagementService securityManagementService=new SecurityManagementService(authManagerClassName,deepCopySubject,callbackHandlerClassName,AUTHORIZATION_MANAGER);
+    if ("default".equals(authorizationManagerClassName)) {
+      authorizationManagerClassName=AUTHORIZATION_MANAGER;
+    }
+    if ("default".equals(auditManagerClassName)) {
+      auditManagerClassName=AUDIT_MANAGER;
+    }
+    if ("default".equals(identityTrustManagerClassName)) {
+      identityTrustManagerClassName=IDENTITY_TRUST_MANAGER;
+    }
+    if ("default".equals(mappingManagerClassName)) {
+      mappingManagerClassName=MAPPING_MANAGER;
+    }
+    final SecurityManagementService securityManagementService=new SecurityManagementService(authenticationManagerClassName,deepCopySubject,callbackHandlerClassName,authorizationManagerClassName,auditManagerClassName,identityTrustManagerClassName,mappingManagerClassName);
     target.addService(SecurityManagementService.SERVICE_NAME,securityManagementService).setInitialMode(ServiceController.Mode.ACTIVE).install();
     if ("default".equals(subjectFactoryClassName))     subjectFactoryClassName=SUBJECT_FACTORY;
     final SubjectFactoryService subjectFactoryService=new SubjectFactoryService(subjectFactoryClassName);

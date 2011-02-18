@@ -1,0 +1,177 @@
+{
+  Set<String> keys=new HashSet<String>(operation.keys());
+  keys.remove(OP);
+  keys.remove(OP_ADDR);
+  keys.remove(NAME);
+  keys.remove(Element.ACL.getLocalName());
+  keys.remove(Element.AUDIT.getLocalName());
+  keys.remove(Element.AUTHENTICATION.getLocalName());
+  keys.remove(Element.AUTHENTICATION_JASPI.getLocalName());
+  keys.remove(Element.AUTHORIZATION.getLocalName());
+  keys.remove(Element.IDENTITY_TRUST.getLocalName());
+  keys.remove(Element.MAPPING.getLocalName());
+  if (!keys.isEmpty()) {
+    throw new UnsupportedOperationException("Unsupported elements for a security domain");
+  }
+  ApplicationPolicy applicationPolicy=new ApplicationPolicy(securityDomain);
+  ModelNode node=null;
+  List<ModelNode> modules;
+  node=operation.get(Element.AUTHENTICATION.getLocalName());
+  if (node.isDefined()) {
+    AuthenticationInfo authenticationInfo=new AuthenticationInfo(securityDomain);
+    modules=node.asList();
+    for (    ModelNode module : modules) {
+      String codeName=module.require(Attribute.CODE.getLocalName()).asString();
+      LoginModuleControlFlag controlFlag=getControlFlag(module.require(Attribute.FLAG.getLocalName()).asString());
+      Map<String,Object> options=new HashMap<String,Object>();
+      if (module.hasDefined(MODULE_OPTIONS)) {
+        for (        Property prop : module.get(MODULE_OPTIONS).asPropertyList()) {
+          options.put(prop.getName(),prop.getValue().asString());
+        }
+      }
+      AppConfigurationEntry entry=new AppConfigurationEntry(codeName,controlFlag,options);
+      authenticationInfo.addAppConfigurationEntry(entry);
+    }
+    applicationPolicy.setAuthenticationInfo(authenticationInfo);
+  }
+  node=operation.get(Element.ACL.getLocalName());
+  if (node.isDefined()) {
+    ACLInfo aclInfo=new ACLInfo(securityDomain);
+    modules=node.asList();
+    for (    ModelNode module : modules) {
+      String codeName=module.require(Attribute.CODE.getLocalName()).asString();
+      ControlFlag controlFlag=ControlFlag.valueOf(module.require(Attribute.FLAG.getLocalName()).asString());
+      Map<String,Object> options=new HashMap<String,Object>();
+      if (module.hasDefined(MODULE_OPTIONS)) {
+        for (        Property prop : module.get(MODULE_OPTIONS).asPropertyList()) {
+          options.put(prop.getName(),prop.getValue().asString());
+        }
+      }
+      ACLProviderEntry entry=new ACLProviderEntry(codeName,options);
+      entry.setControlFlag(controlFlag);
+      aclInfo.add(entry);
+    }
+    applicationPolicy.setAclInfo(aclInfo);
+  }
+  node=operation.get(Element.AUDIT.getLocalName());
+  if (node.isDefined()) {
+    AuditInfo auditInfo=new AuditInfo(securityDomain);
+    modules=node.asList();
+    for (    ModelNode module : modules) {
+      String codeName=module.require(Attribute.CODE.getLocalName()).asString();
+      Map<String,Object> options=new HashMap<String,Object>();
+      if (module.hasDefined(MODULE_OPTIONS)) {
+        for (        Property prop : module.get(MODULE_OPTIONS).asPropertyList()) {
+          options.put(prop.getName(),prop.getValue().asString());
+        }
+      }
+      AuditProviderEntry entry=new AuditProviderEntry(codeName,options);
+      auditInfo.add(entry);
+    }
+    applicationPolicy.setAuditInfo(auditInfo);
+  }
+  node=operation.get(Element.AUTHORIZATION.getLocalName());
+  if (node.isDefined()) {
+    AuthorizationInfo authorizationInfo=new AuthorizationInfo(securityDomain);
+    modules=node.asList();
+    for (    ModelNode module : modules) {
+      String codeName=module.require(Attribute.CODE.getLocalName()).asString();
+      ControlFlag controlFlag=ControlFlag.valueOf(module.require(Attribute.FLAG.getLocalName()).asString());
+      Map<String,Object> options=new HashMap<String,Object>();
+      if (module.hasDefined(MODULE_OPTIONS)) {
+        for (        Property prop : module.get(MODULE_OPTIONS).asPropertyList()) {
+          options.put(prop.getName(),prop.getValue().asString());
+        }
+      }
+      AuthorizationModuleEntry entry=new AuthorizationModuleEntry(codeName,options);
+      entry.setControlFlag(controlFlag);
+      authorizationInfo.add(entry);
+    }
+    applicationPolicy.setAuthorizationInfo(authorizationInfo);
+  }
+  node=operation.get(Element.IDENTITY_TRUST.getLocalName());
+  if (node.isDefined()) {
+    IdentityTrustInfo identityTrustInfo=new IdentityTrustInfo(securityDomain);
+    modules=node.asList();
+    for (    ModelNode module : modules) {
+      String codeName=module.require(Attribute.CODE.getLocalName()).asString();
+      ControlFlag controlFlag=ControlFlag.valueOf(module.require(Attribute.FLAG.getLocalName()).asString());
+      Map<String,Object> options=new HashMap<String,Object>();
+      if (module.hasDefined(MODULE_OPTIONS)) {
+        for (        Property prop : module.get(MODULE_OPTIONS).asPropertyList()) {
+          options.put(prop.getName(),prop.getValue().asString());
+        }
+      }
+      IdentityTrustModuleEntry entry=new IdentityTrustModuleEntry(codeName,options);
+      entry.setControlFlag(controlFlag);
+      identityTrustInfo.add(entry);
+    }
+    applicationPolicy.setIdentityTrustInfo(identityTrustInfo);
+  }
+  node=operation.get(Element.MAPPING.getLocalName());
+  if (node.isDefined()) {
+    modules=node.asList();
+    String mappingType=null;
+    for (    ModelNode module : modules) {
+      MappingInfo mappingInfo=new MappingInfo(securityDomain);
+      String codeName=module.require(Attribute.CODE.getLocalName()).asString();
+      if (module.hasDefined(Attribute.TYPE.getLocalName()))       mappingType=module.get(Attribute.TYPE.getLocalName()).asString();
+ else       mappingType=MappingType.ROLE.toString();
+      Map<String,Object> options=new HashMap<String,Object>();
+      if (module.hasDefined(MODULE_OPTIONS)) {
+        for (        Property prop : module.get(MODULE_OPTIONS).asPropertyList()) {
+          options.put(prop.getName(),prop.getValue().asString());
+        }
+      }
+      MappingModuleEntry entry=new MappingModuleEntry(codeName,options,mappingType);
+      mappingInfo.add(entry);
+      applicationPolicy.setMappingInfo(mappingType,mappingInfo);
+    }
+  }
+  node=operation.get(Element.AUTHENTICATION_JASPI.getLocalName());
+  if (node.isDefined()) {
+    JASPIAuthenticationInfo authenticationInfo=new JASPIAuthenticationInfo(securityDomain);
+    Map<String,LoginModuleStackHolder> holders=new HashMap<String,LoginModuleStackHolder>();
+    ModelNode moduleStack=node.get(Element.LOGIN_MODULE_STACK.getLocalName());
+    modules=moduleStack.asList();
+    Iterator<ModelNode> iter=modules.iterator();
+    ModelNode nameNode=iter.next();
+    String name=nameNode.get(Attribute.NAME.getLocalName()).asString();
+    LoginModuleStackHolder holder=new LoginModuleStackHolder(name,null);
+    holders.put(name,holder);
+    authenticationInfo.add(holder);
+    while (iter.hasNext()) {
+      ModelNode module=iter.next();
+      String code=module.require(Attribute.CODE.getLocalName()).asString();
+      LoginModuleControlFlag controlFlag=getControlFlag(module.require(Attribute.FLAG.getLocalName()).asString());
+      Map<String,Object> options=new HashMap<String,Object>();
+      if (module.hasDefined(MODULE_OPTIONS)) {
+        for (        Property prop : module.get(MODULE_OPTIONS).asPropertyList()) {
+          options.put(prop.getName(),prop.getValue().asString());
+        }
+      }
+      AppConfigurationEntry entry=new AppConfigurationEntry(code,controlFlag,options);
+      holder.addAppConfigurationEntry(entry);
+    }
+    ModelNode authModule=node.get(Element.AUTH_MODULE.getLocalName());
+    String code=authModule.require(Attribute.CODE.getLocalName()).asString();
+    String loginStackRef=null;
+    if (authModule.hasDefined(Attribute.LOGIN_MODULE_STACK_REF.getLocalName()))     loginStackRef=authModule.get(Attribute.LOGIN_MODULE_STACK_REF.getLocalName()).asString();
+    Map<String,Object> options=new HashMap<String,Object>();
+    if (authModule.hasDefined(MODULE_OPTIONS)) {
+      for (      Property prop : authModule.get(MODULE_OPTIONS).asPropertyList()) {
+        options.put(prop.getName(),prop.getValue().asString());
+      }
+    }
+    AuthModuleEntry entry=new AuthModuleEntry(code,options,loginStackRef);
+    if (loginStackRef != null) {
+      if (!holders.containsKey(loginStackRef)) {
+        throw new IllegalArgumentException("auth-module references a login module stack that doesn't exist: " + loginStackRef);
+      }
+      entry.setLoginModuleStackHolder(holders.get(loginStackRef));
+    }
+    authenticationInfo.add(entry);
+    applicationPolicy.setAuthenticationInfo(authenticationInfo);
+  }
+  return applicationPolicy;
+}

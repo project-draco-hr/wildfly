@@ -1,0 +1,91 @@
+{
+  ModelNode op=new ModelNode();
+  op.get(OP).set(ADD);
+  ModelNode address=op.get(OP_ADDR);
+  EnumSet<Attribute> required=EnumSet.of(Attribute.NAME);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    requireNoNamespaceAttribute(reader,i);
+    final String value=reader.getAttributeValue(i);
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+    required.remove(attribute);
+switch (attribute) {
+case NAME:
+{
+        address.set(parentAddress).add(SECURITY_DOMAIN,value);
+        break;
+      }
+case EXTENDS:
+{
+      op.get(attribute.getLocalName()).set(value);
+      break;
+    }
+default :
+  throw unexpectedAttribute(reader,i);
+}
+}
+if (required.size() > 0) {
+throw missingRequired(reader,required);
+}
+final EnumSet<Element> visited=EnumSet.noneOf(Element.class);
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case SECURITY_1_0:
+{
+  final Element element=Element.forName(reader.getLocalName());
+  if (!visited.add(element)) {
+    throw unexpectedElement(reader);
+  }
+switch (element) {
+case AUTHENTICATION:
+{
+      if (visited.contains(Element.AUTHENTICATION_JASPI))       throw new XMLStreamException("A security domain can have either an <authentication> or <authentication-jaspi> element, not both",reader.getLocation());
+      parseAuthentication(reader,op.get(Element.AUTHENTICATION.getLocalName()),true);
+      break;
+    }
+case AUTHORIZATION:
+{
+    parseAuthorization(reader,op.get(Element.AUTHORIZATION.getLocalName()));
+    break;
+  }
+case ACL:
+{
+  parseACL(reader,op.get(Element.ACL.getLocalName()));
+  break;
+}
+case AUDIT:
+{
+parseAudit(reader,op.get(Element.AUDIT.getLocalName()));
+break;
+}
+case IDENTITY_TRUST:
+{
+parseIdentityTrust(reader,op.get(Element.IDENTITY_TRUST.getLocalName()));
+break;
+}
+case MAPPING:
+{
+parseMapping(reader,op.get(Element.MAPPING.getLocalName()));
+break;
+}
+case AUTHENTICATION_JASPI:
+{
+if (visited.contains(Element.AUTHENTICATION)) throw new XMLStreamException("A security domain can have either an <authentication> or <authentication-jaspi> element, not both",reader.getLocation());
+parseAuthenticationJaspi(reader,op.get(Element.AUTHENTICATION_JASPI.getLocalName()));
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+return op;
+}
