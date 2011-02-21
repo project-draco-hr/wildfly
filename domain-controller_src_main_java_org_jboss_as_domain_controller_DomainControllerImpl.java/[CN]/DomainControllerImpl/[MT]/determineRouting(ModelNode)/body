@@ -1,0 +1,63 @@
+{
+  OperationRouting routing;
+  String targetHost=null;
+  List<Property> address=operation.hasDefined(OP_ADDR) ? operation.get(OP_ADDR).asPropertyList() : EMPTY_ADDRESS;
+  if (address.size() > 0) {
+    Property first=address.get(0);
+    if (HOST.equals(first.getName())) {
+      targetHost=first.getValue().asString();
+    }
+  }
+  if (localHostName.equals(targetHost)) {
+    routing=new OperationRouting(false);
+  }
+ else   if (masterDomainControllerClient != null) {
+    routing=new OperationRouting(true);
+  }
+ else   if (targetHost != null) {
+    List<String> hosts=Collections.singletonList(targetHost);
+    routing=new OperationRouting(hosts);
+  }
+ else   if (isReadOnly(operation)) {
+    routing=new OperationRouting(false);
+  }
+ else   if ("composite".equals(operation.require(OP).asString())) {
+    if (operation.hasDefined("steps")) {
+      Set<String> allHosts=new HashSet<String>();
+      boolean routeToMaster=false;
+      boolean hasLocal=false;
+      for (      ModelNode step : operation.get("steps").asList()) {
+        OperationRouting stepRouting=determineRouting(step);
+        if (stepRouting.isRouteToMaster()) {
+          routeToMaster=true;
+          break;
+        }
+ else         if (stepRouting.isLocalOnly()) {
+          hasLocal=true;
+        }
+ else {
+          allHosts.addAll(stepRouting.getHosts());
+        }
+      }
+      if (routeToMaster) {
+        routing=new OperationRouting(true);
+      }
+ else       if (allHosts.size() == 0) {
+        routing=new OperationRouting(false);
+      }
+ else {
+        if (hasLocal) {
+          allHosts.add(localHostName);
+        }
+        routing=new OperationRouting(allHosts);
+      }
+    }
+ else {
+      routing=new OperationRouting(false);
+    }
+  }
+ else {
+    routing=new OperationRouting(this.hosts.keySet());
+  }
+  return routing;
+}

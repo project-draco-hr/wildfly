@@ -1,0 +1,27 @@
+{
+  ControllerTransaction transaction=null;
+  try {
+    final PathAddress address=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR));
+    final ProxyController proxyExecutor=getRegistry().getProxyController(address);
+    if (proxyExecutor != null) {
+      ModelNode newOperation=operation.clone();
+      newOperation.get(OP_ADDR).set(address.subAddress(proxyExecutor.getProxyNodeAddress().size()).toModelNode());
+      return proxyExecutor.execute(newOperation,handler);
+    }
+    transaction=new ControllerTransaction();
+    return execute(operation,handler,transaction);
+  }
+ catch (  final Throwable t) {
+    log.errorf(t,"operation (%s) failed - address: (%s)",operation.get(OP),operation.get(OP_ADDR));
+    if (transaction != null) {
+      transaction.setRollbackOnly();
+    }
+    handler.handleFailed(getFailureResult(t));
+    return new BasicOperationResult();
+  }
+ finally {
+    if (transaction != null) {
+      transaction.commit();
+    }
+  }
+}

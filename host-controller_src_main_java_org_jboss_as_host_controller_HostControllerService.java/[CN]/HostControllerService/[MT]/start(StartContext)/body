@@ -1,29 +1,21 @@
 {
-  final DomainControllerConnection connection=this.connection.getValue();
   final ServerInventory serverInventory=this.serverInventory.getValue();
   final HostControllerImpl controller=new HostControllerImpl(name,hostModel,serverInventory,repository);
   serverInventory.setHostController(controller);
-  try {
-    final ModelNode domainModel=connection.register(controller);
-    final FileRepository remoteRepository=connection.getRemoteFileRepository();
-    controller.initDomainConnection(domainModel,remoteRepository);
-    final ModelNode rawModel=hostModel.getHostModel();
-    if (rawModel.hasDefined(SERVER)) {
-      final ModelNode servers=rawModel.get(SERVER).clone();
-      for (      final String serverName : servers.keys()) {
-        if (servers.get(serverName,START).asBoolean(true)) {
-          try {
-            controller.startServer(serverName);
-          }
- catch (          Exception e) {
-            log.errorf(e,"failed to start server (%s)",serverName);
-          }
-        }
-      }
+  this.controller=controller;
+  this.proxyController=new TransactionalProxyController(){
+    @Override public OperationResult execute(    ModelNode operation,    ResultHandler handler,    ControllerTransactionContext transaction){
+      return controller.execute(operation,handler,transaction);
+    }
+    @Override public ModelNode execute(    ModelNode operation) throws CancellationException {
+      return controller.execute(operation);
+    }
+    @Override public OperationResult execute(    ModelNode operation,    ResultHandler handler){
+      return controller.execute(operation,handler);
+    }
+    @Override public PathAddress getProxyNodeAddress(){
+      return PathAddress.pathAddress(PathElement.pathElement("host",name));
     }
   }
- catch (  IOException e) {
-    throw new StartException(e);
-  }
-  this.controller=controller;
+;
 }

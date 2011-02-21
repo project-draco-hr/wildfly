@@ -1,0 +1,13 @@
+{
+  final String hostName=host.get(NAME).asString();
+  final File configDir=environment.getDomainConfigurationDir();
+  final ExtensibleConfigurationPersister domainConfigurationPersister=createDomainConfigurationPersister(configDir);
+  final DomainControllerService dcService=new DomainControllerService(domainConfigurationPersister,hostName);
+  ServiceBuilder<DomainController> builder=serviceTarget.addService(DomainController.SERVICE_NAME,dcService);
+  if (isSlave) {
+    builder.addDependency(MasterDomainControllerClient.SERVICE_NAME,MasterDomainControllerClient.class,dcService.getMasterDomainControllerClientInjector());
+  }
+  builder.addDependency(SERVICE_NAME_BASE.append("executor"),ScheduledExecutorService.class,dcService.getScheduledExecutorServiceInjector()).addDependency(HostController.SERVICE_NAME,TransactionalProxyController.class,dcService.getHostControllerServiceInjector()).install();
+  final DomainControllerOperationHandlerService operationHandlerService=new DomainControllerOperationHandlerService();
+  serviceTarget.addService(DomainControllerOperationHandlerService.SERVICE_NAME,operationHandlerService).addDependency(ManagementCommunicationService.SERVICE_NAME,ManagementCommunicationService.class,operationHandlerService.getManagementCommunicationServiceValue()).addDependency(DomainController.SERVICE_NAME,ModelController.class,operationHandlerService.getModelControllerValue()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+}
