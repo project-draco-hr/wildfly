@@ -4,15 +4,21 @@
   if (!WeldDeploymentMarker.isWeldDeployment(deploymentUnit)) {
     return;
   }
+  final String beanArchiveIdPrefix;
+  if (deploymentUnit.getParent() == null) {
+    beanArchiveIdPrefix=deploymentUnit.getName();
+  }
+ else {
+    beanArchiveIdPrefix=deploymentUnit.getParent().getName() + "." + deploymentUnit.getName();
+  }
   final Set<BeanDeploymentArchiveImpl> beanDeploymentArchives=new HashSet<BeanDeploymentArchiveImpl>();
-  boolean isolatedModule=DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit);
   log.info("Processing CDI deployment: " + phaseContext.getDeploymentUnit().getName());
   final Map<ResourceRoot,Index> indexes=AnnotationIndexUtils.getAnnotationIndexes(deploymentUnit);
   final Module module=phaseContext.getDeploymentUnit().getAttachment(Attachments.MODULE);
   boolean rootArchiveFound=false;
   if (cdiDeploymentMetadata != null) {
     for (    BeanArchiveMetadata beanArchiveMetadata : cdiDeploymentMetadata.getBeanArchiveMetadata()) {
-      BeanDeploymentArchiveImpl bda=createBeanDeploymentArchive(indexes.get(beanArchiveMetadata.getResourceRoot()),beanArchiveMetadata,module,isolatedModule);
+      BeanDeploymentArchiveImpl bda=createBeanDeploymentArchive(indexes.get(beanArchiveMetadata.getResourceRoot()),beanArchiveMetadata,module,beanArchiveIdPrefix);
       beanDeploymentArchives.add(bda);
       if (beanArchiveMetadata.isDeploymentRoot()) {
         rootArchiveFound=true;
@@ -21,7 +27,7 @@
     }
   }
   if (!rootArchiveFound) {
-    BeanDeploymentArchiveImpl bda=new BeanDeploymentArchiveImpl(Collections.<String>emptySet(),BeansXml.EMPTY_BEANS_XML,module,deploymentUnit.getName(),isolatedModule);
+    BeanDeploymentArchiveImpl bda=new BeanDeploymentArchiveImpl(Collections.<String>emptySet(),BeansXml.EMPTY_BEANS_XML,module,beanArchiveIdPrefix);
     beanDeploymentArchives.add(bda);
     deploymentUnit.putAttachment(WeldAttachments.DEPLOYMENT_ROOT_BEAN_DEPLOYMENT_ARCHIVE,bda);
   }
