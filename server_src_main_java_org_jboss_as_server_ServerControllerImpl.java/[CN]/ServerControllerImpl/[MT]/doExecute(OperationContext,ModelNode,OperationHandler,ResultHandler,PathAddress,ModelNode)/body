@@ -1,17 +1,34 @@
 {
+  boolean rollback=isRollbackOnRuntimeFailure(context,operation);
+  RollbackAwareResultHandler rollbackAwareHandler=null;
+  if (rollback) {
+    rollbackAwareHandler=new RollbackAwareResultHandler(resultHandler);
+    resultHandler=rollbackAwareHandler;
+  }
   final OperationResult result=super.doExecute(context,operation,operationHandler,resultHandler,address,subModel);
   if (context instanceof ServerOperationContextImpl) {
+    if (rollbackAwareHandler != null) {
+      rollbackAwareHandler.setRollbackOperation(result.getCompensatingOperation());
+    }
     final ServerOperationContextImpl serverOperationContext=ServerOperationContextImpl.class.cast(context);
     if (serverOperationContext.getRuntimeTask() != null) {
-      serverOperationContext.getRuntimeTask().execute(new RuntimeTaskContext(){
-        public ServiceTarget getServiceTarget(){
-          return serviceTarget;
+      try {
+        serverOperationContext.getRuntimeTask().execute(new RuntimeTaskContext(){
+          @Override public ServiceTarget getServiceTarget(){
+            return serviceTarget;
+          }
+          @Override public ServiceRegistry getServiceRegistry(){
+            return serviceRegistry;
+          }
         }
-        public ServiceRegistry getServiceRegistry(){
-          return serviceRegistry;
-        }
-      }
 );
+      }
+ catch (      OperationFailedException e) {
+        resultHandler.handleFailed(e.getFailureDescription());
+      }
+catch (      Exception e) {
+        resultHandler.handleFailed(new ModelNode().set(e.toString()));
+      }
     }
   }
   return result;

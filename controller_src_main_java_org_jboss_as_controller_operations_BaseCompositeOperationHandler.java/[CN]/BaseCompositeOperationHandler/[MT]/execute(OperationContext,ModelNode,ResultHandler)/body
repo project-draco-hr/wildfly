@@ -1,10 +1,61 @@
 {
-  try {
-    final List<ModelNode> steps=operation.require(STEPS).asList();
-    executeSteps(new CompositeOperationContext(context,resultHandler),steps);
+  validateOperation(operation);
+  final List<ModelNode> steps=operation.require(STEPS).asList();
+  CompositeOperationContext compositeContext=getCompositeOperationContext(context,operation,resultHandler,steps);
+  for (int i=0; i < steps.size(); i++) {
+    final ModelNode step=steps.get(i);
+    if (compositeContext.hasFailures()) {
+      compositeContext.recordCancellation(Integer.valueOf(i));
+    }
+ else {
+      final PathAddress address=PathAddress.pathAddress(step.get(OP_ADDR));
+      final String operationName=step.require(OP).asString();
+      final Integer id=Integer.valueOf(i);
+      final OperationHandler stepHandler=compositeContext.getRegistry().getOperationHandler(address,operationName);
+      final OperationContext stepContext=compositeContext.getStepOperationContext(id,address,stepHandler);
+      final ResultHandler stepResultHandler=new StepResultHandler(id,compositeContext);
+      try {
+        final OperationResult result=stepHandler.execute(stepContext,step,stepResultHandler);
+        compositeContext.recordRollbackOp(id,result.getCompensatingOperation());
+        final ModelNode overallModel=compositeContext.getSubModel();
+        final ModelNode stepModel=stepContext.getSubModel();
+        if (stepModel != null) {
+synchronized (overallModel) {
+            if (stepHandler instanceof ModelRemoveOperationHandler) {
+              address.remove(overallModel);
+            }
+ else {
+              address.navigate(overallModel,true).set(stepModel);
+            }
+          }
+        }
+      }
+ catch (      OperationFailedException e) {
+        stepResultHandler.handleFailed(e.getFailureDescription());
+      }
+catch (      Throwable t) {
+        stepResultHandler.handleFailed(new ModelNode().set(t.toString()));
+      }
+    }
   }
- catch (  final Exception e) {
-    throw new OperationFailedException(new ModelNode().set(e.toString()));
+  if (compositeContext.hasFailures()) {
+    throw new OperationFailedException(compositeContext.getOverallFailureDescription());
   }
-  return new BasicOperationResult();
+ else {
+    ModelNode compensatingOp=compositeContext.getOverallCompensatingOperation();
+    RuntimeTask runtimeTask=null;
+    if (compositeContext.overallContext.getRuntimeContext() != null) {
+      runtimeTask=getRuntimeTasks(compositeContext);
+      if (runtimeTask != null) {
+        compositeContext.overallContext.getRuntimeContext().setRuntimeTask(runtimeTask);
+      }
+    }
+    if (runtimeTask == null) {
+      compositeContext.handleSuccess();
+    }
+ else {
+      compositeContext.recordModelComplete();
+    }
+    return new BasicOperationResult(compensatingOp);
+  }
 }
