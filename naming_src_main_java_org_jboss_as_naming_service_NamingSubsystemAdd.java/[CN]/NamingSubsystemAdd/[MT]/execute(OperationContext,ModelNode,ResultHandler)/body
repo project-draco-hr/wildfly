@@ -8,12 +8,15 @@
         log.info("Activating Naming Subsystem");
         ObjectFactoryBuilder.INSTANCE.setServiceRegistry(context.getServiceRegistry());
         NamingContext.initializeNamingManager();
+        final NamingStore namingStore=new InMemoryNamingStore(new NamingEventCoordinator());
         final ServiceTarget target=context.getServiceTarget();
-        target.addService(NamingService.SERVICE_NAME,new NamingService(true)).install();
-        final JavaContextService javaContextService=new JavaContextService();
-        target.addService(JavaContextService.SERVICE_NAME,javaContextService).addDependency(NamingService.SERVICE_NAME).install();
-        final ContextService globalContextService=new ContextService("global");
-        target.addService(JavaContextService.SERVICE_NAME.append("global"),globalContextService).addDependency(JavaContextService.SERVICE_NAME,Context.class,globalContextService.getParentContextInjector()).install();
+        target.addService(NamingService.SERVICE_NAME,new NamingService(namingStore)).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME).setInitialMode(ServiceController.Mode.ACTIVE).install();
+        try {
+          namingStore.createSubcontext((Context)namingStore.lookup(new CompositeName()),new CompositeName("global"));
+        }
+ catch (        NamingException e) {
+          throw new OperationFailedException(new ModelNode().set("Unable to create java:global context - " + e.getMessage()));
+        }
         addContextFactory(target,"app");
         addContextFactory(target,"module");
         addContextFactory(target,"comp");

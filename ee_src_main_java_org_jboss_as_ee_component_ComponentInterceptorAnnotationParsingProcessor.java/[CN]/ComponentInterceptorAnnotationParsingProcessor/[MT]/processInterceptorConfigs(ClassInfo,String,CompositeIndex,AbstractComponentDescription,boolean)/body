@@ -1,0 +1,62 @@
+{
+  final ClassInfo superClassInfo=index.getClassByName(classInfo.superName());
+  final String className=classInfo.name().toString();
+  if (superClassInfo != null) {
+    processInterceptorConfigs(superClassInfo,actualClassName,index,componentConfiguration,false);
+  }
+  final Map<DotName,List<AnnotationInstance>> classAnnotations=classInfo.annotations();
+  if (classAnnotations == null) {
+    return;
+  }
+  final List<AnnotationInstance> excludeDefaultAnnotations=classAnnotations.get(EXCLUDE_DEFAULT_ANNOTATION_NAME);
+  if (excludeDefaultAnnotations != null) {
+    for (    AnnotationInstance annotation : excludeDefaultAnnotations) {
+      final AnnotationTarget target=annotation.target();
+      if (target instanceof MethodInfo) {
+        final MethodInfo methodInfo=MethodInfo.class.cast(target);
+        final MethodIdentifier methodIdentifier=methodIdentifierFromMethodInfo(methodInfo);
+        componentConfiguration.excludeDefaultInterceptors(methodIdentifier);
+      }
+ else {
+        componentConfiguration.setExcludeDefaultInterceptors(true);
+      }
+    }
+  }
+  final List<AnnotationInstance> excludeClassAnnotations=classAnnotations.get(EXCLUDE_CLASS_ANNOTATION_NAME);
+  if (excludeClassAnnotations != null) {
+    for (    AnnotationInstance annotation : excludeDefaultAnnotations) {
+      final AnnotationTarget target=annotation.target();
+      if (target instanceof MethodInfo) {
+        final MethodInfo methodInfo=MethodInfo.class.cast(target);
+        final MethodIdentifier methodIdentifier=methodIdentifierFromMethodInfo(methodInfo);
+        componentConfiguration.excludeClassInterceptors(methodIdentifier);
+      }
+ else {
+        throw new DeploymentUnitProcessingException("ExcludeClassInterceptors not applied to method: " + target);
+      }
+    }
+  }
+  final List<AnnotationInstance> interceptorAnnotations=classAnnotations.get(INTERCEPTORS_ANNOTATION_NAME);
+  if (interceptorAnnotations == null || interceptorAnnotations.isEmpty()) {
+    return;
+  }
+  for (  AnnotationInstance annotationInstance : interceptorAnnotations) {
+    final AnnotationValue value=annotationInstance.value();
+    if (value != null)     for (    Type interceptorClass : value.asClassArray()) {
+      final ClassInfo interceptorClassInfo=index.getClassByName(interceptorClass.name());
+      if (interceptorClassInfo == null) {
+        continue;
+      }
+      final AnnotationTarget target=annotationInstance.target();
+      if (target instanceof MethodInfo) {
+        final MethodInfo methodInfo=MethodInfo.class.cast(target);
+        componentConfiguration.addMethodInterceptor(methodIdentifierFromMethodInfo(methodInfo),new InterceptorDescription(interceptorClassInfo.name().toString()));
+      }
+ else {
+        if (actualClass) {
+          componentConfiguration.addClassInterceptor(new InterceptorDescription(interceptorClassInfo.name().toString()));
+        }
+      }
+    }
+  }
+}

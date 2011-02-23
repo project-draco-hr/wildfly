@@ -1,0 +1,51 @@
+{
+  final String bindingName=bindingDescription.getBindingName();
+  final String bindingType=bindingDescription.getBindingType();
+  try {
+    Class.forName(bindingType,false,classLoader);
+  }
+ catch (  ClassNotFoundException e) {
+    throw new DeploymentUnitProcessingException("Component binding class not found",e);
+  }
+  Value<JndiInjectable> resourceValue;
+  if (bindingName != null) {
+    ComponentNamingMode namingMode=description.getNamingMode();
+    final String fullBindingName;
+    final String serviceBindingName;
+    if (bindingDescription.isAbsoluteBinding()) {
+      fullBindingName=bindingName;
+      int idx=fullBindingName.indexOf('/');
+      if (idx == -1) {
+        serviceBindingName=fullBindingName;
+      }
+ else {
+        serviceBindingName=fullBindingName.substring(idx + 1);
+      }
+    }
+ else     if (namingMode == ComponentNamingMode.CREATE) {
+      fullBindingName="java:comp/env/" + bindingName;
+      serviceBindingName="env/" + bindingName;
+    }
+ else {
+      fullBindingName="java:module/env/" + bindingName;
+      serviceBindingName="env/" + bindingName;
+    }
+    final BinderService service=new BinderService(serviceBindingName);
+    final ServiceName bindingServiceName=ContextNames.serviceNameOfContext(applicationName,moduleName,componentName,fullBindingName);
+    if (bindingServiceName == null) {
+      throw new IllegalArgumentException("Invalid context name '" + bindingName + "' for binding");
+    }
+    ServiceBuilder<JndiInjectable> sourceServiceBuilder=serviceTarget.addService(bindingServiceName,service);
+    bindingDescription.getReferenceSourceDescription().getResourceValue(description,bindingDescription,sourceServiceBuilder,phaseContext,service.getJndiInjectableInjector());
+    resourceValue=sourceServiceBuilder.addDependency(createServiceName).addDependency(bindingServiceName.getParent(),NamingStore.class,service.getNamingStoreInjector()).install();
+    startBuilder.addDependency(bindingServiceName);
+  }
+ else {
+    final InjectedValue<JndiInjectable> injectedValue=new InjectedValue<JndiInjectable>();
+    bindingDescription.getReferenceSourceDescription().getResourceValue(description,bindingDescription,startBuilder,phaseContext,injectedValue);
+    resourceValue=injectedValue;
+  }
+  for (  InjectionTargetDescription targetDescription : bindingDescription.getInjectionTargetDescriptions()) {
+    instanceResourceInjections.add(ResourceInjection.Factory.create(targetDescription,injecteeClass,index,resourceValue));
+  }
+}

@@ -1,0 +1,74 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
+  final DeploymentReflectionIndex index=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
+  final ArrayList<Interceptor> rootInterceptors=new ArrayList<Interceptor>();
+  final SimpleInterceptorFactoryContext interceptorFactoryContext=new SimpleInterceptorFactoryContext();
+  for (  InterceptorFactory factory : configuration.getComponentSystemInterceptorFactories()) {
+    rootInterceptors.add(factory.create(interceptorFactoryContext));
+  }
+  rootInterceptors.add(DispatcherInterceptor.INSTANCE);
+  configuration.setComponentInterceptor(Interceptors.getChainedInterceptor(rootInterceptors));
+  final Map<MethodIdentifier,Method> componentMethods=new HashMap<MethodIdentifier,Method>();
+  final Map<Method,InterceptorFactory> componentToInterceptorFactory=new IdentityHashMap<Method,InterceptorFactory>();
+  Class<?> componentClass=configuration.getComponentClass();
+  Class<?> currentClass=componentClass;
+  do {
+    final ClassReflectionIndex<?> classIndex=index.getClassIndex(currentClass);
+    for (    Method componentMethod : classIndex.getMethods()) {
+      final MethodIdentifier methodIdentifier=MethodIdentifier.getIdentifierForMethod(componentMethod);
+      int modifiers=componentMethod.getModifiers();
+      if (!Modifier.isStatic(modifiers) && !Modifier.isFinal(modifiers)) {
+        componentMethods.put(MethodIdentifier.getIdentifierForMethod(componentMethod),componentMethod);
+        final List<InterceptorFactory> interceptorFactories=new ArrayList<InterceptorFactory>();
+        if (!methodExcludeClassInterceptors.contains(methodIdentifier)) {
+          for (          final InterceptorDescription interceptor : classInterceptors) {
+            registerComponentInterceptor(interceptor,configuration,module,index,interceptorFactories);
+          }
+        }
+        List<InterceptorDescription> methodLevelInterceptors=methodInterceptors.get(methodIdentifier);
+        if (methodLevelInterceptors != null)         for (        final InterceptorDescription interceptor : methodLevelInterceptors) {
+          registerComponentInterceptor(interceptor,configuration,module,index,interceptorFactories);
+        }
+        for (        Map.Entry<String,InterceptorMethodDescription> entry : aroundInvokeMethods.entrySet()) {
+          try {
+            final InterceptorMethodDescription aroundInvoke=entry.getValue();
+            final Class<?> methodDeclaringClass=module.getClassLoader().loadClass(entry.getKey());
+            final ClassReflectionIndex<?> methodDeclaringClassIndex=index.getClassIndex(methodDeclaringClass);
+            final Method aroundInvokeMethod=methodDeclaringClassIndex.getMethod(Object.class,aroundInvoke.getIdentifier().getName(),InvocationContext.class);
+            interceptorFactories.add(new MethodInterceptorFactory(AbstractComponent.INSTANCE_FACTORY,aroundInvokeMethod));
+          }
+ catch (          ClassNotFoundException e) {
+            throw new DeploymentUnitProcessingException("Failed to load interceptor class " + entry.getKey());
+          }
+        }
+        interceptorFactories.add(new MethodInvokingInterceptorFactory(AbstractComponent.INSTANCE_FACTORY,componentMethod));
+        componentToInterceptorFactory.put(componentMethod,Interceptors.getChainedInterceptorFactory(interceptorFactories));
+      }
+    }
+    currentClass=currentClass.getSuperclass();
+  }
+ while (currentClass != null);
+  LifecycleInterceptorBuilder.createLifecycleInterceptors(this,configuration,module,index);
+  final Map<Class<?>,ProxyFactory<?>> proxyFactories=configuration.getProxyFactories();
+  final Map<Method,InterceptorFactory> viewToInterceptorFactory=configuration.getInterceptorFactoryMap();
+  for (  String viewClassName : viewClassNames) {
+    final Class<?> viewClass;
+    try {
+      viewClass=Class.forName(viewClassName,false,componentClass.getClassLoader());
+    }
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException("Failed to load view class " + viewClassName,e);
+    }
+    final ProxyFactory<?> factory=getProxyFactory(viewClass);
+    proxyFactories.put(viewClass,factory);
+    final List<Method> methods=new ArrayList<Method>();
+    for (    Method viewMethod : factory.getCachedMethods()) {
+      methods.add(viewMethod);
+      Method componentMethod=componentMethods.get(MethodIdentifier.getIdentifierForMethod(viewMethod));
+      if (componentMethod != null) {
+        viewToInterceptorFactory.put(viewMethod,componentToInterceptorFactory.get(componentMethod));
+      }
+    }
+  }
+}

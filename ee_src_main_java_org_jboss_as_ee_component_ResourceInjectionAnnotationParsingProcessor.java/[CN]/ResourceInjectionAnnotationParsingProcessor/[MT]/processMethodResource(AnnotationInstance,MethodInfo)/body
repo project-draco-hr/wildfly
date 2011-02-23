@@ -1,0 +1,36 @@
+{
+  final String methodName=methodInfo.name();
+  if (!methodName.startsWith("set") || methodInfo.args().length != 1) {
+    throw new IllegalArgumentException("@Resource injection target is invalid.  Only setter methods are allowed: " + methodInfo);
+  }
+  final String contextNameSuffix=methodName.substring(3,4).toLowerCase() + methodName.substring(4);
+  final AnnotationValue declaredNameValue=annotation.value("name");
+  final String declaredName=declaredNameValue != null ? declaredNameValue.asString() : null;
+  final String localContextName;
+  if (declaredName == null || declaredName.isEmpty()) {
+    localContextName=methodInfo.declaringClass().name().toString() + "/" + contextNameSuffix;
+  }
+ else {
+    localContextName=declaredName;
+  }
+  final AnnotationValue declaredTypeValue=annotation.value("type");
+  final DotName declaredType=declaredTypeValue != null ? declaredTypeValue.asClass().name() : null;
+  final DotName injectionType=declaredType == null || declaredType.toString().equals(Object.class.getName()) ? methodInfo.args()[0].name() : declaredType;
+  final BindingDescription bindingDescription=new BindingDescription();
+  bindingDescription.setBindingName(localContextName);
+  final String injectionTypeName=injectionType.toString();
+  bindingDescription.setBindingType(injectionTypeName);
+  final AnnotationValue description=annotation.value("description");
+  if (description != null)   bindingDescription.setDescription(description.asString());
+  final AnnotationValue lookupValue=annotation.value("lookup");
+  if (lookupValue != null) {
+    bindingDescription.setReferenceSourceDescription(new LookupBindingSourceDescription(lookupValue.asString()));
+  }
+  final InjectionTargetDescription targetDescription=new InjectionTargetDescription();
+  targetDescription.setName(methodName);
+  targetDescription.setClassName(methodInfo.declaringClass().name().toString());
+  targetDescription.setType(InjectionTargetDescription.Type.METHOD);
+  targetDescription.setValueClassName(injectionTypeName);
+  bindingDescription.getInjectionTargetDescriptions().add(targetDescription);
+  return bindingDescription;
+}

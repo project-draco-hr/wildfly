@@ -1,5 +1,7 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+  final String applicationName=deploymentUnit.getParent() == null ? deploymentUnit.getName() : deploymentUnit.getParent().getName();
   final CompositeIndex compositeIndex=deploymentUnit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
   if (compositeIndex == null) {
     return;
@@ -13,16 +15,25 @@
     if (!(target instanceof ClassInfo)) {
       throw new DeploymentUnitProcessingException("The ManagedBean annotation is only allowed at the class level: " + target);
     }
-    final ClassInfo classInfo=ClassInfo.class.cast(target);
+    final ClassInfo classInfo=(ClassInfo)target;
     final String beanClassName=classInfo.name().toString();
     final AnnotationValue nameValue=instance.value();
     final String beanName=nameValue == null || nameValue.asString().isEmpty() ? beanClassName : nameValue.asString();
-    final ComponentConfiguration componentConfiguration=new ManagedBeanComponentConfiguration(beanName,beanClassName,ManagedBeanComponentFactory.INSTANCE);
-    componentConfiguration.setAppContextServiceName(ContextServiceNameBuilder.app(deploymentUnit));
-    final ServiceName moduleContextServiceName=ContextServiceNameBuilder.module(deploymentUnit);
-    componentConfiguration.setModuleContextServiceName(moduleContextServiceName);
-    componentConfiguration.setCompContextServiceName(moduleContextServiceName);
-    componentConfiguration.setEnvContextServiceName(moduleContextServiceName.append("env"));
-    deploymentUnit.addToAttachmentList(org.jboss.as.ee.component.Attachments.COMPONENT_CONFIGS,componentConfiguration);
+    final ManagedBeanComponentDescription componentDescription=new ManagedBeanComponentDescription(beanName,beanClassName,deploymentUnit.getName(),applicationName);
+    final ServiceName baseName=deploymentUnit.getServiceName().append("component").append(beanName);
+    componentDescription.getViewClassNames().add(beanClassName);
+    final BindingDescription moduleBinding=new BindingDescription();
+    moduleBinding.setAbsoluteBinding(true);
+    moduleBinding.setBindingName("java:module/" + beanName);
+    moduleBinding.setBindingType(beanClassName);
+    moduleBinding.setReferenceSourceDescription(new ServiceBindingSourceDescription(baseName.append("VIEW").append(beanClassName)));
+    componentDescription.getBindings().add(moduleBinding);
+    final BindingDescription appBinding=new BindingDescription();
+    appBinding.setAbsoluteBinding(true);
+    appBinding.setBindingName("java:app/" + moduleDescription.getModuleName() + "/"+ beanName);
+    appBinding.setBindingType(beanClassName);
+    appBinding.setReferenceSourceDescription(new ServiceBindingSourceDescription(baseName.append("VIEW").append(beanClassName)));
+    componentDescription.getBindings().add(appBinding);
+    moduleDescription.addComponent(componentDescription);
   }
 }

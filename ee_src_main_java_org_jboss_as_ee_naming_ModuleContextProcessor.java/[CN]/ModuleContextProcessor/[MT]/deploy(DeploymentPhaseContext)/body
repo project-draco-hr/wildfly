@@ -3,24 +3,18 @@
   if (DeploymentTypeMarker.isType(DeploymentType.EAR,deploymentUnit)) {
     return;
   }
+  EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
   final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
   final ServiceName moduleContextServiceName=ContextServiceNameBuilder.module(deploymentUnit);
   final RootContextService contextService=new RootContextService();
   serviceTarget.addService(moduleContextServiceName,contextService).install();
-  final BinderService<String> moduleNameBinder=new BinderService<String>("ModuleName",Values.immediateValue(getModuleName(deploymentUnit)));
-  serviceTarget.addService(moduleContextServiceName.append("ModuleName"),moduleNameBinder).addDependency(moduleContextServiceName,Context.class,moduleNameBinder.getContextInjector()).install();
-  final ContextService envContextService=new ContextService("env");
-  serviceTarget.addService(moduleContextServiceName.append("env"),envContextService).addDependency(moduleContextServiceName,Context.class,envContextService.getParentContextInjector()).install();
-  final ServiceName appContextServiceName=deploymentUnit.getAttachment(Attachments.APPLICATION_CONTEXT_CONFIG);
-  if (appContextServiceName != null) {
-    final ContextService appModuleContextService=new ContextService(deploymentUnit.getName());
-    serviceTarget.addService(appContextServiceName.append(deploymentUnit.getName()),appModuleContextService).addDependency(appContextServiceName,Context.class,appModuleContextService.getParentContextInjector()).install();
-  }
+  final BinderService moduleNameBinder=new BinderService("ModuleName");
+  serviceTarget.addService(moduleContextServiceName.append("ModuleName"),moduleNameBinder).addInjection(moduleNameBinder.getJndiInjectableInjector(),new ValueJndiInjectable(Values.immediateValue(moduleDescription.getModuleName()))).addDependency(moduleContextServiceName,NamingStore.class,moduleNameBinder.getNamingStoreInjector()).install();
   deploymentUnit.putAttachment(Attachments.MODULE_CONTEXT_CONFIG,moduleContextServiceName);
   ServiceName appNs=ContextServiceNameBuilder.app(deploymentUnit);
   ServiceName namespaceSelectorServiceName=deploymentUnit.getServiceName().append(NamespaceSelectorService.NAME);
   NamespaceSelectorService namespaceSelector=new NamespaceSelectorService();
-  serviceTarget.addService(namespaceSelectorServiceName,namespaceSelector).addDependency(appNs,Context.class,namespaceSelector.getApp()).addDependency(moduleContextServiceName,Context.class,namespaceSelector.getModule()).addDependency(moduleContextServiceName,Context.class,namespaceSelector.getComp()).install();
+  serviceTarget.addService(namespaceSelectorServiceName,namespaceSelector).addDependency(appNs,NamingStore.class,namespaceSelector.getApp()).addDependency(moduleContextServiceName,NamingStore.class,namespaceSelector.getModule()).addDependency(moduleContextServiceName,NamingStore.class,namespaceSelector.getComp()).install();
   JavaNamespaceSetup setupAction=new JavaNamespaceSetup(namespaceSelector);
   deploymentUnit.addToAttachmentList(org.jboss.as.server.deployment.Attachments.SETUP_ACTIONS,setupAction);
 }
