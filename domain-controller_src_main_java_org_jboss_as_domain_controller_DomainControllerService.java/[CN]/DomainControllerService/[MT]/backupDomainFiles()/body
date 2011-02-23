@@ -1,0 +1,34 @@
+{
+  if (!backupDomainFiles) {
+    return;
+  }
+  if (masterDomainControllerClient.getOptionalValue() == null) {
+    log.warn(CommandLineConstants.BACKUP_DC + " is ignored so no backup of the domain controller files will happen, since the domain controller is running locally");
+    return;
+  }
+  log.debug("Backing up the remote domain controller files");
+  final File originalHost=localRepository.getConfigurationFile("host.xml");
+  long last=originalHost.lastModified();
+  final File hostBackup=new File(originalHost.getParent(),"host-backup.xml");
+  try {
+    copyFile(originalHost,hostBackup);
+  }
+ catch (  IOException e) {
+    throw new RuntimeException("Error backing up " + originalHost + " to "+ hostBackup,e);
+  }
+  FileRepository remote=masterDomainControllerClient.getValue().getRemoteFileRepository();
+  remote.getFile("");
+  remote.getConfigurationFile("");
+  remote.getDeploymentFiles(null);
+  if (last != originalHost.lastModified()) {
+    final File remoteHost=new File(originalHost.getParent(),"remoteHost.xml");
+    try {
+      copyFile(originalHost,remoteHost);
+      copyFile(hostBackup,originalHost);
+    }
+ catch (    IOException e) {
+      throw new RuntimeException("An error happened copying the remote domain controller files. " + originalHost + " has been overwritten. The original can be found at"+ hostBackup);
+    }
+  }
+  hostBackup.delete();
+}
