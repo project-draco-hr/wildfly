@@ -1,6 +1,7 @@
 {
   final AtomicInteger status=new AtomicInteger();
   final ModelNode finalResult=new ModelNode();
+  finalResult.get(OUTCOME);
   finalResult.get(RESULT);
   final OperationResult handlerResult=execute(operation,new ResultHandler(){
     @Override public void handleResultFragment(    final String[] location,    final ModelNode fragment){
@@ -12,15 +13,13 @@ synchronized (finalResult) {
     }
     @Override public void handleResultComplete(){
 synchronized (finalResult) {
-        if (status.compareAndSet(0,1)) {
-        }
+        status.compareAndSet(0,1);
         finalResult.notify();
       }
     }
     @Override public void handleFailed(    final ModelNode failureDescription){
 synchronized (finalResult) {
         if (status.compareAndSet(0,3)) {
-          finalResult.remove(RESULT);
           finalResult.get(FAILURE_DESCRIPTION).set(failureDescription);
         }
         finalResult.notify();
@@ -44,16 +43,19 @@ synchronized (finalResult) {
           final int s=status.get();
 switch (s) {
 case 1:
-            finalResult.get(OUTCOME).set("success");
+            finalResult.get(OUTCOME).set(SUCCESS);
           if (handlerResult.getCompensatingOperation() != null) {
             finalResult.get(COMPENSATING_OPERATION).set(handlerResult.getCompensatingOperation());
           }
         return finalResult;
 case 2:
-      finalResult.get(OUTCOME).set("cancelled");
+      finalResult.get(OUTCOME).set(CANCELLED);
     throw new CancellationException();
 case 3:
-  finalResult.get(OUTCOME).set("failed");
+  finalResult.get(OUTCOME).set(FAILED);
+if (!finalResult.hasDefined(RESULT)) {
+  finalResult.remove(RESULT);
+}
 return finalResult;
 }
 finalResult.wait();
