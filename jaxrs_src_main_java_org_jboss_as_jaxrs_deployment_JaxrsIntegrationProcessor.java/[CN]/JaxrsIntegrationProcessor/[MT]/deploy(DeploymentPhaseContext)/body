@@ -1,0 +1,114 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+  if (!JaxrsDeploymentMarker.isJaxrsDeployment(deploymentUnit)) {
+    return;
+  }
+  final WarMetaData warMetaData=deploymentUnit.getAttachment(WarMetaData.ATTACHMENT_KEY);
+  final JBossWebMetaData webdata=warMetaData.getMergedJBossWebMetaData();
+  final ResteasyDeploymentData resteasy=deploymentUnit.getAttachment(JaxrsAttachments.RESTEASY_DEPLOYMENT_DATA);
+  if (resteasy == null)   return;
+  if (!resteasy.getScannedResourceClasses().isEmpty()) {
+    StringBuffer buf=null;
+    for (    String resource : resteasy.getScannedResourceClasses()) {
+      if (buf == null) {
+        buf=new StringBuffer();
+        buf.append(resource);
+      }
+ else {
+        buf.append(",").append(resource);
+      }
+    }
+    String resources=buf.toString();
+    log.info("*** Adding JAX-RS resource classes: " + resources);
+    setContextParameter(webdata,ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES,resources);
+  }
+  if (!resteasy.getScannedProviderClasses().isEmpty()) {
+    StringBuffer buf=null;
+    for (    String provider : resteasy.getScannedProviderClasses()) {
+      if (buf == null) {
+        buf=new StringBuffer();
+        buf.append(provider);
+      }
+ else {
+        buf.append(",").append(provider);
+      }
+    }
+    String providers=buf.toString();
+    log.info("*** Adding JAX-RS provider classes: " + providers);
+    setContextParameter(webdata,ResteasyContextParameters.RESTEASY_SCANNED_PROVIDERS,providers);
+  }
+  if (!resteasy.getScannedJndiComponentResources().isEmpty()) {
+    StringBuffer buf=null;
+    for (    String resource : resteasy.getScannedJndiComponentResources()) {
+      if (buf == null) {
+        buf=new StringBuffer();
+        buf.append(resource);
+      }
+ else {
+        buf.append(",").append(resource);
+      }
+    }
+    String providers=buf.toString();
+    log.info("*** Adding JAX-RS jndi component resource classes: " + providers);
+    setContextParameter(webdata,ResteasyContextParameters.RESTEASY_SCANNED_JNDI_RESOURCES,providers);
+  }
+  boolean useScannedApplicationClass=false;
+  if (resteasy.getScannedApplicationClass() != null) {
+    if (findContextParam(webdata,"javax.ws.rs.Application") == null) {
+      useScannedApplicationClass=true;
+      setContextParameter(webdata,"javax.ws.rs.Application",resteasy.getScannedApplicationClass().getName());
+    }
+  }
+  try {
+    module.getClassLoader().loadClass(CDI_INJECTOR_FACTORY_CLASS);
+    if (WeldDeploymentMarker.isWeldDeployment(deploymentUnit)) {
+      log.debug("***** Found CDI, adding injector factory class");
+      setContextParameter(webdata,"resteasy.injector.factory",CDI_INJECTOR_FACTORY_CLASS);
+    }
+  }
+ catch (  ClassNotFoundException ignored) {
+  }
+  if (!resteasy.isUnwrappedExceptionsParameterSet()) {
+    setContextParameter(webdata,ResteasyContextParameters.RESTEASY_UNWRAPPED_EXCEPTIONS,"javax.ejb.EJBException");
+  }
+  if (resteasy.hasBootClasses() || resteasy.isDispatcherCreated())   return;
+  if (resteasy.getScannedApplicationClass() == null && resteasy.getScannedJndiComponentResources().isEmpty() && resteasy.getScannedProviderClasses().isEmpty() && resteasy.getScannedResourceClasses().isEmpty())   return;
+  FilterMetaData filter=new FilterMetaData();
+  filter.setFilterClass(Filter30Dispatcher.class.getName());
+  filter.setName("Resteasy");
+  filter.setAsyncSupported(true);
+  FilterMappingMetaData mapping=new FilterMappingMetaData();
+  mapping.setFilterName("Resteasy");
+  List<String> patterns=new ArrayList<String>();
+  if (useScannedApplicationClass && resteasy.getScannedApplicationClass().isAnnotationPresent(ApplicationPath.class)) {
+    ApplicationPath path=resteasy.getScannedApplicationClass().getAnnotation(ApplicationPath.class);
+    String pathValue=path.value().trim();
+    if (!pathValue.startsWith("/")) {
+      pathValue="/" + pathValue;
+    }
+    String prefix=pathValue;
+    if (pathValue.endsWith("/")) {
+      pathValue+="*";
+    }
+ else {
+      pathValue+="/*";
+    }
+    patterns.add(pathValue);
+    setContextParameter(webdata,"resteasy.servlet.mapping.prefix",prefix);
+  }
+ else {
+    patterns.add("/*");
+  }
+  mapping.setUrlPatterns(patterns);
+  if (webdata.getFilters() == null) {
+    webdata.setFilters(new FiltersMetaData());
+  }
+  webdata.getFilters().add(filter);
+  List<FilterMappingMetaData> mappings=webdata.getFilterMappings();
+  if (mappings == null) {
+    mappings=new ArrayList<FilterMappingMetaData>();
+    webdata.setFilterMappings(mappings);
+  }
+  mappings.add(mapping);
+}

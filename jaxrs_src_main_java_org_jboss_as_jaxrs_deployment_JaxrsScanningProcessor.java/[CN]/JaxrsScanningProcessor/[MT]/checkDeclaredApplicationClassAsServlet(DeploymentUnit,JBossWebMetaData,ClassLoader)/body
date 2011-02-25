@@ -1,0 +1,37 @@
+{
+  if (webdata.getServlets() == null)   return null;
+  for (  ServletMetaData servlet : webdata.getServlets()) {
+    String servletClass=servlet.getServletClass();
+    if (servletClass == null)     continue;
+    Class<?> clazz=null;
+    try {
+      clazz=classLoader.loadClass(servletClass);
+    }
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException(e);
+    }
+    if (Application.class.isAssignableFrom(clazz)) {
+      servlet.setServletClass(HttpServlet30Dispatcher.class.getName());
+      servlet.setAsyncSupported(true);
+      ParamValueMetaData param=new ParamValueMetaData();
+      param.setParamName("javax.ws.rs.Application");
+      param.setParamValue(servletClass);
+      List<ParamValueMetaData> params=servlet.getInitParam();
+      if (params == null) {
+        params=new ArrayList<ParamValueMetaData>();
+        servlet.setInitParam(params);
+      }
+      params.add(param);
+      try {
+        classLoader.loadClass(JaxrsIntegrationProcessor.CDI_INJECTOR_FACTORY_CLASS);
+        if (WeldDeploymentMarker.isWeldDeployment(du)) {
+          JaxrsIntegrationProcessor.setContextParameter(webdata,"resteasy.injector.factory",JaxrsIntegrationProcessor.CDI_INJECTOR_FACTORY_CLASS);
+        }
+      }
+ catch (      ClassNotFoundException ignored) {
+      }
+      return clazz;
+    }
+  }
+  return null;
+}
