@@ -9,30 +9,44 @@
   try {
     if (scanEnabled) {
       log.tracef("Scanning directory %s for deployment content changes",deploymentDir.getAbsolutePath());
-      final List<ModelNode> updates=new ArrayList<ModelNode>();
-      Map<String,File> foundDeployed=new HashMap<String,File>();
-      Set<String> newlyAdded=new HashSet<String>();
-      Set<String> registeredDeployments=getDeploymentNames();
-      scanDirectory(deploymentDir,updates,foundDeployed,newlyAdded,registeredDeployments);
-      Set<String> toRemove=new HashSet<String>(deployed);
-      toRemove.removeAll(foundDeployed.keySet());
-      toRemove.removeAll(newlyAdded);
+      final List<ScannerTask> scannerTasks=new ArrayList<ScannerTask>();
+      final Set<String> registeredDeployments=getDeploymentNames();
+      final Set<String> toRemove=new HashSet<String>(deployed.keySet());
+      scanDirectory(deploymentDir,scannerTasks,registeredDeployments,toRemove);
       for (      String missing : toRemove) {
-        updates.add(getUndeployOperation(missing));
-        updates.add(getRemoveOperation(missing));
+        scannerTasks.add(new UndeployTask(missing));
       }
-      if (updates.size() > 0) {
-        if (log.isDebugEnabled()) {
-          for (          ModelNode update : updates) {
+      if (scannerTasks.size() > 0) {
+        List<ModelNode> updates=new ArrayList<ModelNode>(scannerTasks.size());
+        for (        ScannerTask task : scannerTasks) {
+          final ModelNode update=task.getUpdate();
+          if (log.isDebugEnabled()) {
             log.debugf("Deployment scan of [%s] found update action [%s]",deploymentDir,update);
           }
+          updates.add(update);
         }
-        Operation composite=getCompositeUpdate(updates);
-        ModelNode results=serverController.execute(composite);
+        while (!updates.isEmpty()) {
+          ModelNode composite=getCompositeUpdate(updates);
+          final ModelNode results=serverController.execute(OperationBuilder.Factory.create(composite).build());
+          final List<Property> resultList=results.get(RESULT).asPropertyList();
+          final List<ModelNode> toRetry=new ArrayList<ModelNode>();
+          for (int i=0; i < resultList.size(); i++) {
+            final ModelNode result=resultList.get(i).getValue();
+            final ScannerTask task=scannerTasks.get(i);
+            final ModelNode outcome=result.get(OUTCOME);
+            if (OUTCOME != null && SUCCESS.equals(outcome.asString())) {
+              task.handleSuccessResult();
+            }
+ else             if (OUTCOME != null && CANCELLED.equals(outcome.asString())) {
+              toRetry.add(updates.get(i));
+            }
+ else {
+              task.handleFailureResult(result);
+            }
+          }
+          updates=toRetry;
+        }
       }
-      Set<String> validFinds=cleanSpuriousMarkerFiles(foundDeployed);
-      validFinds.addAll(newlyAdded);
-      this.deployed=validFinds;
       log.tracef("Scan complete");
     }
   }

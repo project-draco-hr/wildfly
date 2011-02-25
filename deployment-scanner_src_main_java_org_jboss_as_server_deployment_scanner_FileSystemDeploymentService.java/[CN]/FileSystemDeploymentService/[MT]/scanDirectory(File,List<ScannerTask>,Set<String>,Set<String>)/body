@@ -1,0 +1,49 @@
+{
+  final File[] children=directory.listFiles(filter);
+  if (children == null) {
+    return;
+  }
+  for (  File child : children) {
+    final String fileName=child.getName();
+    if (fileName.endsWith(DEPLOYED)) {
+      final String deploymentName=fileName.substring(0,fileName.length() - DEPLOYED.length());
+      toRemove.remove(deploymentName);
+      if (!deployed.containsKey(deploymentName)) {
+        if (!child.delete()) {
+          log.warnf("Cannot removed extraneous deployment marker file %s",fileName);
+        }
+      }
+      if (deployed.get(deploymentName).lastModified != child.lastModified()) {
+        events.add(new RedeployTask(deploymentName,child.lastModified()));
+      }
+    }
+ else     if (fileName.endsWith(DO_DEPLOY)) {
+      final String deploymentName=fileName.substring(0,fileName.length() - DO_DEPLOY.length());
+      final File deploymentFile=new File(directory,deploymentName);
+      if (!deploymentFile.exists()) {
+        log.warnf("Deployment of '%s' requested, but the deployment is not present",deploymentFile);
+        if (!child.delete()) {
+          log.warnf("Cannot removed extraneous deployment marker file %s",fileName);
+        }
+        continue;
+      }
+      if (registeredDeployments.contains(deploymentName)) {
+        events.add(new ReplaceTask(deploymentName,deploymentFile));
+      }
+ else {
+        events.add(new DeployTask(deploymentName,deploymentFile));
+      }
+      toRemove.remove(deploymentName);
+    }
+ else     if (fileName.endsWith(FAILED_DEPLOY)) {
+      final String deploymentName=fileName.substring(0,fileName.length() - FAILED_DEPLOY.length());
+      toRemove.remove(deploymentName);
+    }
+ else     if (child.isDirectory()) {
+      int idx=fileName.lastIndexOf('.');
+      if (idx == -1 || !ARCHIVES.contains(fileName.substring(idx))) {
+        scanDirectory(child,events,registeredDeployments,toRemove);
+      }
+    }
+  }
+}
