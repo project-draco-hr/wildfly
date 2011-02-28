@@ -3,11 +3,32 @@
   ModelNode attr=context.getSubModel().get(name);
   final int current=attr.asInt();
   attr.set(operation.require("value"));
+  final boolean async=operation.hasDefined("async") && operation.get("async").asBoolean();
   context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
     @Override public void execute(    RuntimeTaskContext context) throws OperationFailedException {
-      resultHandler.handleResultFragment(new String[0],new ModelNode().set(current));
-      runtimeState.set(!runtimeState.get());
-      resultHandler.handleResultComplete();
+      Runnable r=new Runnable(){
+        @Override public void run(){
+          if (async) {
+            try {
+              Thread.sleep(5);
+            }
+ catch (            InterruptedException e) {
+              Thread.currentThread().interrupt();
+            }
+          }
+          resultHandler.handleResultFragment(new String[0],new ModelNode().set(current));
+          runtimeState.set(!runtimeState.get());
+          resultHandler.handleResultComplete();
+        }
+      }
+;
+      if (async) {
+        Thread t=new Thread(r);
+        t.start();
+      }
+ else {
+        r.run();
+      }
     }
   }
 );
