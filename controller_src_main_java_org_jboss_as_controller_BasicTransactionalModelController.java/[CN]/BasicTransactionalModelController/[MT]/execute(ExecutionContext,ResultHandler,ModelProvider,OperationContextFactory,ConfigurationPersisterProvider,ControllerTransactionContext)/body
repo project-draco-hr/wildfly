@@ -1,0 +1,40 @@
+{
+  try {
+    final PathAddress address=PathAddress.pathAddress(executionContext.getOperation().get(ModelDescriptionConstants.OP_ADDR));
+    final ProxyController proxyExecutor=getRegistry().getProxyController(address);
+    if (proxyExecutor != null) {
+      ExecutionContext newContext=executionContext.clone();
+      newContext.getOperation().get(OP_ADDR).set(address.subAddress(proxyExecutor.getProxyNodeAddress().size()).toModelNode());
+      return proxyExecutor.execute(newContext,handler);
+    }
+    if (isMultiStepOperation(executionContext,address)) {
+      MultiStepOperationController multistepController=getMultiStepOperationController(executionContext,handler,modelSource,configurationPersisterProvider,transaction);
+      return multistepController.execute(handler);
+    }
+    final String operationName=executionContext.getOperation().require(ModelDescriptionConstants.OP).asString();
+    final OperationHandler operationHandler=getRegistry().getOperationHandler(address,operationName);
+    if (operationHandler == null) {
+      throw new IllegalStateException("No handler for " + operationName + " at address "+ address);
+    }
+    final OperationContext context=contextFactory.getOperationContext(modelSource,address,operationHandler);
+    try {
+      final OperationResult result=operationHandler.execute(context,executionContext.getOperation(),handler);
+      ControllerResource txResource=getControllerResource(context,executionContext.getOperation(),operationHandler,handler,address,modelSource,configurationPersisterProvider);
+      if (txResource != null) {
+        transaction.registerResource(txResource);
+      }
+      return result;
+    }
+ catch (    OperationFailedException e) {
+      transaction.setRollbackOnly();
+      handler.handleFailed(e.getFailureDescription());
+      return new BasicOperationResult();
+    }
+  }
+ catch (  final Throwable t) {
+    transaction.setRollbackOnly();
+    log.errorf(t,"operation (%s) failed - address: (%s)",executionContext.getOperation().get(OP),executionContext.getOperation().get(OP_ADDR));
+    handler.handleFailed(getFailureResult(t));
+    return new BasicOperationResult();
+  }
+}

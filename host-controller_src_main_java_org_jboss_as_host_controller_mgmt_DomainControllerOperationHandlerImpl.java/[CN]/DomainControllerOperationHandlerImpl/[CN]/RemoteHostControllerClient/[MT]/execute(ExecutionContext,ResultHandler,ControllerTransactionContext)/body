@@ -1,0 +1,43 @@
+{
+  if (executionContext == null) {
+    throw new IllegalArgumentException("Null execution context");
+  }
+  if (handler == null) {
+    throw new IllegalArgumentException("Null handler");
+  }
+  if (transaction == null) {
+    throw new IllegalArgumentException("Null transaction");
+  }
+  final AsynchronousOperation result=new AsynchronousOperation();
+  executorService.execute(new Runnable(){
+    @Override public void run(){
+      try {
+        Future<Void> f=new ExecuteTransactionalRequest(result,executionContext,handler,transaction.getTransactionId()).execute(connectionStrategy);
+        while (true) {
+          try {
+            f.get(500,TimeUnit.MILLISECONDS);
+            break;
+          }
+ catch (          TimeoutException e) {
+            if (executorService.isShutdown()) {
+              break;
+            }
+          }
+        }
+      }
+ catch (      Exception e) {
+        throw new RuntimeException("Failed to execute operation ",e);
+      }
+    }
+  }
+);
+  return new OperationResult(){
+    @Override public Cancellable getCancellable(){
+      return result;
+    }
+    @Override public ModelNode getCompensatingOperation(){
+      return null;
+    }
+  }
+;
+}
