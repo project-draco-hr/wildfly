@@ -1,0 +1,25 @@
+{
+  final ClassLoader oldTCCL=SecurityActions.getContextClassLoader();
+  try {
+    SecurityActions.setContextClassLoader(classLoader);
+    final BeanManagerImpl bm=beanManager.getValue();
+    WeldInjectionHandle weldHandle=new WeldInjectionHandle(injectionPoints.size());
+    for (int i=0; i < injectionPoints.size(); ++i) {
+      final CDIInjectionPoint injectionPoint=injectionPoints.get(i);
+      try {
+        final CreationalContext<?> ctx=bm.createCreationalContext(injectionPoint.bean);
+        final Object value=bm.getReference(injectionPoint.bean,injectionPoint.field.getGenericType(),ctx);
+        injectionPoint.field.set(instance,value);
+        weldHandle.instances[i]=value;
+        weldHandle.creationalContexts[i]=ctx;
+      }
+ catch (      IllegalAccessException e) {
+        throw new RuntimeException("Failed to perform CDI injection of field: " + injectionPoint.field + " on "+ componentClass,e);
+      }
+    }
+    return weldHandle;
+  }
+  finally {
+    SecurityActions.setContextClassLoader(oldTCCL);
+  }
+}

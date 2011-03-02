@@ -1,0 +1,33 @@
+{
+  final ClassLoader oldTCCL=SecurityActions.getContextClassLoader();
+  try {
+    SecurityActions.setContextClassLoader(classLoader);
+    final BeanManagerImpl bm=beanManager.getValue();
+    final ClassTransformer transformer=bm.getServices().get(ClassTransformer.class);
+    final List<CDIInjectionPoint> injectionPoints=new ArrayList<CDIInjectionPoint>();
+    WeldClass<?> weldClass=transformer.loadClass(componentClass);
+    for (    AnnotatedField<?> field : weldClass.getFields()) {
+      if (field.isAnnotationPresent(Inject.class)) {
+        final Set<Annotation> qualifiers=new HashSet<Annotation>();
+        for (        Annotation annotation : field.getAnnotations()) {
+          if (bm.isQualifier(annotation.annotationType())) {
+            qualifiers.add(annotation);
+          }
+        }
+        Set<Bean<?>> beans=bm.getBeans(field.getBaseType(),qualifiers);
+        if (beans.size() > 1) {
+          throw new StartException("Error resolving CDI injection point " + field + " on "+ componentClass+ ". Injection points is ambiguous "+ beans);
+        }
+ else         if (beans.isEmpty()) {
+          throw new StartException("Error resolving CDI injection point " + field + " on "+ componentClass+ ". No bean satisfies the injection point.");
+        }
+        Bean<?> bean=bm.resolve(beans);
+        injectionPoints.add(new CDIInjectionPoint(field.getJavaMember(),bean));
+      }
+    }
+    this.injectionPoints=injectionPoints;
+  }
+  finally {
+    SecurityActions.setContextClassLoader(oldTCCL);
+  }
+}

@@ -24,6 +24,17 @@
     final ServiceName baseName=deploymentUnit.getServiceName().append("component").append(componentName);
     final AbstractComponentConfiguration configuration=description.createComponentConfiguration(phaseContext,componentClass);
     configuration.setComponentClass(componentClass);
+    final List<ServiceName> additionalDependencies=new ArrayList<ServiceName>();
+    for (    InjectionFactory injectionFactory : moduleDescription.getInjectionFactories()) {
+      final ComponentInjector injector=injectionFactory.createInjector(configuration);
+      if (injector != null) {
+        configuration.addComponentInjector(injector);
+        ServiceName injectorServiceName=injector.getServiceName();
+        if (injector.getServiceName() != null) {
+          additionalDependencies.add(injectorServiceName);
+        }
+      }
+    }
     final ServiceName createServiceName=baseName.append("CREATE");
     final ServiceName startServiceName=baseName.append("START");
     final ComponentCreateService createService=new ComponentCreateService(configuration);
@@ -31,6 +42,7 @@
     final ComponentStartService startService=new ComponentStartService();
     final ServiceBuilder<Component> startBuilder=serviceTarget.addService(startServiceName,startService);
     startBuilder.addDependency(createServiceName,Component.class,startService.getComponentInjector());
+    startBuilder.addDependencies(additionalDependencies);
     for (    Map.Entry<Class<?>,ProxyFactory<?>> entry : configuration.getProxyFactories().entrySet()) {
       final Class<?> viewClass=entry.getKey();
       final ServiceName serviceName=baseName.append("VIEW").append(viewClass.getName());

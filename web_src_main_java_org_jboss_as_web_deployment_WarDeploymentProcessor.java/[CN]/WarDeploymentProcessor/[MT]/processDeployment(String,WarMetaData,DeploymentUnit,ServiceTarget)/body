@@ -38,9 +38,15 @@
   if (!metaData.isDisableCrossContext()) {
     webContext.setCrossContext(true);
   }
+  final WebInjectionContainer injectionContainer=new WebInjectionContainer(module.getClassLoader());
+  final Map<String,ComponentInstantiator> components=deploymentUnit.getAttachment(WebAttachments.WEB_COMPONENT_INSTANTIATORS);
+  if (components != null) {
+    for (    Map.Entry<String,ComponentInstantiator> entry : components.entrySet()) {
+      injectionContainer.addInstantiator(entry.getKey(),entry.getValue());
+    }
+  }
+  webContext.setInstanceManager(injectionContainer);
   final Loader loader=new WebCtxLoader(classLoader);
-  final InstanceManager manager=new WebInjectionContainer(classLoader);
-  webContext.setInstanceManager(manager);
   webContext.setLoader(loader);
 switch (metaData.getSessionCookies()) {
 case JBossWebMetaData.SESSION_COOKIES_ENABLED:
@@ -74,7 +80,7 @@ SecurityActions.setContextClassLoader(tcl);
 try {
 ServiceName namespaceSelectorServiceName=deploymentUnit.getServiceName().append(NamespaceSelectorService.NAME);
 WebDeploymentService webDeploymentService=new WebDeploymentService(webContext);
-serviceTarget.addService(WebSubsystemServices.JBOSS_WEB.append(deploymentName),webDeploymentService).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(hostName),Host.class,new WebContextInjector(webContext)).addDependency(namespaceSelectorServiceName,NamespaceContextSelector.class,webDeploymentService.getNamespaceSelector()).setInitialMode(Mode.ACTIVE).install();
+serviceTarget.addService(WebSubsystemServices.JBOSS_WEB.append(deploymentName),webDeploymentService).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(hostName),Host.class,new WebContextInjector(webContext)).addDependencies(injectionContainer.getServiceNames()).addDependency(namespaceSelectorServiceName,NamespaceContextSelector.class,webDeploymentService.getNamespaceSelector()).setInitialMode(Mode.ACTIVE).install();
 }
  catch (ServiceRegistryException e) {
 throw new DeploymentUnitProcessingException("Failed to add JBoss web deployment service",e);
