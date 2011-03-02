@@ -1,0 +1,46 @@
+{
+  final PathAddress current=address.subAddress(base.size());
+  final Iterator<PathElement> iterator=current.iterator();
+  if (!iterator.hasNext()) {
+    resolved.add(base);
+    return;
+  }
+  while (iterator.hasNext()) {
+    final PathElement next=iterator.next();
+    if (next.isWildcard()) {
+      if (model.hasDefined(next.getKey())) {
+        for (        final String value : model.require(next.getKey()).keys()) {
+          final PathElement element=PathElement.pathElement(next.getKey(),value);
+          resolve(address,base.append(element),model.get(next.getKey(),value),resolved,create);
+        }
+      }
+      return;
+    }
+ else     if (next.isMultiTarget()) {
+      if (model.hasDefined(next.getKey())) {
+        final ModelNode subModel=model.get(next.getKey());
+        for (        final String value : next.getSegments()) {
+          if (subModel.hasDefined(value)) {
+            final PathElement element=PathElement.pathElement(next.getKey(),value);
+            resolve(address,base.append(element),subModel.get(value),resolved,create);
+          }
+        }
+      }
+      return;
+    }
+ else {
+      if (create && !iterator.hasNext()) {
+        model=model.require(next.getKey()).get(next.getValue());
+      }
+ else {
+        model=model.require(next.getKey()).require(next.getValue());
+      }
+      if (!iterator.hasNext()) {
+        resolved.add(base.append(next));
+      }
+ else {
+        base=base.append(next);
+      }
+    }
+  }
+}
