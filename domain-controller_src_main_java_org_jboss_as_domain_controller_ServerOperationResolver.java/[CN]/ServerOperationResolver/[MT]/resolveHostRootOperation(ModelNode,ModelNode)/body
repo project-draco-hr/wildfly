@@ -1,0 +1,30 @@
+{
+  Map<Set<ServerIdentity>,ModelNode> result=null;
+  String opName=operation.require(OP).asString();
+  if (WRITE_ATTRIBUTE_OPERATION.equals(opName)) {
+    result=Collections.emptyMap();
+  }
+ else   if (SystemPropertyAddHandler.OPERATION_NAME.equals(opName) || SystemPropertyRemoveHandler.OPERATION_NAME.equals(opName)) {
+    String propName=operation.require(NAME).asString();
+    Set<ServerIdentity> servers=null;
+    if (host.hasDefined(SERVER_CONFIG)) {
+      servers=new HashSet<ServerIdentity>();
+      for (      Property serverProp : host.get(SERVER_CONFIG).asPropertyList()) {
+        ModelNode server=serverProp.getValue();
+        if (!hasSystemProperty(server,propName) && (!server.hasDefined(START) || server.get(START).asBoolean())) {
+          String groupName=server.require(GROUP).asString();
+          servers.add(new ServerIdentity(localHostName,groupName,serverProp.getName()));
+        }
+      }
+    }
+    if (servers != null && servers.size() > 0) {
+      ModelNode serverOp=operation.clone();
+      serverOp.get(OP_ADDR).setEmptyList();
+      result=Collections.singletonMap(servers,serverOp);
+    }
+  }
+  if (result == null) {
+    result=Collections.emptyMap();
+  }
+  return result;
+}

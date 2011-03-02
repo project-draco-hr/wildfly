@@ -1,0 +1,46 @@
+{
+  String targetHost=null;
+  String runningServerTarget=null;
+  ModelNode runningServerOp=null;
+  PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+  if (address.size() > 0) {
+    PathElement first=address.getElement(0);
+    if (HOST.equals(first.getKey())) {
+      targetHost=first.getValue();
+      if (address.size() > 1 && RUNNING_SERVER.equals(address.getElement(1).getKey())) {
+        runningServerTarget=address.getElement(1).getValue();
+        ModelNode relativeAddress=new ModelNode();
+        for (int i=2; i < address.size(); i++) {
+          PathElement element=address.getElement(i);
+          relativeAddress.add(element.getKey(),element.getValue());
+        }
+        runningServerOp=operation.clone();
+        runningServerOp.get(OP_ADDR).set(relativeAddress);
+      }
+    }
+  }
+  ParsedOp result=null;
+  if (targetHost != null && !localHostName.equals(targetHost)) {
+    result=new SimpleParsedOp(index);
+  }
+ else   if (runningServerTarget != null) {
+    result=new SimpleParsedOp(index,runningServerTarget,runningServerOp);
+  }
+ else   if (COMPOSITE.equals(operation.require(OP).asString())) {
+    if (operation.hasDefined(STEPS)) {
+      int stepNum=0;
+      List<ParsedOp> parsedSteps=new ArrayList<ParsedOp>();
+      for (      ModelNode step : operation.get(STEPS).asList()) {
+        parsedSteps.add(parseOperation(step,stepNum++));
+      }
+      result=new ParsedMultiStepOp(index,parsedSteps);
+    }
+ else {
+      result=new SimpleParsedOp(index,operation,address);
+    }
+  }
+ else {
+    result=new SimpleParsedOp(index,operation,address);
+  }
+  return result;
+}

@@ -1,0 +1,23 @@
+{
+  if (!SUCCESS.equals(opResult.get(OUTCOME).asString())) {
+    return opResult;
+  }
+  ModelNode resultNode=opResult.get(RESULT);
+  ModelNode overallResult=new ModelNode();
+  overallResult.get(OUTCOME).set(SUCCESS);
+  ModelNode domainResult=parsedOp.getFormattedDomainResult(resultNode);
+  overallResult.get(RESULT,"domain-results").set(domainResult);
+  Map<Set<ServerIdentity>,ModelNode> serverOps=parsedOp.getServerOps(getDomainModel(),getHostModel());
+  ModelNode serverOpsNode=overallResult.get(RESULT,"server-operations");
+  for (  Map.Entry<Set<ServerIdentity>,ModelNode> entry : serverOps.entrySet()) {
+    ModelNode setNode=serverOpsNode.add();
+    ModelNode serverNode=setNode.get("servers");
+    for (    ServerIdentity server : entry.getKey()) {
+      serverNode.add(server.getServerName(),server.getServerGroupName());
+    }
+    setNode.get("operation").set(entry.getValue());
+  }
+  ModelNode compOp=opResult.has(COMPENSATING_OPERATION) ? opResult.get(COMPENSATING_OPERATION) : new ModelNode();
+  overallResult.get(COMPENSATING_OPERATION).set(compOp);
+  return overallResult;
+}
