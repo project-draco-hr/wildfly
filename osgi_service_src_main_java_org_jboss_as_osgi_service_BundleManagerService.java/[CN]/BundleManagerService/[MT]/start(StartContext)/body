@@ -6,29 +6,12 @@
     Map<String,Object> props=new HashMap<String,Object>(subsystemState.getProperties());
     setupIntegrationProperties(context,props);
     bundleManager=new BundleManager(props);
-    Module frameworkModule=new FrameworkModuleLoader(bundleManager).getFrameworkModule();
-    bundleManager.setProperty(Module.class.getName(),frameworkModule);
+    bundleManager.addPlugin(SystemModuleProviderPlugin.class,new FrameworkModuleProvider(bundleManager));
     ServerController serverController=injectedServerController.getValue();
     ServerDeploymentManager deploymentManager=new ModelControllerServerDeploymentManager(serverController);
     bundleManager.addPlugin(DeployerServicePlugin.class,new DeployerServicePluginIntegration(bundleManager,deploymentManager));
-    BundleManagerMBean bundleManagerMBean=new BundleManagerMBean(){
-      @Override public long installBundle(      ModuleIdentifier identifier) throws BundleException, ModuleLoadException {
-        Bundle bundle;
-        if (identifier.getName().startsWith(ServiceModuleLoader.MODULE_PREFIX)) {
-          ModuleLoader moduleLoader=injectedServiceModuleLoader.getValue();
-          Module module=moduleLoader.loadModule(identifier);
-          bundle=bundleManager.installBundle(module);
-        }
- else {
-          bundle=bundleManager.installBundle(identifier);
-        }
-        return bundle.getBundleId();
-      }
-    }
-;
-    StandardMBean mbean=new StandardMBean(bundleManagerMBean,BundleManagerMBean.class);
-    ObjectName oname=ObjectNameFactory.create(BundleManagerMBean.OBJECT_NAME);
-    injectedMBeanServer.getValue().registerMBean(mbean,oname);
+    ServiceModuleLoader moduleLoader=injectedServiceModuleLoader.getValue();
+    bundleManager.addPlugin(ModuleLoaderPlugin.class,new ModuleLoaderPluginImpl(bundleManager,moduleLoader));
   }
  catch (  Throwable t) {
     throw new StartException("Failed to create BundleManager",t);

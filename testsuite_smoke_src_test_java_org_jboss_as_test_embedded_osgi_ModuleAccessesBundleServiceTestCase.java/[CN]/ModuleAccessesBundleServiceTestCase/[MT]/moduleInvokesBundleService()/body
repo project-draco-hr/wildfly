@@ -1,0 +1,30 @@
+{
+  Archive<?> apiArchive=deploymentProvider.getClientDeployment(API_MODULE_NAME);
+  String apiDeploymentName=archiveDeployer.deploy(apiArchive);
+  assertNotNull("Deployment name not null",apiDeploymentName);
+  try {
+    registerModule(ModuleIdentifier.create("deployment." + apiDeploymentName));
+    InputStream input=deploymentProvider.getClientDeploymentAsStream(TARGET_BUNDLE_NAME);
+    Bundle targetBundle=context.installBundle(TARGET_BUNDLE_NAME,input);
+    assertEquals("Bundle INSTALLED",Bundle.INSTALLED,targetBundle.getState());
+    try {
+      targetBundle.start();
+      assertEquals("Bundle ACTIVE",Bundle.ACTIVE,targetBundle.getState());
+      Archive<?> clientArchive=deploymentProvider.getClientDeployment(CLIENT_MODULE_NAME);
+      String clientDeploymentName=archiveDeployer.deploy(clientArchive);
+      assertNotNull("Deployment name not null",clientDeploymentName);
+      try {
+        assertServiceState(ServiceName.parse("jboss.osgi.xservice.invoker"),State.UP,5000);
+      }
+  finally {
+        archiveDeployer.undeploy(clientDeploymentName);
+      }
+    }
+  finally {
+      targetBundle.uninstall();
+    }
+  }
+  finally {
+    archiveDeployer.undeploy(apiDeploymentName);
+  }
+}

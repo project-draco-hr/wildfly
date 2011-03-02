@@ -1,0 +1,25 @@
+{
+  final ServiceController<?> bundleContextService=getServiceContainer().getRequiredService(BundleContextService.SERVICE_NAME);
+  if (bundleContextService.getMode() == Mode.ON_DEMAND && bundleContextService.getState() == State.DOWN) {
+    final CountDownLatch latch=new CountDownLatch(1);
+    bundleContextService.addListener(new AbstractServiceListener<Object>(){
+      @Override public void serviceStarted(      ServiceController<? extends Object> controller){
+        latch.countDown();
+        controller.removeListener(this);
+      }
+      @Override public void serviceFailed(      ServiceController<? extends Object> controller,      StartException reason){
+        latch.countDown();
+        controller.removeListener(this);
+      }
+    }
+);
+    bundleContextService.setMode(Mode.ACTIVE);
+    latch.await(10,TimeUnit.SECONDS);
+    if (bundleContextService.getState() != State.UP)     throw new IllegalStateException("BundleContextService not started");
+  }
+  final ServiceController<?> bundleManagerService=getServiceContainer().getRequiredService(BundleManagerService.SERVICE_NAME);
+  BundleManager bundleManager=(BundleManager)bundleManagerService.getValue();
+  if (bundleManager == null)   throw new IllegalStateException("BundleManagerService not started");
+  Bundle bundle=bundleManager.installBundle(moduleId);
+  return bundle.getBundleId();
+}

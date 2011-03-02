@@ -1,12 +1,8 @@
 {
   log.debugf("Starting Arquillian Test Runner");
   final MBeanServer mbeanServer=injectedMBeanServer.getValue();
-  final TestClassLoader testClassLoader=new TestClassLoaderImpl();
-  serviceContainer=context.getController().getServiceContainer();
-  ServiceLoader<TestEnricher> loader=ServiceLoader.load(TestEnricher.class,testClassLoader.getServiceClassLoader());
-  for (  TestEnricher enricher : loader.getProviders()) {
-    if (enricher instanceof ServiceContainerInjector)     ((ServiceContainerInjector)enricher).inject(serviceContainer);
-  }
+  final ServiceContainer serviceContainer=context.getController().getServiceContainer();
+  final TestClassLoader testClassLoader=new TestClassLoaderImpl(serviceContainer);
   try {
     jmxTestRunner=new JMXTestRunner(){
       @Override public TestResult runTestMethod(      String className,      String methodName,      Map<String,String> props){
@@ -15,7 +11,9 @@
         if (config != null) {
           final DeploymentUnit deployment=config.getDeploymentUnitContext();
           final Module module=deployment.getAttachment(Attachments.MODULE);
-          builder.add(new TCCLSetup(module.getClassLoader()));
+          if (module != null) {
+            builder.add(new TCCLSetup(module.getClassLoader()));
+          }
           builder.addAll(deployment);
         }
         Map<String,Object> properties=Collections.<String,Object>singletonMap(TEST_CLASS_PROPERTY,className);

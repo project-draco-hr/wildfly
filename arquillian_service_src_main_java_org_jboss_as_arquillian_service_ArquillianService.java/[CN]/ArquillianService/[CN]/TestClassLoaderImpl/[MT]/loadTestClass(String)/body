@@ -1,20 +1,32 @@
 {
   ArquillianConfig arqConfig=getConfig(className);
-  if (arqConfig != null) {
-    if (arqConfig.getTestClasses().contains(className)) {
-      DeploymentUnit depunit=arqConfig.getDeploymentUnitContext();
-      Module module=depunit.getAttachment(Attachments.MODULE);
-      Deployment osgidep=OSGiDeploymentAttachment.getDeployment(depunit);
-      if (module != null && osgidep != null)       throw new IllegalStateException("Found MODULE attachment for Bundle deployment: " + depunit);
-      if (module != null)       return module.getClassLoader().loadClass(className);
-      if (osgidep != null) {
-        Bundle bundle=osgidep.getAttachment(Bundle.class);
-        BundleAssociation.setBundle(bundle);
-        BundleContext sysContext=getSystemBundleContext();
-        BundleContextAssociation.setBundleContext(sysContext);
-        return bundle.loadClass(className);
-      }
-    }
+  if (arqConfig == null)   throw new ClassNotFoundException(className);
+  if (arqConfig.getTestClasses().contains(className) == false)   throw new ClassNotFoundException(className);
+  DeploymentUnit depunit=arqConfig.getDeploymentUnitContext();
+  Module module=depunit.getAttachment(Attachments.MODULE);
+  Deployment osgidep=OSGiDeploymentAttachment.getDeployment(depunit);
+  if (module != null && osgidep != null)   throw new IllegalStateException("Found MODULE attachment for Bundle deployment: " + depunit);
+  Class<?> testClass=null;
+  if (module != null) {
+    ServiceContainerAssociation.setServiceContainer(serviceContainer);
+    ServerDeploymentManagerAssociation.setServerDeploymentManager(deploymentManager);
+    testClass=module.getClassLoader().loadClass(className);
   }
-  throw new ClassNotFoundException(className);
+ else   if (osgidep != null) {
+    Bundle bundle=osgidep.getAttachment(Bundle.class);
+    BundleAssociation.setBundle(bundle);
+    ServiceContainerAssociation.setServiceContainer(serviceContainer);
+    ServerDeploymentManagerAssociation.setServerDeploymentManager(deploymentManager);
+    testClass=bundle.loadClass(className);
+  }
+  if (testClass == null)   throw new ClassNotFoundException(className);
+  if (isOSGiSubsystemRequired(testClass)) {
+    ServiceController<?> controller=serviceContainer.getRequiredService(BundleContextService.SERVICE_NAME);
+    if (controller.getState() != State.UP) {
+      controller.setMode(Mode.ACTIVE);
+      assertServiceState(BundleContextService.SERVICE_NAME,State.UP,5000);
+    }
+    BundleContextAssociation.setBundleContext((BundleContext)controller.getValue());
+  }
+  return testClass;
 }
