@@ -1,18 +1,36 @@
 {
   validator.validate(operation);
-  byte[] hash=operation.get(HASH).asBytes();
-  if (!deploymentRepository.hasDeploymentContent(hash)) {
-    throw new OperationFailedException(new ModelNode().set(String.format("No deployment content with hash %s is available in the deployment content repository.",HashUtil.bytesToHexString(hash))));
+  String name=operation.require(NAME).asString();
+  String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : name;
+  byte[] hash;
+  if (operation.hasDefined(INPUT_STREAM_INDEX) && operation.hasDefined(HASH)) {
+    throw new OperationFailedException(new ModelNode().set("Can't pass in both an input-stream-index and a hash"));
+  }
+ else   if (operation.hasDefined(INPUT_STREAM_INDEX)) {
+    InputStream in=getContents(context,operation);
+    try {
+      hash=deploymentRepository.addDeploymentContent(name,runtimeName,in);
+    }
+ catch (    IOException e) {
+      throw new OperationFailedException(new ModelNode().set(e.toString()));
+    }
+  }
+ else   if (operation.hasDefined(HASH)) {
+    hash=operation.get(HASH).asBytes();
+    if (!deploymentRepository.hasDeploymentContent(hash)) {
+      throw new OperationFailedException(new ModelNode().set(String.format("No deployment content with hash %s is available in the deployment content repository.",HashUtil.bytesToHexString(hash))));
+    }
+  }
+ else {
+    throw new OperationFailedException(new ModelNode().set("Neither an attachment or a hash were passed in"));
   }
   ModelNode rootModel=context.getSubModel();
   ModelNode deployments=rootModel.get(DEPLOYMENT);
-  String name=operation.require(NAME).asString();
   ModelNode replaceNode=deployments.hasDefined(name) ? deployments.get(name) : null;
   if (replaceNode == null) {
     throw new OperationFailedException(new ModelNode().set(String.format("No deployment with name %s found",name)));
   }
   boolean start=replaceNode.get(START).asBoolean();
-  String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : name;
   ModelNode deployNode=new ModelNode();
   deployNode.get(NAME).set(name);
   deployNode.get(RUNTIME_NAME).set(runtimeName);
