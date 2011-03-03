@@ -9,7 +9,7 @@
   try {
     if (scanEnabled) {
       log.tracef("Scanning directory %s for deployment content changes",deploymentDir.getAbsolutePath());
-      final List<ScannerTask> scannerTasks=new ArrayList<ScannerTask>();
+      List<ScannerTask> scannerTasks=new ArrayList<ScannerTask>();
       final Set<String> registeredDeployments=getDeploymentNames();
       final Set<String> toRemove=new HashSet<String>(deployed.keySet());
       scanDirectory(deploymentDir,scannerTasks,registeredDeployments,toRemove);
@@ -30,6 +30,7 @@
           final ModelNode results=serverController.execute(OperationBuilder.Factory.create(composite).build());
           final List<Property> resultList=results.get(RESULT).asPropertyList();
           final List<ModelNode> toRetry=new ArrayList<ModelNode>();
+          final List<ScannerTask> retryTasks=new ArrayList<ScannerTask>();
           for (int i=0; i < resultList.size(); i++) {
             final ModelNode result=resultList.get(i).getValue();
             final ScannerTask task=scannerTasks.get(i);
@@ -39,12 +40,14 @@
             }
  else             if (OUTCOME != null && CANCELLED.equals(outcome.asString())) {
               toRetry.add(updates.get(i));
+              retryTasks.add(task);
             }
  else {
               task.handleFailureResult(result);
             }
           }
           updates=toRetry;
+          scannerTasks=retryTasks;
         }
       }
       log.tracef("Scan complete");
