@@ -1,0 +1,27 @@
+{
+  final MBeanServer mbeanServer=ManagementFactory.getPlatformMBeanServer();
+  final ObjectName name=new ObjectName("jboss.test:service=testdeployments");
+  final TestNotificationListener listener=new TestNotificationListener(name);
+  mbeanServer.addNotificationListener(MBeanServerDelegate.DELEGATE_NAME,listener,null,null);
+  try {
+    deploymentExecutor.initialDeploy();
+    listener.await();
+    Assert.assertNotNull(mbeanServer.getMBeanInfo(name));
+    listener.reset(2);
+    deploymentExecutor.fullReplace();
+    listener.await();
+    Assert.assertNotNull(mbeanServer.getMBeanInfo(name));
+    listener.reset(1);
+    deploymentExecutor.undeploy();
+    listener.await();
+    try {
+      mbeanServer.getMBeanInfo(name);
+      Assert.fail("Should not have found MBean");
+    }
+ catch (    InstanceNotFoundException expected) {
+    }
+  }
+  finally {
+    mbeanServer.removeNotificationListener(MBeanServerDelegate.DELEGATE_NAME,listener);
+  }
+}
