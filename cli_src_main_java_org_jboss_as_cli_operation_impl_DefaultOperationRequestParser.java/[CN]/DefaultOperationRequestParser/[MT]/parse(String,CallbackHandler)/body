@@ -1,0 +1,144 @@
+{
+  if (operationRequest == null || operationRequest.isEmpty()) {
+    return;
+  }
+  int aoSep=operationRequest.indexOf(ADDRESS_OPERATION_NAME_SEPARATOR);
+  final int addressLength;
+  if (aoSep < 0) {
+    addressLength=operationRequest.length();
+  }
+ else   if (aoSep > 0) {
+    addressLength=aoSep;
+  }
+ else {
+    addressLength=0;
+  }
+  if (addressLength > 0) {
+    int nodeIndex=0;
+    while (nodeIndex < addressLength) {
+      final int nodeSepIndex=operationRequest.indexOf(NODE_SEPARATOR,nodeIndex);
+      final String node;
+      if (nodeSepIndex < 0) {
+        node=operationRequest.substring(nodeIndex,addressLength).trim();
+      }
+ else {
+        node=operationRequest.substring(nodeIndex,nodeSepIndex).trim();
+      }
+      if (node.isEmpty()) {
+        if (nodeSepIndex > 0) {
+          throw new OperationFormatException("Node type/name is missing or the format is wrong for the prefix '" + operationRequest.substring(0,addressLength) + "'");
+        }
+      }
+ else {
+        int typeNameSep=node.indexOf(NODE_TYPE_NAME_SEPARATOR);
+        if (typeNameSep < 0) {
+          if (ROOT_NODE.equals(node)) {
+            handler.rootNode();
+          }
+ else           if (PARENT_NODE.equals(node)) {
+            handler.parentNode();
+          }
+ else           if (NODE_TYPE.equals(node)) {
+            handler.nodeType();
+          }
+ else {
+            if (nodeIndex == 0) {
+              if (nodeSepIndex < 0) {
+                handler.nodeTypeOrName(node);
+              }
+ else               if (aoSep > 0) {
+                handler.nodeName(node);
+              }
+ else {
+                handler.nodeTypeOrName(node);
+              }
+            }
+ else             if (nodeSepIndex < 0) {
+              handler.nodeTypeOrName(node);
+            }
+          }
+        }
+ else {
+          String nodeType=node.substring(0,typeNameSep).trim();
+          handler.nodeType(nodeType);
+          handler.nodeTypeNameSeparator(nodeIndex + typeNameSep);
+          String nodeName=node.substring(typeNameSep + 1).trim();
+          if (!nodeName.isEmpty()) {
+            handler.nodeName(nodeName);
+          }
+        }
+      }
+      if (nodeSepIndex < 0) {
+        nodeIndex=addressLength;
+      }
+ else {
+        handler.nodeSeparator(nodeSepIndex);
+        nodeIndex=nodeSepIndex + 1;
+      }
+    }
+  }
+  if (aoSep < 0) {
+    return;
+  }
+  handler.addressOperationSeparator(aoSep);
+  String operationName;
+  int argListStartIndex=operationRequest.indexOf(ARGUMENTS_LIST_START,aoSep + 1);
+  if (argListStartIndex < 0) {
+    if (aoSep + 1 < operationRequest.length()) {
+      operationName=operationRequest.substring(aoSep + 1);
+      handler.operationName(operationName);
+    }
+    return;
+  }
+ else {
+    operationName=operationRequest.substring(aoSep + 1,argListStartIndex).trim();
+    handler.operationName(operationName);
+    handler.propertyListStart(argListStartIndex);
+  }
+  final boolean argListEndPresent=operationRequest.charAt(operationRequest.length() - 1) == ARGUMENTS_LIST_END;
+  final int argsLength;
+  if (argListEndPresent) {
+    argsLength=operationRequest.length() - 1;
+  }
+ else {
+    argsLength=operationRequest.length();
+  }
+  int argIndex=argListStartIndex + 1;
+  while (argIndex < argsLength) {
+    final int argSepIndex=operationRequest.indexOf(ARGUMENT_SEPARATOR,argIndex);
+    final String arg;
+    if (argSepIndex == -1) {
+      arg=operationRequest.substring(argIndex,argsLength).trim();
+    }
+ else {
+      arg=operationRequest.substring(argIndex,argSepIndex).trim();
+    }
+    if (arg.isEmpty()) {
+      throw new OperationFormatException("An argument is missing or the command is in the wrong format: '" + operationRequest + "'");
+    }
+    int argNameValueSepIndex=arg.indexOf(ARGUMENT_NAME_VALUE_SEPARATOR);
+    if (argNameValueSepIndex < 0) {
+      handler.propertyName(arg);
+    }
+ else {
+      String argValue=arg.substring(argNameValueSepIndex + 1).trim();
+      if (argValue.isEmpty()) {
+        handler.propertyName(arg.substring(0,argNameValueSepIndex).trim());
+        handler.propertyNameValueSeparator(argNameValueSepIndex);
+      }
+ else {
+        handler.property(arg.substring(0,argNameValueSepIndex).trim(),argValue,argNameValueSepIndex);
+      }
+    }
+    if (argSepIndex < 0) {
+      argIndex=argsLength;
+    }
+ else {
+      argIndex=argSepIndex + 1;
+      handler.propertySeparator(argSepIndex);
+    }
+  }
+  if (argListEndPresent) {
+    handler.propertyListEnd(operationRequest.length() - 1);
+  }
+}
