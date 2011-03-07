@@ -1,0 +1,48 @@
+{
+  String opName=op.require(OP).asString();
+  if (READ_CHILDREN_NAMES_OPERATION.equals(opName)) {
+    return getDeploymentNamesResponse();
+  }
+ else   if (COMPOSITE.equals(opName)) {
+    for (    ModelNode child : op.require(STEPS).asList()) {
+      opName=child.require(OP).asString();
+      if (COMPOSITE.equals(opName)) {
+        return processOp(child);
+      }
+      if (responses.isEmpty()) {
+        Assert.fail("unexpected request " + op);
+        return null;
+      }
+      if (!responses.get(0).ok) {
+        continue;
+      }
+      PathAddress address=PathAddress.pathAddress(child.require(OP_ADDR));
+      if (ADD.equals(opName)) {
+        added.put(address.getLastElement().getValue(),child.require(HASH).asBytes());
+      }
+ else       if (REMOVE.equals(opName)) {
+        added.remove(address.getLastElement().getValue());
+      }
+ else       if ("deploy".equals(opName)) {
+        String name=address.getLastElement().getValue();
+        deployed.put(name,added.get(name));
+      }
+ else       if ("undeploy".equals(opName)) {
+        deployed.remove(address.getLastElement().getValue());
+      }
+ else       if ("full-replace-deployment".equals(opName)) {
+        String name=child.require(NAME).asString();
+        byte[] hash=child.require(HASH).asBytes();
+        added.put(name,hash);
+        deployed.put(name,hash);
+      }
+ else {
+        throw new IllegalArgumentException("unexpected step " + opName);
+      }
+    }
+    return responses.remove(0).rsp;
+  }
+ else {
+    throw new IllegalArgumentException("unexpected operation " + opName);
+  }
+}
