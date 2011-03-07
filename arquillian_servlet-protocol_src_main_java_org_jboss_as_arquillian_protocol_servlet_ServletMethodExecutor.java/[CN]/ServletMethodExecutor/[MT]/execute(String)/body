@@ -1,0 +1,46 @@
+{
+  long timeoutTime=System.currentTimeMillis() + 1000;
+  boolean interrupted=false;
+  while (timeoutTime > System.currentTimeMillis()) {
+    URLConnection connection=new URL(url).openConnection();
+    if (!(connection instanceof HttpURLConnection)) {
+      throw new IllegalStateException("Not an http connection! " + connection);
+    }
+    HttpURLConnection httpConnection=(HttpURLConnection)connection;
+    httpConnection.setUseCaches(false);
+    httpConnection.setDefaultUseCaches(false);
+    try {
+      httpConnection.connect();
+      if (httpConnection.getResponseCode() == HttpURLConnection.HTTP_OK) {
+        ObjectInputStream ois=new ObjectInputStream(httpConnection.getInputStream());
+        Object o;
+        try {
+          o=ois.readObject();
+        }
+  finally {
+          ois.close();
+        }
+        if (!(o instanceof TestResult)) {
+          throw new IllegalStateException("Error reading test results - expected a TestResult but got " + o);
+        }
+        return (TestResult)o;
+      }
+ else       if (httpConnection.getResponseCode() != HttpURLConnection.HTTP_NOT_FOUND) {
+        throw new IllegalStateException("Error launching test at " + url + ". "+ "Got "+ httpConnection.getResponseCode()+ " ("+ httpConnection.getResponseMessage()+ ")");
+      }
+      try {
+        Thread.sleep(200);
+      }
+ catch (      InterruptedException e) {
+        interrupted=true;
+      }
+    }
+  finally {
+      httpConnection.disconnect();
+    }
+  }
+  if (interrupted) {
+    Thread.currentThread().interrupt();
+  }
+  throw new IllegalStateException("Error launching test at " + url + ". Kept on getting 404s.");
+}
