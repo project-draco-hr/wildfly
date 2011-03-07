@@ -1,0 +1,30 @@
+{
+  final String type=http.getRequestHeaders().getFirst(CONTENT_TYPE);
+  if (type == null)   throw new IllegalArgumentException("No content type provided");
+  Matcher matcher=MULTIPART_FD_BOUNDARY.matcher(type);
+  if (!matcher.matches())   throw new IllegalArgumentException("Invalid content type provided: " + type);
+  final String boundary="--" + matcher.group(1);
+  final BoundaryDelimitedInputStream stream=new BoundaryDelimitedInputStream(http.getRequestBody(),boundary.getBytes("US-ASCII"));
+  byte[] ignore=new byte[1024];
+  while (stream.read(ignore) != -1) {
+  }
+  stream.setBoundary(("\r\n" + boundary).getBytes(US_ASCII));
+  while (!stream.isOuterStreamClosed()) {
+    MimeHeaderParser.ParseResult result=MimeHeaderParser.parseHeaders(stream);
+    if (result.eof())     continue;
+    Headers partHeaders=result.headers();
+    String disposition=partHeaders.getFirst(CONTENT_DISPOSITION);
+    if (disposition != null) {
+      matcher=DISPOSITION_FILE.matcher(disposition);
+      if (matcher.matches()) {
+        SeekResult seek=new SeekResult();
+        seek.fileName=matcher.group(1);
+        seek.stream=stream;
+        return seek;
+      }
+    }
+    while (stream.read(ignore) != -1) {
+    }
+  }
+  throw new IllegalArgumentException("Request did not contain a deployment");
+}

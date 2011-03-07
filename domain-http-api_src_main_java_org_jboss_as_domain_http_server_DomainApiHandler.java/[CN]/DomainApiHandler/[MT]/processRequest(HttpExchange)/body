@@ -1,0 +1,28 @@
+{
+  final URI request=http.getRequestURI();
+  final String requestMethod=http.getRequestMethod();
+  boolean isGet=GET.equals(requestMethod);
+  if (!isGet && !POST.equals(requestMethod)) {
+    http.sendResponseHeaders(METHOD_NOT_ALLOWED,-1);
+    return;
+  }
+  ModelNode dmr=null;
+  ModelNode response;
+  int status=OK;
+  Headers requestHeaders=http.getRequestHeaders();
+  boolean encode=APPLICATION_DMR_ENCODED.equals(requestHeaders.getFirst(ACCEPT)) || APPLICATION_DMR_ENCODED.equals(requestHeaders.getFirst(CONTENT_TYPE));
+  try {
+    dmr=isGet ? convertGetRequest(request) : convertPostRequest(http.getRequestBody(),encode);
+    response=modelController.execute(OperationBuilder.Factory.create(dmr).build());
+  }
+ catch (  Throwable t) {
+    log.error("Unexpected error executing model request",t);
+    http.sendResponseHeaders(INTERNAL_SERVER_ERROR,-1);
+    return;
+  }
+  if (response.hasDefined(OUTCOME) && FAILED.equals(response.get(OUTCOME).asString())) {
+    status=INTERNAL_SERVER_ERROR;
+  }
+  boolean pretty=dmr.hasDefined("json.pretty") && dmr.get("json.pretty").asBoolean();
+  writeResponse(http,isGet,pretty,response,status,encode);
+}
