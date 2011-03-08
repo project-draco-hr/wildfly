@@ -1,11 +1,13 @@
 {
-  OperationRouting routing=determineRouting(executionContext.getOperation());
+  ModelNode operation=executionContext.getOperation();
+  OperationRouting routing=determineRouting(operation);
   if (routing.isRouteToMaster()) {
     return masterDomainControllerClient.execute(executionContext,handler);
   }
  else   if (routing.isLocalOnly()) {
     return localDomainModel.execute(executionContext,handler);
   }
+  ModelNode rolloutPlan=operation.has(ROLLOUT_PLAN) ? operation.remove(ROLLOUT_PLAN) : new ModelNode();
   ControllerTransaction transaction=new ControllerTransaction();
   Map<String,ModelNode> hostResults=pushToHosts(executionContext,routing,transaction);
   for (  ModelNode hostResult : hostResults.values()) {
@@ -25,8 +27,18 @@
     throw new UnsupportedOperationException("implement reporting of domain-level failure");
   }
  else {
-    transaction.commit();
     Map<String,Map<ServerIdentity,ModelNode>> opsByGroup=getOpsByGroup(hostResults);
+    try {
+      rolloutPlan=getRolloutPlan(rolloutPlan,opsByGroup);
+    }
+ catch (    OperationFailedException ofe) {
+      transaction.setRollbackOnly();
+      handler.handleFailed(ofe.getFailureDescription());
+      return new BasicOperationResult();
+    }
+ finally {
+      transaction.commit();
+    }
     handler.handleResultComplete();
     return new BasicOperationResult();
   }
