@@ -1,0 +1,55 @@
+{
+  this.executor=executor;
+  this.opsByGroup=opsByGroup;
+  this.rolloutPlan=rolloutPlan;
+  this.resultHandler=resultHandler;
+  this.hostControllerClients=hostControllerClients;
+  this.rollbackAcrossGroups=!rolloutPlan.hasDefined(ROLLBACK_ACROSS_GROUPS) || rolloutPlan.get(ROLLBACK_ACROSS_GROUPS).asBoolean();
+  this.shutdown=rolloutPlan.hasDefined(SHUTDOWN) && rolloutPlan.get(SHUTDOWN).asBoolean();
+  this.gracefulShutdownPeriod=rolloutPlan.hasDefined(GRACEFUL_SHUTDOWN_TIMEOUT) ? rolloutPlan.get(GRACEFUL_SHUTDOWN_TIMEOUT).asInt() : -1;
+  final List<Runnable> rollingTasks=new ArrayList<Runnable>();
+  this.rootTask=new RollingUpdateTask(rollingTasks);
+  if (rolloutPlan.hasDefined(IN_SERIES)) {
+    ConcurrentGroupServerUpdatePolicy predecessor=null;
+    for (    ModelNode series : rolloutPlan.get(IN_SERIES).asList()) {
+      final List<Runnable> seriesTasks=new ArrayList<Runnable>();
+      rollingTasks.add(new ConcurrentUpdateTask(seriesTasks,executor));
+      Set<String> groupNames=new HashSet<String>();
+      List<Property> groupPolicies=new ArrayList<Property>();
+      if (series.hasDefined(CONCURRENT_GROUPS)) {
+        for (        Property pol : series.get(CONCURRENT_GROUPS).asPropertyList()) {
+          groupNames.add(pol.getName());
+          groupPolicies.add(pol);
+        }
+      }
+ else {
+        Property pol=series.require(SERVER_GROUP).asProperty();
+        groupNames.add(pol.getName());
+        groupPolicies.add(pol);
+      }
+      ConcurrentGroupServerUpdatePolicy parent=new ConcurrentGroupServerUpdatePolicy(predecessor,groupNames);
+      for (      Property prop : groupPolicies) {
+        final List<Runnable> groupTasks=new ArrayList<Runnable>();
+        final ModelNode policyNode=prop.getValue();
+        final boolean rollingGroup=policyNode.hasDefined(ROLLING_TO_SERVERS) && policyNode.get(ROLLING_TO_SERVERS).asBoolean();
+        seriesTasks.add(rollingGroup ? new RollingUpdateTask(groupTasks) : new ConcurrentUpdateTask(groupTasks,executor));
+        final String serverGroupName=prop.getName();
+        final Map<ServerIdentity,ModelNode> groupEntry=opsByGroup.get(serverGroupName);
+        final Set<ServerIdentity> servers=groupEntry.keySet();
+        int maxFailures=0;
+        if (policyNode.hasDefined(MAX_FAILURE_PERCENTAGE)) {
+          int pct=policyNode.get(MAX_FAILURE_PERCENTAGE).asInt();
+          maxFailures=((servers.size() * pct) / 100);
+        }
+ else         if (policyNode.hasDefined(MAX_FAILED_SERVERS)) {
+          maxFailures=policyNode.get(MAX_FAILED_SERVERS).asInt();
+        }
+        ServerUpdatePolicy policy=new ServerUpdatePolicy(parent,serverGroupName,servers,maxFailures);
+        updatePolicies.put(serverGroupName,policy);
+        for (        Map.Entry<ServerIdentity,ModelNode> entry : groupEntry.entrySet()) {
+          groupTasks.add(createServerTask(entry.getKey(),entry.getValue(),policy));
+        }
+      }
+    }
+  }
+}
