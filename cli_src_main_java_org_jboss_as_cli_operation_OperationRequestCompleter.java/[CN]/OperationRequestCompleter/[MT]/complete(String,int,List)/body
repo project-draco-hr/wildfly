@@ -1,8 +1,23 @@
 {
-  if (!buffer.isEmpty() && buffer.charAt(0) == '/')   return -1;
+  if (buffer.endsWith("..")) {
+    return 0;
+  }
+  final String request;
+  final int requestStartIndex;
+  if (buffer.startsWith("./")) {
+    requestStartIndex=2;
+    request=buffer.substring(requestStartIndex);
+  }
+ else   if (buffer.charAt(0) == ':' || buffer.charAt(0) == '/' || buffer.startsWith("..")) {
+    requestStartIndex=0;
+    request=buffer;
+  }
+ else {
+    return -1;
+  }
   DefaultOperationCallbackHandler handler=new DefaultOperationCallbackHandler(new DefaultOperationRequestAddress(ctx.getPrefix()));
   try {
-    ctx.getOperationRequestParser().parse(buffer,handler);
+    ctx.getOperationRequestParser().parse(request,handler);
   }
  catch (  OperationFormatException e1) {
     return -1;
@@ -22,7 +37,7 @@
     if (handler.endsOnArgumentListStart()) {
       candidates.addAll(propertyNames);
       Collections.sort(candidates);
-      return handler.getLastSeparatorIndex() + 1;
+      return requestStartIndex + handler.getLastSeparatorIndex() + 1;
     }
     Set<String> specifiedNames=handler.getPropertyNames();
     String chunk=null;
@@ -40,7 +55,7 @@
         candidates.addAll(propertyNames);
         Collections.sort(candidates);
       }
-      return handler.getLastSeparatorIndex() + 1;
+      return requestStartIndex + handler.getLastSeparatorIndex() + 1;
     }
     for (    String candidate : propertyNames) {
       if (candidate.startsWith(chunk)) {
@@ -48,7 +63,7 @@
       }
     }
     Collections.sort(candidates);
-    return handler.getLastSeparatorIndex() + 1;
+    return requestStartIndex + handler.getLastSeparatorIndex() + 1;
   }
   if (handler.hasOperationName() || handler.endsOnAddressOperationNameSeparator()) {
     OperationCandidatesProvider provider=ctx.getOperationCandidatesProvider();
@@ -68,11 +83,11 @@
       }
     }
     Collections.sort(candidates);
-    return handler.getLastSeparatorIndex() + 1;
+    return requestStartIndex + handler.getLastSeparatorIndex() + 1;
   }
   final OperationRequestAddress address=handler.getAddress();
   final String chunk;
-  if (address.isEmpty() || handler.endsOnNodeSeparator() || handler.endsOnNodeTypeNameSeparator()|| address.equals(ctx.getPrefix())) {
+  if (address.isEmpty() || handler.endsOnNodeSeparator() || handler.endsOnNodeTypeNameSeparator()|| address.equals(ctx.getPrefix())|| buffer.endsWith("..")) {
     chunk=null;
   }
  else   if (address.endsOnType()) {
@@ -104,5 +119,5 @@
     }
   }
   Collections.sort(candidates);
-  return handler.getLastSeparatorIndex() + 1;
+  return requestStartIndex + handler.getLastSeparatorIndex() + 1;
 }
