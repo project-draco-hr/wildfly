@@ -1,0 +1,46 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+  final String applicationName=moduleDescription.getAppName();
+  final CompositeIndex compositeIndex=deploymentUnit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
+  if (compositeIndex == null) {
+    if (logger.isTraceEnabled()) {
+      logger.trace("Skipping EJB annotation processing since no composite annotation index found in unit: " + deploymentUnit);
+    }
+    return;
+  }
+  final List<AnnotationInstance> sessionBeanAnnotations=this.getSessionBeans(compositeIndex);
+  if (sessionBeanAnnotations == null || sessionBeanAnnotations.isEmpty()) {
+    if (logger.isTraceEnabled()) {
+      logger.trace("No session bean annotations found in unit: " + deploymentUnit);
+    }
+    return;
+  }
+  EjbDeploymentMarker.mark(deploymentUnit);
+  for (  AnnotationInstance sessionBeanAnnotation : sessionBeanAnnotations) {
+    AnnotationTarget target=sessionBeanAnnotation.target();
+    if (!(target instanceof ClassInfo)) {
+      logger.warn(sessionBeanAnnotation.name() + " annotation is expected to be only on classes. " + target+ " is not a class");
+      continue;
+    }
+    final ClassInfo classInfo=(ClassInfo)target;
+    final String beanClassName=classInfo.name().local();
+    final AnnotationValue nameValue=sessionBeanAnnotation.value();
+    final String beanName=nameValue == null || nameValue.asString().isEmpty() ? beanClassName : nameValue.asString();
+    SessionBeanComponentDescription sessionBeanDescription=null;
+    String annotation=sessionBeanAnnotation.name().toString();
+    if (Stateless.class.getName().equals(annotation)) {
+      sessionBeanDescription=new StatelessComponentDescription(beanName,beanClassName,moduleDescription.getModuleName(),applicationName);
+    }
+ else     if (Stateful.class.getName().equals(annotation)) {
+      sessionBeanDescription=new StatefulComponentDescription(beanName,beanClassName,moduleDescription.getModuleName(),applicationName);
+    }
+ else     if (Singleton.class.getName().equals(annotation)) {
+      sessionBeanDescription=new StatelessComponentDescription(beanName,beanClassName,moduleDescription.getModuleName(),applicationName);
+    }
+ else {
+      throw new IllegalArgumentException("Unknown session bean type: " + annotation);
+    }
+    moduleDescription.addComponent(sessionBeanDescription);
+  }
+}
