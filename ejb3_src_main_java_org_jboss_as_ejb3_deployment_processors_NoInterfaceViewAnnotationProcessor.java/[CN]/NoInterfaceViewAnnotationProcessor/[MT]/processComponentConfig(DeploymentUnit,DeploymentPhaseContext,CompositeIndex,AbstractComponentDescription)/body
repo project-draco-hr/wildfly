@@ -1,0 +1,31 @@
+{
+  final ClassInfo sessionBeanClass=compositeIndex.getClassByName(DotName.createSimple(componentDescription.getComponentClassName()));
+  if (sessionBeanClass == null) {
+    return;
+  }
+  if (!EjbDeploymentMarker.isEjbDeployment(deploymentUnit) || !(componentDescription instanceof SessionBeanComponentDescription)) {
+    return;
+  }
+  SessionBeanComponentDescription sessionBeanComponentDescription=(SessionBeanComponentDescription)componentDescription;
+  if (!this.hasNoInterfaceView(sessionBeanClass)) {
+    if (logger.isTraceEnabled()) {
+      logger.trace("Session bean: " + sessionBeanComponentDescription.getEJBName() + " doesn't have a no-interface view");
+    }
+    return;
+  }
+  sessionBeanComponentDescription.addNoInterfaceView();
+  String applicationName=null;
+  String globalJNDIBaseName="java:global/" + (applicationName != null ? applicationName + "/" : "") + sessionBeanComponentDescription.getModuleName()+ "/"+ sessionBeanComponentDescription.getEJBName();
+  String appJNDIBaseName="java:app/" + sessionBeanComponentDescription.getModuleName() + "/"+ sessionBeanComponentDescription.getEJBName();
+  String moduleJNDIBaseName="java:module/" + sessionBeanComponentDescription.getEJBName();
+  ServiceName baseServiceName=deploymentUnit.getServiceName().append("component").append(sessionBeanComponentDescription.getComponentName());
+  String ejbClassName=sessionBeanComponentDescription.getEJBClassName();
+  final BindingDescription globalBinding=new BindingDescription();
+  globalBinding.setAbsoluteBinding(true);
+  String globalJNDIName=globalJNDIBaseName + "!" + ejbClassName;
+  globalBinding.setBindingName(globalJNDIName);
+  globalBinding.setBindingType(ejbClassName);
+  globalBinding.setReferenceSourceDescription(new ServiceBindingSourceDescription(baseServiceName.append("VIEW").append(ejbClassName)));
+  componentDescription.getBindings().add(globalBinding);
+  logger.debug("Added java:global jndi binding at " + globalJNDIName + " for no-interface view of session bean: "+ sessionBeanComponentDescription.getEJBName());
+}
