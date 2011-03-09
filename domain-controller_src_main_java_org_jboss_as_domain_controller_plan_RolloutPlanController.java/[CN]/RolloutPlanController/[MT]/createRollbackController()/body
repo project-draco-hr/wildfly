@@ -1,0 +1,45 @@
+{
+  Map<String,Map<ServerIdentity,ModelNode>> rollbackOpsByGroup=new HashMap<String,Map<ServerIdentity,ModelNode>>();
+  for (  Map.Entry<String,ServerUpdatePolicy> entry : updatePolicies.entrySet()) {
+    if (rollbackAcrossGroups || entry.getValue().isFailed()) {
+      Map<ServerIdentity,ModelNode> groupResults=serverResults.get(entry.getKey());
+      for (      Map.Entry<ServerIdentity,ModelNode> serverEntry : groupResults.entrySet()) {
+        ModelNode serverResult=serverEntry.getValue();
+        if (needsRollback(serverResult) && serverResult.hasDefined(COMPENSATING_OPERATION)) {
+          String groupName=serverEntry.getKey().getServerGroupName();
+          Map<ServerIdentity,ModelNode> groupRollbacks=rollbackOpsByGroup.get(groupName);
+          if (groupRollbacks == null) {
+            groupRollbacks=new HashMap<ServerIdentity,ModelNode>();
+            rollbackOpsByGroup.put(groupName,groupRollbacks);
+          }
+          groupRollbacks.put(serverEntry.getKey(),serverResult.get(COMPENSATING_OPERATION));
+        }
+      }
+    }
+  }
+  ModelNode rollbackRolloutPlan=new ModelNode();
+  rollbackRolloutPlan.get(ROLLBACK_ACROSS_GROUPS).set(false);
+  for (  ModelNode series : rolloutPlan.get(IN_SERIES).asList()) {
+    if (series.hasDefined(CONCURRENT_GROUPS)) {
+      ModelNode item=null;
+      for (      Property prop : series.get(SERVER_GROUP).asPropertyList()) {
+        if (rollbackOpsByGroup.containsKey(prop.getName())) {
+          ModelNode rollbackPolicy=getRollbackPolicy(prop.getValue());
+          if (item == null) {
+            item=new ModelNode();
+          }
+          item.get(prop.getName()).set(rollbackPolicy);
+        }
+      }
+      rollbackRolloutPlan.get(IN_SERIES).add().get(CONCURRENT_GROUPS).set(item);
+    }
+ else {
+      Property prop=series.get(SERVER_GROUP).asProperty();
+      if (rollbackOpsByGroup.containsKey(prop.getName())) {
+        ModelNode rollbackPolicy=getRollbackPolicy(prop.getValue());
+        rollbackRolloutPlan.get(IN_SERIES).add().get(SERVER_GROUP,prop.getName()).set(rollbackPolicy);
+      }
+    }
+  }
+  return new RolloutPlanController(rollbackOpsByGroup,rollbackRolloutPlan,this.resultHandler,this.hostControllerClients,this.executor,true);
+}

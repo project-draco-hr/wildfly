@@ -1,9 +1,9 @@
 {
   this.executor=executor;
-  this.opsByGroup=opsByGroup;
   this.rolloutPlan=rolloutPlan;
   this.resultHandler=resultHandler;
   this.hostControllerClients=hostControllerClients;
+  this.forRollback=forRollback;
   this.rollbackAcrossGroups=!rolloutPlan.hasDefined(ROLLBACK_ACROSS_GROUPS) || rolloutPlan.get(ROLLBACK_ACROSS_GROUPS).asBoolean();
   this.shutdown=rolloutPlan.hasDefined(SHUTDOWN) && rolloutPlan.get(SHUTDOWN).asBoolean();
   this.gracefulShutdownPeriod=rolloutPlan.hasDefined(GRACEFUL_SHUTDOWN_TIMEOUT) ? rolloutPlan.get(GRACEFUL_SHUTDOWN_TIMEOUT).asInt() : -1;
@@ -36,15 +36,21 @@
         final String serverGroupName=prop.getName();
         final Map<ServerIdentity,ModelNode> groupEntry=opsByGroup.get(serverGroupName);
         final Set<ServerIdentity> servers=groupEntry.keySet();
-        int maxFailures=0;
-        if (policyNode.hasDefined(MAX_FAILURE_PERCENTAGE)) {
-          int pct=policyNode.get(MAX_FAILURE_PERCENTAGE).asInt();
-          maxFailures=((servers.size() * pct) / 100);
+        ServerUpdatePolicy policy;
+        if (forRollback) {
+          policy=new ServerUpdatePolicy(parent,serverGroupName,servers);
         }
- else         if (policyNode.hasDefined(MAX_FAILED_SERVERS)) {
-          maxFailures=policyNode.get(MAX_FAILED_SERVERS).asInt();
+ else {
+          int maxFailures=0;
+          if (policyNode.hasDefined(MAX_FAILURE_PERCENTAGE)) {
+            int pct=policyNode.get(MAX_FAILURE_PERCENTAGE).asInt();
+            maxFailures=((servers.size() * pct) / 100);
+          }
+ else           if (policyNode.hasDefined(MAX_FAILED_SERVERS)) {
+            maxFailures=policyNode.get(MAX_FAILED_SERVERS).asInt();
+          }
+          policy=new ServerUpdatePolicy(parent,serverGroupName,servers,maxFailures);
         }
-        ServerUpdatePolicy policy=new ServerUpdatePolicy(parent,serverGroupName,servers,maxFailures);
         updatePolicies.put(serverGroupName,policy);
         for (        Map.Entry<ServerIdentity,ModelNode> entry : groupEntry.entrySet()) {
           groupTasks.add(createServerTask(entry.getKey(),entry.getValue(),policy));

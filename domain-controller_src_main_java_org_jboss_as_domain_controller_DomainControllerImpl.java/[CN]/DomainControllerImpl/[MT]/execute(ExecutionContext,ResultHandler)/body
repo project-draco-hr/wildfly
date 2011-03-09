@@ -56,9 +56,26 @@
       transaction.commit();
     }
     ModelNode compensatingOperation=getCompensatingOperation(operation,hostResults);
-    RolloutPlanController controller=new RolloutPlanController(opsByGroup,rolloutPlan,handler,immutableHosts,scheduledExecutorService);
-    controller.execute();
+    RolloutPlanController controller=new RolloutPlanController(opsByGroup,rolloutPlan,handler,immutableHosts,scheduledExecutorService,false);
+    RolloutPlanController.Result controllerResult=controller.execute();
+switch (controllerResult) {
+case FAILED:
+{
+        controller.rollback();
+        handler.handleFailed(new ModelNode().set("Operation was not applied successfully to any servers"));
+        return new BasicOperationResult(compensatingOperation);
+      }
+case PARTIAL:
+{
+      controller.rollback();
+    }
+case SUCCESS:
+{
     handler.handleResultComplete();
     return new BasicOperationResult(compensatingOperation);
   }
+default :
+throw new IllegalStateException("Unknown result " + controllerResult);
+}
+}
 }
