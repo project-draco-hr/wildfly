@@ -1,9 +1,18 @@
 {
-  DeploymentPlanBuilder builder=manager.newDeploymentPlan();
-  RemoveDeploymentPlanBuilder removeBuilder=null;
+  ModelNode op=new ModelNode();
+  op.get("operation").set("composite");
+  op.get("address").setEmptyList();
+  ModelNode steps=op.get("steps");
+  boolean execute=false;
+  Set<String> deployed=getDeploymentNames();
   for (  Deployment deployment : deployments) {
-    removeBuilder=deployment.removeDeployment(builder);
-    builder=removeBuilder;
+    if (deployed.contains(deployment.archiveName)) {
+      steps.add(deployment.removeDeployment());
+      execute=true;
+    }
   }
-  manager.execute(removeBuilder.toServerGroup("main-server-group").build()).get();
+  if (execute) {
+    op.get("rollout-plan").set(getRolloutPlan());
+    ModelNode result=client.execute(op);
+  }
 }
