@@ -1,7 +1,8 @@
 {
   final File configDir=environment.getDomainConfigurationDir();
+  final ModelNode hostModelNode=HostModelUtil.createCoreModel();
   final ExtensibleConfigurationPersister configurationPersister=createHostConfigurationPersister(configDir);
-  final HostModel hostModel=new HostModel(configurationPersister);
+  final ModelNodeRegistration hostRegistry=HostModelUtil.createHostRegistry(configurationPersister);
   final List<ModelNode> operations=configurationPersister.load();
   final AtomicInteger count=new AtomicInteger(1);
   final ResultHandler resultHandler=new ResultHandler(){
@@ -21,10 +22,16 @@
     }
   }
 ;
+final class BootstrapModelController extends BasicModelController {
+    BootstrapModelController(){
+      super(hostModelNode,configurationPersister,hostRegistry);
+    }
+  }
+  final BasicModelController bootstrapContoller=new BootstrapModelController();
   for (  final ModelNode operation : operations) {
     count.incrementAndGet();
     operation.get(ROLLBACK_ON_RUNTIME_FAILURE).set(false);
-    hostModel.execute(ExecutionContextBuilder.Factory.create(operation).build(),resultHandler);
+    bootstrapContoller.execute(ExecutionContextBuilder.Factory.create(operation).build(),resultHandler);
   }
   if (count.decrementAndGet() == 0) {
   }
@@ -37,26 +44,25 @@
 );
   final ProcessControllerConnectionService processControllerClient=new ProcessControllerConnectionService(environment,authCode);
   serviceTarget.addService(ProcessControllerConnectionService.SERVICE_NAME,processControllerClient).install();
-  final ModelNode rawModel=hostModel.getHostModel();
-  activateNetworkInterfaces(rawModel,serviceTarget);
+  activateNetworkInterfaces(hostModelNode,serviceTarget);
   final ServiceName threadFactoryServiceName=SERVICE_NAME_BASE.append("thread-factory");
   final ServiceName executorServiceName=SERVICE_NAME_BASE.append("executor");
   serviceTarget.addService(threadFactoryServiceName,new ThreadFactoryService()).install();
   final HostControllerExecutorService executorService=new HostControllerExecutorService();
   serviceTarget.addService(executorServiceName,executorService).addDependency(threadFactoryServiceName,ThreadFactory.class,executorService.threadFactoryValue).install();
-  final String mgmtNetwork=rawModel.get(MANAGEMENT,NATIVE_API,INTERFACE).asString();
-  final int mgmtPort=rawModel.get(MANAGEMENT,NATIVE_API,PORT).asInt();
+  final String mgmtNetwork=hostModelNode.get(MANAGEMENT,NATIVE_API,INTERFACE).asString();
+  final int mgmtPort=hostModelNode.get(MANAGEMENT,NATIVE_API,PORT).asInt();
   final ServerInventoryService inventory=new ServerInventoryService(environment,mgmtPort);
   serviceTarget.addService(ServerInventoryService.SERVICE_NAME,inventory).addDependency(ProcessControllerConnectionService.SERVICE_NAME,ProcessControllerClient.class,inventory.getClient()).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(mgmtNetwork),NetworkInterfaceBinding.class,inventory.getInterface()).install();
-  final String name=rawModel.get(NAME).asString();
-  final HostControllerService hc=new HostControllerService(name,hostModel);
+  final String name=hostModelNode.get(NAME).asString();
+  final HostControllerService hc=new HostControllerService(name,hostModelNode,configurationPersister,hostRegistry);
   serviceTarget.addService(HostController.SERVICE_NAME,hc).addDependency(ServerInventoryService.SERVICE_NAME,ServerInventory.class,hc.getServerInventory()).addDependency(ServerToHostOperationHandler.SERVICE_NAME).setInitialMode(Mode.ACTIVE).install();
   final ManagementCommunicationService managementCommunicationService=new ManagementCommunicationService();
   serviceTarget.addService(ManagementCommunicationService.SERVICE_NAME,managementCommunicationService).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(mgmtNetwork),NetworkInterfaceBinding.class,managementCommunicationService.getInterfaceInjector()).addInjection(managementCommunicationService.getPortInjector(),mgmtPort).addDependency(executorServiceName,ExecutorService.class,managementCommunicationService.getExecutorServiceInjector()).addDependency(threadFactoryServiceName,ThreadFactory.class,managementCommunicationService.getThreadFactoryInjector()).setInitialMode(Mode.ACTIVE).install();
-  activateDomainController(environment,rawModel,serviceTarget,environment.isBackupDomainFiles(),environment.isUseCachedDc());
-  if (rawModel.get(MANAGEMENT).hasDefined(HTTP_API)) {
+  activateDomainController(environment,hostModelNode,serviceTarget,environment.isBackupDomainFiles(),environment.isUseCachedDc());
+  if (hostModelNode.get(MANAGEMENT).hasDefined(HTTP_API)) {
     final HttpManagementService service=new HttpManagementService();
-    serviceTarget.addService(HttpManagementService.SERVICE_NAME,service).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(rawModel.get(MANAGEMENT,HTTP_API).require(INTERFACE).asString()),NetworkInterfaceBinding.class,service.getInterfaceInjector()).addDependency(DomainController.SERVICE_NAME,ModelController.class,service.getModelControllerInjector()).addInjection(service.getPortInjector(),rawModel.get(MANAGEMENT,HTTP_API).require(PORT).asInt()).addDependency(executorServiceName,ExecutorService.class,service.getExecutorServiceInjector()).setInitialMode(ServiceController.Mode.ACTIVE).addListener(new ResultHandler.ServiceStartListener(resultHandler)).install();
+    serviceTarget.addService(HttpManagementService.SERVICE_NAME,service).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(hostModelNode.get(MANAGEMENT,HTTP_API).require(INTERFACE).asString()),NetworkInterfaceBinding.class,service.getInterfaceInjector()).addDependency(DomainController.SERVICE_NAME,ModelController.class,service.getModelControllerInjector()).addInjection(service.getPortInjector(),hostModelNode.get(MANAGEMENT,HTTP_API).require(PORT).asInt()).addDependency(executorServiceName,ExecutorService.class,service.getExecutorServiceInjector()).setInitialMode(ServiceController.Mode.ACTIVE).addListener(new ResultHandler.ServiceStartListener(resultHandler)).install();
   }
   final ServerToHostOperationHandler serverToHost=new ServerToHostOperationHandler();
   serviceTarget.addService(ServerToHostOperationHandler.SERVICE_NAME,serverToHost).addDependency(ServerInventoryService.SERVICE_NAME,ManagedServerLifecycleCallback.class,serverToHost.getCallback()).addDependency(ManagementCommunicationService.SERVICE_NAME,ManagementCommunicationService.class,new ManagementCommunicationServiceInjector(serverToHost)).install();
