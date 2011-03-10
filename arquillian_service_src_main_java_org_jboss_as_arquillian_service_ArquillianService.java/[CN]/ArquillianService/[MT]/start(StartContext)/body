@@ -6,6 +6,29 @@
   try {
     jmxTestRunner=new JMXTestRunner(){
       @Override public TestResult runTestMethod(      String className,      String methodName,      Map<String,String> props){
+        Map<String,Object> properties=Collections.<String,Object>singletonMap(TEST_CLASS_PROPERTY,className);
+        ContextManager contextManager=initializeContextManager(className,properties);
+        try {
+          return super.runTestMethod(className,methodName,props);
+        }
+  finally {
+          contextManager.teardown(properties);
+        }
+      }
+      @Override public InputStream runTestMethodEmbedded(      String className,      String methodName,      Map<String,String> props){
+        Map<String,Object> properties=Collections.<String,Object>singletonMap(TEST_CLASS_PROPERTY,className);
+        ContextManager contextManager=initializeContextManager(className,properties);
+        try {
+          return super.runTestMethodEmbedded(className,methodName,props);
+        }
+  finally {
+          contextManager.teardown(properties);
+        }
+      }
+      @Override protected TestClassLoader getTestClassLoader(){
+        return testClassLoader;
+      }
+      private ContextManager initializeContextManager(      String className,      Map<String,Object> properties){
         final ContextManagerBuilder builder=new ContextManagerBuilder();
         ArquillianConfig config=getConfig(className);
         if (config != null) {
@@ -16,18 +39,9 @@
           }
           builder.addAll(deployment);
         }
-        Map<String,Object> properties=Collections.<String,Object>singletonMap(TEST_CLASS_PROPERTY,className);
         ContextManager contextManager=builder.build();
         contextManager.setup(properties);
-        try {
-          return super.runTestMethod(className,methodName,props);
-        }
-  finally {
-          contextManager.teardown(properties);
-        }
-      }
-      @Override protected TestClassLoader getTestClassLoader(){
-        return testClassLoader;
+        return contextManager;
       }
     }
 ;
