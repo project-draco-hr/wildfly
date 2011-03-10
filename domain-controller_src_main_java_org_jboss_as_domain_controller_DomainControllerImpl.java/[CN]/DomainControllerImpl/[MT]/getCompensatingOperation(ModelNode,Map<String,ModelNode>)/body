@@ -1,7 +1,7 @@
 {
   ModelNode result=null;
   if (isMultistepOperation(operation)) {
-    SortedSet<String> keys=new TreeSet<String>(operation.get(STEPS).keys());
+    int stepCount=operation.get(STEPS).asInt();
     Map<String,ModelNode> compSteps=new HashMap<String,ModelNode>();
     ModelNode masterResult=hostResults.get(localHostName);
     if (masterResult != null && !IGNORED.equals(masterResult.get(OUTCOME).asString()) && masterResult.hasDefined(COMPENSATING_OPERATION)) {
@@ -12,7 +12,7 @@
         }
       }
     }
-    if (compSteps.size() < keys.size()) {
+    if (compSteps.size() < stepCount) {
       for (      ModelNode hostResult : hostResults.values()) {
         if (hostResult != null && !IGNORED.equals(hostResult.get(OUTCOME).asString()) && hostResult.hasDefined(COMPENSATING_OPERATION)) {
           for (          Property prop : masterResult.get(COMPENSATING_OPERATION).asPropertyList()) {
@@ -27,11 +27,15 @@
       }
     }
     result=new ModelNode();
-    for (    String step : keys) {
+    for (int i=1; i <= stepCount; i++) {
+      String step="step-" + i;
       ModelNode stepComp=compSteps.get(step);
       if (stepComp != null && stepComp.isDefined()) {
-        result.add(stepComp);
+        result.get("steps").add(stepComp);
       }
+    }
+    if (result.isDefined()) {
+      result.get(OP).set(COMPOSITE);
     }
   }
  else {
