@@ -1,7 +1,26 @@
 {
   ModelNode operation=operationContext.getOperation();
   if (operation.get(OP).asString().equals(HostControllerClient.EXECUTE_ON_DOMAIN)) {
-    return localDomainModel.execute(operationContext.clone(operation.require(HostControllerClient.DOMAIN_OP)),handler);
+    ControllerTransaction transaction=new ControllerTransaction();
+    try {
+      ModelNode query=localDomainModel.execute(operationContext,transaction);
+      handler.handleResultFragment(new String[0],query);
+      handler.handleResultComplete();
+      return new BasicOperationResult();
+    }
+ catch (    final Throwable t) {
+      log.errorf(t,"domain operation (%s) failed - address: (%s)",operationContext.getOperation().get(DOMAIN_OP).get(OP),operationContext.getOperation().get(DOMAIN_OP).get(OP_ADDR));
+      if (transaction != null) {
+        transaction.setRollbackOnly();
+      }
+      handler.handleFailed(getFailureResult(t));
+      return new BasicOperationResult();
+    }
+ finally {
+      if (transaction != null) {
+        transaction.commit();
+      }
+    }
   }
   OperationRouting routing=determineRouting(operation);
   if (routing.isRouteToMaster()) {
