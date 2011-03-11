@@ -1,0 +1,67 @@
+{
+  StateParser parser=new StateParser();
+  PropertyValueState valueState=new PropertyValueState();
+  PropertyState propState=new PropertyState(valueState);
+  PropertyListState listState=new PropertyListState(propState);
+  parser.addState('(',listState);
+  ParsingStateCallbackHandler stateCallbackHandler=new ParsingStateCallbackHandler(){
+    int nameValueSep=-1;
+    StringBuilder propName=new StringBuilder();
+    StringBuilder propValue=new StringBuilder();
+    boolean valueContent;
+    @Override public void enteredState(    ParsingContext ctx){
+      String stateId=ctx.getState().getId();
+      if (stateId.equals(PropertyListState.ID)) {
+        opCallbackHandler.propertyListStart(startIndex + ctx.getLocation());
+      }
+ else       if (stateId.equals(PropertyState.ID)) {
+        propName.setLength(0);
+        propValue.setLength(0);
+        nameValueSep=-1;
+      }
+ else       if (stateId.equals(PropertyValueState.ID)) {
+        nameValueSep=ctx.getLocation();
+        valueContent=true;
+      }
+    }
+    @Override public void leavingState(    ParsingContext ctx) throws OperationFormatException {
+      String stateId=ctx.getState().getId();
+      if (stateId.equals(PropertyListState.ID)) {
+        if (ctx.getCharacter() == ')') {
+          opCallbackHandler.propertyListEnd(startIndex + ctx.getLocation());
+        }
+      }
+ else       if (stateId.equals(PropertyState.ID)) {
+        if (propValue.length() > 0) {
+          opCallbackHandler.property(propName.toString().trim(),propValue.toString().trim(),nameValueSep);
+        }
+ else {
+          opCallbackHandler.propertyName(propName.toString().trim());
+          if (nameValueSep != -1) {
+            opCallbackHandler.propertyNameValueSeparator(nameValueSep);
+          }
+        }
+        if (ctx.getCharacter() == ',') {
+          opCallbackHandler.propertySeparator(startIndex + ctx.getLocation());
+        }
+      }
+ else       if (stateId.equals(PropertyValueState.ID)) {
+        valueContent=false;
+      }
+    }
+    @Override public void character(    ParsingContext ctx) throws OperationFormatException {
+      if (valueContent) {
+        propValue.append(ctx.getCharacter());
+      }
+ else {
+        String stateId=ctx.getState().getId();
+        if (stateId.equals(PropertyState.ID)) {
+          propName.append(ctx.getCharacter());
+        }
+      }
+    }
+  }
+;
+  String paramStr=startIndex == 0 ? str : str.substring(startIndex);
+  parser.parse(paramStr,stateCallbackHandler);
+}
