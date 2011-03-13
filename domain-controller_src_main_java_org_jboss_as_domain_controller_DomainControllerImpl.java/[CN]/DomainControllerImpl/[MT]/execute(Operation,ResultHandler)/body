@@ -1,40 +1,24 @@
 {
   ModelNode operation=operationContext.getOperation();
-  if (operation.get(OP).asString().equals(HostControllerClient.EXECUTE_ON_DOMAIN)) {
-    ControllerTransaction transaction=new ControllerTransaction();
-    try {
-      ModelNode query=localDomainModel.execute(operationContext,transaction);
-      handler.handleResultFragment(new String[0],query);
-      handler.handleResultComplete();
-      return new BasicOperationResult();
-    }
- catch (    final Throwable t) {
-      log.errorf(t,"domain operation (%s) failed - address: (%s)",operationContext.getOperation().get(DOMAIN_OP).get(OP),operationContext.getOperation().get(DOMAIN_OP).get(OP_ADDR));
-      if (transaction != null) {
-        transaction.setRollbackOnly();
-      }
-      handler.handleFailed(getFailureResult(t));
-      return new BasicOperationResult();
-    }
- finally {
-      if (transaction != null) {
-        transaction.commit();
-      }
-    }
-  }
   OperationRouting routing=determineRouting(operation);
-  if (routing.isRouteToMaster()) {
-    return masterDomainControllerClient.execute(operationContext,handler);
+  if (!routing.isLocalOnly() && masterDomainControllerClient != null) {
+    PathAddress addr=PathAddress.pathAddress(operation.get(OP_ADDR));
+    handler.handleFailed(new ModelNode().set("Operations for address " + addr + " can only handled by the master Domain Controller; this host is not the master Domain Controller"));
+    return new BasicOperationResult();
   }
- else   if (routing.isLocalOnly()) {
-    return localDomainModel.execute(operationContext,handler);
+ else   if (!routing.isTwoStep()) {
+    String host=routing.getSingleHost();
+    DomainControllerSlaveClient hostClient=hosts.get(host);
+    return hostClient.execute(operationContext,handler);
   }
   ModelNode rolloutPlan=operation.has(ROLLOUT_PLAN) ? operation.remove(ROLLOUT_PLAN) : null;
   ControllerTransaction transaction=new ControllerTransaction();
   Map<String,ModelNode> hostResults=pushToHosts(operationContext,routing,transaction);
+  System.out.println("---- Pushed to hosts");
   ModelNode masterFailureResult=null;
   ModelNode hostFailureResults=null;
   ModelNode masterResult=hostResults.get(localHostName);
+  System.out.println("-----Checking host results");
   if (masterResult != null && masterResult.hasDefined(OUTCOME) && FAILED.equals(masterResult.get(OUTCOME).asString())) {
     transaction.setRollbackOnly();
     masterFailureResult=masterResult.hasDefined(FAILURE_DESCRIPTION) ? masterResult.get(FAILURE_DESCRIPTION) : new ModelNode().set("Unexplained failure");

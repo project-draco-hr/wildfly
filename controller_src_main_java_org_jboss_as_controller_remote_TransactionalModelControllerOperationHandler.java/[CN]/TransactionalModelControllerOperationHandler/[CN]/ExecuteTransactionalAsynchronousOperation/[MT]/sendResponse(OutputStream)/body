@@ -3,7 +3,8 @@
   final IOExceptionHolder exceptionHolder=new IOExceptionHolder();
   final FailureHolder failureHolder=new FailureHolder();
   final AtomicInteger status=new AtomicInteger(0);
-  OperationResult result=modelController.execute(builder.build(),new ResultHandler(){
+  ControllerTransactionContext tx=getTransaction();
+  OperationResult result=transactionalModelController.execute(builder.build(),new ResultHandler(){
     @Override public void handleResultFragment(    String[] location,    ModelNode fragment){
       try {
 synchronized (outputStream) {
@@ -19,20 +20,20 @@ synchronized (outputStream) {
         }
       }
  catch (      IOException e) {
-        asynchOperations.remove(asynchronousRequestId);
+        clearAsynchronousOperation(asynchronousRequestId);
         exceptionHolder.setException(e);
         completeLatch.countDown();
       }
     }
     @Override public void handleResultComplete(){
-      asynchOperations.remove(asynchronousRequestId);
+      clearAsynchronousOperation(asynchronousRequestId);
       if (!status.compareAndSet(0,1)) {
         throw new RuntimeException("Result already set");
       }
       completeLatch.countDown();
     }
     @Override public void handleFailed(    final ModelNode failureDescription){
-      asynchOperations.remove(asynchronousRequestId);
+      clearAsynchronousOperation(asynchronousRequestId);
       if (!status.compareAndSet(0,2)) {
         throw new RuntimeException("Result already set");
       }
@@ -40,18 +41,24 @@ synchronized (outputStream) {
       completeLatch.countDown();
     }
     @Override public void handleCancellation(){
-      asynchOperations.remove(asynchronousRequestId);
+      clearAsynchronousOperation(asynchronousRequestId);
       if (!status.compareAndSet(0,3)) {
         throw new RuntimeException("Result already set");
       }
       completeLatch.countDown();
     }
   }
-);
+,tx);
+synchronized (outputStream) {
+    outputStream.write(ModelControllerClientProtocol.PARAM_OPERATION);
+    ModelNode compensating=result.getCompensatingOperation() != null ? result.getCompensatingOperation() : new ModelNode();
+    compensating.writeExternal(outputStream);
+    outputStream.flush();
+  }
   if (completeLatch.getCount() == 0) {
   }
  else {
-    asynchOperations.put(Integer.valueOf(asynchronousRequestId),result.getCancellable());
+    addAsynchronousOperation(asynchronousRequestId,result.getCancellable());
 synchronized (outputStream) {
       outputStream.write(ModelControllerClientProtocol.PARAM_REQUEST_ID);
       StreamUtils.writeInt(outputStream,asynchronousRequestId);
@@ -74,9 +81,6 @@ case 1:
 {
 synchronized (outputStream) {
         outputStream.write(ModelControllerClientProtocol.PARAM_HANDLE_RESULT_COMPLETE);
-        outputStream.write(ModelControllerClientProtocol.PARAM_OPERATION);
-        ModelNode compensating=result.getCompensatingOperation() != null ? result.getCompensatingOperation() : new ModelNode();
-        compensating.writeExternal(outputStream);
         outputStream.flush();
       }
       break;
@@ -85,7 +89,6 @@ case 2:
 {
 synchronized (outputStream) {
       outputStream.write(ModelControllerClientProtocol.PARAM_HANDLE_RESULT_FAILED);
-      outputStream.write(ModelControllerClientProtocol.PARAM_OPERATION);
       failureHolder.getFailure().writeExternal(outputStream);
       outputStream.flush();
     }

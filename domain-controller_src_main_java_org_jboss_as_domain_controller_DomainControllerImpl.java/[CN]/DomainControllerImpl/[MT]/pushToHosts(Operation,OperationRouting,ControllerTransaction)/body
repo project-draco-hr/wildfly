@@ -1,16 +1,13 @@
 {
   final Map<String,ModelNode> hostResults=new HashMap<String,ModelNode>();
   final Map<String,Future<ModelNode>> futures=new HashMap<String,Future<ModelNode>>();
-  ModelNode wrapper=new ModelNode();
-  wrapper.get(OP).set(HostControllerClient.EXECUTE_ON_DOMAIN);
-  wrapper.get(HostControllerClient.DOMAIN_OP).set(operation.getOperation());
-  Operation wrapperOperation=operation.clone(wrapper);
   final Set<String> targets=routing.getHosts();
   if (targets.remove(localHostName)) {
+    Operation localOperation=operation;
     if (targets.size() > 0) {
-      wrapperOperation=wrapperOperation.clone(wrapper.clone());
+      localOperation=localOperation.clone(localOperation.getOperation().clone());
     }
-    pushToHost(wrapperOperation,transaction,localHostName,futures);
+    pushToHost(localOperation,transaction,localHostName,futures);
     processHostFuture(localHostName,futures.remove(localHostName),hostResults);
     ModelNode hostResult=hostResults.get(localHostName);
     if (!transaction.isRollbackOnly()) {
@@ -21,7 +18,7 @@
   }
   if (!transaction.isRollbackOnly()) {
     for (    final String host : targets) {
-      pushToHost(wrapperOperation,transaction,host,futures);
+      pushToHost(operation,transaction,host,futures);
     }
     log.debugf("Domain updates pushed to %s host controller(s)",futures.size());
     for (    final Map.Entry<String,Future<ModelNode>> entry : futures.entrySet()) {
