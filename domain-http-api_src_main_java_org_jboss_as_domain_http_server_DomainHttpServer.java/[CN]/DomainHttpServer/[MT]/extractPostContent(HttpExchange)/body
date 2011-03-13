@@ -1,0 +1,27 @@
+{
+  final BoundaryDelimitedInputStream iStream=new BoundaryDelimitedInputStream(http.getRequestBody(),POST_BOUNDARY);
+  final File tempUploadFile=File.createTempFile("upload",".tmp",serverTempDir);
+  final BufferedOutputStream bos=new BufferedOutputStream(new FileOutputStream(tempUploadFile));
+  final byte[] buffer=new byte[UPLOAD_BUFFER_SIZE];
+  boolean isDeploymentPart=false;
+  try {
+    while (!isDeploymentPart && !iStream.isOuterStreamClosed()) {
+      int numRead=0;
+      final MultipartHeader header=readHeader(iStream);
+      if (header != null) {
+        isDeploymentPart=MULTIPART_FORM_DATA_CONTENT_TYPE.equals(header.getContentType());
+        while (numRead != -1) {
+          numRead=iStream.read(buffer);
+          if (numRead > 0 && isDeploymentPart) {
+            bos.write(buffer,0,numRead);
+          }
+        }
+      }
+    }
+  }
+  finally {
+    bos.flush();
+    safeClose(bos);
+  }
+  return tempUploadFile;
+}
