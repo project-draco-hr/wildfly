@@ -55,8 +55,26 @@
  catch (        ValidateException e) {
           throw new OperationFailedException(e,operation);
         }
-        serviceTarget.addService(ConnectorServices.DATASOURCES_SERVICE,new DataSourcesService(datasources)).setInitialMode(Mode.ACTIVE).install();
-        updateContext.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_DATA_SOURCES,new DataSourcesAttachmentProcessor(datasources));
+        for (        DataSource dataSource : datasources.getDataSource()) {
+          if (dataSource.isEnabled() != null && !dataSource.isEnabled()) {
+            continue;
+          }
+          String jndiName=dataSource.getJndiName();
+          if (dataSource.isUseJavaContext() != null && dataSource.isUseJavaContext().booleanValue() && !jndiName.startsWith("java:/")) {
+            jndiName="java:/" + jndiName;
+          }
+          installDataSourceService(serviceTarget,jndiName,dataSource.getModule(),new LocalDataSourceService(jndiName,dataSource));
+        }
+        for (        XaDataSource xaDataSource : datasources.getXaDataSource()) {
+          if (xaDataSource.isEnabled() != null && !xaDataSource.isEnabled()) {
+            continue;
+          }
+          String jndiName=xaDataSource.getJndiName();
+          if (xaDataSource.isUseJavaContext() != null && xaDataSource.isUseJavaContext().booleanValue() && !jndiName.startsWith("java:/")) {
+            jndiName="java:/" + jndiName;
+          }
+          installDataSourceService(serviceTarget,jndiName,xaDataSource.getModule(),new XaDataSourceService(jndiName,xaDataSource));
+        }
         updateContext.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_DATA_SOURCE_DEFINITION,new DataSourceDefinitionDeployer());
         resultHandler.handleResultComplete();
       }

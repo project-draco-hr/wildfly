@@ -1,0 +1,26 @@
+{
+synchronized (stateLock) {
+    if (inManagedTransaction)     return;
+    if (jdbcAutoCommit != underlyingAutoCommit) {
+      con.setAutoCommit(jdbcAutoCommit);
+      underlyingAutoCommit=jdbcAutoCommit;
+    }
+  }
+  if (!jdbcAutoCommit && !inLocalTransaction.getAndSet(true)) {
+    Collection<ConnectionEventListener> copy=null;
+synchronized (cels) {
+      copy=new ArrayList<ConnectionEventListener>(cels);
+    }
+    ConnectionEvent ce=new ConnectionEvent(this,ConnectionEvent.LOCAL_TRANSACTION_STARTED);
+    for (Iterator<ConnectionEventListener> i=copy.iterator(); i.hasNext(); ) {
+      ConnectionEventListener cel=i.next();
+      try {
+        cel.localTransactionStarted(ce);
+      }
+ catch (      Throwable t) {
+        getLog().trace("Error notifying of connection committed for listener: " + cel,t);
+      }
+    }
+  }
+  checkState();
+}

@@ -1,0 +1,23 @@
+{
+synchronized (stateLock) {
+    if (inManagedTransaction)     throw new SQLException("You cannot rollback during a managed transaction!");
+    if (jdbcAutoCommit)     throw new SQLException("You cannot rollback with autocommit set!");
+  }
+  con.rollback();
+  if (inLocalTransaction.getAndSet(false)) {
+    Collection<ConnectionEventListener> copy=null;
+synchronized (cels) {
+      copy=new ArrayList<ConnectionEventListener>(cels);
+    }
+    ConnectionEvent ce=new ConnectionEvent(this,ConnectionEvent.LOCAL_TRANSACTION_ROLLEDBACK);
+    for (Iterator<ConnectionEventListener> i=copy.iterator(); i.hasNext(); ) {
+      ConnectionEventListener cel=i.next();
+      try {
+        cel.localTransactionRolledback(ce);
+      }
+ catch (      Throwable t) {
+        getLog().trace("Error notifying of connection rollback for listener: " + cel,t);
+      }
+    }
+  }
+}

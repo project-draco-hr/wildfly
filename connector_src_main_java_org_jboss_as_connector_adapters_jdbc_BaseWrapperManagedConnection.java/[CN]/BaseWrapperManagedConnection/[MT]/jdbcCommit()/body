@@ -1,0 +1,23 @@
+{
+synchronized (stateLock) {
+    if (inManagedTransaction)     throw new SQLException("You cannot commit during a managed transaction!");
+    if (jdbcAutoCommit)     throw new SQLException("You cannot commit with autocommit set!");
+  }
+  con.commit();
+  if (inLocalTransaction.getAndSet(false)) {
+    Collection<ConnectionEventListener> copy=null;
+synchronized (cels) {
+      copy=new ArrayList<ConnectionEventListener>(cels);
+    }
+    ConnectionEvent ce=new ConnectionEvent(this,ConnectionEvent.LOCAL_TRANSACTION_COMMITTED);
+    for (Iterator<ConnectionEventListener> i=copy.iterator(); i.hasNext(); ) {
+      ConnectionEventListener cel=i.next();
+      try {
+        cel.localTransactionCommitted(ce);
+      }
+ catch (      Throwable t) {
+        getLog().trace("Error notifying of connection committed for listener: " + cel,t);
+      }
+    }
+  }
+}
