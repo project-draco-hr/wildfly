@@ -1,24 +1,21 @@
 {
   ModelNode operation=operationContext.getOperation();
   OperationRouting routing=determineRouting(operation);
-  if (!routing.isLocalOnly() && masterDomainControllerClient != null) {
+  if ((routing.isRouteToMaster() || !routing.isLocalOnly()) && masterDomainControllerClient != null) {
     PathAddress addr=PathAddress.pathAddress(operation.get(OP_ADDR));
     handler.handleFailed(new ModelNode().set("Operations for address " + addr + " can only handled by the master Domain Controller; this host is not the master Domain Controller"));
     return new BasicOperationResult();
   }
  else   if (!routing.isTwoStep()) {
     String host=routing.getSingleHost();
-    DomainControllerSlaveClient hostClient=hosts.get(host);
-    return hostClient.execute(operationContext,handler);
+    return executeOnHost(host,operationContext,handler);
   }
   ModelNode rolloutPlan=operation.has(ROLLOUT_PLAN) ? operation.remove(ROLLOUT_PLAN) : null;
   ControllerTransaction transaction=new ControllerTransaction();
   Map<String,ModelNode> hostResults=pushToHosts(operationContext,routing,transaction);
-  System.out.println("---- Pushed to hosts");
   ModelNode masterFailureResult=null;
   ModelNode hostFailureResults=null;
   ModelNode masterResult=hostResults.get(localHostName);
-  System.out.println("-----Checking host results");
   if (masterResult != null && masterResult.hasDefined(OUTCOME) && FAILED.equals(masterResult.get(OUTCOME).asString())) {
     transaction.setRollbackOnly();
     masterFailureResult=masterResult.hasDefined(FAILURE_DESCRIPTION) ? masterResult.get(FAILURE_DESCRIPTION) : new ModelNode().set("Unexplained failure");
@@ -66,7 +63,7 @@
       handler.handleResultComplete();
       return new BasicOperationResult(compensatingOperation);
     }
-    RolloutPlanController controller=new RolloutPlanController(opsByGroup,rolloutPlan,handler,immutableHosts,scheduledExecutorService,false);
+    RolloutPlanController controller=new RolloutPlanController(opsByGroup,rolloutPlan,handler,serverOperationExecutor,scheduledExecutorService,false);
     RolloutPlanController.Result controllerResult=controller.execute();
 switch (controllerResult) {
 case FAILED:
