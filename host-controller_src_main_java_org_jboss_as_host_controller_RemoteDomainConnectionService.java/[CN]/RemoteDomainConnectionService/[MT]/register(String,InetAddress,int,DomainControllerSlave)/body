@@ -6,19 +6,20 @@
   config.setSocketFactory(SocketFactory.getDefault());
   config.setServerAddress(new InetSocketAddress(host,port));
   config.setThreadFactory(Executors.defaultThreadFactory());
+  final InetAddress callbackAddress=getCallbackAddress(ourAddress,host);
   final ProtocolClient protocolClient=new ProtocolClient(config);
   try {
     connection=protocolClient.connect();
     masterProxy=new ModelControllerClientToModelControllerAdapter(connection);
-    operationHandler=ModelControllerOperationHandler.Factory.create(slave,initialMessageHandler);
-    txOperationHandler=new TransactionalModelControllerOperationHandler(slave,initialMessageHandler);
+    txOperationHandler=new SlaveDomainControllerOperationHandler(slave);
+    managementCommunicationService.getValue().addHandler(txOperationHandler);
   }
  catch (  IOException e) {
     log.warnf("Could not connect to remote domain controller %s:%d",host.getHostAddress(),port);
     throw new IllegalStateException(e);
   }
   try {
-    ModelNode node=new RegisterModelControllerRequest().executeForResult(new ManagementRequestConnectionStrategy.ExistingConnectionStrategy(connection));
+    ModelNode node=new RegisterModelControllerRequest(callbackAddress,ourPort).executeForResult(new ManagementRequestConnectionStrategy.ExistingConnectionStrategy(connection));
     slave.setInitialDomainModel(node);
   }
  catch (  Exception e) {
