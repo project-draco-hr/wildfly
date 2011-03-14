@@ -20,22 +20,26 @@
   final Set<BeanDeploymentArchiveImpl> beanDeploymentArchives=new HashSet<BeanDeploymentArchiveImpl>();
   log.info("Processing CDI deployment: " + phaseContext.getDeploymentUnit().getName());
   final Map<ResourceRoot,Index> indexes=AnnotationIndexUtils.getAnnotationIndexes(deploymentUnit);
+  final Map<ResourceRoot,BeanDeploymentArchiveImpl> bdaMap=new HashMap<ResourceRoot,BeanDeploymentArchiveImpl>();
   final Module module=phaseContext.getDeploymentUnit().getAttachment(Attachments.MODULE);
-  boolean rootArchiveFound=false;
+  BeanDeploymentArchiveImpl rootBda=null;
   if (cdiDeploymentMetadata != null) {
     for (    BeanArchiveMetadata beanArchiveMetadata : cdiDeploymentMetadata.getBeanArchiveMetadata()) {
       BeanDeploymentArchiveImpl bda=createBeanDeploymentArchive(indexes.get(beanArchiveMetadata.getResourceRoot()),beanArchiveMetadata,module,beanArchiveIdPrefix);
       beanDeploymentArchives.add(bda);
+      bdaMap.put(beanArchiveMetadata.getResourceRoot(),bda);
       if (beanArchiveMetadata.isDeploymentRoot()) {
-        rootArchiveFound=true;
+        rootBda=bda;
         deploymentUnit.putAttachment(WeldAttachments.DEPLOYMENT_ROOT_BEAN_DEPLOYMENT_ARCHIVE,bda);
       }
     }
   }
-  if (!rootArchiveFound) {
+  if (rootBda == null) {
     BeanDeploymentArchiveImpl bda=new BeanDeploymentArchiveImpl(Collections.<String>emptySet(),BeansXml.EMPTY_BEANS_XML,module,beanArchiveIdPrefix);
     beanDeploymentArchives.add(bda);
     deploymentUnit.putAttachment(WeldAttachments.DEPLOYMENT_ROOT_BEAN_DEPLOYMENT_ARCHIVE,bda);
+    rootBda=bda;
   }
+  processEjbComponents(deploymentUnit,bdaMap,rootBda,indexes);
   deploymentUnit.putAttachment(WeldAttachments.BEAN_DEPLOYMENT_MODULE,new BeanDeploymentModule(beanDeploymentArchives));
 }
