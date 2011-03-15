@@ -1,0 +1,33 @@
+{
+  final StatefulSessionComponent component=getComponent(context,StatefulSessionComponent.class);
+  final StatefulSessionComponentInstance instance=getComponentInstance(context);
+  AccessTimeout timeout=component.getAccessTimeout();
+  boolean acquired=lock.tryLock(timeout.value(),timeout.unit());
+  if (!acquired) {
+    throw new ConcurrentAccessTimeoutException("EJB 3.1 FR 4.3.14.1 concurrent access timeout on " + context + " - could not obtain lock within "+ timeout.value()+ timeout.unit());
+  }
+  TransactionSynchronizationRegistry transactionSynchronizationRegistry=component.getTransactionSynchronizationRegistry();
+  Object currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
+  if (transactionKey != null) {
+    if (!transactionKey.equals(currentTransactionKey))     throw new EJBException("EJB 3.1 FR 4.6 Stateful instance " + instance + " is already associated with tx "+ transactionKey+ " (current tx "+ currentTransactionKey+ ")");
+  }
+ else {
+    if (currentTransactionKey != null) {
+      transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
+        @Override public void beforeCompletion(){
+        }
+        @Override public void afterCompletion(        int status){
+          release(instance);
+        }
+      }
+);
+      transactionKey=currentTransactionKey;
+    }
+  }
+  try {
+    return context.proceed();
+  }
+  finally {
+    if (currentTransactionKey == null)     release(instance);
+  }
+}
