@@ -1,0 +1,96 @@
+{
+  Set<String> deployments=getCurrentDomainDeployments();
+  Set<String> serverGroups=getServerGroupNames(plan);
+  ModelNode op=new ModelNode();
+  op.get(OP).set(COMPOSITE);
+  op.get(OP_ADDR).setEmptyList();
+  ModelNode steps=op.get(STEPS);
+  steps.setEmptyList();
+  op.get(ROLLBACK_ON_RUNTIME_FAILURE).set(plan.isSingleServerRollback());
+  OperationBuilder builder=OperationBuilder.Factory.create(op);
+  for (  DeploymentActionImpl action : plan.getDeploymentActionImpls()) {
+    List<ModelNode> actionSteps=new ArrayList<ModelNode>();
+    String uniqueName=action.getDeploymentUnitUniqueName();
+switch (action.getType()) {
+case ADD:
+{
+        if (!deployments.contains(uniqueName)) {
+          ModelNode step=configureDeploymentOperation(ADD,uniqueName,null);
+          step.get(RUNTIME_NAME).set(action.getNewContentFileName());
+          step.get("hash").set(action.getNewContentHash());
+          actionSteps.add(step);
+        }
+        for (        String group : serverGroups) {
+          ModelNode groupStep=configureDeploymentOperation(ADD,uniqueName,group);
+          actionSteps.add(groupStep);
+        }
+        break;
+      }
+case DEPLOY:
+{
+      for (      String group : serverGroups) {
+        ModelNode groupStep=configureDeploymentOperation(DEPLOYMENT_DEPLOY_OPERATION,uniqueName,group);
+        actionSteps.add(groupStep);
+      }
+      break;
+    }
+case FULL_REPLACE:
+{
+    ModelNode step=new ModelNode();
+    step.get(OP).set(DEPLOYMENT_FULL_REPLACE_OPERATION);
+    step.get(OP_ADDR).setEmptyList();
+    step.get(NAME).set(uniqueName);
+    step.get(RUNTIME_NAME).set(action.getNewContentFileName());
+    step.get("hash").set(action.getNewContentHash());
+    actionSteps.add(step);
+    break;
+  }
+case REDEPLOY:
+{
+  for (  String group : serverGroups) {
+    ModelNode groupStep=configureDeploymentOperation(DEPLOYMENT_REDEPLOY_OPERATION,uniqueName,group);
+    actionSteps.add(groupStep);
+  }
+  break;
+}
+case REMOVE:
+{
+for (String group : serverGroups) {
+  ModelNode groupStep=configureDeploymentOperation(DEPLOYMENT_REMOVE_OPERATION,uniqueName,group);
+  actionSteps.add(groupStep);
+}
+ModelNode step=configureDeploymentOperation(DEPLOYMENT_REMOVE_OPERATION,uniqueName,null);
+actionSteps.add(step);
+break;
+}
+case REPLACE:
+{
+for (String group : serverGroups) {
+ModelNode groupStep=new ModelNode();
+groupStep.get(OP).set(DEPLOYMENT_REPLACE_OPERATION);
+groupStep.get(OP_ADDR).add("server-group",group);
+groupStep.get(NAME).set(uniqueName);
+groupStep.get(TO_REPLACE).set(action.getReplacedDeploymentUnitUniqueName());
+actionSteps.add(groupStep);
+}
+break;
+}
+case UNDEPLOY:
+{
+for (String group : serverGroups) {
+ModelNode groupStep=configureDeploymentOperation(DEPLOYMENT_UNDEPLOY_OPERATION,uniqueName,group);
+actionSteps.add(groupStep);
+}
+break;
+}
+default :
+{
+throw new IllegalStateException("Unknown action type " + action.getType());
+}
+}
+for (ModelNode actionStep : actionSteps) {
+steps.add(actionStep);
+}
+}
+return builder.build();
+}
