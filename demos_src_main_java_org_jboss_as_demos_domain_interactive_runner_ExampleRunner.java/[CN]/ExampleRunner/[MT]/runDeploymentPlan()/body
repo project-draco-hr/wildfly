@@ -1,3 +1,25 @@
 {
-  throw new UnsupportedOperationException("Convert to detyped API");
+  DomainDeploymentManager deploymentManager=client.getDeploymentManager();
+  DeploymentPlanBuilder builder=deploymentManager.newDeploymentPlan();
+  ModelNode model=getDomainModel();
+  DeploymentActionsCompleteBuilder completionBuilder=null;
+  String serverGroup=null;
+  Set<String> includedGroups=new HashSet<String>();
+  do {
+    completionBuilder=deploymentSetBuilder(builder,model);
+    if (completionBuilder != null) {
+      serverGroup=chooseServerGroup(model,includedGroups);
+    }
+  }
+ while (serverGroup == null && completionBuilder != null);
+  if (completionBuilder != null) {
+    includedGroups.add(serverGroup);
+    ServerGroupDeploymentPlanBuilder groupPlanBuilder=completionBuilder.toServerGroup(serverGroup);
+    DeploymentPlan plan=completeDeploymentPlan(groupPlanBuilder,model,includedGroups);
+    if (plan != null) {
+      Future<DeploymentPlanResult> future=deploymentManager.execute(plan);
+      writeDeploymentPlanResult(future.get());
+    }
+  }
+  return continuePrompt();
 }
