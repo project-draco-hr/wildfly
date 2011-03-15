@@ -14,7 +14,7 @@
   }
   final Deque<ResourceRoot> libResourceRoots=new ArrayDeque<ResourceRoot>();
   for (  ResourceRoot resourceRoot : resourceRoots) {
-    if (ModuleRootMarker.isModuleRoot(resourceRoot)) {
+    if (ModuleRootMarker.isModuleRoot(resourceRoot) && !SubDeploymentMarker.isSubDeployment(resourceRoot)) {
       libResourceRoots.add(resourceRoot);
     }
   }
@@ -24,16 +24,16 @@
     for (    String item : items) {
       final VirtualFile classPathFile=resourceRoot.getRoot().getParent().getChild(item);
       if (!classPathFile.exists()) {
-        throw new DeploymentUnitProcessingException("Class Path entry " + item + " in "+ resourceRoot.getRoot()+ "  not found. ");
+        log.warnf("Class Path entry %s in %s not found. ",item,resourceRoot.getRoot());
       }
-      if (isInside(classPathFile,toplevelRoot)) {
+ else       if (isInside(classPathFile,toplevelRoot)) {
         if (!files.containsKey(classPathFile)) {
-          throw new DeploymentUnitProcessingException("Class Path entry " + item + " in "+ resourceRoot.getRoot()+ "  does not point to a valid jar for a Class-Path reference.");
+          log.warnf("Class Path entry %s in %s does not point to a valid jar for a Class-Path reference.",item,resourceRoot.getRoot());
         }
  else {
           final ResourceRoot target=files.get(classPathFile);
           if (SubDeploymentMarker.isSubDeployment(target)) {
-            throw new DeploymentUnitProcessingException("Class Path entry " + item + " in "+ resourceRoot.getRoot()+ "  may not point to a sub deployment.");
+            log.warnf("Class Path entry  in " + resourceRoot.getRoot() + "  may not point to a sub deployment.");
           }
  else           if (!ModuleRootMarker.isModuleRoot(target)) {
             ModuleRootMarker.mark(target);
@@ -42,10 +42,13 @@
           }
         }
       }
- else {
-        ModuleIdentifier moduleIdentifier=externalModuleService.addExternalModule(classPathFile);
+ else       if (item.startsWith("/")) {
+        ModuleIdentifier moduleIdentifier=externalModuleService.addExternalModule(item);
         deploymentUnit.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES,moduleIdentifier);
         log.debugf("Resource %s added as external jar %s",classPathFile,resourceRoot.getRoot());
+      }
+ else {
+        deploymentUnit.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES,ModuleIdentifier.create(ServiceModuleLoader.MODULE_PREFIX + classPathFile.getName()));
       }
     }
   }
