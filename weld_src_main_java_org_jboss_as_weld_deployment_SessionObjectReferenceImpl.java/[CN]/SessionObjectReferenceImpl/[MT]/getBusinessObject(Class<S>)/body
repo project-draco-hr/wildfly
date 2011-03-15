@@ -1,21 +1,29 @@
 {
-  if (!descriptor.isStateless() && viewClass != null) {
-    if (businessInterfaceType != viewClass) {
-      throw new RuntimeException("Stateful session beans with multiple views are not integrated with CDI yet");
+  if (component == null) {
+synchronized (this) {
+      if (component == null) {
+        final ServiceName createServiceName=descriptor.getCreateServiceName();
+        final ServiceController<?> controller=serviceRegistry.getRequiredService(createServiceName);
+        component=(Component)controller.getValue();
+        final ServiceName viewServiceName=component.getViewServices().get(businessInterfaceType);
+        if (viewServiceName == null) {
+          throw new RuntimeException("Could not find view for " + businessInterfaceType);
+        }
+        final ServiceController<?> viewController=serviceRegistry.getRequiredService(viewServiceName);
+        view=(ComponentView)viewController.getValue();
+      }
     }
   }
-  if (descriptor.isStateful() && reference != null) {
-    return (S)reference.getInstance();
+  if (descriptor.isStateful()) {
+    StatefulSessionComponent sfsb=(StatefulSessionComponent)component;
+    if (sessionId == null) {
+synchronized (this) {
+        if (sessionId == null) {
+          sessionId=sfsb.createSession();
+        }
+      }
+    }
+    return (S)view.getViewForInstance(sessionId);
   }
-  final ServiceName createServiceName=descriptor.getCreateServiceName();
-  final ServiceController<?> controller=serviceRegistry.getRequiredService(createServiceName);
-  final Component component=(Component)controller.getValue();
-  final ServiceName viewServiceName=component.getViewServices().get(businessInterfaceType);
-  if (viewServiceName == null) {
-    throw new RuntimeException("Could not find view for " + businessInterfaceType);
-  }
-  final ServiceController<?> viewController=serviceRegistry.getRequiredService(viewServiceName);
-  final ComponentView view=(ComponentView)viewController.getValue();
-  reference=view.getReference();
-  return (S)reference.getInstance();
+  return (S)view.getReference().getInstance();
 }
