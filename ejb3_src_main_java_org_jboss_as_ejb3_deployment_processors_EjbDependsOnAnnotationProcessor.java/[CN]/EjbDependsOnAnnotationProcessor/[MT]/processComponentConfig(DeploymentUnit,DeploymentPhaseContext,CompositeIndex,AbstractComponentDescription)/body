@@ -1,0 +1,26 @@
+{
+  final ClassInfo beanClass=index.getClassByName(DotName.createSimple(componentDescription.getComponentClassName()));
+  if (beanClass == null) {
+    return;
+  }
+  Class<SingletonComponentDescription> componentDescriptionType=SingletonComponentDescription.class;
+  if (!EjbDeploymentMarker.isEjbDeployment(deploymentUnit) || !(componentDescriptionType.isAssignableFrom(componentDescription.getClass()))) {
+    return;
+  }
+  final Map<DotName,List<AnnotationInstance>> annotationsOnBean=beanClass.annotations();
+  if (annotationsOnBean == null || annotationsOnBean.isEmpty()) {
+    return;
+  }
+  final SingletonComponentDescription singletonComponentDescription=componentDescriptionType.cast(componentDescription);
+  final List<AnnotationInstance> dependsOnAnnotations=annotationsOnBean.get(DotName.createSimple(DependsOn.class.getName()));
+  if (dependsOnAnnotations == null || dependsOnAnnotations.isEmpty()) {
+    return;
+  }
+  validate(annotationsOnBean,dependsOnAnnotations,singletonComponentDescription.getEJBName());
+  final AnnotationInstance dependsOnAnnotation=dependsOnAnnotations.get(0);
+  final List<AnnotationValue> annotationValues=dependsOnAnnotation.values();
+  for (  AnnotationValue annotationValue : annotationValues) {
+    componentDescription.addDependency(createServiceName(deploymentUnit,annotationValue.asString(),null),DependencyType.REQUIRED);
+  }
+  logger.info(singletonComponentDescription.getEJBName() + " bean has @DependsOn");
+}
