@@ -1,3 +1,41 @@
 {
-  throw new UnsupportedOperationException("Convert to detyped API");
+  stdout.println("Enter the name for the new queue or [C] to cancel:");
+  String queueName=readStdIn();
+  if ("C".equals(queueName.toUpperCase())) {
+    return continuePrompt();
+  }
+  final ModelNode address=new ModelNode();
+  address.add(ModelDescriptionConstants.PROFILE,"default");
+  address.add(ModelDescriptionConstants.SUBSYSTEM,"jms");
+  address.add("queue",queueName);
+  final ModelNode queueAddOperation=new ModelNode();
+  queueAddOperation.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.ADD);
+  queueAddOperation.get(ModelDescriptionConstants.OP_ADDR).set(address);
+  queueAddOperation.add("entries",queueName);
+  DomainDeploymentUtils utils=null;
+  boolean deployed=false;
+  try {
+    utils=new DomainDeploymentUtils(client);
+    utils.addDeployment("fakejndi.sar",FakeJndi.class.getPackage());
+    utils.deploy();
+    deployed=true;
+    try {
+      final ModelNode result=executeForResult(queueAddOperation);
+      Collection<ServerIdentity> servers=resultToServerIdentitySet(result);
+      for (      ServerIdentity server : servers) {
+        System.out.println(server);
+        exerciseQueueOnServer(queueName,server);
+      }
+    }
+ catch (    Exception e) {
+      System.out.println("failed to execute operation " + queueAddOperation);
+      e.printStackTrace();
+    }
+    return continuePrompt();
+  }
+  finally {
+    if (deployed && utils != null) {
+      utils.undeploy();
+    }
+  }
 }
