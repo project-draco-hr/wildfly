@@ -1,0 +1,47 @@
+{
+  final ModelNode opAddr=operation.require(OP_ADDR);
+  final String jndiName=PathAddress.pathAddress(opAddr).getLastElement().getValue();
+  final ModelNode model=context.getSubModel();
+  final ModelNode compensating=Util.getEmptyOperation(ADD,opAddr);
+  if (model.has(CONNECTION_PROPERTIES)) {
+    for (    ModelNode property : model.get(CONNECTION_PROPERTIES).asList()) {
+      compensating.get(CONNECTION_PROPERTIES,property.asProperty().getName()).set(property.asString());
+    }
+  }
+  for (  final AttributeDefinition attribute : getModelProperties()) {
+    if (model.get(attribute.getName()).isDefined()) {
+      compensating.get(attribute.getName()).set(model.get(attribute.getName()));
+    }
+  }
+  if (context.getRuntimeContext() != null) {
+    context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context) throws OperationFailedException {
+        final ServiceRegistry registry=context.getServiceRegistry();
+        final ServiceName binderServiceName=ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jndiName);
+        final ServiceController<?> binderController=registry.getService(binderServiceName);
+        if (binderController != null) {
+          binderController.setMode(ServiceController.Mode.REMOVE);
+        }
+        final ServiceName dataSourceServiceName=AbstractDataSourceService.SERVICE_NAME_BASE.append(jndiName);
+        final ServiceController<?> dataSourceController=registry.getService(dataSourceServiceName);
+        if (dataSourceController != null) {
+          dataSourceController.addListener(new ResultHandler.ServiceRemoveListener(resultHandler){
+            public void serviceStopped(            ServiceController<?> serviceController){
+              log.infof("Unbound JDBC Data-source [%s]",jndiName);
+              super.serviceStopped(serviceController);
+            }
+          }
+);
+        }
+ else {
+          resultHandler.handleResultComplete();
+        }
+      }
+    }
+);
+  }
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensating);
+}

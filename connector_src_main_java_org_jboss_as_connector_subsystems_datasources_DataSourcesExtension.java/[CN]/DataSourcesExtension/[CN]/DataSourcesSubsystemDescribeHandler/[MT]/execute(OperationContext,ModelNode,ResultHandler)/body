@@ -1,21 +1,42 @@
 {
-  ModelNode add=createEmptyAddSubsystemOperation();
-  ModelNode model=context.getSubModel();
-  boolean workaround=true;
-  if (workaround) {
-    if (model.hasDefined(DATASOURCES)) {
-      ModelNode datasources=model.get(DATASOURCES);
-      add.get(DATASOURCES).set(datasources);
-    }
-    if (model.hasDefined(JDBC_DRIVER)) {
-      ModelNode jdbcDrivers=model.get(JDBC_DRIVER);
-      add.get(JDBC_DRIVER).set(jdbcDrivers);
+  final ModelNode result=new ModelNode();
+  final PathAddress rootAddress=PathAddress.pathAddress(PathAddress.pathAddress(operation.require(OP_ADDR)).getLastElement());
+  final ModelNode subModel=context.getSubModel();
+  final ModelNode subsystemAdd=new ModelNode();
+  subsystemAdd.get(OP).set(ADD);
+  subsystemAdd.get(OP_ADDR).set(rootAddress.toModelNode());
+  result.add(subsystemAdd);
+  if (subModel.hasDefined(JDBC_DRIVER)) {
+    for (    final Property jdbcDriver : subModel.get(Constants.JDBC_DRIVER).asPropertyList()) {
+      final ModelNode address=rootAddress.toModelNode();
+      address.add(Constants.JDBC_DRIVER,jdbcDriver.getName());
+      final ModelNode addOperation=Util.getEmptyOperation(ADD,address);
+      addOperation.get(MODULE).set(jdbcDriver.getValue().get(MODULE));
+      result.add(addOperation);
     }
   }
- else {
+  if (subModel.hasDefined(DATA_SOURCE)) {
+    for (    final Property dataSourceProp : subModel.get(Constants.DATA_SOURCE).asPropertyList()) {
+      final ModelNode address=rootAddress.toModelNode();
+      address.add(Constants.DATA_SOURCE,dataSourceProp.getName());
+      final ModelNode addOperation=Util.getEmptyOperation(ADD,address);
+      final ModelNode dataSource=dataSourceProp.getValue();
+      populateAddModel(dataSource,addOperation,CONNECTION_PROPERTIES,DATASOURCE_ATTRIBUTE);
+      addOperation.get(MODULE).set(dataSourceProp.getValue().get(MODULE));
+      result.add(addOperation);
+    }
   }
-  ModelNode result=new ModelNode();
-  result.add(add);
+  if (subModel.hasDefined(XA_DATA_SOURCE)) {
+    for (    final Property dataSourceProp : subModel.get(Constants.XA_DATA_SOURCE).asPropertyList()) {
+      final ModelNode address=rootAddress.toModelNode();
+      address.add(Constants.XA_DATA_SOURCE,dataSourceProp.getName());
+      final ModelNode addOperation=Util.getEmptyOperation(ADD,address);
+      final ModelNode dataSource=dataSourceProp.getValue();
+      populateAddModel(dataSource,addOperation,XADATASOURCEPROPERTIES,XA_DATASOURCE_ATTRIBUTE);
+      addOperation.get(MODULE).set(dataSourceProp.getValue().get(MODULE));
+      result.add(addOperation);
+    }
+  }
   resultHandler.handleResultFragment(Util.NO_LOCATION,result);
   resultHandler.handleResultComplete();
   return new BasicOperationResult();

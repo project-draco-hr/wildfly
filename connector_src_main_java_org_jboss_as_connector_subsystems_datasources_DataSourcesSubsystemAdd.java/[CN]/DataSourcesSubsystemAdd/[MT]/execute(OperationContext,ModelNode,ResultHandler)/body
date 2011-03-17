@@ -1,92 +1,12 @@
 {
   final ModelNode subModel=context.getSubModel();
   subModel.setEmptyObject();
-  boolean workaround=true;
-  if (workaround) {
-    if (operation.has(DATASOURCES)) {
-      ModelNode datasources=operation.get(DATASOURCES);
-      subModel.get(DATASOURCES).set(datasources);
-    }
-    subModel.get(JDBC_DRIVER);
-  }
- else {
-    if (operation.has(DATASOURCES)) {
-      for (      ModelNode dataSourceNode : operation.get(DATASOURCES).asList()) {
-        if (dataSourceNode.has(CONNECTION_PROPERTIES)) {
-          for (          ModelNode property : dataSourceNode.get(CONNECTION_PROPERTIES).asList()) {
-            subModel.get(CONNECTION_PROPERTIES,property.asProperty().getName()).set(property.asString());
-          }
-        }
-        for (        final String attribute : DataSourcesSubsystemProviders.DATASOURCE_ATTRIBUTE) {
-          if (operation.get(attribute).isDefined()) {
-            subModel.get(attribute).set(operation.get(attribute));
-          }
-        }
-      }
-    }
-    if (operation.has(XA_DATASOURCES)) {
-      for (      ModelNode dataSourceNode : operation.get(XA_DATASOURCES).asList()) {
-        Map<String,String> connectionProperties;
-        if (dataSourceNode.has(XADATASOURCEPROPERTIES)) {
-          connectionProperties=new HashMap<String,String>(dataSourceNode.get(XADATASOURCEPROPERTIES).asList().size());
-          for (          ModelNode property : dataSourceNode.get(XADATASOURCEPROPERTIES).asList()) {
-            subModel.get(XADATASOURCEPROPERTIES,property.asProperty().getName()).set(property.asString());
-          }
-        }
- else {
-          connectionProperties=Collections.emptyMap();
-        }
-        for (        final String attribute : DataSourcesSubsystemProviders.XA_DATASOURCE_ATTRIBUTE) {
-          if (operation.get(attribute).isDefined()) {
-            subModel.get(attribute).set(operation.get(attribute));
-          }
-        }
-      }
-    }
-  }
-  if (context instanceof BootOperationContext) {
-    final BootOperationContext updateContext=BootOperationContext.class.cast(context);
-    context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
-      public void execute(      RuntimeTaskContext context) throws OperationFailedException {
-        final ServiceTarget serviceTarget=context.getServiceTarget();
-        DataSources datasources=null;
-        try {
-          datasources=buildDataSourcesObject(operation);
-        }
- catch (        ValidateException e) {
-          throw new OperationFailedException(e,operation);
-        }
-        for (        DataSource dataSource : datasources.getDataSource()) {
-          if (dataSource.isEnabled() != null && !dataSource.isEnabled()) {
-            continue;
-          }
-          String jndiName=dataSource.getJndiName();
-          if (dataSource.isUseJavaContext() != null && dataSource.isUseJavaContext().booleanValue() && !jndiName.startsWith("java:/")) {
-            jndiName="java:/" + jndiName;
-          }
-          installDataSourceService(serviceTarget,jndiName,dataSource.getModule(),new LocalDataSourceService(jndiName,dataSource));
-        }
-        for (        XaDataSource xaDataSource : datasources.getXaDataSource()) {
-          if (xaDataSource.isEnabled() != null && !xaDataSource.isEnabled()) {
-            continue;
-          }
-          String jndiName=xaDataSource.getJndiName();
-          if (xaDataSource.isUseJavaContext() != null && xaDataSource.isUseJavaContext().booleanValue() && !jndiName.startsWith("java:/")) {
-            jndiName="java:/" + jndiName;
-          }
-          installDataSourceService(serviceTarget,jndiName,xaDataSource.getModule(),new XaDataSourceService(jndiName,xaDataSource));
-        }
-        updateContext.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_DATA_SOURCE_DEFINITION,new DataSourceDefinitionDeployer());
-        resultHandler.handleResultComplete();
-      }
-    }
-);
-  }
- else {
-    resultHandler.handleResultComplete();
-  }
+  subModel.get(DATA_SOURCE);
+  subModel.get(XA_DATA_SOURCE);
+  subModel.get(JDBC_DRIVER);
   final ModelNode compensatingOperation=new ModelNode();
   compensatingOperation.get(OP).set(REMOVE);
   compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  resultHandler.handleResultComplete();
   return new BasicOperationResult(compensatingOperation);
 }
