@@ -1,0 +1,28 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+  final String moduleName=moduleDescription.getModuleName();
+  final String applicationName=moduleDescription.getAppName();
+  final CompositeIndex compositeIndex=deploymentUnit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
+  if (compositeIndex == null) {
+    return;
+  }
+  final List<AnnotationInstance> instances=compositeIndex.getAnnotations(MESSAGE_DRIVEN_ANNOTATION_NAME);
+  if (instances == null || instances.isEmpty()) {
+    return;
+  }
+  EjbDeploymentMarker.mark(deploymentUnit);
+  for (  final AnnotationInstance instance : instances) {
+    final AnnotationTarget target=instance.target();
+    if (!(target instanceof ClassInfo)) {
+      throw new DeploymentUnitProcessingException("The @MessageDriven annotation is only allowed at the class level: " + target);
+    }
+    final ClassInfo beanClassInfo=(ClassInfo)target;
+    final String beanClassName=beanClassInfo.name().toString();
+    final String ejbName=beanClassInfo.name().local();
+    final AnnotationValue nameValue=instance.value("name");
+    final String beanName=nameValue == null || nameValue.asString().isEmpty() ? ejbName : nameValue.asString();
+    MessageDrivenComponentDescription messageDrivenComponentDescription=new MessageDrivenComponentDescription(beanName,beanClassName,moduleName,applicationName);
+    moduleDescription.addComponent(messageDrivenComponentDescription);
+  }
+}
