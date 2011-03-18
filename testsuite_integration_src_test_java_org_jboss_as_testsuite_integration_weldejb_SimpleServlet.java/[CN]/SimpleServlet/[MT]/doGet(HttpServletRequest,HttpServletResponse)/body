@@ -1,0 +1,45 @@
+{
+  final String msg=req.getParameter("input");
+  final ExecutorService executor=Executors.newFixedThreadPool(2);
+  final CountDownLatch latch=new CountDownLatch(1);
+  final Future<String>[] futures=new Future[2];
+  for (int i=0; i < futures.length; i++) {
+    futures[i]=executor.submit(new Callable<String>(){
+      @Override public String call() throws Exception {
+        try {
+          return bean.echo(latch,msg);
+        }
+  finally {
+          latch.countDown();
+        }
+      }
+    }
+);
+  }
+  final List<String> results=new LinkedList<String>();
+  final List<Throwable> exceptions=new LinkedList<Throwable>();
+  for (int i=0; i < futures.length; i++) {
+    try {
+      String result=futures[i].get(10,SECONDS);
+      results.add(result);
+    }
+ catch (    ExecutionException e) {
+      e.printStackTrace();
+      exceptions.add(e.getCause());
+    }
+catch (    InterruptedException e) {
+      e.printStackTrace();
+      exceptions.add(e);
+    }
+catch (    TimeoutException e) {
+      e.printStackTrace();
+      exceptions.add(e);
+    }
+  }
+  PrintWriter writer=resp.getWriter();
+  XMLEncoder encoder=new XMLEncoder(new WriterOutputStream(writer));
+  encoder.writeObject(results);
+  encoder.writeObject(exceptions);
+  encoder.writeObject(sharedContext);
+  encoder.close();
+}
