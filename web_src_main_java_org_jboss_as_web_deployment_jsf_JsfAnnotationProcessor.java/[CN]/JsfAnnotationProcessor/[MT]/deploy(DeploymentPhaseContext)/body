@@ -1,0 +1,39 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final Map<Class<? extends Annotation>,Set<Class<?>>> instances=new HashMap<Class<? extends Annotation>,Set<Class<?>>>();
+  final CompositeIndex compositeIndex=deploymentUnit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
+  if (compositeIndex == null) {
+    return;
+  }
+  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+  if (module == null) {
+    return;
+  }
+  final ClassLoader classLoader=module.getClassLoader();
+  for (  FacesAnnotation annotation : FacesAnnotation.values()) {
+    final List<AnnotationInstance> annotationInstances=compositeIndex.getAnnotations(annotation.indexName);
+    if (annotationInstances == null || annotationInstances.isEmpty()) {
+      continue;
+    }
+    final Set<Class<?>> discoveredClasses=new HashSet<Class<?>>();
+    instances.put(annotation.annotationClass,discoveredClasses);
+    for (    AnnotationInstance annotationInstance : annotationInstances) {
+      final AnnotationTarget target=annotationInstance.target();
+      if (target instanceof ClassInfo) {
+        final DotName className=ClassInfo.class.cast(target).name();
+        final Class<?> annotatedClass;
+        try {
+          annotatedClass=classLoader.loadClass(className.toString());
+        }
+ catch (        ClassNotFoundException e) {
+          throw new DeploymentUnitProcessingException("Failed to load annotated class " + className);
+        }
+        discoveredClasses.add(annotatedClass);
+      }
+ else {
+        throw new DeploymentUnitProcessingException("Annotation " + annotation + " is only allowed on classes.  Found on "+ target);
+      }
+    }
+  }
+  deploymentUnit.addToAttachmentList(ServletContextAttribute.ATTACHMENT_KEY,new ServletContextAttribute(JandexAnnotationProvider.FACES_ANNOTATIONS,instances));
+}
