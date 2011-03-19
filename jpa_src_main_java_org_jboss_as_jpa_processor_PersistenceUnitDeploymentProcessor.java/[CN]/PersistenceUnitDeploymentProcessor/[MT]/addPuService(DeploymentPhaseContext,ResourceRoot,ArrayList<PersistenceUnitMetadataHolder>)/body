@@ -2,7 +2,6 @@
   if (puList.size() > 0) {
     final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
     final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
-    final HashSet<ServiceName> serviceDependencies=new HashSet<ServiceName>();
     if (module == null)     throw new DeploymentUnitProcessingException("Failed to get module attachment for " + phaseContext.getDeploymentUnit());
     final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
     final ModuleClassLoader classLoader=module.getClassLoader();
@@ -10,12 +9,6 @@
       for (      PersistenceUnitMetadata pu : holder.getPersistenceUnits()) {
         pu.setClassLoader(classLoader);
         pu.setTempClassloader(new TempClassLoader(classLoader));
-        if (pu.getJtaDataSourceName() != null) {
-          serviceDependencies.add(AbstractDataSourceService.SERVICE_NAME_BASE.append(pu.getJtaDataSourceName()));
-        }
-        if (pu.getNonJtaDataSourceName() != null) {
-          serviceDependencies.add(AbstractDataSourceService.SERVICE_NAME_BASE.append(pu.getNonJtaDataSourceName()));
-        }
         try {
           PersistenceUnitService service=new PersistenceUnitService(pu,resourceRoot);
           final Injector<TransactionManager> transactionManagerInjector=new Injector<TransactionManager>(){
@@ -38,7 +31,14 @@
           properties.put("javax.persistence.validation.factory",ValidatorFactoryProvider.getInstance().getValidatorFactory());
           addHibernateProps(properties);
           final ServiceName serviceName=PersistenceUnitService.getPUServiceName(pu);
-          serviceTarget.addService(serviceName,service).addDependencies(serviceDependencies).addDependency(TransactionManagerService.SERVICE_NAME,new CastingInjector<TransactionManager>(transactionManagerInjector,TransactionManager.class)).addDependency(TransactionSynchronizationRegistryService.SERVICE_NAME,new CastingInjector<TransactionSynchronizationRegistry>(transactionRegistryInjector,TransactionSynchronizationRegistry.class)).setInitialMode(ServiceController.Mode.ACTIVE).addInjection(service.getPropertiesInjector(),properties).install();
+          ServiceBuilder builder=serviceTarget.addService(serviceName,service);
+          if (pu.getJtaDataSourceName() != null) {
+            builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(pu.getJtaDataSourceName()),new CastingInjector<DataSource>(service.getJtaDataSourceInjector(),DataSource.class));
+          }
+          if (pu.getNonJtaDataSourceName() != null) {
+            builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(pu.getNonJtaDataSourceName()),new CastingInjector<DataSource>(service.getNonJtaDataSourceInjector(),DataSource.class));
+          }
+          builder.addDependency(TransactionManagerService.SERVICE_NAME,new CastingInjector<TransactionManager>(transactionManagerInjector,TransactionManager.class)).addDependency(TransactionSynchronizationRegistryService.SERVICE_NAME,new CastingInjector<TransactionSynchronizationRegistry>(transactionRegistryInjector,TransactionSynchronizationRegistry.class)).setInitialMode(ServiceController.Mode.ACTIVE).addInjection(service.getPropertiesInjector(),properties).install();
           log.trace("added PersistenceUnitService for '" + serviceName + "'.  PU is ready for injector action. ");
         }
  catch (        ServiceRegistryException e) {
