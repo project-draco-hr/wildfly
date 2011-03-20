@@ -1,0 +1,39 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (WeldDeploymentMarker.isWeldDeployment(deploymentUnit)) {
+    return;
+  }
+  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
+  if (module == null) {
+    return;
+  }
+  final ResteasyDeploymentData resteasy=deploymentUnit.getAttachment(JaxrsAttachments.RESTEASY_DEPLOYMENT_DATA);
+  if (resteasy == null) {
+    return;
+  }
+  if (!resteasy.isScanResources())   return;
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
+  if (moduleDescription == null) {
+    return;
+  }
+  final ClassLoader loader=module.getClassLoader();
+  for (  final AbstractComponentDescription component : moduleDescription.getComponentDescriptions()) {
+    if (!(component instanceof ManagedBeanComponentDescription)) {
+      continue;
+    }
+    Class componentClass=null;
+    try {
+      componentClass=loader.loadClass(component.getComponentClassName());
+    }
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException(e);
+    }
+    if (!GetRestful.isRootResource(componentClass))     continue;
+    String jndiName="java:module/" + component.getComponentName();
+    log.debug("Found JAX-RS Managed Bean: " + component.getComponentClassName() + " local jndi name: "+ jndiName);
+    StringBuilder buf=new StringBuilder();
+    buf.append(jndiName).append(";").append(component.getComponentClassName()).append(";").append("true");
+    resteasy.getScannedJndiComponentResources().add(buf.toString());
+    resteasy.getScannedResourceClasses().remove(component.getComponentClassName());
+  }
+}
