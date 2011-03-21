@@ -1,10 +1,23 @@
 {
   PersistenceUnitService service=(PersistenceUnitService)deploymentUnit.getServiceRegistry().getRequiredService(puServiceName).getValue();
   EntityManagerFactory emf=service.getEntityManagerFactory();
+  EntityManager entityManager;
   if (type.equals(PersistenceContextType.TRANSACTION)) {
-    return new ValueManagedReference(new ImmediateValue<Object>(new TransactionScopedEntityManager(unitName,properties,emf)));
+    entityManager=new TransactionScopedEntityManager(unitName,properties,emf);
   }
  else {
-    return new ValueManagedReference(new ImmediateValue<Object>(new ExtendedEntityManager(null)));
+    entityManager=new ExtendedEntityManager(null);
   }
+  if (!ENTITY_MANAGER_CLASS.equals(injectionTypeName)) {
+    Class extensionClass;
+    try {
+      extensionClass=this.getClass().getClassLoader().loadClass(injectionTypeName);
+    }
+ catch (    ClassNotFoundException e) {
+      throw new RuntimeException("couldn't load " + injectionTypeName + " from JPA modules classloader",e);
+    }
+    Object targetValueToInject=entityManager.unwrap(extensionClass);
+    new ValueManagedReference(new ImmediateValue<Object>(targetValueToInject));
+  }
+  return new ValueManagedReference(new ImmediateValue<Object>(entityManager));
 }
