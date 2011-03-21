@@ -44,7 +44,21 @@
     currentClass=currentClass.getSuperclass();
   }
  while (currentClass != null);
-  LifecycleInterceptorBuilder.createLifecycleInterceptors(this,configuration,module,index);
+  configuration.addPostConstructComponentLifecycles(createLifecycless(getPostConstructs(),module,index));
+  configuration.addPreDestroyComponentLifecycles(createLifecycless(getPreDestroys(),module,index));
+  configuration.addPostConstructLifecycles(createLifecycleInterceptors(getPostConstructs(),module,index));
+  configuration.addPreDestroyLifecycles(createLifecycleInterceptors(getPreDestroys(),module,index));
+  final Map<Class<?>,List<LifecycleInterceptorFactory>> interceptorPreDestroys=configuration.getInterceptorPreDestroys();
+  for (  InterceptorDescription interceptorDescription : getClassInterceptors()) {
+    final Class<?> interceptorClass;
+    try {
+      interceptorClass=Class.forName(interceptorDescription.getInterceptorClassName(),false,componentClass.getClassLoader());
+    }
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException("Failed to load interceptor class " + interceptorDescription.getInterceptorClassName(),e);
+    }
+    interceptorPreDestroys.put(interceptorClass,createLifecycleInterceptors(interceptorDescription.getPreDestroys(),module,index));
+  }
   final Map<Class<?>,ProxyFactory<?>> proxyFactories=configuration.getProxyFactories();
   final Map<Method,InterceptorFactory> viewToInterceptorFactory=configuration.getInterceptorFactoryMap();
   for (  String viewClassName : viewClassNames) {
