@@ -1,0 +1,34 @@
+{
+  ModelNode operationAddress=operation.require(OP_ADDR);
+  PathAddress address=PathAddress.pathAddress(operationAddress);
+  final String securityRealm=address.getLastElement().getValue();
+  final ModelNode authentication=operation.get(AUTHENTICATION);
+  final ModelNode serverIdentities=operation.get(SERVER_IDENTITIES);
+  final ModelNode subModel=context.getSubModel();
+  if (serverIdentities != null) {
+    subModel.get(SERVER_IDENTITIES).set(serverIdentities);
+  }
+  if (authentication != null) {
+    subModel.get(AUTHENTICATION).set(authentication);
+  }
+  final ModelNode compensatingOperation=new ModelNode();
+  if (context.getRuntimeContext() != null) {
+    context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context) throws OperationFailedException {
+        final ServiceTarget serviceTarget=context.getServiceTarget();
+        final SecurityRealmService securityRealmService=new SecurityRealmService(securityRealm,authentication,serverIdentities);
+        ServiceBuilder builder=serviceTarget.addService(SecurityRealmService.BASE_SERVICE_NAME.append(securityRealm),securityRealmService);
+        String connectionManager=requiredConnectionManager(authentication);
+        if (connectionManager != null) {
+          builder.addDependency(LdapConnectionManagerService.BASE_SERVICE_NAME.append(connectionManager),ConnectionManager.class,securityRealmService.getConnectionManagerInjector());
+        }
+        builder.setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+      }
+    }
+);
+  }
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensatingOperation);
+}

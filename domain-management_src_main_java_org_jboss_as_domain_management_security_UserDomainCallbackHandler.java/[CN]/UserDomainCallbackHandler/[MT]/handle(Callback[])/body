@@ -1,0 +1,40 @@
+{
+  List<Callback> toRespondTo=new LinkedList<Callback>();
+  String userName=null;
+  ModelNode user=null;
+  for (  Callback current : callbacks) {
+    if (current instanceof AuthorizeCallback) {
+      toRespondTo.add(current);
+    }
+ else     if (current instanceof NameCallback) {
+      NameCallback nameCallback=(NameCallback)current;
+      userName=nameCallback.getDefaultName();
+      user=userDomain.get(USER,userName);
+    }
+ else     if (current instanceof PasswordCallback) {
+      toRespondTo.add(current);
+    }
+ else     if (current instanceof RealmCallback) {
+      String realm=((RealmCallback)current).getDefaultText();
+      if (this.realm.equals(realm) == false) {
+        throw new IllegalStateException("Invalid Realm '" + realm + "' expected '"+ this.realm+ "'");
+      }
+    }
+ else {
+      throw new UnsupportedCallbackException(current);
+    }
+  }
+  if (user == null) {
+    throw new IllegalStateException("User '" + userName + "' not found.");
+  }
+  for (  Callback current : toRespondTo) {
+    if (current instanceof AuthorizeCallback) {
+      AuthorizeCallback authorizeCallback=(AuthorizeCallback)current;
+      authorizeCallback.setAuthorized(authorizeCallback.getAuthenticationID().equals(authorizeCallback.getAuthorizedID()));
+    }
+ else     if (current instanceof PasswordCallback) {
+      String password=user.require(PASSWORD).asString();
+      ((PasswordCallback)current).setPassword(password.toCharArray());
+    }
+  }
+}

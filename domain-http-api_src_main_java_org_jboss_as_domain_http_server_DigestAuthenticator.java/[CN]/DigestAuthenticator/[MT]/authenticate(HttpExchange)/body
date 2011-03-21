@@ -1,0 +1,32 @@
+{
+  DigestContext context=getOrCreateNegotiationContext(httpExchange.getRemoteAddress());
+  if (context.isAuthenticated()) {
+    return new Authenticator.Success(context.getPrincipal());
+  }
+  Headers requestHeaders=httpExchange.getRequestHeaders();
+  if (requestHeaders.containsKey(AUTHORIZATION_HEADER) == false) {
+    Headers responseHeaders=httpExchange.getResponseHeaders();
+    responseHeaders.add(WWW_AUTHENTICATE_HEADER,CHALLENGE + " " + createChallenge(false));
+    return new Authenticator.Retry(UNAUTHORIZED);
+  }
+  String authorizationHeader=requestHeaders.getFirst(AUTHORIZATION_HEADER);
+  if (authorizationHeader.startsWith(CHALLENGE + " ") == false) {
+    throw new RuntimeException("Invalid 'Authorization' header.");
+  }
+  String challenge=authorizationHeader.substring(CHALLENGE.length() + 1);
+  Map<String,String> challengeParameters=parseDigestChallenge(challenge);
+  HttpPrincipal principal=validateUser(challengeParameters);
+  if (principal == null) {
+    if (challengeParameters.containsKey(NONCE)) {
+      nonceFactory.useNonce(challengeParameters.get(NONCE));
+    }
+    return new Failure(FORBIDDEN);
+  }
+  if (nonceFactory.useNonce(challengeParameters.get(NONCE))) {
+    context.principal=principal;
+    return new Authenticator.Success(principal);
+  }
+  Headers responseHeaders=httpExchange.getResponseHeaders();
+  responseHeaders.add(WWW_AUTHENTICATE_HEADER,CHALLENGE + " " + createChallenge(true));
+  return new Authenticator.Retry(UNAUTHORIZED);
+}

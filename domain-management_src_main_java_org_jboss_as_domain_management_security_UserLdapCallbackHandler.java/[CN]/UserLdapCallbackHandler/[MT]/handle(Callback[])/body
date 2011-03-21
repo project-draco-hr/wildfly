@@ -1,0 +1,69 @@
+{
+  String username=null;
+  VerifyPasswordCallback verifyPasswordCallback=null;
+  for (  Callback current : callbacks) {
+    if (current instanceof NameCallback) {
+      username=((NameCallback)current).getDefaultName();
+    }
+ else     if (current instanceof RealmCallback) {
+    }
+ else     if (current instanceof VerifyPasswordCallback) {
+      verifyPasswordCallback=(VerifyPasswordCallback)current;
+    }
+ else {
+      throw new UnsupportedCallbackException(current);
+    }
+  }
+  if (username == null || username.length() == 0) {
+    throw new IOException("No username provided.");
+  }
+  if (verifyPasswordCallback == null) {
+    throw new IOException("No password to verify.");
+  }
+  InitialDirContext searchContext=null;
+  InitialDirContext userContext=null;
+  NamingEnumeration<SearchResult> searchEnumeration=null;
+  try {
+    searchContext=(InitialDirContext)connectionManager.getConnection();
+    SearchControls searchControls=new SearchControls();
+    if (recursive) {
+      searchControls.setSearchScope(SearchControls.SUBTREE_SCOPE);
+    }
+ else {
+      searchControls.setSearchScope(SearchControls.ONELEVEL_SCOPE);
+    }
+    searchControls.setReturningAttributes(new String[]{userDn});
+    searchControls.setTimeLimit(searchTimeLimit);
+    Object[] filterArguments=new Object[]{username};
+    String filter="(" + usernameAttribute + "={0})";
+    searchEnumeration=searchContext.search(baseDn,filter,filterArguments,searchControls);
+    if (searchEnumeration.hasMore() == false) {
+      throw new IOException("User '" + username + "' not found in directory.");
+    }
+    String distinguishedUserDN=null;
+    SearchResult result=searchEnumeration.next();
+    Attributes attributes=result.getAttributes();
+    if (attributes != null) {
+      Attribute dn=attributes.get(userDn);
+      if (dn != null) {
+        distinguishedUserDN=(String)dn.get();
+      }
+    }
+    if (distinguishedUserDN == null) {
+      if (result.isRelative() == true)       distinguishedUserDN=result.getName() + ("".equals(baseDn) ? "" : "," + baseDn);
+ else       throw new NamingException("Can't follow referal for authentication: " + result.getName());
+    }
+    userContext=(InitialDirContext)connectionManager.getConnection(distinguishedUserDN,verifyPasswordCallback.getPassword());
+    if (userContext != null) {
+      verifyPasswordCallback.setVerified(true);
+    }
+  }
+ catch (  Exception e) {
+    throw new IOException("Unable to perform verification",e);
+  }
+ finally {
+    safeClose(searchEnumeration);
+    safeClose(searchContext);
+    safeClose(userContext);
+  }
+}
