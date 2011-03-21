@@ -1,0 +1,171 @@
+{
+  int firstCharIndex=0;
+  while (firstCharIndex < buffer.length()) {
+    if (!Character.isWhitespace(buffer.charAt(firstCharIndex))) {
+      break;
+    }
+    ++firstCharIndex;
+  }
+  if (requireSlashOrDotSlash) {
+    if (firstCharIndex == buffer.length()) {
+      return -1;
+    }
+    if (!(buffer.startsWith("./",firstCharIndex) || buffer.charAt(firstCharIndex) == ':' || buffer.charAt(firstCharIndex) == '/' || buffer.startsWith("..",firstCharIndex))) {
+      return -1;
+    }
+  }
+  if (buffer.endsWith("..")) {
+    return 0;
+  }
+  DefaultOperationCallbackHandler handler=new DefaultOperationCallbackHandler(new DefaultOperationRequestAddress(ctx.getPrefix()));
+  try {
+    ctx.getOperationRequestParser().parse(buffer,handler);
+  }
+ catch (  OperationFormatException e1) {
+    return -1;
+  }
+  if (handler.isRequestComplete()) {
+    return -1;
+  }
+  if (handler.hasProperties() || handler.endsOnPropertyListStart()) {
+    if (handler.endsOnPropertyValueSeparator()) {
+      return -1;
+    }
+    OperationCandidatesProvider provider=ctx.getOperationCandidatesProvider();
+    List<String> propertyNames=provider.getPropertyNames(handler.getOperationName(),handler.getAddress());
+    if (propertyNames.isEmpty()) {
+      if (handler.endsOnPropertyListStart()) {
+        candidates.add(")");
+        return buffer.length();
+      }
+      return -1;
+    }
+    if (handler.endsOnPropertyListStart()) {
+      if (propertyNames.size() == 1) {
+        candidates.add(propertyNames.get(0) + '=');
+      }
+ else {
+        candidates.addAll(propertyNames);
+        Collections.sort(candidates);
+      }
+      return buffer.length();
+    }
+    Set<String> specifiedNames=handler.getPropertyNames();
+    String chunk=null;
+    for (    String specifiedName : specifiedNames) {
+      String value=handler.getPropertyValue(specifiedName);
+      if (value == null) {
+        chunk=specifiedName;
+      }
+ else {
+        propertyNames.remove(specifiedName);
+      }
+    }
+    if (chunk == null) {
+      if (handler.endsOnPropertySeparator()) {
+        if (propertyNames.size() == 1) {
+          candidates.add(propertyNames.get(0) + '=');
+        }
+ else {
+          candidates.addAll(propertyNames);
+          Collections.sort(candidates);
+        }
+      }
+ else       if (propertyNames.isEmpty()) {
+        candidates.add(")");
+      }
+      return buffer.length();
+    }
+    for (    String candidate : propertyNames) {
+      if (candidate.startsWith(chunk)) {
+        candidates.add(candidate);
+      }
+    }
+    if (candidates.size() == 1) {
+      candidates.set(0,(String)candidates.get(0) + '=');
+    }
+ else {
+      Collections.sort(candidates);
+    }
+    return handler.getLastSeparatorIndex() + 1;
+  }
+  if (handler.hasOperationName() || handler.endsOnAddressOperationNameSeparator()) {
+    if (handler.getAddress().endsOnType()) {
+      return -1;
+    }
+    OperationCandidatesProvider provider=ctx.getOperationCandidatesProvider();
+    final List<String> names=provider.getOperationNames(handler.getAddress());
+    if (names.isEmpty()) {
+      return -1;
+    }
+    final String chunk=handler.getOperationName();
+    if (chunk == null) {
+      candidates.addAll(names);
+    }
+ else {
+      for (      String name : names) {
+        if (chunk == null || name.startsWith(chunk)) {
+          candidates.add(name);
+        }
+      }
+    }
+    Collections.sort(candidates);
+    return handler.getLastSeparatorIndex() + 1;
+  }
+  final OperationRequestAddress address=handler.getAddress();
+  final String chunk;
+  if (address.isEmpty() || handler.endsOnNodeSeparator() || handler.endsOnNodeTypeNameSeparator()|| address.equals(ctx.getPrefix())|| buffer.endsWith("..")) {
+    chunk=null;
+  }
+ else   if (address.endsOnType()) {
+    chunk=address.getNodeType();
+    address.toParentNode();
+  }
+ else {
+    chunk=address.toNodeType();
+  }
+  OperationCandidatesProvider provider=ctx.getOperationCandidatesProvider();
+  final List<String> names;
+  if (address.endsOnType()) {
+    names=provider.getNodeNames(address);
+  }
+ else {
+    names=provider.getNodeTypes(address);
+  }
+  if (names.isEmpty()) {
+    return -1;
+  }
+  if (chunk == null) {
+    candidates.addAll(names);
+  }
+ else {
+    for (    String name : names) {
+      if (chunk == null || name.startsWith(chunk)) {
+        candidates.add(name);
+      }
+    }
+  }
+  if (candidates.size() == 1) {
+    if (address.endsOnType()) {
+      candidates.set(0,formatName((String)candidates.get(0)));
+    }
+ else {
+      String onlyType=(String)candidates.get(0);
+      address.toNodeType(onlyType);
+      List<String> childNames=provider.getNodeNames(address);
+      if (!childNames.isEmpty()) {
+        candidates.clear();
+        if (childNames.size() == 1) {
+          candidates.add(onlyType + '=' + formatName(childNames.get(0)));
+        }
+ else {
+          for (          String name : childNames) {
+            candidates.add(onlyType + '=' + name);
+          }
+        }
+      }
+    }
+  }
+  Collections.sort(candidates);
+  return handler.getLastSeparatorIndex() + 1;
+}
