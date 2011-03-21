@@ -1,7 +1,26 @@
 {
-  JndiStrategy js=jndiStrategy.getValue();
-  String[] result=js.bindAdminObjects(deployment,new Object[]{ao},new String[]{jndi});
   mdr.getValue().registerJndiMapping(url.toExternalForm(),ao.getClass().getName(),jndi);
-  log.infof("Bound admin object at %s",jndi);
-  return result;
+  log.infof("Registerred admin object at %s on mdr",jndi);
+  final AdminObjectService adminObjectService=new AdminObjectService(ao);
+  final ServiceName adminObjectServiceName=AdminObjectService.SERVICE_NAME_BASE.append(jndi);
+  serviceContainer.addService(adminObjectServiceName,adminObjectService).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  final AdminObjectReferenceFactoryService referenceFactoryService=new AdminObjectReferenceFactoryService();
+  final ServiceName referenceFactoryServiceName=AdminObjectReferenceFactoryService.SERVICE_NAME_BASE.append(jndi);
+  serviceContainer.addService(referenceFactoryServiceName,referenceFactoryService).addDependency(adminObjectServiceName,Object.class,referenceFactoryService.getDataSourceInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  final BinderService binderService=new BinderService(jndi.substring(6));
+  final ServiceName binderServiceName=ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jndi);
+  serviceContainer.addService(binderServiceName,binderService).addDependency(referenceFactoryServiceName,ManagedReferenceFactory.class,binderService.getManagedObjectInjector()).addDependency(ContextNames.JAVA_CONTEXT_SERVICE_NAME,NamingStore.class,binderService.getNamingStoreInjector()).addListener(new AbstractServiceListener<Object>(){
+    public void serviceStarted(    ServiceController<?> controller){
+      log.infof("Bound JCA AdminObject [%s]",jndi);
+    }
+    public void serviceStopped(    ServiceController<?> serviceController){
+      log.infof("Unbound JCA AdminObject [%s]",jndi);
+    }
+    public void serviceRemoved(    ServiceController<?> serviceController){
+      log.infof("Removed JCA AdminObject [%s]",jndi);
+      serviceController.removeListener(this);
+    }
+  }
+).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  return new String[]{jndi};
 }
