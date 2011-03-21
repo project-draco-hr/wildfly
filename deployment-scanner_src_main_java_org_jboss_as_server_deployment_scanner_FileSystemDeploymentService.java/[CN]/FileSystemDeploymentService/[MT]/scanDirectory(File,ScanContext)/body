@@ -1,0 +1,74 @@
+{
+  final File[] children=directory.listFiles(filter);
+  if (children == null) {
+    return;
+  }
+  for (  File child : children) {
+    final String fileName=child.getName();
+    if (fileName.endsWith(DEPLOYED)) {
+      final String deploymentName=fileName.substring(0,fileName.length() - DEPLOYED.length());
+      scanContext.toRemove.remove(deploymentName);
+      if (!deployed.containsKey(deploymentName)) {
+        removeExtraneousMarker(child,fileName);
+      }
+      if (deployed.get(deploymentName).lastModified != child.lastModified()) {
+        scanContext.scannerTasks.add(new RedeployTask(deploymentName,child.lastModified(),directory));
+      }
+    }
+ else     if (fileName.endsWith(DO_DEPLOY)) {
+      final String deploymentName=fileName.substring(0,fileName.length() - DO_DEPLOY.length());
+      final File deploymentFile=new File(directory,deploymentName);
+      if (!deploymentFile.exists()) {
+        scanContext.ignoredMissingDeployments.add(deploymentName);
+        continue;
+      }
+      long timestamp=getDeploymentTimestamp(deploymentFile);
+      addContentAddingTask(deploymentName,deploymentFile,timestamp,scanContext);
+    }
+ else     if (fileName.endsWith(FAILED_DEPLOY)) {
+      final String deploymentName=fileName.substring(0,fileName.length() - FAILED_DEPLOY.length());
+      scanContext.toRemove.remove(deploymentName);
+      if (!deployed.containsKey(deploymentName) && !(new File(child.getParent(),deploymentName).exists())) {
+        removeExtraneousMarker(child,fileName);
+      }
+    }
+ else     if (isEEArchive(fileName)) {
+      boolean autoDeployable=child.isDirectory() ? autoDeployExploded : autoDeployZip;
+      if (autoDeployable) {
+        if (!isAutoDeployDisabled(child)) {
+          DeploymentMarker marker=deployed.get(fileName);
+          long timestamp=getDeploymentTimestamp(child);
+          if (marker == null || marker.lastModified != timestamp) {
+            try {
+              if (isZipComplete(child)) {
+                addContentAddingTask(fileName,child,timestamp,scanContext);
+              }
+ else {
+                scanContext.incompleteFiles.put(child,new IncompleteDeploymentStatus(child));
+              }
+            }
+ catch (            NonScannableZipException e) {
+              scanContext.nonscannable.put(child,e);
+            }
+          }
+        }
+      }
+ else       if (!deployed.containsKey(fileName) && !new File(fileName + DO_DEPLOY).exists() && !new File(fileName + FAILED_DEPLOY).exists()) {
+        scanContext.nonDeployable.add(fileName);
+      }
+    }
+ else     if (fileName.endsWith(DEPLOYING) || fileName.endsWith(UNDEPLOYING)) {
+      removeExtraneousMarker(child,fileName);
+    }
+ else     if (fileName.endsWith(PENDING)) {
+      final String deploymentName=fileName.substring(0,fileName.length() - PENDING.length());
+      File deployment=new File(child.getParent(),deploymentName);
+      if (!deployment.exists()) {
+        removeExtraneousMarker(child,fileName);
+      }
+    }
+ else     if (child.isDirectory()) {
+      scanDirectory(child,scanContext);
+    }
+  }
+}

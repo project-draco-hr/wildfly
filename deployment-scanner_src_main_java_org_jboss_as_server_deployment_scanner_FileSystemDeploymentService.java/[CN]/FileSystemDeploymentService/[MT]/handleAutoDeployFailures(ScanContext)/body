@@ -1,0 +1,76 @@
+{
+  ScanStatus result=ScanStatus.PROCEED;
+  boolean warnLogged=false;
+  Set<File> noLongerIncomplete=new HashSet<File>(incompleteDeployments.keySet());
+  noLongerIncomplete.removeAll(scanContext.incompleteFiles.keySet());
+  int oldIncompleteCount=incompleteDeployments.size();
+  incompleteDeployments.keySet().retainAll(scanContext.incompleteFiles.keySet());
+  if (scanContext.incompleteFiles.size() > 0) {
+    result=ScanStatus.RETRY;
+    boolean logAll=incompleteDeployments.size() != oldIncompleteCount;
+    long now=System.currentTimeMillis();
+    for (    Map.Entry<File,IncompleteDeploymentStatus> entry : scanContext.incompleteFiles.entrySet()) {
+      File incompleteFile=entry.getKey();
+      String deploymentName=incompleteFile.getName();
+      IncompleteDeploymentStatus status=incompleteDeployments.get(incompleteFile);
+      if (status == null || status.size < entry.getValue().size) {
+        status=entry.getValue();
+      }
+      if (now - status.timestamp > maxNoProgress) {
+        if (!status.warned) {
+          String suffix=deployed.containsKey(deploymentName) ? " A previous version of this content was deployed and remains deployed." : "";
+          String msg=String.format("Deployment content %s appears to be incomplete and is not progressing toward " + "completion. This content cannot be auto-deployed.%s",incompleteFile,suffix,DO_DEPLOY,SKIP_DEPLOY);
+          writeFailedMarker(incompleteFile,new ModelNode().set(msg));
+          log.error(msg);
+          status.warned=true;
+          warnLogged=true;
+          result=ScanStatus.ABORT;
+        }
+        new File(incompleteFile.getParentFile(),deploymentName + PENDING).delete();
+      }
+ else {
+        boolean newIncomplete=incompleteDeployments.put(incompleteFile,status) == null;
+        if (newIncomplete || logAll) {
+          log.infof("Scan found incompletely copied file content for deployment %s. Deployment changes will not be " + "processed until all content is complete.",entry.getKey().getPath());
+        }
+        if (newIncomplete) {
+          File pending=new File(incompleteFile.getParentFile(),deploymentName + PENDING);
+          createMarkerFile(pending,deploymentName);
+        }
+      }
+    }
+  }
+  for (  File complete : noLongerIncomplete) {
+    File pending=new File(complete.getParentFile(),complete.getName() + PENDING);
+    removeExtraneousMarker(pending,pending.getName());
+  }
+  int oldNonScannableCount=nonscannableLogged.size();
+  nonscannableLogged.retainAll(scanContext.nonscannable.keySet());
+  if (scanContext.nonscannable.size() > 0) {
+    result=(result == ScanStatus.PROCEED ? ScanStatus.RETRY : result);
+    boolean logAll=nonscannableLogged.size() != oldNonScannableCount;
+    for (    Map.Entry<File,NonScannableZipException> entry : scanContext.nonscannable.entrySet()) {
+      File nonScannable=entry.getKey();
+      String fileName=nonScannable.getName();
+      if (nonscannableLogged.add(nonScannable) || logAll) {
+        NonScannableZipException e=entry.getValue();
+        String msg=String.format("File %s was configured for auto-deploy but could not be safely auto-deployed. The reason the file " + "could not be auto-deployed was: %s.  To enable deployment of this file create a file called %s%s",fileName,e.getLocalizedMessage(),fileName,DO_DEPLOY);
+        writeFailedMarker(nonScannable,new ModelNode().set(msg));
+        log.error(msg);
+        warnLogged=true;
+        result=ScanStatus.ABORT;
+      }
+    }
+  }
+  if (warnLogged) {
+    Set<String> allProblems=new HashSet<String>();
+    for (    File f : scanContext.nonscannable.keySet()) {
+      allProblems.add(f.getName());
+    }
+    for (    File f : scanContext.incompleteFiles.keySet()) {
+      allProblems.add(f.getName());
+    }
+    log.warnf("Scan found content configured for auto-deploy that could not be safely auto-deployed. See details above. " + "Deployment changes will not be processed until all problematic content is either removed or whether to " + "deploy the content or not is indicated via a %s or %s marker file. Problematic deployments are %s",DO_DEPLOY,SKIP_DEPLOY,allProblems);
+  }
+  return result;
+}

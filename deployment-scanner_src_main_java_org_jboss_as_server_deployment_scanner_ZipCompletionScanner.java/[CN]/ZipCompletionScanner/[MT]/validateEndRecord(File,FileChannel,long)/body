@@ -1,0 +1,47 @@
+{
+  try {
+    channel.position(startEndRecord);
+    ByteBuffer endDirHeader=getByteBuffer(ENDLEN);
+    read(endDirHeader,channel);
+    if (endDirHeader.limit() < ENDLEN) {
+      return false;
+    }
+ else     if (getUnsignedInt(endDirHeader,0) != ENDSIG) {
+      return false;
+    }
+    long pos=getUnsignedInt(endDirHeader,END_CENSTART);
+    if (pos == ZIP64_MARKER) {
+      throw new NonScannableZipException(file,true);
+    }
+    ByteBuffer cdfhBuffer=getByteBuffer(CENLEN);
+    read(cdfhBuffer,channel,pos);
+    long header=getUnsignedInt(cdfhBuffer,0);
+    if (header == CENSIG) {
+      long firstLoc=getUnsignedInt(cdfhBuffer,CEN_LOC_OFFSET);
+      long firstSize=getUnsignedInt(cdfhBuffer,CENSIZ);
+      if (firstLoc == 0) {
+        if (!validateLocalFileRecord(channel,0,firstSize)) {
+          return false;
+        }
+      }
+ else {
+        long fileFirstLoc=scanForLocSig(channel);
+        if (firstLoc != fileFirstLoc) {
+          if (fileFirstLoc == 0) {
+            return false;
+          }
+ else {
+            throw new NonScannableZipException(file,false);
+          }
+        }
+      }
+      int commentLen=getUnsignedShort(endDirHeader,END_COMMENTLEN);
+      long commentEnd=startEndRecord + ENDLEN + commentLen;
+      return commentEnd <= channel.size();
+    }
+    return false;
+  }
+ catch (  EOFException eof) {
+    return false;
+  }
+}

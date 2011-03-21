@@ -1,0 +1,50 @@
+{
+  ByteBuffer bb=getByteBuffer(CHUNK_SIZE);
+  long start=channel.size();
+  long end=Math.max(0,start - MAX_REVERSE_SCAN);
+  long channelPos=Math.max(0,start - CHUNK_SIZE);
+  long lastChannelPos=channelPos;
+  boolean firstRead=true;
+  while (lastChannelPos >= end) {
+    read(bb,channel,channelPos);
+    int actualRead=bb.limit();
+    if (firstRead) {
+      long expectedRead=Math.min(CHUNK_SIZE,start);
+      if (actualRead > expectedRead) {
+        return false;
+      }
+      firstRead=false;
+    }
+    int bufferPos=actualRead - 1;
+    while (bufferPos >= SIG_PATTERN_LENGTH) {
+      int patternPos;
+      for (patternPos=SIG_PATTERN_LENGTH - 1; patternPos >= 0 && ENDSIG_PATTERN[patternPos] == bb.get(bufferPos - patternPos); --patternPos) {
+      }
+switch (patternPos) {
+case -1:
+{
+          long startEndRecord=channelPos + bufferPos - SIG_PATTERN_LENGTH + 1;
+          if (validateEndRecord(file,channel,startEndRecord)) {
+            return true;
+          }
+          bufferPos-=4;
+          break;
+        }
+case 3:
+{
+        int idx=bb.get(bufferPos - patternPos) - Byte.MIN_VALUE;
+        bufferPos-=END_BAD_BYTE_SKIP[idx];
+        break;
+      }
+default :
+    bufferPos-=4;
+}
+}
+if (channelPos <= bufferPos) {
+break;
+}
+lastChannelPos=channelPos;
+channelPos-=Math.min(channelPos - bufferPos,CHUNK_SIZE - bufferPos);
+}
+return false;
+}

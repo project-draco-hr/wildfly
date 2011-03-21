@@ -6,20 +6,40 @@
     Thread.currentThread().interrupt();
     return;
   }
+  boolean scheduleRescan=false;
   try {
     if (scanEnabled) {
       log.tracef("Scanning directory %s for deployment content changes",deploymentDir.getAbsolutePath());
-      List<ScannerTask> scannerTasks=new ArrayList<ScannerTask>();
-      final Set<String> registeredDeployments=getDeploymentNames();
-      final Set<String> toRemove=new HashSet<String>(deployed.keySet());
-      scanDirectory(deploymentDir,scannerTasks,registeredDeployments,toRemove);
-      for (      String missing : toRemove) {
+      ScanContext scanContext=new ScanContext();
+      scanDirectory(deploymentDir,scanContext);
+      ignoredMissingDeployments.retainAll(scanContext.ignoredMissingDeployments);
+      for (      String deploymentName : scanContext.ignoredMissingDeployments) {
+        if (ignoredMissingDeployments.add(deploymentName)) {
+          log.warnf("Deployment of '%s' requested, but the deployment is not present",deploymentName);
+        }
+      }
+      noticeLogged.retainAll(scanContext.nonDeployable);
+      for (      String fileName : scanContext.nonDeployable) {
+        if (noticeLogged.add(fileName)) {
+          log.infof("Found %s in deployment directory. To trigger deployment create a file called %s%s",fileName,fileName,DO_DEPLOY);
+        }
+      }
+      ScanStatus status=handleAutoDeployFailures(scanContext);
+      if (status != ScanStatus.PROCEED) {
+        if (status == ScanStatus.RETRY && scanInterval > 1000) {
+          scheduleRescan=true;
+        }
+        return;
+      }
+      List<ScannerTask> scannerTasks=scanContext.scannerTasks;
+      for (      String missing : scanContext.toRemove) {
         File parent=deploymentDir;
         scannerTasks.add(new UndeployTask(missing,parent));
       }
       if (scannerTasks.size() > 0) {
         List<ModelNode> updates=new ArrayList<ModelNode>(scannerTasks.size());
         for (        ScannerTask task : scannerTasks) {
+          task.recordInProgress();
           final ModelNode update=task.getUpdate();
           if (log.isDebugEnabled()) {
             log.debugf("Deployment scan of [%s] found update action [%s]",deploymentDir,update);
@@ -56,5 +76,12 @@
   }
   finally {
     scanLock.unlock();
+    if (scheduleRescan) {
+synchronized (this) {
+        if (scanEnabled) {
+          rescanIncompleteTask=scheduledExecutor.schedule(scanRunnable,200,TimeUnit.MILLISECONDS);
+        }
+      }
+    }
   }
 }
