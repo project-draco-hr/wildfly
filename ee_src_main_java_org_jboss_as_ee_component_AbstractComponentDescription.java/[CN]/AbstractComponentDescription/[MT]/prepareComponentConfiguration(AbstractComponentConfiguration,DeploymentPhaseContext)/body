@@ -13,16 +13,16 @@
       int modifiers=componentMethod.getModifiers();
       if (!Modifier.isStatic(modifiers) && !Modifier.isFinal(modifiers)) {
         componentMethods.put(MethodIdentifier.getIdentifierForMethod(componentMethod),componentMethod);
-        final List<InterceptorFactory> interceptorFactories=new ArrayList<InterceptorFactory>();
-        interceptorFactories.addAll(configuration.getComponentInstanceSystemInterceptorFactories());
+        final List<InterceptorFactory> theInterceptorFactories=new ArrayList<InterceptorFactory>();
+        theInterceptorFactories.addAll(configuration.getComponentInstanceSystemInterceptorFactories());
         if (!methodExcludeClassInterceptors.contains(methodIdentifier)) {
           for (          final InterceptorDescription interceptor : classInterceptors) {
-            registerComponentInterceptor(interceptor,configuration,module,index,interceptorFactories);
+            registerComponentInterceptor(interceptor,configuration,module,index,theInterceptorFactories);
           }
         }
         List<InterceptorDescription> methodLevelInterceptors=methodInterceptors.get(methodIdentifier);
         if (methodLevelInterceptors != null)         for (        final InterceptorDescription interceptor : methodLevelInterceptors) {
-          registerComponentInterceptor(interceptor,configuration,module,index,interceptorFactories);
+          registerComponentInterceptor(interceptor,configuration,module,index,theInterceptorFactories);
         }
         for (        Map.Entry<String,InterceptorMethodDescription> entry : aroundInvokeMethods.entrySet()) {
           try {
@@ -30,24 +30,27 @@
             final Class<?> methodDeclaringClass=module.getClassLoader().loadClass(entry.getKey());
             final ClassReflectionIndex<?> methodDeclaringClassIndex=index.getClassIndex(methodDeclaringClass);
             final Method aroundInvokeMethod=methodDeclaringClassIndex.getMethod(Object.class,aroundInvoke.getIdentifier().getName(),InvocationContext.class);
-            interceptorFactories.add(new MethodInterceptorFactory(AbstractComponent.INSTANCE_FACTORY,aroundInvokeMethod));
+            theInterceptorFactories.add(new MethodInterceptorFactory(AbstractComponent.INSTANCE_FACTORY,aroundInvokeMethod));
           }
  catch (          ClassNotFoundException e) {
             throw new DeploymentUnitProcessingException("Failed to load interceptor class " + entry.getKey());
           }
         }
-        interceptorFactories.add(new MethodInvokingInterceptorFactory(AbstractComponent.INSTANCE_FACTORY,componentMethod));
-        componentToInterceptorFactory.put(componentMethod,Interceptors.getChainedInterceptorFactory(interceptorFactories));
+        theInterceptorFactories.addAll(interceptorFactories);
+        theInterceptorFactories.add(new MethodInvokingInterceptorFactory(AbstractComponent.INSTANCE_FACTORY,componentMethod));
+        componentToInterceptorFactory.put(componentMethod,Interceptors.getChainedInterceptorFactory(theInterceptorFactories));
         processComponentMethod(configuration,componentMethod);
       }
     }
     currentClass=currentClass.getSuperclass();
   }
  while (currentClass != null);
+  configuration.addPostConstructComponentLifecycles(getPostConstructComponentLifecycles());
   configuration.addPostConstructComponentLifecycles(createLifecycless(getPostConstructs(),module,index));
   configuration.addPreDestroyComponentLifecycles(createLifecycless(getPreDestroys(),module,index));
   configuration.addPostConstructLifecycles(createLifecycleInterceptors(getPostConstructs(),module,index));
   configuration.addPreDestroyLifecycles(createLifecycleInterceptors(getPreDestroys(),module,index));
+  configuration.addPreDestroyComponentLifecycles(getPreDestroyComponentLifecycles());
   final Map<Class<?>,List<LifecycleInterceptorFactory>> interceptorPreDestroys=configuration.getInterceptorPreDestroys();
   for (  InterceptorDescription interceptorDescription : getClassInterceptors()) {
     final Class<?> interceptorClass;
