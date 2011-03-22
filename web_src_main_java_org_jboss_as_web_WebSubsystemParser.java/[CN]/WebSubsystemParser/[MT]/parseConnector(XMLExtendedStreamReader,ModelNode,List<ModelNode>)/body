@@ -12,6 +12,7 @@
   String maxSavePostSize=null;
   String secure=null;
   String redirectPort=null;
+  String maxConnections=null;
   final int count=reader.getAttributeCount();
   for (int i=0; i < count; i++) {
     requireNoNamespaceAttribute(reader,i);
@@ -57,6 +58,9 @@ break;
 case REDIRECT_PORT:
 redirectPort=value;
 break;
+case MAX_CONNECTIONS:
+maxConnections=value;
+break;
 default :
 unexpectedAttribute(reader,i);
 }
@@ -67,10 +71,31 @@ missingRequired(reader,Collections.singleton(Attribute.NAME));
 if (protocol == null) {
 missingRequired(reader,Collections.singleton(Attribute.PROTOCOL));
 }
-requireNoContent(reader);
 final ModelNode connector=new ModelNode();
 connector.get(OP).set(ADD);
 connector.get(OP_ADDR).set(address).add(CONNECTOR,name);
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case WEB_1_0:
+{
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case SSL:
+final ModelNode ssl=parseSsl(reader);
+connector.get(SSL).set(ssl);
+break;
+case VIRTUAL_SERVER:
+connector.get(VIRTUAL_SERVER).add(readStringAttributeElement(reader,Attribute.NAME.getLocalName()));
+break;
+default :
+throw unexpectedElement(reader);
+}
+break;
+}
+default :
+throw unexpectedElement(reader);
+}
+}
 if (protocol != null) connector.get(PROTOCOL).set(protocol);
 connector.get(SOCKET_BINDING).set(bindingRef);
 if (scheme != null) connector.get(SCHEME).set(scheme);
@@ -83,5 +108,6 @@ if (maxPostSize != null) connector.get(MAX_POST_SIZE).set(maxPostSize);
 if (maxSavePostSize != null) connector.get(MAX_SAVE_POST_SIZE).set(maxSavePostSize);
 if (secure != null) connector.get(SECURE).set(secure);
 if (redirectPort != null) connector.get(REDIRECT_PORT).set(redirectPort);
+if (maxConnections != null) connector.get(MAX_CONNECTIONS).set(maxConnections);
 list.add(connector);
 }
