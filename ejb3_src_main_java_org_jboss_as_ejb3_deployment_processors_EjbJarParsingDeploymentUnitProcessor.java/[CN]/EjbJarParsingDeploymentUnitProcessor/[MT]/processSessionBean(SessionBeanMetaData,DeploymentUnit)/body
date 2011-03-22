@@ -1,0 +1,58 @@
+{
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+  final String applicationName=moduleDescription.getAppName();
+  SessionType sessionType=sessionBean.getSessionType();
+  if (sessionType == null) {
+    throw new DeploymentUnitProcessingException("Unknown session-type for session bean: " + sessionBean.getName() + " in deployment unit: "+ deploymentUnit);
+  }
+  String beanName=sessionBean.getName();
+  String beanClassName=sessionBean.getEjbClass();
+  SessionBeanComponentDescription sessionBeanDescription=null;
+switch (sessionType) {
+case Stateless:
+    sessionBeanDescription=new StatelessComponentDescription(beanName,beanClassName,moduleDescription.getModuleName(),applicationName);
+  break;
+case Stateful:
+sessionBeanDescription=new StatefulComponentDescription(beanName,beanClassName,moduleDescription.getModuleName(),applicationName);
+break;
+case Singleton:
+sessionBeanDescription=new SingletonComponentDescription(beanName,beanClassName,moduleDescription.getModuleName(),applicationName);
+break;
+default :
+throw new IllegalArgumentException("Unknown session bean type: " + sessionType);
+}
+sessionBean.setMappedName(sessionBean.getMappedName());
+BusinessLocalsMetaData businessLocals=sessionBean.getBusinessLocals();
+if (businessLocals != null && !businessLocals.isEmpty()) {
+sessionBeanDescription.addLocalBusinessInterfaceViews(businessLocals);
+}
+BusinessRemotesMetaData businessRemotes=sessionBean.getBusinessRemotes();
+if (businessRemotes != null && !businessRemotes.isEmpty()) {
+logger.debug("Remote business interface processing isn't yet implemented");
+}
+sessionBeanDescription.setTransactionManagementType(sessionBean.getTransactionType());
+if (sessionBean.getTransactionType() != TransactionManagementType.BEAN) {
+ContainerTransactionsMetaData containerTransactions=sessionBean.getContainerTransactions();
+if (containerTransactions != null && !containerTransactions.isEmpty()) {
+for (ContainerTransactionMetaData containerTx : containerTransactions) {
+TransactionAttributeType txAttr=containerTx.getTransAttribute();
+MethodsMetaData methods=containerTx.getMethods();
+for (MethodMetaData method : methods) {
+String methodName=method.getMethodName();
+MethodIntf methodIntf=this.getMethodIntf(method.getMethodIntf());
+if (methodName.equals("*")) {
+sessionBeanDescription.setTransactionAttribute(methodIntf,txAttr);
+}
+ else {
+MethodParametersMetaData methodParams=method.getMethodParams();
+sessionBeanDescription.setTransactionAttribute(methodIntf,txAttr,methodName,this.getMethodParams(methodParams));
+}
+}
+}
+}
+}
+if (sessionBean instanceof SessionBean31MetaData) {
+this.processSessionBean31((SessionBean31MetaData)sessionBean,sessionBeanDescription);
+}
+moduleDescription.addComponent(sessionBeanDescription);
+}
