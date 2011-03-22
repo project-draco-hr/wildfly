@@ -5,7 +5,7 @@
   }
   final String xaDataSourceClass=getStringIfSetOrGetDefault(dataSourceNode,XADATASOURCECLASS,null);
   final String jndiName=getStringIfSetOrGetDefault(dataSourceNode,JNDINAME,null);
-  final String module=getStringIfSetOrGetDefault(dataSourceNode,MODULE,null);
+  final String module=getStringIfSetOrGetDefault(dataSourceNode,DRIVER,null);
   final String newConnectionSql=getStringIfSetOrGetDefault(dataSourceNode,NEW_CONNECTION_SQL,null);
   final String poolName=getStringIfSetOrGetDefault(dataSourceNode,POOLNAME,null);
   final String urlDelimiter=getStringIfSetOrGetDefault(dataSourceNode,URL_DELIMITER,null);
@@ -25,7 +25,8 @@
   final String username=getStringIfSetOrGetDefault(dataSourceNode,USERNAME,null);
   final String password=getStringIfSetOrGetDefault(dataSourceNode,PASSWORD,null);
   final String securityDomain=getStringIfSetOrGetDefault(dataSourceNode,SECURITY_DOMAIN,null);
-  final DsSecurity security=new DsSecurityImpl(username,password,securityDomain);
+  final Extension reauthPlugin=extractExtension(dataSourceNode,REAUTHPLUGIN_CLASSNAME,REAUTHPLUGIN_PROPERTIES);
+  final DsSecurity security=new DsSecurityImpl(username,password,securityDomain,reauthPlugin);
   final boolean sharePreparedStatements=dataSourceNode.hasDefined(SHAREPREPAREDSTATEMENTS) ? dataSourceNode.get(SHAREPREPAREDSTATEMENTS).asBoolean() : false;
   final Long preparedStatementsCacheSize=dataSourceNode.get(PREPAREDSTATEMENTSCACHESIZE).asLong();
   final Statement.TrackStatementsEnum trackStatements=Statement.TrackStatementsEnum.valueOf(dataSourceNode.get(TRACKSTATEMENTS).asString());
@@ -41,14 +42,21 @@
   final TimeOut timeOut=new TimeOutImpl(blockingTimeoutMillis,idleTimeoutMinutes,allocationRetry,allocationRetryWaitMillis,xaResourceTimeout,setTxQuertTimeout,queryTimeout,useTryLock);
   final TransactionIsolation transactionIsolation=dataSourceNode.hasDefined(TRANSACTION_ISOLOATION) ? TransactionIsolation.valueOf(dataSourceNode.get(TRANSACTION_ISOLOATION).asString()) : null;
   final String checkValidConnectionSql=getStringIfSetOrGetDefault(dataSourceNode,CHECKVALIDCONNECTIONSQL,null);
-  final JdbcAdapterExtension exceptionSorter=extractJdbcAdapterExtension(dataSourceNode,EXCEPTIONSORTERCLASSNAME,EXCEPTIONSORTER_PROPERTIES);
-  final JdbcAdapterExtension staleConnectionChecker=extractJdbcAdapterExtension(dataSourceNode,STALECONNECTIONCHECKERCLASSNAME,STALECONNECTIONCHECKER_PROPERTIES);
-  final JdbcAdapterExtension validConnectionChecker=extractJdbcAdapterExtension(dataSourceNode,VALIDCONNECTIONCHECKERCLASSNAME,VALIDCONNECTIONCHECKER_PROPERTIES);
+  final Extension exceptionSorter=extractExtension(dataSourceNode,EXCEPTIONSORTERCLASSNAME,EXCEPTIONSORTER_PROPERTIES);
+  final Extension staleConnectionChecker=extractExtension(dataSourceNode,STALECONNECTIONCHECKERCLASSNAME,STALECONNECTIONCHECKER_PROPERTIES);
+  final Extension validConnectionChecker=extractExtension(dataSourceNode,VALIDCONNECTIONCHECKERCLASSNAME,VALIDCONNECTIONCHECKER_PROPERTIES);
   final Long backgroundValidationMinutes=getLongIfSetOrGetDefault(dataSourceNode,BACKGROUNDVALIDATIONMINUTES,null);
   final boolean backgroundValidation=getBooleanIfSetOrGetDefault(dataSourceNode,BACKGROUNDVALIDATION,false);
   final boolean useFastFail=getBooleanIfSetOrGetDefault(dataSourceNode,USE_FAST_FAIL,false);
   final boolean validateOnMatch=getBooleanIfSetOrGetDefault(dataSourceNode,VALIDATEONMATCH,false);
   final boolean spy=getBooleanIfSetOrGetDefault(dataSourceNode,SPY,false);
   final Validation validation=new ValidationImpl(backgroundValidation,backgroundValidationMinutes,useFastFail,validConnectionChecker,checkValidConnectionSql,validateOnMatch,staleConnectionChecker,exceptionSorter);
-  return new XADataSourceImpl(transactionIsolation,timeOut,security,statement,validation,urlDelimiter,urlSelectorStrategyClassName,useJavaContext,poolName,enabled,jndiName,spy,xaDataSourceProperty,xaDataSourceClass,module,newConnectionSql,xaPool);
+  final String recoveryUsername=getStringIfSetOrGetDefault(dataSourceNode,RECOVERY_USERNAME,null);
+  final String recoveryPassword=getStringIfSetOrGetDefault(dataSourceNode,RECOVERY_PASSWORD,null);
+  final String recoverySecurityDomain=getStringIfSetOrGetDefault(dataSourceNode,RECOVERY_SECURITY_DOMAIN,null);
+  final Credential credential=new CredentialImpl(recoveryUsername,recoveryPassword,recoverySecurityDomain);
+  final Extension recoverPlugin=extractExtension(dataSourceNode,RECOVERLUGIN_CLASSNAME,RECOVERLUGIN_PROPERTIES);
+  final boolean noRecovery=getBooleanIfSetOrGetDefault(dataSourceNode,NO_RECOVERY,false);
+  Recovery recovery=new Recovery(credential,recoverPlugin,noRecovery);
+  return new XADataSourceImpl(transactionIsolation,timeOut,security,statement,validation,urlDelimiter,urlSelectorStrategyClassName,useJavaContext,poolName,enabled,jndiName,spy,xaDataSourceProperty,xaDataSourceClass,module,newConnectionSql,xaPool,recovery);
 }
