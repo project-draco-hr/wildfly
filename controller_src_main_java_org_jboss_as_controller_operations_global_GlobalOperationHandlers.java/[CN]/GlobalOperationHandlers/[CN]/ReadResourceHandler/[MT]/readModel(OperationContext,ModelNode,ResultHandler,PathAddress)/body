@@ -1,0 +1,67 @@
+{
+  final ModelNodeRegistration registry=context.getRegistry();
+  final ModelNode model=context.getSubModel(address);
+  final ModelNode result;
+  if (readOperation.get(RECURSIVE).asBoolean(false)) {
+    result=model.clone();
+    if (readOperation.get(PROXIES).asBoolean(true)) {
+      addProxyNodes(context,address,readOperation,result,registry);
+    }
+  }
+ else {
+    result=new ModelNode();
+    final Set<String> childNames=registry.getChildNames(address);
+    final ModelNode subModel=model.clone();
+    for (    final String key : subModel.keys()) {
+      final ModelNode child=subModel.get(key);
+      if (childNames.contains(key)) {
+        if (subModel.get(key).isDefined()) {
+          for (          final String childKey : child.keys()) {
+            subModel.get(key,childKey).set(new ModelNode());
+          }
+        }
+        result.get(key).set(child);
+      }
+ else {
+        result.get(key).set(child);
+      }
+    }
+    final boolean queryRuntime=readOperation.get(INCLUDE_RUNTIME).asBoolean(false);
+    final Set<String> attributeNames=registry.getAttributeNames(address);
+    for (    final String attributeName : attributeNames) {
+      final AttributeAccess access=registry.getAttributeAccess(address,attributeName);
+      if (access == null) {
+        continue;
+      }
+ else {
+        final AttributeAccess.Storage storage=access.getStorageType();
+        if (!queryRuntime && storage != AttributeAccess.Storage.CONFIGURATION) {
+          continue;
+        }
+        final AccessType type=access.getAccessType();
+        final OperationHandler handler=access.getReadHandler();
+        if (handler != null) {
+          final ModelNode attributeOperation=readOperation.clone();
+          attributeOperation.get(NAME).set(attributeName);
+          handler.execute(context,attributeOperation,new ResultHandler(){
+            @Override public void handleResultFragment(            final String[] location,            final ModelNode attributeResult){
+              result.get(attributeName).set(attributeResult);
+            }
+            @Override public void handleResultComplete(){
+            }
+            @Override public void handleFailed(            ModelNode failureDescription){
+              if (type != AccessType.METRIC) {
+                resultHandler.handleFailed(failureDescription);
+              }
+            }
+            @Override public void handleCancellation(){
+              resultHandler.handleCancellation();
+            }
+          }
+);
+        }
+      }
+    }
+  }
+  return result;
+}

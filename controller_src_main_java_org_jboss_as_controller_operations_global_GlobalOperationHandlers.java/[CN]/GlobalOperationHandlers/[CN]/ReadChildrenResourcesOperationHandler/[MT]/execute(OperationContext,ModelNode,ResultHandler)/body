@@ -1,0 +1,53 @@
+{
+  try {
+    String childName=operation.require(CHILD_TYPE).asString();
+    ModelNode subModel=context.getSubModel().clone();
+    if (!subModel.isDefined()) {
+      final ModelNode result=new ModelNode();
+      result.setEmptyList();
+      resultHandler.handleResultFragment(new String[0],result);
+      resultHandler.handleResultComplete();
+    }
+ else {
+      final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+      final Set<String> childNames=context.getRegistry().getChildNames(address);
+      if (!childNames.contains(childName)) {
+        resultHandler.handleFailed(new ModelNode().set("No known child called " + childName));
+      }
+ else {
+        final ModelNode result=new ModelNode();
+        subModel=subModel.get(childName);
+        if (!subModel.isDefined()) {
+          result.setEmptyList();
+        }
+ else {
+          for (          final String key : subModel.keys()) {
+            final PathAddress childAddress=address.append(PathElement.pathElement(childName,key));
+            final ModelNode readOp=operation.clone();
+            readOp.get(OP_ADDR).set(childAddress.toModelNode());
+            final ModelNode readResult=readModel(context,operation,new ResultHandler(){
+              public void handleResultFragment(              String[] location,              ModelNode result){
+              }
+              public void handleResultComplete(){
+              }
+              public void handleFailed(              ModelNode failureDescription){
+                resultHandler.handleFailed(failureDescription);
+              }
+              public void handleCancellation(){
+                resultHandler.handleCancellation();
+              }
+            }
+,childAddress);
+            result.add(key,readResult);
+          }
+        }
+        resultHandler.handleResultFragment(Util.NO_LOCATION,result);
+        resultHandler.handleResultComplete();
+      }
+    }
+  }
+ catch (  final Exception e) {
+    throw new OperationFailedException(Util.createErrorResult(e));
+  }
+  return new BasicOperationResult();
+}
