@@ -1,10 +1,10 @@
 {
   final SocketBinding binding=this.binding.getValue();
   final InetSocketAddress address=binding.getSocketAddress();
+  final Executor executor=this.executor.getOptionalValue();
   try {
-    final Connector connector=new Connector();
+    final Connector connector=new Connector(protocol);
     connector.setPort(address.getPort());
-    connector.setProtocol(protocol);
     connector.setScheme(scheme);
     if (enableLookups != null)     connector.setEnableLookups(enableLookups);
     if (maxPostSize != null)     connector.setMaxPostSize(maxPostSize);
@@ -13,6 +13,28 @@
     if (proxyPort != null)     connector.setProxyPort(proxyPort);
     if (redirectPort != null)     connector.setRedirectPort(redirectPort);
     if (secure != null)     connector.setSecure(secure);
+    if (executor != null) {
+      Method m=connector.getProtocolHandler().getClass().getMethod("setExecutor",Executor.class);
+      m.invoke(connector.getProtocolHandler(),executor);
+    }
+    if (address != null && address.getAddress() != null) {
+      Method m=connector.getProtocolHandler().getClass().getMethod("setAddress",InetAddress.class);
+      m.invoke(connector.getProtocolHandler(),address.getAddress());
+    }
+    if (maxConnections != null) {
+      try {
+        Method m=connector.getProtocolHandler().getClass().getMethod("setPollerSize",Integer.TYPE);
+        m.invoke(connector.getProtocolHandler(),maxConnections);
+      }
+ catch (      NoSuchMethodException e) {
+      }
+      try {
+        Method m=connector.getProtocolHandler().getClass().getMethod("setSendfileSize",Integer.TYPE);
+        m.invoke(connector.getProtocolHandler(),maxConnections);
+      }
+ catch (      NoSuchMethodException e) {
+      }
+    }
     getWebServer().addConnector(connector);
     this.connector=connector;
   }
