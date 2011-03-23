@@ -53,13 +53,6 @@
     log.debug("Adding JAX-RS jndi component resource classes: " + providers);
     setContextParameter(webdata,ResteasyContextParameters.RESTEASY_SCANNED_JNDI_RESOURCES,providers);
   }
-  boolean useScannedApplicationClass=false;
-  if (resteasy.getScannedApplicationClass() != null) {
-    if (findContextParam(webdata,"javax.ws.rs.Application") == null) {
-      useScannedApplicationClass=true;
-      setContextParameter(webdata,"javax.ws.rs.Application",resteasy.getScannedApplicationClass().getName());
-    }
-  }
   try {
     module.getClassLoader().loadClass(CDI_INJECTOR_FACTORY_CLASS);
     if (WeldDeploymentMarker.isPartOfWeldDeployment(deploymentUnit)) {
@@ -74,41 +67,57 @@
   }
   if (resteasy.hasBootClasses() || resteasy.isDispatcherCreated())   return;
   if (resteasy.getScannedApplicationClass() == null && resteasy.getScannedJndiComponentResources().isEmpty() && resteasy.getScannedProviderClasses().isEmpty() && resteasy.getScannedResourceClasses().isEmpty())   return;
-  FilterMetaData filter=new FilterMetaData();
-  filter.setFilterClass(Filter30Dispatcher.class.getName());
-  filter.setName("Resteasy");
-  filter.setAsyncSupported(true);
-  FilterMappingMetaData mapping=new FilterMappingMetaData();
-  mapping.setFilterName("Resteasy");
-  List<String> patterns=new ArrayList<String>();
-  if (useScannedApplicationClass && resteasy.getScannedApplicationClass().isAnnotationPresent(ApplicationPath.class)) {
-    ApplicationPath path=resteasy.getScannedApplicationClass().getAnnotation(ApplicationPath.class);
-    String pathValue=path.value().trim();
-    if (!pathValue.startsWith("/")) {
-      pathValue="/" + pathValue;
-    }
-    String prefix=pathValue;
-    if (pathValue.endsWith("/")) {
-      pathValue+="*";
-    }
- else {
-      pathValue+="/*";
-    }
-    patterns.add(pathValue);
-    setContextParameter(webdata,"resteasy.servlet.mapping.prefix",prefix);
+  boolean useScannedClass=false;
+  if (resteasy.getScannedApplicationClass() == null) {
+    JBossServletMetaData servlet=new JBossServletMetaData();
+    servlet.setName(JAVA_RS_SERVLET_NAME);
+    servlet.setServletClass(HttpServlet30Dispatcher.class.getName());
+    addServlet(webdata,servlet);
   }
  else {
-    patterns.add("/*");
+    ParamValueMetaData param=findInitParam(webdata,SERVLET_INIT_PARAM);
+    if (param != null) {
+      setContextParameter(webdata,"javax.ws.rs.Application",param.getParamValue());
+    }
+ else     if (findContextParam(webdata,"javax.ws.rs.Application") == null) {
+      setContextParameter(webdata,"javax.ws.rs.Application",resteasy.getScannedApplicationClass().getName());
+      useScannedClass=true;
+    }
   }
-  mapping.setUrlPatterns(patterns);
-  if (webdata.getFilters() == null) {
-    webdata.setFilters(new FiltersMetaData());
+  if (useScannedClass) {
+    final String servletName=resteasy.getScannedApplicationClass().getName();
+    JBossServletMetaData servlet=new JBossServletMetaData();
+    servlet.setName(servletName);
+    servlet.setServletClass(HttpServlet30Dispatcher.class.getName());
+    addServlet(webdata,servlet);
+    if (!servletMappingsExist(webdata,servletName)) {
+      List<String> patterns=new ArrayList<String>();
+      if (resteasy.getScannedApplicationClass().isAnnotationPresent(ApplicationPath.class)) {
+        ApplicationPath path=resteasy.getScannedApplicationClass().getAnnotation(ApplicationPath.class);
+        String pathValue=path.value().trim();
+        if (!pathValue.startsWith("/")) {
+          pathValue="/" + pathValue;
+        }
+        String prefix=pathValue;
+        if (pathValue.endsWith("/")) {
+          pathValue+="*";
+        }
+ else {
+          pathValue+="/*";
+        }
+        patterns.add(pathValue);
+        setContextParameter(webdata,"resteasy.servlet.mapping.prefix",prefix);
+      }
+ else {
+        throw new DeploymentUnitProcessingException("No Servlet mappings found for JAX-RS application: " + servletName + " either annotate it with @ApplicationPath or add a servlet-mapping in web.xml");
+      }
+      ServletMappingMetaData mapping=new ServletMappingMetaData();
+      mapping.setServletName(servletName);
+      mapping.setUrlPatterns(patterns);
+      if (webdata.getServletMappings() == null) {
+        webdata.setServletMappings(new ArrayList<ServletMappingMetaData>());
+      }
+      webdata.getServletMappings().add(mapping);
+    }
   }
-  webdata.getFilters().add(filter);
-  List<FilterMappingMetaData> mappings=webdata.getFilterMappings();
-  if (mappings == null) {
-    mappings=new ArrayList<FilterMappingMetaData>();
-    webdata.setFilterMappings(mappings);
-  }
-  mappings.add(mapping);
 }
