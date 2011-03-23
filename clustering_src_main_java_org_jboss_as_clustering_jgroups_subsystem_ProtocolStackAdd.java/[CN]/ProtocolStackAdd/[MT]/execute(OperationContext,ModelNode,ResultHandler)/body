@@ -1,0 +1,60 @@
+{
+  ModelNode opAddr=operation.require(ModelDescriptionConstants.OP_ADDR);
+  final ModelNode removeOperation=Util.getResourceRemoveOperation(opAddr);
+  final PathAddress address=PathAddress.pathAddress(opAddr);
+  final String name=address.getLastElement().getValue();
+  populate(operation,context.getSubModel());
+  RuntimeOperationContext runtime=context.getRuntimeContext();
+  if (runtime != null) {
+    RuntimeTask task=new RuntimeTask(){
+      @Override public void execute(      RuntimeTaskContext context) throws OperationFailedException {
+        ModelNode transport=operation.get(ModelKeys.TRANSPORT);
+        TransportConfigurationImpl transportConfig=new TransportConfigurationImpl(transport.require(ModelKeys.TYPE).asString());
+        ProtocolStackConfigurationImpl stackConfig=new ProtocolStackConfigurationImpl(transportConfig);
+        InjectionCollector injections=new InjectionCollector();
+        this.process(transport,transportConfig,injections);
+        if (transport.has(ModelKeys.DIAGNOSTICS_SOCKET_BINDING)) {
+          injections.addSocketBindingInjector(transport.get(ModelKeys.DIAGNOSTICS_SOCKET_BINDING).asString(),transportConfig.getDiagnosticsSocketBindingInjector());
+        }
+        if (transport.has(ModelKeys.THREAD_POOL)) {
+          injections.addExecutorInjector(transport.get(ModelKeys.THREAD_POOL).asString(),transportConfig.getThreadPoolInjector());
+        }
+        if (transport.has(ModelKeys.OOB_THREAD_POOL)) {
+          injections.addExecutorInjector(transport.get(ModelKeys.OOB_THREAD_POOL).asString(),transportConfig.getOOBThreadPoolInjector());
+        }
+        if (transport.has(ModelKeys.TIMER_THREAD_POOL)) {
+          injections.addScheduledExecutorInjector(transport.get(ModelKeys.TIMER_THREAD_POOL).asString(),transportConfig.getTimerThreadPoolInjector());
+        }
+        if (transport.has(ModelKeys.THREAD_FACTORY)) {
+          injections.addThreadFactoryInjector(transport.get(ModelKeys.THREAD_FACTORY).asString(),transportConfig.getThreadFactoryInjector());
+        }
+        for (        ModelNode protocol : operation.get(ModelKeys.PROTOCOL).asList()) {
+          ProtocolConfigurationImpl protocolConfig=new ProtocolConfigurationImpl(protocol.require(ModelKeys.TYPE).asString());
+          this.process(protocol,protocolConfig,injections);
+          stackConfig.getProtocols().add(protocolConfig);
+        }
+        ServiceBuilder<ChannelFactory> builder=new ChannelFactoryService(name,stackConfig).build(context.getServiceTarget());
+        injections.addDependencies(builder);
+        builder.addListener(new ResultHandler.ServiceStartListener(resultHandler));
+        builder.install();
+      }
+      private void process(      ModelNode protocol,      ProtocolConfigurationImpl protocolConfig,      InjectionCollector injections){
+        if (protocol.has(ModelKeys.SOCKET_BINDING)) {
+          injections.addSocketBindingInjector(protocol.get(ModelKeys.SOCKET_BINDING).asString(),protocolConfig.getSocketBindingInjector());
+        }
+        Map<String,String> properties=protocolConfig.getProperties();
+        if (protocol.has(ModelKeys.PROPERTY)) {
+          for (          Property property : protocol.get(ModelKeys.PROPERTY).asPropertyList()) {
+            properties.put(property.getName(),property.getValue().asString());
+          }
+        }
+      }
+    }
+;
+    runtime.setRuntimeTask(task);
+  }
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(removeOperation);
+}
