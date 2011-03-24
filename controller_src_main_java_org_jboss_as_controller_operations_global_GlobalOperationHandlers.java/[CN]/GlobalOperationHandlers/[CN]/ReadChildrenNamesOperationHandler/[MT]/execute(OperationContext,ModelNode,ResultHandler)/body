@@ -1,39 +1,33 @@
 {
-  try {
-    String childName=operation.require(CHILD_TYPE).asString();
-    ModelNode subModel=context.getSubModel().clone();
-    if (!subModel.isDefined()) {
+  String childName=operation.require(CHILD_TYPE).asString();
+  ModelNode subModel=context.getSubModel().clone();
+  if (!subModel.isDefined()) {
+    final ModelNode result=new ModelNode();
+    result.setEmptyList();
+    resultHandler.handleResultFragment(new String[0],result);
+  }
+ else {
+    final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+    final Set<String> childNames=context.getRegistry().getChildNames(address);
+    if (!childNames.contains(childName)) {
+      throw new OperationFailedException(new ModelNode().set("No known child called " + childName));
+    }
+ else {
       final ModelNode result=new ModelNode();
-      result.setEmptyList();
-      resultHandler.handleResultFragment(new String[0],result);
-      resultHandler.handleResultComplete();
-    }
- else {
-      final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
-      final Set<String> childNames=context.getRegistry().getChildNames(address);
-      if (!childNames.contains(childName)) {
-        resultHandler.handleFailed(new ModelNode().set("No known child called " + childName));
+      subModel=subModel.get(childName);
+      if (!subModel.isDefined()) {
+        result.setEmptyList();
       }
  else {
-        final ModelNode result=new ModelNode();
-        subModel=subModel.get(childName);
-        if (!subModel.isDefined()) {
-          result.setEmptyList();
+        for (        final String key : subModel.keys()) {
+          final ModelNode node=new ModelNode();
+          node.set(key);
+          result.add(node);
         }
- else {
-          for (          final String key : subModel.keys()) {
-            final ModelNode node=new ModelNode();
-            node.set(key);
-            result.add(node);
-          }
-        }
-        resultHandler.handleResultFragment(Util.NO_LOCATION,result);
-        resultHandler.handleResultComplete();
       }
+      resultHandler.handleResultFragment(Util.NO_LOCATION,result);
     }
   }
- catch (  final Exception e) {
-    throw new OperationFailedException(Util.createErrorResult(e));
-  }
+  resultHandler.handleResultComplete();
   return new BasicOperationResult();
 }
