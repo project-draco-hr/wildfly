@@ -1,16 +1,12 @@
 {
   Map<DotName,List<AnnotationInstance>> annotationsOnBean=sessionBeanClass.annotations();
-  if (annotationsOnBean == null || annotationsOnBean.isEmpty()) {
-    String defaultLocalBusinessInterface=this.getDefaultLocalInterface(sessionBeanClass);
-    if (defaultLocalBusinessInterface != null) {
-      logger.debug("Session bean class: " + sessionBeanClass + " has no explicit local business interfaces, marking "+ defaultLocalBusinessInterface+ " as the (implicit) default local business interface");
-      return Collections.singleton(defaultLocalBusinessInterface);
-    }
-    return Collections.emptySet();
-  }
-  List<AnnotationInstance> ejbLocalAnnotations=annotationsOnBean.get(DotName.createSimple(Local.class.getName()));
+  List<AnnotationInstance> ejbLocalAnnotations=annotationsOnBean.get(LOCAL);
   if (ejbLocalAnnotations == null || ejbLocalAnnotations.isEmpty()) {
-    String defaultLocalBusinessInterface=this.getDefaultLocalInterface(sessionBeanClass);
+    Collection<String> localInterfaces=this.getLocalInterfacesFromInterfaceAnnotations(sessionBeanClass,compositeIndex);
+    if (!localInterfaces.isEmpty()) {
+      return localInterfaces;
+    }
+    String defaultLocalBusinessInterface=this.getDefaultLocalInterface(sessionBeanClass,compositeIndex);
     if (defaultLocalBusinessInterface != null) {
       logger.debug("Session bean class: " + sessionBeanClass + " has no explicit local business interfaces, marking "+ defaultLocalBusinessInterface+ " as the (implicit) default local business interface");
       return Collections.singleton(defaultLocalBusinessInterface);
@@ -20,7 +16,6 @@
   if (ejbLocalAnnotations.size() > 1) {
     throw new RuntimeException("@Local appears more than once in EJB class: " + sessionBeanClass.name());
   }
-  final Collection<String> localBusinessInterfaces=new HashSet<String>();
   AnnotationInstance ejbLocalAnnotation=ejbLocalAnnotations.get(0);
   AnnotationTarget target=ejbLocalAnnotation.target();
   if (target instanceof ClassInfo == false) {
@@ -28,11 +23,11 @@
   }
   AnnotationValue ejbLocalAnnValue=ejbLocalAnnotation.value();
   if (ejbLocalAnnValue == null) {
-    DotName[] interfaces=sessionBeanClass.interfaces();
-    if (interfaces.length != 1)     throw new DeploymentUnitProcessingException("Bean " + description + " specifies @Local, but does not implement 1 interface");
-    localBusinessInterfaces.add(interfaces[0].toString());
-    return localBusinessInterfaces;
+    Set<DotName> interfaces=getPotentialBusinessInterfaces(sessionBeanClass);
+    if (interfaces.size() != 1)     throw new DeploymentUnitProcessingException("Bean " + description + " specifies @Local, but does not implement 1 interface");
+    return Collections.singleton(interfaces.iterator().next().toString());
   }
+  final Collection<String> localBusinessInterfaces=new HashSet<String>();
   Type[] localInterfaceTypes=ejbLocalAnnValue.asClassArray();
   for (  Type localInterface : localInterfaceTypes) {
     localBusinessInterfaces.add(localInterface.name().toString());
