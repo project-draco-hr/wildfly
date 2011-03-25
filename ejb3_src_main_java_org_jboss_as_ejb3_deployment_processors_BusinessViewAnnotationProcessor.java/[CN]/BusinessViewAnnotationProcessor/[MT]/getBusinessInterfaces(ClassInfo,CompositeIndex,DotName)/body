@@ -1,0 +1,31 @@
+{
+  Map<DotName,List<AnnotationInstance>> annotationsOnBean=sessionBeanClass.annotations();
+  List<AnnotationInstance> annotations=annotationsOnBean.get(annotationType);
+  if (annotations == null || annotations.isEmpty()) {
+    Collection<String> interfaces=getBusinessInterfacesFromInterfaceAnnotations(sessionBeanClass,compositeIndex,annotationType);
+    if (!interfaces.isEmpty()) {
+      return interfaces;
+    }
+    return Collections.emptySet();
+  }
+  if (annotations.size() > 1) {
+    throw new DeploymentUnitProcessingException("@" + annotationType + " appears more than once in EJB class: "+ sessionBeanClass.name());
+  }
+  final AnnotationInstance annotation=annotations.get(0);
+  final AnnotationTarget target=annotation.target();
+  if (target instanceof ClassInfo == false) {
+    throw new RuntimeException("@" + annotationType + " should only appear on a class. Target: "+ target+ " is not a class");
+  }
+  AnnotationValue annotationValue=annotation.value();
+  if (annotationValue == null) {
+    Set<DotName> interfaces=getPotentialBusinessInterfaces(sessionBeanClass);
+    if (interfaces.size() != 1)     throw new DeploymentUnitProcessingException("Bean " + sessionBeanClass + " specifies @"+ annotationType+ ", but does not implement 1 interface");
+    return Collections.singleton(interfaces.iterator().next().toString());
+  }
+  final Collection<String> businessInterfaces=new HashSet<String>();
+  final Type[] interfaceTypes=annotationValue.asClassArray();
+  for (  final Type type : interfaceTypes) {
+    businessInterfaces.add(type.name().toString());
+  }
+  return businessInterfaces;
+}
