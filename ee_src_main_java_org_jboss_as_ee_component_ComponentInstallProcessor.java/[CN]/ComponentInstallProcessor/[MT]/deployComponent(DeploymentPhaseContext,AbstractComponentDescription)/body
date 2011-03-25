@@ -5,6 +5,14 @@
   final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
   final DeploymentReflectionIndex deploymentReflectionIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
   final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+  final JndiInjectionPointStore moduleInjectionPointStore=deploymentUnit.getAttachment(Attachments.MODULE_INJECTIONS);
+  final JndiInjectionPointStore injectionPointStore;
+  if (moduleInjectionPointStore != null) {
+    injectionPointStore=new JndiInjectionPointStore(moduleInjectionPointStore);
+  }
+ else {
+    injectionPointStore=new JndiInjectionPointStore();
+  }
   final String className=description.getComponentClassName();
   final Class<?> componentClass;
   try {
@@ -79,14 +87,12 @@ final ViewService viewService=new ViewService(viewClass,proxyFactory);
 serviceTarget.addService(serviceName,viewService).addDependency(createServiceName,AbstractComponent.class,viewService.getComponentInjector()).install();
 configuration.getViewServices().put(viewClass,serviceName);
 }
-final List<BindingDescription> bindingDescriptions=description.getBindings();
-final List<ResourceInjection> instanceResourceInjections=configuration.getResourceInjections();
+final List<BindingDescription> bindingDescriptions=description.getMergedBindings();
 for (BindingDescription bindingDescription : bindingDescriptions) {
-addJndiDependency(classLoader,serviceTarget,description,componentClass,deploymentReflectionIndex,applicationName,moduleName,componentName,createServiceName,startBuilder,instanceResourceInjections,bindingDescription,phaseContext);
+addJndiBinding(classLoader,serviceTarget,applicationName,moduleName,componentName,createServiceName,startBuilder,bindingDescription,phaseContext,injectionPointStore);
 }
 final Collection<InterceptorDescription> interceptorClasses=description.getAllInterceptors().values();
 for (InterceptorDescription interceptorDescription : interceptorClasses) {
-final List<ResourceInjection> interceptorResourceInjections=new ArrayList<ResourceInjection>();
 String interceptorClassName=interceptorDescription.getInterceptorClassName();
 final Class<?> interceptorClass;
 try {
@@ -95,10 +101,12 @@ interceptorClass=Class.forName(interceptorClassName,false,classLoader);
  catch (ClassNotFoundException e) {
 throw new DeploymentUnitProcessingException("Component interceptor class not found",e);
 }
-for (BindingDescription bindingDescription : interceptorDescription.getBindings()) {
-addJndiDependency(classLoader,serviceTarget,description,interceptorClass,deploymentReflectionIndex,applicationName,moduleName,componentName,createServiceName,startBuilder,interceptorResourceInjections,bindingDescription,phaseContext);
+List<ResourceInjection> injectionList=injectionPointStore.applyInjections(interceptorClass,deploymentReflectionIndex);
+configuration.addInterceptorResourceInjection(interceptorClass,injectionList);
 }
-}
+List<ResourceInjection> injectionList=injectionPointStore.applyInjections(componentClass,deploymentReflectionIndex);
+startBuilder.addDependencies(injectionPointStore.getServiceNames());
+configuration.getResourceInjections().addAll(injectionList);
 createBuilder.install();
 startBuilder.install();
 }

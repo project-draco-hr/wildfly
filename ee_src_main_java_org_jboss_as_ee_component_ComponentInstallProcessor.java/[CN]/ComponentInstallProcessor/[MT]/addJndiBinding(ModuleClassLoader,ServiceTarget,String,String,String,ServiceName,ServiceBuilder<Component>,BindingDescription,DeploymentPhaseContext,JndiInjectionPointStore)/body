@@ -1,0 +1,41 @@
+{
+  final String bindingName=bindingDescription.getBindingName();
+  final String bindingType=bindingDescription.getBindingType();
+  try {
+    Class.forName(bindingType,false,classLoader);
+  }
+ catch (  ClassNotFoundException e) {
+    throw new DeploymentUnitProcessingException("Component binding class not found",e);
+  }
+  Value<ManagedReferenceFactory> resourceValue;
+  if (bindingName != null) {
+    final String serviceBindingName;
+    int idx=bindingName.indexOf('/');
+    if (idx == -1) {
+      serviceBindingName=bindingName;
+    }
+ else {
+      serviceBindingName=bindingName.substring(idx + 1);
+    }
+    final BinderService service=new BinderService(serviceBindingName);
+    final ServiceName bindingServiceName=ContextNames.serviceNameOfContext(applicationName,moduleName,componentName,bindingName);
+    if (bindingServiceName == null) {
+      throw new IllegalArgumentException("Invalid context name '" + bindingName + "' for binding");
+    }
+    ServiceBuilder<ManagedReferenceFactory> sourceServiceBuilder=serviceTarget.addService(bindingServiceName,service);
+    bindingDescription.getReferenceSourceDescription().getResourceValue(bindingDescription,sourceServiceBuilder,phaseContext,service.getManagedObjectInjector());
+    resourceValue=sourceServiceBuilder.addDependency(createServiceName).addDependency(bindingServiceName.getParent(),NamingStore.class,service.getNamingStoreInjector()).install();
+    if (bindingDescription.isDependency())     startBuilder.addDependency(bindingServiceName);
+    for (    final InjectionTargetDescription injectionTarget : bindingDescription.getInjectionTargetDescriptions()) {
+      injectionPointStore.addInjectedValue(new JndiInjectedValue(injectionTarget,resourceValue,bindingServiceName));
+    }
+  }
+ else {
+    final InjectedValue<ManagedReferenceFactory> injectedValue=new InjectedValue<ManagedReferenceFactory>();
+    bindingDescription.getReferenceSourceDescription().getResourceValue(bindingDescription,startBuilder,phaseContext,injectedValue);
+    resourceValue=injectedValue;
+    for (    final InjectionTargetDescription injectionTarget : bindingDescription.getInjectionTargetDescriptions()) {
+      injectionPointStore.addInjectedValue(new JndiInjectedValue(injectionTarget,resourceValue,null));
+    }
+  }
+}

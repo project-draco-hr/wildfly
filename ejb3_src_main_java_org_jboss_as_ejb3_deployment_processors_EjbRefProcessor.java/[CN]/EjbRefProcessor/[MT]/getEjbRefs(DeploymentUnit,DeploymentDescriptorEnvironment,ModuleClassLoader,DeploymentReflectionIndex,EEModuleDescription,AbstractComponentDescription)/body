@@ -1,0 +1,47 @@
+{
+  EJBLocalReferencesMetaData ejbLocalRefs=environment.getEnvironment().getEjbLocalReferences();
+  List<BindingDescription> bindingDescriptions=new ArrayList<BindingDescription>();
+  if (ejbLocalRefs != null) {
+    for (    EJBLocalReferenceMetaData ejbRef : ejbLocalRefs) {
+      String name=ejbRef.getEjbRefName();
+      String ejbName=ejbRef.getLink();
+      String lookup=ejbRef.getLookupName();
+      String localInterface=ejbRef.getLocal();
+      Class<?> localInterfaceType=null;
+      if (!isEmpty(localInterface)) {
+        try {
+          classLoader.loadClass(localInterface);
+        }
+ catch (        ClassNotFoundException e) {
+          throw new DeploymentUnitProcessingException("Could not load local interface type " + localInterface,e);
+        }
+      }
+      if (!name.startsWith("java:")) {
+        name=environment.getDefaultContext() + name;
+      }
+      BindingDescription bindingDescription=new BindingDescription(name);
+      bindingDescriptions.add(bindingDescription);
+      localInterfaceType=processInjectionTargets(classLoader,deploymentReflectionIndex,ejbRef,bindingDescription,localInterfaceType);
+      if (localInterfaceType == null) {
+        throw new DeploymentUnitProcessingException("Could not determine type of ejb-local-ref " + name + " for component "+ componentDescription);
+      }
+      bindingDescription.setBindingType(localInterfaceType.getName());
+      if (!isEmpty(lookup)) {
+        if (componentDescription != null) {
+          bindingDescription.setReferenceSourceDescription(new LookupBindingSourceDescription(lookup,componentDescription));
+        }
+ else {
+          bindingDescription.setReferenceSourceDescription(new LookupBindingSourceDescription(lookup,moduleDescription));
+        }
+      }
+ else       if (!isEmpty(ejbName)) {
+        final ServiceName beanServiceName=deploymentUnit.getServiceName().append("component").append(ejbName).append("VIEW").append(bindingDescription.getBindingType());
+        bindingDescription.setReferenceSourceDescription(new ServiceBindingSourceDescription(beanServiceName));
+      }
+ else {
+        bindingDescription.setReferenceSourceDescription(new LazyBindingSourceDescription());
+      }
+    }
+  }
+  return bindingDescriptions;
+}

@@ -1,0 +1,29 @@
+{
+  final String bindingName=bindingDescription.getBindingName();
+  final String bindingType=bindingDescription.getBindingType();
+  Value<ManagedReferenceFactory> resourceValue;
+  if (bindingName != null) {
+    final String serviceBindingName;
+    int idx=bindingName.indexOf('/');
+    if (idx == -1) {
+      serviceBindingName=bindingName;
+    }
+ else {
+      serviceBindingName=bindingName.substring(idx + 1);
+    }
+    final BinderService service=new BinderService(serviceBindingName);
+    final ServiceName bindingServiceName=ContextNames.serviceNameOfContext(module.getAppName(),module.getModuleName(),componentName,bindingName);
+    if (bindingServiceName == null) {
+      throw new IllegalArgumentException("Invalid context name '" + bindingName + "' for binding");
+    }
+    ServiceBuilder<ManagedReferenceFactory> sourceServiceBuilder=phaseContext.getServiceTarget().addService(bindingServiceName,service);
+    bindingDescription.getReferenceSourceDescription().getResourceValue(bindingDescription,sourceServiceBuilder,phaseContext,service.getManagedObjectInjector());
+    resourceValue=sourceServiceBuilder.addDependency(bindingServiceName.getParent(),NamingStore.class,service.getNamingStoreInjector()).install();
+    for (    final InjectionTargetDescription injectionTarget : bindingDescription.getInjectionTargetDescriptions()) {
+      injectionPointStore.addInjectedValue(new JndiInjectedValue(injectionTarget,resourceValue,bindingServiceName));
+    }
+  }
+ else {
+    throw new DeploymentUnitProcessingException("Binding name must not be null: " + bindingDescription);
+  }
+}

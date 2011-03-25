@@ -1,0 +1,45 @@
+{
+  final AnnotationTarget annotationTarget=annotation.target();
+  final AnnotationValue nameValue=annotation.value("name");
+  final String name=nameValue != null ? nameValue.asString() : null;
+  final AnnotationValue beanNameValue=annotation.value("beanName");
+  final String beanName=beanNameValue != null ? beanNameValue.asString() : null;
+  final AnnotationValue beanInterfaceValue=annotation.value("beanInterface");
+  final String beanInterface=beanInterfaceValue != null ? beanInterfaceValue.asClass().name().toString() : null;
+  final AnnotationValue descriptionValue=annotation.value("description");
+  final String description=descriptionValue != null ? descriptionValue.asString() : null;
+  final AnnotationValue lookupValue=annotation.value("lookup");
+  final String lookup=lookupValue != null ? lookupValue.asString() : null;
+  if (!isEmpty(lookup) && !isEmpty(beanName)) {
+    throw new IllegalArgumentException("@EJB annotations may have either 'beanName' or 'lookup' specified, but not both");
+  }
+  final BindingDescription bindingDescription;
+  if (annotationTarget instanceof FieldInfo) {
+    bindingDescription=processFieldInjection(FieldInfo.class.cast(annotationTarget),name,beanInterface,componentDescription);
+  }
+ else   if (annotationTarget instanceof MethodInfo) {
+    bindingDescription=processMethodInjection(MethodInfo.class.cast(annotationTarget),name,beanInterface,componentDescription);
+  }
+ else   if (annotationTarget instanceof ClassInfo) {
+    bindingDescription=processClassInjection(name,beanInterface,componentDescription);
+  }
+ else {
+    bindingDescription=null;
+  }
+  if (bindingDescription != null) {
+    if (!isEmpty(description)) {
+      bindingDescription.setDescription(description);
+    }
+    if (!isEmpty(lookup)) {
+      bindingDescription.setReferenceSourceDescription(new LookupBindingSourceDescription(lookup,componentDescription));
+    }
+ else     if (!isEmpty(beanName)) {
+      final ServiceName beanServiceName=deploymentUnit.getServiceName().append("component").append(beanName).append("VIEW").append(bindingDescription.getBindingType());
+      bindingDescription.setReferenceSourceDescription(new ServiceBindingSourceDescription(beanServiceName));
+    }
+ else {
+      bindingDescription.setReferenceSourceDescription(new LazyBindingSourceDescription());
+    }
+  }
+  return bindingDescription;
+}
