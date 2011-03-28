@@ -1,0 +1,47 @@
+{
+  if (original.isEmpty()) {
+    mergedResult.addAll(override);
+  }
+ else {
+    if (override.isEmpty()) {
+      mergedResult.addAll(original);
+    }
+ else {
+      Set<String> commonBeans=new HashSet<String>();
+      for (      SessionBeanComponentDescription originalSessionBean : original) {
+        SessionBeanComponentDescription overrideSessionBean=findSessionBean(originalSessionBean.getEJBName(),override);
+        if (overrideSessionBean == null) {
+          mergedResult.add(originalSessionBean);
+        }
+ else {
+          SessionBeanComponentDescription.SessionBeanType sessionBeanType=originalSessionBean.getSessionBeanType();
+          if (overrideSessionBean.getSessionBeanType() != sessionBeanType) {
+            throw new RuntimeException("Cannot mergeSessionBean two EJBs with the same name = " + originalSessionBean.getEJBName() + " but with different session bean types, type 1 - "+ overrideSessionBean.getSessionBeanType()+ " type 2 - "+ originalSessionBean.getSessionBeanType());
+          }
+          commonBeans.add(originalSessionBean.getEJBName());
+          SessionBeanComponentDescription mergedBean=createNewSessionBean(originalSessionBean);
+switch (sessionBeanType) {
+case STATELESS:
+            mergeStatelessBean((StatelessComponentDescription)mergedBean,(StatelessComponentDescription)originalSessionBean,(StatelessComponentDescription)overrideSessionBean);
+          break;
+case STATEFUL:
+        mergeStatefulBean((StatefulComponentDescription)mergedBean,(StatefulComponentDescription)originalSessionBean,(StatefulComponentDescription)overrideSessionBean);
+      break;
+case SINGLETON:
+    mergeSingletonBean((SingletonComponentDescription)mergedBean,(SingletonComponentDescription)originalSessionBean,(SingletonComponentDescription)overrideSessionBean);
+  break;
+default :
+throw new RuntimeException("Unknown session bean type: " + sessionBeanType + " for bean: "+ originalSessionBean.getEJBName());
+}
+mergedResult.add(mergedBean);
+}
+}
+for (SessionBeanComponentDescription overrideSessionBean : override) {
+if (commonBeans.contains(overrideSessionBean.getEJBName())) {
+continue;
+}
+mergedResult.add(overrideSessionBean);
+}
+}
+}
+}
