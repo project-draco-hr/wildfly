@@ -6,19 +6,20 @@
         final ServiceController<?> controller=context.getServiceRegistry().getService(Services.JBOSS_DEPLOYMENT_UNIT.append(deploymentUnitName));
         if (controller != null) {
           controller.addListener(new AbstractServiceListener<Object>(){
-            @Override public void listenerAdded(            ServiceController<? extends Object> serviceController){
-              controller.setMode(ServiceController.Mode.NEVER);
+            @Override public void listenerAdded(            ServiceController<?> controller){
+              if (!controller.compareAndSetMode(ServiceController.Mode.ACTIVE,ServiceController.Mode.NEVER)) {
+                controller.removeListener(this);
+              }
             }
-            public void serviceStopped(            ServiceController<? extends Object> serviceController){
+            public void serviceStopping(            ServiceController<?> controller){
               controller.removeListener(this);
-              controller.addListener(new ResultHandler.ServiceStartListener(resultHandler));
-              controller.setMode(ServiceController.Mode.ACTIVE);
+              controller.compareAndSetMode(ServiceController.Mode.NEVER,ServiceController.Mode.ACTIVE);
             }
           }
 );
         }
  else {
-          deploy(deploymentModel,resultHandler,context);
+          deploy(deploymentModel,context);
         }
       }
     }

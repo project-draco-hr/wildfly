@@ -1,0 +1,44 @@
+{
+  DeploymentStatus oldStatus=previous;
+  boolean hasFailed=!startFailedServices.isEmpty();
+  boolean hasMissing=!servicesMissingDependencies.isEmpty();
+  final DeploymentStatus newStatus=hasFailed || hasMissing ? DeploymentStatus.FAILED : DeploymentStatus.OKAY;
+  if (oldStatus != newStatus) {
+    previous=newStatus;
+    if (hasFailed || hasMissing) {
+      final StringBuilder msg=new StringBuilder();
+      msg.append("Deployment '").append(deploymentName).append("' has ");
+      if (hasFailed) {
+        msg.append("failed services");
+        if (hasMissing) {
+          msg.append(" and ");
+        }
+      }
+      if (hasMissing) {
+        msg.append("services missing dependencies");
+      }
+      if (hasFailed) {
+        msg.append("\n    Failed services:");
+        for (        ServiceController<?> service : startFailedServices) {
+          final StartException cause=service.getStartException();
+          if (cause != null) {
+            msg.append("\n        ").append(service.getName()).append(": ").append(cause);
+          }
+        }
+      }
+      if (hasMissing) {
+        msg.append("\n    Missing dependencies:");
+        for (        ServiceController<?> service : servicesMissingDependencies) {
+          msg.append("\n        ").append(service.getName()).append(" is missing: ");
+          for (          ServiceName name : service.getImmediateUnavailableDependencies()) {
+            msg.append("\n            ").append(name);
+          }
+        }
+      }
+      log.error(msg);
+    }
+ else {
+      log.infof("Deployment '%s' started successfully",deploymentName);
+    }
+  }
+}

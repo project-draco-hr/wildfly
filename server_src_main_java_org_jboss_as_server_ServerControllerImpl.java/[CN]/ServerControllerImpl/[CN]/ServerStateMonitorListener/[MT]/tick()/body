@@ -1,0 +1,65 @@
+{
+  int tick=busyServiceCount.decrementAndGet();
+  if (tick == 0) {
+synchronized (this) {
+      final Set<ServiceName> missingDeps=new HashSet<ServiceName>();
+      for (      ServiceController<?> controller : servicesWithMissingDeps) {
+        missingDeps.addAll(controller.getImmediateUnavailableDependencies());
+      }
+      final Set<ServiceName> previousMissing=previousMissingDepSet;
+      final Set<ServiceName> noLongerMissing=new TreeSet<ServiceName>();
+      for (      ServiceName name : previousMissing) {
+        if (!missingDeps.contains(name)) {
+          noLongerMissing.add(name);
+        }
+      }
+      final Set<ServiceName> newlyMissing=new TreeSet<ServiceName>();
+      for (      ServiceName name : missingDeps) {
+        if (!previousMissing.contains(name)) {
+          newlyMissing.add(name);
+        }
+      }
+      previousMissingDepSet=missingDeps;
+      final StringBuilder msg=new StringBuilder();
+      msg.append("Service status report\n");
+      boolean print=false;
+      if (!newlyMissing.isEmpty()) {
+        print=true;
+        msg.append("   New missing/unsatisfied dependencies:\n");
+        for (        ServiceName name : newlyMissing) {
+          ServiceController<?> controller=serviceRegistry.getService(name);
+          if (controller == null) {
+            msg.append("      ").append(name).append(" (missing)\n");
+          }
+ else {
+            msg.append("      ").append(name).append(" (unavailable)\n");
+          }
+        }
+      }
+      if (!noLongerMissing.isEmpty()) {
+        print=true;
+        msg.append("   Newly corrected services:\n");
+        for (        ServiceName name : noLongerMissing) {
+          ServiceController<?> controller=serviceRegistry.getService(name);
+          if (controller == null) {
+            msg.append("      ").append(name).append(" (no longer required)\n");
+          }
+ else {
+            msg.append("      ").append(name).append(" (now available)\n");
+          }
+        }
+      }
+      if (!failedControllers.isEmpty()) {
+        print=true;
+        msg.append("  Services which failed to start:\n");
+        for (        Map.Entry<ServiceController<?>,String> entry : failedControllers.entrySet()) {
+          msg.append("      ").append(entry.getKey().getName()).append(": ").append(entry.getValue()).append('\n');
+        }
+        failedControllers.clear();
+      }
+      if (print) {
+        log.info(msg);
+      }
+    }
+  }
+}
