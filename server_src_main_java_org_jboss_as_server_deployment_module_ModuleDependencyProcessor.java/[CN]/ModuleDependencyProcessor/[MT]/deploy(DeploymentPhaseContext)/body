@@ -2,21 +2,22 @@
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   final ModuleSpecification moduleSpecification=deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
   final ServiceModuleLoader deploymentModuleLoader=deploymentUnit.getAttachment(Attachments.SERVICE_MODULE_LOADER);
-  List<ResourceRoot> allResourceRoots=DeploymentUtils.allResourceRoots(deploymentUnit);
-  for (  ResourceRoot resourceRoot : allResourceRoots) {
+  final List<ResourceRoot> allResourceRoots=DeploymentUtils.allResourceRoots(deploymentUnit);
+  for (  final ResourceRoot resourceRoot : allResourceRoots) {
     final Manifest manifest=resourceRoot.getAttachment(Attachments.MANIFEST);
     if (manifest == null)     continue;
-    final String dependencyString=manifest.getMainAttributes().getValue("Dependencies");
+    final String dependencyString=manifest.getMainAttributes().getValue(DEPENDENCIES_ATTR);
     if (dependencyString == null)     continue;
     final String[] dependencyDefs=dependencyString.split(",");
-    for (    String dependencyDef : dependencyDefs) {
+    for (    final String dependencyDef : dependencyDefs) {
       final String[] dependencyParts=dependencyDef.split(" ");
-      final int dependencyPartsLength=dependencyParts.length;
-      if (dependencyPartsLength == 0)       throw new RuntimeException("Invalid dependency: " + dependencyString);
+      if (dependencyParts.length == 0) {
+        throw new RuntimeException("Invalid dependency: " + dependencyString);
+      }
       final ModuleIdentifier dependencyId=ModuleIdentifier.fromString(dependencyParts[0]);
-      boolean export=parseOptionalExportParams(dependencyParts,"export");
-      boolean optional=parseOptionalExportParams(dependencyParts,"optional");
-      boolean services=parseOptionalExportParams(dependencyParts,"services");
+      final boolean export=containsParam(dependencyParts,EXPORT_PARAM);
+      final boolean optional=containsParam(dependencyParts,OPTIONAL_PARAM);
+      final boolean services=containsParam(dependencyParts,SERVICES_PARAM);
       final ModuleLoader dependencyLoader;
       if (dependencyId.getName().startsWith("deployment.")) {
         dependencyLoader=deploymentModuleLoader;
@@ -24,13 +25,13 @@
  else {
         dependencyLoader=Module.getBootModuleLoader();
       }
-      ModuleDependency dependency=new ModuleDependency(dependencyLoader,dependencyId,optional,export,services);
+      final ModuleDependency dependency=new ModuleDependency(dependencyLoader,dependencyId,optional,export,services);
       moduleSpecification.addDependency(dependency);
       deploymentUnit.addToAttachmentList(Attachments.MANIFEST_DEPENDENCIES,dependency);
     }
   }
   if (deploymentUnit.getParent() != null) {
-    List<ModuleDependency> dependencies=deploymentUnit.getParent().getAttachmentList(Attachments.MANIFEST_DEPENDENCIES);
-    moduleSpecification.addDependencies(dependencies);
+    final List<ModuleDependency> parentDependencies=deploymentUnit.getParent().getAttachmentList(Attachments.MANIFEST_DEPENDENCIES);
+    moduleSpecification.addDependencies(parentDependencies);
   }
 }
