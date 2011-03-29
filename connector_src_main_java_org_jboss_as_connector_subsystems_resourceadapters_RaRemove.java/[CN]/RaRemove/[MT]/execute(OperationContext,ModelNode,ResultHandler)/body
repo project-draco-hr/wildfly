@@ -1,0 +1,30 @@
+{
+  final ModelNode opAddr=operation.require(OP_ADDR);
+  final String archive=PathAddress.pathAddress(opAddr).getLastElement().getValue();
+  operation.get(ARCHIVE).set(archive);
+  final ModelNode model=context.getSubModel();
+  final ModelNode compensating=Util.getEmptyOperation(ADD,opAddr);
+  if (model.hasDefined(RESOURCEADAPTERS)) {
+    for (    ModelNode raNode : model.get(RESOURCEADAPTERS).asList()) {
+      ModelNode raCompensatingNode=raNode.clone();
+      compensating.get(RESOURCEADAPTERS).add(raCompensatingNode);
+    }
+  }
+  if (context.getRuntimeContext() != null) {
+    context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context) throws OperationFailedException {
+        ModifiableResourceAdapeters resourceAdapters=buildResourceAdaptersObject(operation);
+        final ServiceController<?> raService=context.getServiceRegistry().getService(ConnectorServices.RESOURCEADAPTERS_SERVICE);
+        if (raService != null) {
+          ((ModifiableResourceAdapeters)raService.getValue()).removeAllResourceAdapters(resourceAdapters.getResourceAdapters());
+        }
+        resultHandler.handleResultComplete();
+      }
+    }
+);
+  }
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensating);
+}
