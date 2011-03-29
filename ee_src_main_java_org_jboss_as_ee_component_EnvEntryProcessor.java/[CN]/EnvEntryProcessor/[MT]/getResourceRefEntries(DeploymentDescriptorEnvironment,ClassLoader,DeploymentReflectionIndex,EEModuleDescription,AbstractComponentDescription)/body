@@ -1,0 +1,42 @@
+{
+  List<BindingDescription> bindings=new ArrayList<BindingDescription>();
+  final ResourceReferencesMetaData entries=environment.getEnvironment().getResourceReferences();
+  if (entries == null) {
+    return bindings;
+  }
+  for (  ResourceReferenceMetaData envEntry : entries) {
+    final String name;
+    if (envEntry.getName().startsWith("java:")) {
+      name=envEntry.getName();
+    }
+ else {
+      name=environment.getDefaultContext() + envEntry.getName();
+    }
+    BindingDescription description=new BindingDescription(name);
+    Class<?> classType=null;
+    if (envEntry.getType() != null) {
+      try {
+        classType=classLoader.loadClass(envEntry.getType());
+      }
+ catch (      ClassNotFoundException e) {
+        throw new DeploymentUnitProcessingException("Could not load " + envEntry.getType() + " referenced in env-entry ",e);
+      }
+    }
+    description.setDependency(true);
+    classType=processInjectionTargets(classLoader,deploymentReflectionIndex,envEntry,description,classType);
+    description.setBindingType(classType.getName());
+    if (!isEmpty(envEntry.getLookupName())) {
+      if (componentDescription != null) {
+        description.setReferenceSourceDescription(new LookupBindingSourceDescription(envEntry.getLookupName(),componentDescription));
+      }
+ else {
+        description.setReferenceSourceDescription(new LookupBindingSourceDescription(envEntry.getLookupName(),moduleDescription));
+      }
+    }
+ else {
+      description.setReferenceSourceDescription(new LazyBindingSourceDescription());
+    }
+    bindings.add(description);
+  }
+  return bindings;
+}
