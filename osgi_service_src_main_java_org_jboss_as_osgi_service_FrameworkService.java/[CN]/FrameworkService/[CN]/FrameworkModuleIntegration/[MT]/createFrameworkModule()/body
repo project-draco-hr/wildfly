@@ -1,0 +1,37 @@
+{
+  Module systemModule=injectedSystemModule.getValue();
+  ModuleIdentifier systemIdentifier=systemModule.getIdentifier();
+  ModuleLoader systemLoader=systemModule.getModuleLoader();
+  ModuleSpec.Builder specBuilder=ModuleSpec.build(ModuleIdentifier.create(JBOSGI_PREFIX + ".framework"));
+  specBuilder.addDependency(DependencySpec.createModuleDependencySpec(PathFilters.acceptAll(),PathFilters.acceptAll(),systemLoader,systemIdentifier,false));
+  ModuleLoader bootLoader=Module.getBootModuleLoader();
+  ModuleIdentifier frameworkIdentifier=ModuleIdentifier.create("org.jboss.osgi.framework");
+  DependencySpec moduleDep=DependencySpec.createModuleDependencySpec(PathFilters.acceptAll(),PathFilters.acceptAll(),bootLoader,frameworkIdentifier,false);
+  specBuilder.addDependency(moduleDep);
+  String modulesProps=(String)subsystemState.getProperties().get(PROP_JBOSS_OSGI_SYSTEM_MODULES);
+  if (modulesProps != null) {
+    for (    String moduleProp : modulesProps.split(",")) {
+      ModuleIdentifier moduleId=ModuleIdentifier.create(moduleProp.trim());
+      moduleDep=DependencySpec.createModuleDependencySpec(PathFilters.acceptAll(),PathFilters.acceptAll(),bootLoader,moduleId,false);
+      specBuilder.addDependency(moduleDep);
+    }
+  }
+  Bundle systemBundle=injectedSystemBundle.getValue();
+  specBuilder.setModuleClassLoaderFactory(new BundleReferenceClassLoader.Factory(systemBundle));
+  try {
+    final ModuleSpec moduleSpec=specBuilder.create();
+    ModuleLoader moduleLoader=new ModuleLoader(){
+      @Override protected ModuleSpec findModule(      ModuleIdentifier identifier) throws ModuleLoadException {
+        return (moduleSpec.getModuleIdentifier().equals(identifier) ? moduleSpec : null);
+      }
+      @Override public String toString(){
+        return getClass().getSimpleName();
+      }
+    }
+;
+    return moduleLoader.loadModule(specBuilder.getIdentifier());
+  }
+ catch (  ModuleLoadException ex) {
+    throw new IllegalStateException(ex);
+  }
+}

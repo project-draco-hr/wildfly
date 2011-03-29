@@ -1,32 +1,20 @@
 {
   log.infof("Starting OSGi Framework");
   try {
-    final BundleManager bundleManager=injectedBundleManager.getValue();
-    framework=bundleManager.getFrameworkState();
-    framework.start();
-    BundleContext sysContext=framework.getBundleContext();
-    MBeanServer mbeanServer=injectedMBeanServer.getValue();
-    sysContext.registerService(MBeanServer.class.getName(),mbeanServer,null);
     ServiceContainer serviceContainer=context.getController().getServiceContainer();
-    sysContext.registerService(ServiceContainer.class.getName(),serviceContainer,null);
-    List<Deployment> deployments=new ArrayList<Deployment>();
-    BundleDeploymentPlugin depPlugin=bundleManager.getPlugin(BundleDeploymentPlugin.class);
-    for (    OSGiModule moduleMetaData : subsystemState.getModules()) {
-      ModuleIdentifier identifier=moduleMetaData.getIdentifier();
-      ModuleLoader moduleLoader=Module.getSystemModuleLoader();
-      Module module=moduleLoader.loadModule(identifier);
-      Deployment dep=depPlugin.createDeployment(module);
-      dep.setAutoStart(moduleMetaData.isStart());
-      deployments.add(dep);
-    }
-    DeployerService service=new SystemDeployerService(sysContext){
-      @Override protected Bundle installBundle(      Deployment dep) throws BundleException {
-        AbstractBundle bundleState=bundleManager.installBundle(dep);
-        return bundleState.getBundleWrapper();
-      }
-    }
-;
-    service.deploy(deployments.toArray(new Deployment[deployments.size()]));
+    Map<String,Object> props=new HashMap<String,Object>(subsystemState.getProperties());
+    setupIntegrationProperties(context,props);
+    FrameworkBuilder builder=new FrameworkBuilder(props);
+    builder.setServiceContainer(serviceContainer);
+    builder.addProvidedService(DeployerServiceProvider.SERVICE_NAME);
+    builder.addProvidedService(FrameworkModuleProvider.SERVICE_NAME);
+    builder.addProvidedService(ModuleLoaderProvider.SERVICE_NAME);
+    framework=builder.build();
+    framework.start();
+    BundleContext systemContext=framework.getBundleContext();
+    MBeanServer mbeanServer=injectedMBeanServer.getValue();
+    systemContext.registerService(MBeanServer.class.getName(),mbeanServer,null);
+    systemContext.registerService(ServiceContainer.class.getName(),serviceContainer,null);
   }
  catch (  Throwable t) {
     throw new StartException("Failed to start OSGi Framework: " + framework,t);

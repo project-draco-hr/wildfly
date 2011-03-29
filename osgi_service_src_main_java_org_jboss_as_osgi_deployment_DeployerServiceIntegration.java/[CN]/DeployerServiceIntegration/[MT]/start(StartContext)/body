@@ -1,0 +1,118 @@
+{
+  final ServiceContainer serviceContainer=context.getController().getServiceContainer();
+  final BundleContext systemContext=injectedSystemBundle.getValue().getBundleContext();
+  deploymentManager=new ModelControllerServerDeploymentManager(injectedServerController.getValue());
+  delegate=new SystemDeployerService(systemContext){
+    @Override protected Bundle installBundle(    Deployment dep) throws BundleException {
+      log.tracef("Install deployment: %s",dep);
+      Bundle bundle=null;
+      String contextName=DeploymentHolderService.getContextName(dep);
+      DeploymentPlanBuilder builder=deploymentManager.newDeploymentPlan();
+      try {
+        ServiceTarget serviceTarget=serviceContainer.subTarget();
+        DeploymentHolderService.addService(serviceTarget,contextName,dep);
+        OSGiDeploymentLatchService.addService(serviceTarget,contextName);
+        InputStream inputStream=dep.getRoot().openStream();
+        builder=builder.add(contextName,inputStream).andDeploy();
+        DeploymentPlan plan=builder.build();
+        DeploymentAction deployAction=builder.getLastAction();
+        executeDeploymentPlan(plan,deployAction);
+        final CountDownLatch latch=new CountDownLatch(1);
+        ServiceName serviceName=OSGiDeploymentLatchService.getServiceName(contextName);
+        ServiceController<?> controller=serviceContainer.getService(serviceName);
+        controller.addListener(new AbstractServiceListener<Object>(){
+          @Override public void listenerAdded(          ServiceController<? extends Object> controller){
+            if (controller.getState() == State.UP)             serviceStarted(controller);
+ else             if (controller.getState() == State.START_FAILED)             serviceFailed(controller,controller.getStartException());
+          }
+          @Override public void serviceStarted(          ServiceController<? extends Object> controller){
+            log.tracef("Service started: %s",controller.getName());
+            controller.removeListener(this);
+            latch.countDown();
+          }
+          @Override public void serviceFailed(          ServiceController<? extends Object> controller,          StartException reason){
+            log.tracef(reason,"Service failed: %s",controller.getName());
+            controller.removeListener(this);
+            latch.countDown();
+          }
+        }
+);
+        try {
+          latch.await(10,TimeUnit.SECONDS);
+          if (controller.getState() == State.START_FAILED)           throw controller.getStartException();
+          if (controller.getState() != State.UP)           throw new BundleException("OSGiDeploymentService not available: " + serviceName);
+          Deployment bundleDep=(Deployment)controller.getValue();
+          bundle=bundleDep.getAttachment(Bundle.class);
+        }
+  finally {
+          controller.setMode(Mode.REMOVE);
+        }
+      }
+ catch (      RuntimeException rte) {
+        throw rte;
+      }
+catch (      BundleException ex) {
+        throw ex;
+      }
+catch (      Exception ex) {
+        throw new BundleException("Cannot deploy bundle: " + dep,ex);
+      }
+ finally {
+        DeploymentHolderService.removeService(serviceContainer,contextName);
+      }
+      if (bundle == null)       throw new IllegalStateException("Cannot find bundle: " + contextName);
+      return bundle;
+    }
+    @Override protected void uninstallBundle(    Deployment dep,    Bundle bundle) throws BundleException {
+      try {
+        String contextName=DeploymentHolderService.getContextName(dep);
+        ServiceName serviceName=OSGiDeploymentService.getServiceName(contextName);
+        ServiceController<?> controller=serviceContainer.getService(serviceName);
+        if (controller == null) {
+          FrameworkExt bundleManager=injectedBundleManager.getValue();
+          bundleManager.uninstallBundle(dep);
+          return;
+        }
+        final CountDownLatch latch=new CountDownLatch(1);
+        controller.addListener(new AbstractServiceListener<Object>(){
+          @Override public void listenerAdded(          ServiceController<? extends Object> controller){
+            if (controller.getState() == State.REMOVED)             serviceRemoved(controller);
+ else             if (controller.getState() == State.START_FAILED)             serviceFailed(controller,controller.getStartException());
+          }
+          @Override public void serviceRemoved(          ServiceController<? extends Object> controller){
+            log.tracef("Service removed: %s",controller.getName());
+            controller.removeListener(this);
+            latch.countDown();
+          }
+          @Override public void serviceFailed(          ServiceController<? extends Object> controller,          StartException reason){
+            log.tracef(reason,"Service failed: %s",controller.getName());
+            controller.removeListener(this);
+            latch.countDown();
+          }
+        }
+);
+        DeploymentPlanBuilder builder=deploymentManager.newDeploymentPlan();
+        builder=builder.undeploy(contextName).remove(contextName);
+        DeploymentPlan plan=builder.build();
+        DeploymentAction removeAction=builder.getLastAction();
+        executeDeploymentPlan(plan,removeAction);
+        latch.await(10,TimeUnit.SECONDS);
+        if (controller.getState() == State.START_FAILED)         throw controller.getStartException();
+        if (controller.getState() != State.REMOVED)         throw new BundleException("OSGiDeploymentService not removed: " + serviceName);
+      }
+ catch (      RuntimeException rte) {
+        throw rte;
+      }
+catch (      BundleException ex) {
+        throw ex;
+      }
+catch (      Exception ex) {
+        throw new BundleException("Cannot undeploy bundle: " + dep,ex);
+      }
+    }
+  }
+;
+  Hashtable<String,Object> props=new Hashtable<String,Object>();
+  props.put(Constants.SERVICE_RANKING,Integer.MAX_VALUE);
+  systemContext.registerService(DeployerService.class.getName(),delegate,props);
+}

@@ -1,24 +1,29 @@
 {
   populateSubModel(context.getSubModel(),operation);
   if (context instanceof BootOperationContext) {
-    log.infof("Activating OSGi Subsystem");
     final BootOperationContext updateContext=(BootOperationContext)context;
     context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
       public void execute(      RuntimeTaskContext context) throws OperationFailedException {
-        final ServiceTarget target=context.getServiceTarget();
+        log.infof("Activating OSGi Subsystem");
+        long begin=System.currentTimeMillis();
         SubsystemState subsystemState=createSubsystemState(operation);
         String value=SecurityActions.getSystemProperty("jboss.protocol.handler.modules","org.jboss.osgi.framework");
-        if (!value.equals("org.jboss.osgi.framework"))         value=value + "|org.jboss.osgi.framework";
+        if (!value.equals("org.jboss.osgi.framework")) {
+          value=value + "|org.jboss.osgi.framework";
+        }
         SecurityActions.setSystemProperty("jboss.protocol.handler.modules",value);
+        ServiceTarget target=context.getServiceTarget();
         Activation policy=subsystemState.getActivationPolicy();
-        BundleManagerService.addService(target,subsystemState);
-        FrameworkService.addService(target,subsystemState);
         BundleContextService.addService(target,policy);
+        DeployerServiceIntegration.addService(target);
+        FrameworkService.addService(target,subsystemState);
         PackageAdminService.addService(target);
         StartLevelService.addService(target);
         ConfigAdminServiceImpl.addService(target,subsystemState);
         new OSGiDeploymentActivator().activate(updateContext);
         resultHandler.handleResultComplete();
+        long end=System.currentTimeMillis();
+        log.debugf("Activated OSGi Subsystem in %dms",end - begin);
       }
     }
 );

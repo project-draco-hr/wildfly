@@ -3,25 +3,30 @@
   String apiDeploymentName=archiveDeployer.deploy(apiArchive);
   assertNotNull("Deployment name not null",apiDeploymentName);
   try {
-    registerModule(ModuleIdentifier.create("deployment." + apiDeploymentName));
-    InputStream input=deploymentProvider.getClientDeploymentAsStream(TARGET_BUNDLE_NAME);
-    Bundle targetBundle=context.installBundle(TARGET_BUNDLE_NAME,input);
-    assertEquals("Bundle INSTALLED",Bundle.INSTALLED,targetBundle.getState());
+    Bundle apiBundle=registerModule(ModuleIdentifier.create("deployment." + apiDeploymentName));
     try {
-      targetBundle.start();
-      assertEquals("Bundle ACTIVE",Bundle.ACTIVE,targetBundle.getState());
-      Archive<?> clientArchive=deploymentProvider.getClientDeployment(CLIENT_MODULE_NAME);
-      String clientDeploymentName=archiveDeployer.deploy(clientArchive);
-      assertNotNull("Deployment name not null",clientDeploymentName);
+      InputStream input=deploymentProvider.getClientDeploymentAsStream(TARGET_BUNDLE_NAME);
+      Bundle targetBundle=context.installBundle(TARGET_BUNDLE_NAME,input);
+      assertEquals("Bundle INSTALLED",Bundle.INSTALLED,targetBundle.getState());
       try {
-        assertServiceState(ServiceName.parse("jboss.osgi.xservice.invoker"),State.UP,5000);
+        targetBundle.start();
+        assertEquals("Bundle ACTIVE",Bundle.ACTIVE,targetBundle.getState());
+        Archive<?> clientArchive=deploymentProvider.getClientDeployment(CLIENT_MODULE_NAME);
+        String clientDeploymentName=archiveDeployer.deploy(clientArchive);
+        assertNotNull("Deployment name not null",clientDeploymentName);
+        try {
+          assertServiceState(ServiceName.parse("jboss.osgi.xservice.invoker"),State.UP,5000);
+        }
+  finally {
+          archiveDeployer.undeploy(clientDeploymentName);
+        }
       }
   finally {
-        archiveDeployer.undeploy(clientDeploymentName);
+        targetBundle.uninstall();
       }
     }
   finally {
-      targetBundle.uninstall();
+      apiBundle.uninstall();
     }
   }
   finally {
