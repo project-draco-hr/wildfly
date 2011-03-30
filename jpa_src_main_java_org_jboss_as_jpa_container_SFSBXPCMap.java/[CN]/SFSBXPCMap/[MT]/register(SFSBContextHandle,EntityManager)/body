@@ -2,11 +2,18 @@
   if (!(entityManager instanceof AbstractEntityManager)) {
     throw new RuntimeException("internal error, XPC needs to be a AbstractEntityManager so that we can get metadata");
   }
-  List<EntityManager> xpcList=Collections.synchronizedList(new ArrayList<EntityManager>());
-  xpcList.add(entityManager);
-  xpcList=contextToXPCMap.putIfAbsent(beanContextHandle,xpcList);
-  if (null != xpcList) {
-    xpcList.add(entityManager);
+  List<WeakReference<EntityManager>> xpcList=contextToXPCMap.get(beanContextHandle);
+  if (xpcList == null) {
+    xpcList=Collections.synchronizedList(new ArrayList<WeakReference<EntityManager>>());
+    xpcList.add(new WeakReference(entityManager));
+    List<WeakReference<EntityManager>> existingList=contextToXPCMap.putIfAbsent(beanContextHandle,xpcList);
+    if (existingList != null) {
+      xpcList=existingList;
+      xpcList.add(new WeakReference(entityManager));
+    }
+  }
+ else {
+    xpcList.add(new WeakReference(entityManager));
   }
   List<SFSBContextHandle> sfsbList=Collections.synchronizedList(new ArrayList<SFSBContextHandle>());
   sfsbList.add(beanContextHandle);
