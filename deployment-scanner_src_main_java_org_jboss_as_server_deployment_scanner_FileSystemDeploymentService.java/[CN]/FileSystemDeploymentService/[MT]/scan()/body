@@ -48,7 +48,22 @@
         }
         while (!updates.isEmpty()) {
           ModelNode composite=getCompositeUpdate(updates);
-          final ModelNode results=serverController.execute(OperationBuilder.Factory.create(composite).build());
+          final DeploymentTask deploymentTask=new DeploymentTask(OperationBuilder.Factory.create(composite).build());
+          final Future<ModelNode> futureResults=scheduledExecutor.submit(deploymentTask);
+          final ModelNode results;
+          try {
+            results=futureResults.get(deploymentTimeout,TimeUnit.SECONDS);
+          }
+ catch (          Exception e) {
+            futureResults.cancel(true);
+            final ModelNode failure=new ModelNode();
+            failure.get(OUTCOME).set(FAILED);
+            failure.get(FAILURE_DESCRIPTION).set("Failed to execute deployment operation in allowed timeout [" + deploymentTimeout + "]");
+            for (            ScannerTask task : scannerTasks) {
+              task.handleFailureResult(failure);
+            }
+            break;
+          }
           final List<Property> resultList=results.get(RESULT).asPropertyList();
           final List<ModelNode> toRetry=new ArrayList<ModelNode>();
           final List<ScannerTask> retryTasks=new ArrayList<ScannerTask>();
