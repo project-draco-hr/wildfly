@@ -1,31 +1,25 @@
 {
   final ModelNode model=context.getSubModel();
   final ModelNode compensatingOp=DeploymentAddHandler.getOperation(operation.get(OP_ADDR),model);
-  if (model.get(ENABLED).asBoolean()) {
-    String msg=String.format("Deployment %s must be undeployed before being removed",model.get(NAME).asString());
-    throw new OperationFailedException(new ModelNode().set(msg));
-  }
+  if (context.getRuntimeContext() != null) {
+    context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context) throws OperationFailedException {
+        String deploymentUnitName=model.require(NAME).asString();
+        final ServiceName deploymentUnitServiceName=Services.deploymentUnitName(deploymentUnitName);
+        final ServiceRegistry serviceRegistry=context.getServiceRegistry();
+        final ServiceController<?> controller=serviceRegistry.getService(deploymentUnitServiceName);
+        if (controller != null) {
+          controller.addListener(new ResultHandler.ServiceRemoveListener(resultHandler));
+        }
  else {
-    if (context.getRuntimeContext() != null) {
-      context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
-        public void execute(        RuntimeTaskContext context) throws OperationFailedException {
-          String deploymentUnitName=model.require(NAME).asString();
-          final ServiceName deploymentUnitServiceName=Services.deploymentUnitName(deploymentUnitName);
-          final ServiceRegistry serviceRegistry=context.getServiceRegistry();
-          final ServiceController<?> controller=serviceRegistry.getService(deploymentUnitServiceName);
-          if (controller != null) {
-            controller.addListener(new ResultHandler.ServiceRemoveListener(resultHandler));
-          }
- else {
-            resultHandler.handleResultComplete();
-          }
+          resultHandler.handleResultComplete();
         }
       }
+    }
 );
-    }
+  }
  else {
-      resultHandler.handleResultComplete();
-    }
+    resultHandler.handleResultComplete();
   }
   return new BasicOperationResult(compensatingOp);
 }
