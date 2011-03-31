@@ -1,0 +1,28 @@
+{
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(ModelDescriptionConstants.REMOVE);
+  compensatingOperation.get(OP_ADDR).set(operation.require(OP_ADDR));
+  final String interfaceName=operation.require(ModelDescriptionConstants.INTERFACE).asString();
+  final int port=operation.require(ModelDescriptionConstants.PORT).asInt();
+  final ModelNode subModel=context.getSubModel();
+  subModel.get(ModelDescriptionConstants.INTERFACE).set(interfaceName);
+  subModel.get(ModelDescriptionConstants.PORT).set(port);
+  if (context.getRuntimeContext() != null) {
+    context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context) throws OperationFailedException {
+        final ServiceTarget serviceTarget=context.getServiceTarget();
+        Logger.getLogger("org.jboss.as").infof("creating native management service using network interface (%s) port (%s)",interfaceName,port);
+        final ServiceName SERVICE_NAME_BASE=ServiceName.JBOSS.append("host","controller");
+        final ServiceName threadFactoryServiceName=SERVICE_NAME_BASE.append("thread-factory");
+        final ServiceName executorServiceName=SERVICE_NAME_BASE.append("executor");
+        final ManagementCommunicationService managementCommunicationService=new ManagementCommunicationService();
+        serviceTarget.addService(ManagementCommunicationService.SERVICE_NAME,managementCommunicationService).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(interfaceName),NetworkInterfaceBinding.class,managementCommunicationService.getInterfaceInjector()).addInjection(managementCommunicationService.getPortInjector(),port).addDependency(executorServiceName,ExecutorService.class,managementCommunicationService.getExecutorServiceInjector()).addDependency(threadFactoryServiceName,ThreadFactory.class,managementCommunicationService.getThreadFactoryInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+      }
+    }
+);
+  }
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensatingOperation);
+}
