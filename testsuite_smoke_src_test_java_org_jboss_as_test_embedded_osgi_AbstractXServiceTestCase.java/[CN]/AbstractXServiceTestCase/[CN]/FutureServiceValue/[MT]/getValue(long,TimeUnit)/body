@@ -1,0 +1,39 @@
+{
+  if (controller.getState() == State.UP)   return controller.getValue();
+  final CountDownLatch latch=new CountDownLatch(1);
+  AbstractServiceListener<T> listener=new AbstractServiceListener<T>(){
+    @Override public void listenerAdded(    ServiceController<? extends T> controller){
+      State state=controller.getState();
+      if (state == State.UP || state == State.START_FAILED)       listenerDone(controller);
+    }
+    @Override public void serviceStarted(    ServiceController<? extends T> controller){
+      listenerDone(controller);
+    }
+    @Override public void serviceFailed(    ServiceController<? extends T> controller,    StartException reason){
+      listenerDone(controller);
+    }
+    private void listenerDone(    ServiceController<? extends T> controller){
+      controller.removeListener(this);
+      latch.countDown();
+    }
+  }
+;
+  controller.addListener(listener);
+  try {
+    if (latch.await(timeout,unit) == false) {
+      TimeoutException cause=new TimeoutException("Timeout getting " + controller.getName());
+      processExceptionCause(cause);
+      throw cause;
+    }
+  }
+ catch (  InterruptedException e) {
+  }
+  if (controller.getState() == State.UP)   return controller.getValue();
+  StartException startException=controller.getStartException();
+  Throwable cause=(startException != null ? startException.getCause() : null);
+  String message=processExceptionCause(cause);
+  if (cause instanceof RuntimeException)   throw (RuntimeException)cause;
+  if (cause instanceof ExecutionException)   throw (ExecutionException)cause;
+  if (cause instanceof TimeoutException)   throw (TimeoutException)cause;
+  throw new ExecutionException(message,cause);
+}

@@ -1,0 +1,38 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  Deployment deployment=OSGiDeploymentAttachment.getDeployment(deploymentUnit);
+  String contextName=deploymentUnit.getName();
+  ServiceRegistry serviceRegistry=phaseContext.getServiceRegistry();
+  Deployment holderDep=DeploymentHolderService.getDeployment(serviceRegistry,contextName);
+  VirtualFile virtualFile=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
+  String location=holderDep != null ? holderDep.getLocation() : contextName;
+  boolean autoStart=holderDep != null ? holderDep.isAutoStart() : true;
+  BundleInfo info=BundleInfoAttachment.getBundleInfo(deploymentUnit);
+  if (deployment == null && info != null) {
+    deployment=DeploymentFactory.createDeployment(info);
+    deployment.addAttachment(BundleInfo.class,info);
+    OSGiDeploymentAttachment.attachDeployment(deploymentUnit,deployment);
+  }
+  OSGiMetaData metadata=OSGiMetaDataAttachment.getOSGiMetaData(deploymentUnit);
+  if (deployment == null && metadata != null) {
+    String symbolicName=metadata.getBundleSymbolicName();
+    Version version=metadata.getBundleVersion();
+    deployment=DeploymentFactory.createDeployment(AbstractVFS.adapt(virtualFile),location,symbolicName,version);
+    deployment.addAttachment(OSGiMetaData.class,metadata);
+    OSGiDeploymentAttachment.attachDeployment(deploymentUnit,deployment);
+  }
+  XModule resModule=XModuleAttachment.getXModuleAttachment(deploymentUnit);
+  if (deployment == null && resModule != null) {
+    String symbolicName=resModule.getName();
+    Version version=resModule.getVersion();
+    deployment=DeploymentFactory.createDeployment(AbstractVFS.adapt(virtualFile),location,symbolicName,version);
+    deployment.addAttachment(XModule.class,resModule);
+    OSGiDeploymentAttachment.attachDeployment(deploymentUnit,deployment);
+  }
+  if (deployment != null) {
+    MountHandle mount=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT).getMountHandle();
+    deployment.addAttachment(MountHandle.class,mount);
+    deployment.setAutoStart(autoStart);
+    BundleInstallService.addService(phaseContext,deployment);
+  }
+}
