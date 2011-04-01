@@ -1,0 +1,41 @@
+{
+  final String bindingsName;
+  final String osName=SecurityActions.getSystemProperty("os.name").toLowerCase();
+  if (osName.indexOf("windows") >= 0) {
+    bindingsName="keybindings/jline-windows-bindings.properties";
+  }
+ else   if (osName.startsWith("macos")) {
+    bindingsName="keybindings/jline-mac-bindings.properties";
+  }
+ else {
+    bindingsName="keybindings/jline-default-bindings.properties";
+  }
+  ClassLoader cl=SecurityActions.getClassLoader(CommandLineMain.class);
+  InputStream bindingsIs=cl.getResourceAsStream(bindingsName);
+  if (bindingsIs == null) {
+    System.err.println("Failed to locate key bindings for OS '" + osName + "': "+ bindingsName);
+    URLClassLoader ucl=(URLClassLoader)cl;
+    for (    URL url : ucl.getURLs()) {
+      System.out.println(url.toExternalForm());
+    }
+    try {
+      return new jline.ConsoleReader();
+    }
+ catch (    IOException e) {
+      throw new IllegalStateException("Failed to initialize console reader",e);
+    }
+  }
+ else {
+    try {
+      final InputStream in=new FileInputStream(FileDescriptor.in);
+      final Writer out=new PrintWriter(new OutputStreamWriter(System.out,System.getProperty("jline.WindowsTerminal.output.encoding",System.getProperty("file.encoding"))));
+      return new jline.ConsoleReader(in,out,bindingsIs);
+    }
+ catch (    Exception e) {
+      throw new IllegalStateException("Failed to initialize console reader",e);
+    }
+ finally {
+      StreamUtils.safeClose(bindingsIs);
+    }
+  }
+}
