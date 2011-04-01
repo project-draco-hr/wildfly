@@ -18,6 +18,7 @@
   final MarshallerFactory factory=Marshalling.getMarshallerFactory("river",DomainServerMain.class.getClassLoader());
   final Unmarshaller unmarshaller;
   final ByteInput byteInput;
+  final AsyncFuture<ServiceContainer> containerFuture;
   try {
     final MarshallingConfiguration configuration=new MarshallingConfiguration();
     configuration.setVersion(2);
@@ -27,7 +28,7 @@
     unmarshaller.start(byteInput);
     final ServerTask task=unmarshaller.readObject(ServerTask.class);
     unmarshaller.finish();
-    task.run(Arrays.<ServiceActivator>asList(new ServiceActivator(){
+    containerFuture=task.run(Arrays.<ServiceActivator>asList(new ServiceActivator(){
       @Override public void activate(      final ServiceActivatorContext serviceActivatorContext){
       }
     }
@@ -38,11 +39,26 @@
     System.exit(1);
     throw new IllegalStateException();
   }
+ finally {
+  }
   for (; ; )   try {
-    unmarshaller.start(byteInput);
-    final InetSocketAddress socketAddress=unmarshaller.readObject(InetSocketAddress.class);
-    unmarshaller.finish();
-    break;
+    String hostName=StreamUtils.readUTFZBytes(initialInput);
+    int port=StreamUtils.readInt(initialInput);
+    final CountDownLatch latch=new CountDownLatch(2);
+    final UninstallListener connectionListener=new UninstallListener(latch,HostControllerConnectionService.SERVICE_NAME);
+    final UninstallListener clientListener=new UninstallListener(latch,HostControllerServerClient.SERVICE_NAME);
+    final ServiceContainer container=containerFuture.get();
+    final ServiceController<?> client=container.getRequiredService(HostControllerServerClient.SERVICE_NAME);
+    final String name=((HostControllerServerClient)client.getValue()).getServerName();
+    client.addListener(clientListener);
+    client.setMode(ServiceController.Mode.REMOVE);
+    final ServiceController<?> connection=container.getRequiredService(HostControllerConnectionService.SERVICE_NAME);
+    connection.addListener(connectionListener);
+    connection.setMode(ServiceController.Mode.REMOVE);
+    latch.await();
+    client.removeListener(clientListener);
+    connection.removeListener(connectionListener);
+    addCommunicationServices(container,name,new InetSocketAddress(InetAddress.getByName(hostName),port));
   }
  catch (  InterruptedIOException e) {
     Thread.interrupted();
@@ -51,6 +67,7 @@ catch (  EOFException e) {
     break;
   }
 catch (  Exception e) {
+    e.printStackTrace();
     break;
   }
   System.exit(0);

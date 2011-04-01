@@ -4,17 +4,18 @@
     log.errorf("No server called %s exists for stop",serverName);
     return;
   }
-  checkState(server,ServerState.STOPPING);
-  try {
-    server.stopServerProcess();
+  hostController.unregisterRunningServer(server.getServerName());
+  if (server.getState() != ServerState.STOPPING) {
+    try {
+      if (server.incrementAndGetRespawnCount() < 10) {
+        server.startServerProcess();
+        return;
+      }
+      server.setState(ServerState.MAX_FAILED);
+    }
+ catch (    IOException e) {
+      log.error("Failed to start server " + serverName,e);
+    }
   }
- catch (  final IOException e) {
-    log.errorf(e,"Could not stop server %s in PM",serverName);
-  }
-  try {
-    server.removeServerProcess();
-  }
- catch (  final IOException e) {
-    log.errorf(e,"Could not stop server %s",serverName);
-  }
+  servers.remove(serverName);
 }
