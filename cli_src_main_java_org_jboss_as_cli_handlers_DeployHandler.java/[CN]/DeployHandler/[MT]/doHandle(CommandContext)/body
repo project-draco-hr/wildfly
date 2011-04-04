@@ -1,0 +1,120 @@
+{
+  ModelControllerClient client=ctx.getModelControllerClient();
+  if (client == null) {
+    ctx.printLine("The controller client is not available. Make sure you are connected to the controller.");
+    return;
+  }
+  if (!ctx.hasArguments()) {
+    printList(ctx,Util.getDeployments(ctx.getModelControllerClient()));
+    return;
+  }
+  String filePath=null;
+  String name=null;
+  String runtimeName=null;
+  for (  String arg : ctx.getArguments()) {
+    if (filePath == null) {
+      filePath=arg;
+    }
+ else     if (name == null) {
+      name=arg;
+    }
+ else {
+      runtimeName=arg;
+    }
+  }
+  if (filePath == null) {
+    printList(ctx,Util.getDeployments(ctx.getModelControllerClient()));
+    return;
+  }
+  File f=new File(filePath);
+  if (!f.exists()) {
+    ctx.printLine("The path doesn't exist: " + f.getAbsolutePath());
+    return;
+  }
+  if (name == null) {
+    name=f.getName();
+  }
+  if (Util.isDeployed(name,ctx.getModelControllerClient())) {
+    if (ctx.hasSwitch("f")) {
+      DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
+      ModelNode result;
+      builder=new DefaultOperationRequestBuilder();
+      builder.setOperationName("full-replace-deployment");
+      builder.addProperty("name",name);
+      if (runtimeName != null) {
+        builder.addProperty("runtime-name",runtimeName);
+      }
+      FileInputStream is=null;
+      try {
+        is=new FileInputStream(f);
+        ModelNode request=builder.buildRequest();
+        OperationBuilder op=OperationBuilder.Factory.create(request);
+        op.addInputStream(is);
+        request.get("input-stream-index").set(0);
+        result=client.execute(op.build());
+      }
+ catch (      Exception e) {
+        ctx.printLine("Failed to replace the deployment: " + e.getLocalizedMessage());
+        return;
+      }
+ finally {
+        StreamUtils.safeClose(is);
+      }
+      if (!Util.isSuccess(result)) {
+        ctx.printLine(Util.getFailureDescription(result));
+        return;
+      }
+      ctx.printLine("'" + name + "' re-deployed successfully.");
+    }
+ else {
+      ctx.printLine("'" + name + "' is already deployed (use -f to force re-deploy).");
+    }
+    return;
+  }
+ else {
+    DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
+    ModelNode result;
+    builder=new DefaultOperationRequestBuilder();
+    builder.setOperationName("add");
+    builder.addNode("deployment",name);
+    if (runtimeName != null) {
+      builder.addProperty("runtime-name",runtimeName);
+    }
+    FileInputStream is=null;
+    try {
+      is=new FileInputStream(f);
+      ModelNode request=builder.buildRequest();
+      OperationBuilder op=OperationBuilder.Factory.create(request);
+      op.addInputStream(is);
+      request.get("input-stream-index").set(0);
+      result=client.execute(op.build());
+    }
+ catch (    Exception e) {
+      ctx.printLine("Failed to add the deployment content to the repository: " + e.getLocalizedMessage());
+      return;
+    }
+ finally {
+      StreamUtils.safeClose(is);
+    }
+    if (!Util.isSuccess(result)) {
+      ctx.printLine(Util.getFailureDescription(result));
+      return;
+    }
+    builder=new DefaultOperationRequestBuilder();
+    builder.setOperationName("deploy");
+    builder.addNode("deployment",name);
+    try {
+      ModelNode request=builder.buildRequest();
+      result=client.execute(request);
+    }
+ catch (    Exception e) {
+      ctx.printLine("Failed to deploy: " + e.getLocalizedMessage());
+      return;
+    }
+    if (!Util.isSuccess(result)) {
+      ctx.printLine(Util.getFailureDescription(result));
+      return;
+    }
+    ctx.printLine("'" + name + "' deployed successfully.");
+  }
+}
