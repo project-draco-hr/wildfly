@@ -1,0 +1,40 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+  final String applicationName=configuration.getApplicationName();
+  final String moduleName=configuration.getModuleName();
+  final String componentName=configuration.getComponentName();
+  final ServiceName baseName=deploymentUnit.getServiceName().append("component").append(componentName);
+  final ServiceName createServiceName=baseName.append("CREATE");
+  final ServiceName startServiceName=baseName.append("START");
+  final BasicComponentCreateService createService=configuration.getComponentCreateServiceFactory().constructService(configuration);
+  final ServiceBuilder<Component> createBuilder=serviceTarget.addService(createServiceName,createService);
+  final ComponentStartService startService=new ComponentStartService();
+  final ServiceBuilder<Component> startBuilder=serviceTarget.addService(startServiceName,startService);
+  for (  DependencyConfigurator configurator : configuration.getCreateDependencies()) {
+    configurator.configureDependency(createBuilder);
+  }
+  for (  DependencyConfigurator configurator : configuration.getStartDependencies()) {
+    configurator.configureDependency(startBuilder);
+  }
+  startBuilder.addDependency(createServiceName,BasicComponent.class,startService.getComponentInjector());
+  for (  ViewConfiguration viewConfiguration : configuration.getViews()) {
+    final ServiceName serviceName=viewConfiguration.getViewServiceName();
+    final ViewService viewService=new ViewService(viewConfiguration);
+    serviceTarget.addService(serviceName,viewService).addDependency(createServiceName,Component.class,viewService.getComponentInjector()).install();
+    for (    BindingConfiguration bindingConfiguration : viewConfiguration.getBindingConfigurations()) {
+      final String bindingName=bindingConfiguration.getName();
+      final BinderService service=new BinderService(bindingName);
+      ServiceBuilder<ManagedReferenceFactory> serviceBuilder=serviceTarget.addService(ContextNames.serviceNameOfContext(applicationName,moduleName,componentName,bindingName),service);
+      bindingConfiguration.getSource().getResourceValue(configuration,serviceBuilder,phaseContext,service.getManagedObjectInjector());
+    }
+  }
+  for (  BindingConfiguration bindingConfiguration : configuration.getBindingConfigurations()) {
+    final String bindingName=bindingConfiguration.getName();
+    final BinderService service=new BinderService(bindingName);
+    ServiceBuilder<ManagedReferenceFactory> serviceBuilder=serviceTarget.addService(ContextNames.serviceNameOfContext(applicationName,moduleName,componentName,bindingName),service);
+    bindingConfiguration.getSource().getResourceValue(configuration,serviceBuilder,phaseContext,service.getManagedObjectInjector());
+  }
+  createBuilder.install();
+  startBuilder.install();
+}

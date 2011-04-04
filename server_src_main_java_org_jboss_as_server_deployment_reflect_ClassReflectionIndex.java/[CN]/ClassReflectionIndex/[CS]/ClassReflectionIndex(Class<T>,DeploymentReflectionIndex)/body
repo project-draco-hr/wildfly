@@ -1,0 +1,50 @@
+{
+  this.indexedClass=indexedClass;
+  final Field[] declaredFields=indexedClass.getDeclaredFields();
+  final Map<String,Field> fields=new HashMap<String,Field>();
+  for (  Field field : declaredFields) {
+    field.setAccessible(true);
+    fields.put(field.getName(),field);
+  }
+  this.fields=fields;
+  final Method[] declaredMethods=indexedClass.getDeclaredMethods();
+  final Map<String,Map<ParamList,Map<Class<?>,Method>>> methods=new HashMap<String,Map<ParamList,Map<Class<?>,Method>>>();
+  final Map<String,Map<ParamNameList,Map<String,Method>>> methodsByTypeName=new HashMap<String,Map<ParamNameList,Map<String,Method>>>();
+  for (  Method method : declaredMethods) {
+    method.setAccessible(true);
+    addMethod(methods,method);
+    addMethodByTypeName(methodsByTypeName,method);
+  }
+  Class<? super T> superClass=indexedClass.getSuperclass();
+  if (superClass != null) {
+    for (    Method method : deploymentReflectionIndex.getClassIndex(superClass).getMethods()) {
+      int modifiers=method.getModifiers();
+      if (Modifier.isPublic(modifiers) && !Modifier.isStatic(modifiers)) {
+        addMethod(methods,method);
+        addMethodByTypeName(methodsByTypeName,method);
+      }
+    }
+  }
+  for (  Class<?> iface : indexedClass.getInterfaces()) {
+    for (    Method method : deploymentReflectionIndex.getClassIndex(iface).getMethods()) {
+      int modifiers=method.getModifiers();
+      if (Modifier.isPublic(modifiers) && !Modifier.isStatic(modifiers)) {
+        addMethod(methods,method);
+        addMethodByTypeName(methodsByTypeName,method);
+      }
+    }
+  }
+  this.methods=methods;
+  this.methodsByTypeName=methodsByTypeName;
+  final Constructor<T>[] declaredConstructors=(Constructor<T>[])indexedClass.getDeclaredConstructors();
+  final Map<ParamNameList,Constructor<T>> constructorsByTypeName=new HashMap<ParamNameList,Constructor<T>>();
+  final Map<ParamList,Constructor<T>> constructors=new HashMap<ParamList,Constructor<T>>();
+  for (  Constructor<T> constructor : declaredConstructors) {
+    constructor.setAccessible(true);
+    Class<?>[] parameterTypes=constructor.getParameterTypes();
+    constructors.put(createParamList(parameterTypes),constructor);
+    constructorsByTypeName.put(createParamNameList(parameterTypes),constructor);
+  }
+  this.constructorsByTypeName=constructorsByTypeName;
+  this.constructors=constructors;
+}

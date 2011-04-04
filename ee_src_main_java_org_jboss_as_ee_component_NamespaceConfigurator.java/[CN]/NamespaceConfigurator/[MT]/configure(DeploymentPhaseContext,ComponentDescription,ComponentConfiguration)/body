@@ -1,0 +1,40 @@
+{
+  final ComponentNamingMode namingMode=description.getNamingMode();
+  final InjectedEENamespaceContextSelector selector=new InjectedEENamespaceContextSelector();
+  final String applicationName=configuration.getApplicationName();
+  final String moduleName=configuration.getModuleName();
+  final String compName=configuration.getComponentName();
+  final ServiceName appContextServiceName=ContextNames.contextServiceNameOfApplication(applicationName);
+  final ServiceName moduleContextServiceName=ContextNames.contextServiceNameOfModule(applicationName,moduleName);
+  final ServiceName compContextServiceName=ContextNames.contextServiceNameOfComponent(applicationName,moduleName,compName);
+  final Injector<NamingStore> appInjector=selector.getAppContextInjector();
+  final Injector<NamingStore> moduleInjector=selector.getModuleContextInjector();
+  final Injector<NamingStore> compInjector;
+switch (namingMode) {
+case USE_MODULE:
+    compInjector=moduleInjector;
+  break;
+case CREATE:
+compInjector=selector.getCompContextInjector();
+break;
+case NONE:
+default :
+compInjector=null;
+}
+configuration.getStartDependencies().add(new DependencyConfigurator(){
+public void configureDependency(final ServiceBuilder<?> serviceBuilder){
+serviceBuilder.addDependency(appContextServiceName,NamingStore.class,appInjector);
+serviceBuilder.addDependency(moduleContextServiceName,NamingStore.class,moduleInjector);
+if (namingMode != ComponentNamingMode.CREATE) {
+serviceBuilder.addDependency(compContextServiceName,NamingStore.class,compInjector);
+}
+}
+}
+);
+final InterceptorFactory interceptorFactory=new ImmediateInterceptorFactory(new NamespaceContextInterceptor(selector));
+configuration.getPostConstructInterceptors().addFirst(interceptorFactory);
+configuration.getPreDestroyInterceptors().addFirst(interceptorFactory);
+for (Method method : configuration.getDefinedComponentMethods()) {
+configuration.getComponentInterceptorDeque(method).addFirst(interceptorFactory);
+}
+}

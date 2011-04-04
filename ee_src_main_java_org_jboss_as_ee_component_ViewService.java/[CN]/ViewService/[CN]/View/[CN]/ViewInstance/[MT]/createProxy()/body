@@ -1,0 +1,36 @@
+{
+  final SimpleInterceptorFactoryContext factoryContext=new SimpleInterceptorFactoryContext();
+  final Map<Method,InterceptorFactory> clientInterceptorFactories=ViewService.this.clientInterceptorFactories;
+  final Map<Method,Interceptor> clientEntryPoints=new IdentityHashMap<Method,Interceptor>(clientInterceptorFactories.size());
+  for (  Method method : clientInterceptorFactories.keySet()) {
+    clientEntryPoints.put(method,clientInterceptorFactories.get(method).create(factoryContext));
+  }
+  final Interceptor postConstructInterceptor=clientPostConstruct.create(factoryContext);
+  try {
+    Object object=proxyFactory.newInstance(new ProxyInvocationHandler(clientEntryPoints));
+    InterceptorContext interceptorContext=new InterceptorContext();
+    interceptorContext.putPrivateData(ComponentView.class,View.this);
+    interceptorContext.putPrivateData(Component.class,component);
+    try {
+      postConstructInterceptor.processInvocation(interceptorContext);
+    }
+ catch (    Exception e) {
+      InstantiationException exception=new InstantiationException("Post-construct lifecycle failed");
+      exception.initCause(e);
+      throw exception;
+    }
+    return object;
+  }
+ catch (  InstantiationException e) {
+    InstantiationError error=new InstantiationError(e.getMessage());
+    Throwable cause=e.getCause();
+    if (cause != null)     error.initCause(cause);
+    throw error;
+  }
+catch (  IllegalAccessException e) {
+    IllegalAccessError error=new IllegalAccessError(e.getMessage());
+    Throwable cause=e.getCause();
+    if (cause != null)     error.initCause(cause);
+    throw error;
+  }
+}

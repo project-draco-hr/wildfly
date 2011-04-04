@@ -1,0 +1,34 @@
+{
+  DeploymentUnit deploymentUnit=context.getDeploymentUnit();
+  Module module=deploymentUnit.getAttachment(MODULE);
+  ModuleClassLoader classLoader=module.getClassLoader();
+  applicationName=description.getApplicationName();
+  moduleName=description.getModuleName();
+  final Map<String,EEModuleClassConfiguration> classesByName=new HashMap<String,EEModuleClassConfiguration>();
+  for (  EEModuleClassDescription classDescription : description.getClassDescriptions()) {
+    String className=classDescription.getClassName();
+    Class<?> clazz=null;
+    try {
+      clazz=Class.forName(className,false,classLoader);
+    }
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException("Failed to load class " + className,e);
+    }
+    EEModuleClassConfiguration classConfiguration=new EEModuleClassConfiguration(clazz,this);
+    for (    ClassConfigurator configurator : classDescription.getConfigurators()) {
+      configurator.configure(context,classDescription,classConfiguration);
+    }
+    classesByName.put(className,classConfiguration);
+  }
+  final Map<String,ComponentConfiguration> componentsByName=new HashMap<String,ComponentConfiguration>();
+  final Map<String,ComponentConfiguration> componentsByClassName=new HashMap<String,ComponentConfiguration>();
+  for (  ComponentDescription componentDescription : description.getComponentDescriptions()) {
+    ComponentConfiguration componentConfiguration=new ComponentConfiguration(componentDescription,classesByName.get(componentDescription.getComponentClassName()));
+    for (    ComponentConfigurator configurator : componentDescription.getConfigurators()) {
+      configurator.configure(context,componentDescription,componentConfiguration);
+    }
+  }
+  this.classesByName=classesByName;
+  this.componentsByName=componentsByName;
+  this.componentsByClassName=componentsByClassName;
+}

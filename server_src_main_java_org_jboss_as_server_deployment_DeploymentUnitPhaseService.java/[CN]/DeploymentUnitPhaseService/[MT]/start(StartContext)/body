@@ -5,8 +5,14 @@
   final ListIterator<DeploymentUnitProcessor> iterator=list.listIterator();
   final ServiceContainer container=context.getController().getServiceContainer();
   final ServiceTarget serviceTarget=context.getChildTarget().subTarget();
-  final DeploymentPhaseContext processorContext=new DeploymentPhaseContextImpl(serviceTarget,new DelegatingServiceRegistry(container),deploymentUnit,phase);
-  for (  AttachedDependency attachedDependency : injectedAttachedDepenendencies) {
+  final Phase nextPhase=phase.next();
+  final String name=deploymentUnit.getName();
+  final DeploymentUnit parent=deploymentUnit.getParent();
+  final ServiceName serviceName=parent == null ? Services.deploymentUnitName(name,nextPhase) : Services.deploymentUnitName(parent.getName(),name,nextPhase);
+  final DeploymentUnitPhaseService<?> phaseService=DeploymentUnitPhaseService.create(deploymentUnit,nextPhase);
+  final ServiceBuilder<?> phaseServiceBuilder=nextPhase == null ? null : serviceTarget.addService(serviceName,phaseService);
+  final DeploymentPhaseContext processorContext=new DeploymentPhaseContextImpl(serviceTarget,new DelegatingServiceRegistry(container),phaseServiceBuilder,deploymentUnit,phase);
+  for (  AttachedDependency attachedDependency : injectedAttachedDependencies) {
     final Attachable target;
     if (attachedDependency.isDeploymentUnit()) {
       target=deploymentUnit;
@@ -34,13 +40,7 @@
       throw new StartException(String.format("Failed to process phase %s of %s",phase,deploymentUnit),e);
     }
   }
-  final Phase nextPhase=phase.next();
   if (nextPhase != null) {
-    final String name=deploymentUnit.getName();
-    final DeploymentUnit parent=deploymentUnit.getParent();
-    final ServiceName serviceName=parent == null ? Services.deploymentUnitName(name,nextPhase) : Services.deploymentUnitName(parent.getName(),name,nextPhase);
-    final DeploymentUnitPhaseService<?> phaseService=DeploymentUnitPhaseService.create(deploymentUnit,nextPhase);
-    final ServiceBuilder<?> phaseServiceBuilder=serviceTarget.addService(serviceName,phaseService);
     phaseServiceBuilder.addDependency(Services.JBOSS_DEPLOYMENT_CHAINS,DeployerChains.class,phaseService.getDeployerChainsInjector());
     phaseServiceBuilder.addDependency(context.getController().getName());
     final List<ServiceName> nextPhaseDeps=processorContext.getAttachment(Attachments.NEXT_PHASE_DEPS);
@@ -52,7 +52,7 @@
       for (      AttachableDependency attachableDep : nextPhaseAttachableDeps) {
         AttachedDependency result=new AttachedDependency(attachableDep.getAttachmentKey(),attachableDep.isDeploymentUnit());
         phaseServiceBuilder.addDependency(attachableDep.getServiceName(),result.getValue());
-        phaseService.injectedAttachedDepenendencies.add(result);
+        phaseService.injectedAttachedDependencies.add(result);
       }
     }
     if (deploymentUnit.getParent() != null) {

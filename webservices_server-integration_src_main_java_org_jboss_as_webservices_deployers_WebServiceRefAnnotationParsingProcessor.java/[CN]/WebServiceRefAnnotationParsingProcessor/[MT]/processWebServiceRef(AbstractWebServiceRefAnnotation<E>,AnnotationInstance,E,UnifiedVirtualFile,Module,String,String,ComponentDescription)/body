@@ -1,0 +1,27 @@
+{
+  UnifiedServiceRefMetaData ref=processor.process(annotation,annotated,vfs);
+  ClassLoader contextClassLoader=Thread.currentThread().getContextClassLoader();
+  final Referenceable referenceable;
+  try {
+    Thread.currentThread().setContextClassLoader(ClassLoaderProvider.getDefaultProvider().getServerIntegrationClassLoader());
+    final SPIProvider spiProvider=SPIProviderResolver.getInstance().getProvider();
+    final ServiceRefHandler serviceRefHandler=spiProvider.getSPI(ServiceRefHandlerFactory.class).getServiceRefHandler();
+    referenceable=serviceRefHandler.createReferenceable(ref);
+  }
+  finally {
+    Thread.currentThread().setContextClassLoader(contextClassLoader);
+  }
+  BindingDescription bindingDescription=new BindingDescription(processor.getName(annotated),componentDescription);
+  bindingDescription.setDependency(true);
+  bindingDescription.setBindingType(ref.getServiceRefType());
+  bindingDescription.setReferenceSourceDescription(new WebServiceRefInjectionSource(referenceable,duModule));
+  final InjectionTarget targetDescription;
+  if (processor.getInjectionType() == InjectionTarget.Type.FIELD) {
+    targetDescription=new FieldInjectionTarget(name,className,ref.getServiceRefType());
+  }
+ else {
+    targetDescription=new MethodInjectionTarget(name,className,ref.getServiceRefType());
+  }
+  bindingDescription.getInjectionTargetDescriptions().add(targetDescription);
+  return bindingDescription;
+}

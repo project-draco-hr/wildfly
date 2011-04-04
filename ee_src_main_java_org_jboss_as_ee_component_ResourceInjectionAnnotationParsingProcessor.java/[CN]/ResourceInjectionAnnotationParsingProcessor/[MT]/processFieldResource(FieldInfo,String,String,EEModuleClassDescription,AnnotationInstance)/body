@@ -1,0 +1,33 @@
+{
+  final String fieldName=fieldInfo.name();
+  final String injectionType=isEmpty(type) || type.equals(Object.class.getName()) ? fieldInfo.type().name().toString() : type;
+  final String localContextName;
+  if (isEmpty(name)) {
+    localContextName=fieldInfo.declaringClass().name().toString() + "/" + fieldName;
+  }
+ else {
+    localContextName=name;
+  }
+  final InjectionTarget targetDescription=new FieldInjectionTarget(fieldName,fieldInfo.declaringClass().name().toString(),injectionType);
+  final InjectionSource injectionSource=new LookupInjectionSource(localContextName);
+  String lookup=annotation.value("lookup").asString();
+  if (isEmpty(lookup) && FIXED_LOCATIONS.containsKey(injectionType)) {
+    lookup=FIXED_LOCATIONS.get(injectionType);
+  }
+  final InjectionSource valueSource;
+  if (isEmpty(lookup)) {
+    valueSource=new ComponentTypeInjectionSource(injectionType);
+  }
+ else {
+    valueSource=new LookupInjectionSource(lookup);
+  }
+  final ResourceInjectionConfiguration injectionConfiguration=new ResourceInjectionConfiguration(targetDescription,injectionSource);
+  final BindingConfiguration bindingConfiguration=new BindingConfiguration(localContextName,valueSource);
+  classDescription.getConfigurators().add(new ClassConfigurator(){
+    public void configure(    final DeploymentPhaseContext context,    final EEModuleClassDescription description,    final EEModuleClassConfiguration configuration) throws DeploymentUnitProcessingException {
+      configuration.getBindingConfigurations().add(bindingConfiguration);
+      configuration.getInjectionConfigurations().add(injectionConfiguration);
+    }
+  }
+);
+}
