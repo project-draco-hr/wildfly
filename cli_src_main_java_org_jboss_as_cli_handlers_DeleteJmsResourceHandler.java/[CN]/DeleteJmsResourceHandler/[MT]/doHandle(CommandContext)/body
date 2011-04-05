@@ -1,0 +1,57 @@
+{
+  ModelControllerClient client=ctx.getModelControllerClient();
+  if (client == null) {
+    ctx.printLine("The controller client isn't available, make sure you are connected.");
+    return;
+  }
+  if (!ctx.hasArguments()) {
+    ctx.printLine("Arguments are missing");
+  }
+  String jndiName=null;
+  String[] args=ctx.getCommandArguments().split("\\s+");
+  int i=0;
+  while (i < args.length) {
+    String arg=args[i++];
+    if (arg.equals("--target")) {
+    }
+ else {
+      jndiName=arg;
+    }
+  }
+  if (jndiName == null) {
+    ctx.printLine("name is missing.");
+    return;
+  }
+  final String resource;
+  if (Util.isTopic(client,jndiName)) {
+    resource="topic";
+  }
+ else   if (Util.isQueue(client,jndiName)) {
+    resource="queue";
+  }
+ else   if (Util.isConnectionFactory(client,jndiName)) {
+    resource="connection-factory";
+  }
+ else {
+    ctx.printLine("'" + jndiName + "' wasn't found among existing JMS resources.");
+    return;
+  }
+  DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
+  builder.addNode("subsystem","jms");
+  builder.addNode(resource,jndiName);
+  builder.setOperationName("remove");
+  final ModelNode result;
+  try {
+    ModelNode request=builder.buildRequest();
+    result=client.execute(request);
+  }
+ catch (  Exception e) {
+    ctx.printLine("Failed to perform operation: " + e.getLocalizedMessage());
+    return;
+  }
+  if (!Util.isSuccess(result)) {
+    ctx.printLine(Util.getFailureDescription(result));
+    return;
+  }
+  ctx.printLine("Removed " + resource + ' '+ jndiName);
+}
