@@ -5,25 +5,25 @@
   String name=address.getLastElement().getValue();
   String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : name;
   byte[] hash;
-  if (operation.hasDefined(INPUT_STREAM_INDEX) && operation.hasDefined(HASH)) {
-    throw new OperationFailedException(new ModelNode().set("Can't pass in both an input-stream-index and a hash"));
+  if (tooManyDeploymentParametersDefined(operation)) {
+    throw createFailureException("Only allowed one of the following parameters is allowed %s.",VALID_DEPLOYMENT_PARAMETERS);
   }
  else   if (operation.hasDefined(HASH)) {
     hash=operation.get(HASH).asBytes();
   }
- else   if (operation.hasDefined(INPUT_STREAM_INDEX)) {
+ else   if (hasValidDeploymentParameterDefined(operation)) {
     if (!isMaster) {
-      throw new OperationFailedException(new ModelNode().set("A slave domain controller cannot accept deployment content uploads"));
+      throw createFailureException("A slave domain controller cannot accept deployment content uploads");
     }
     try {
       hash=DeploymentUploadUtil.storeDeploymentContent(context,operation,deploymentRepository);
     }
  catch (    IOException e) {
-      throw new OperationFailedException(new ModelNode().set(e.toString()));
+      throw createFailureException(e.toString());
     }
   }
  else {
-    throw new OperationFailedException(new ModelNode().set("Neither an attachment nor a hash were passed in"));
+    throw createFailureException("None of the following parameters were defined %s.",VALID_DEPLOYMENT_PARAMETERS);
   }
   if (!isMaster || deploymentRepository.hasDeploymentContent(hash)) {
     ModelNode subModel=context.getSubModel();
@@ -32,7 +32,7 @@
     subModel.get(HASH).set(hash);
   }
  else {
-    throw new OperationFailedException(new ModelNode().set(String.format("No deployment content with hash %s is available in the deployment content repository.",HashUtil.bytesToHexString(hash))));
+    throw createFailureException("No deployment content with hash %s is available in the deployment content repository.",HashUtil.bytesToHexString(hash));
   }
   resultHandler.handleResultComplete();
   return new BasicOperationResult(Util.getResourceRemoveOperation(operation.get(OP_ADDR)));
