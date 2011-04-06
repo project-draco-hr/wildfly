@@ -1,0 +1,29 @@
+{
+  if (jbossHomeDir == null || jbossHomeDir.isDirectory() == false)   throw new IllegalStateException("Invalid jboss.home.dir: " + jbossHomeDir);
+  if (systemProps.getProperty(ServerEnvironment.HOME_DIR) == null)   systemProps.setProperty(ServerEnvironment.HOME_DIR,jbossHomeDir.getAbsolutePath());
+  File modulesDir=new File(jbossHomeDir + "/modules");
+  final ModuleLoader moduleLoader=InitialModuleLoaderFactory.getModuleLoader(modulesDir,systemPackages);
+  ModuleIdentifier logModuleId=ModuleIdentifier.create("org.jboss.logmanager");
+  ModuleClassLoader logModuleClassLoader=moduleLoader.loadModule(logModuleId).getClassLoader();
+  ClassLoader ctxClassLoader=Thread.currentThread().getContextClassLoader();
+  try {
+    Thread.currentThread().setContextClassLoader(logModuleClassLoader);
+    systemProps.setProperty("java.util.logging.manager","org.jboss.logmanager.LogManager");
+    if (LogManager.getLogManager().getClass() == LogManager.class) {
+      System.err.println("WARNING: Failed to load the specified logmodule " + logModuleId);
+    }
+ else {
+      Module.setModuleLogger(new JDKModuleLogger());
+    }
+  }
+  finally {
+    Thread.currentThread().setContextClassLoader(ctxClassLoader);
+  }
+  final ModuleIdentifier serverModuleId=ModuleIdentifier.create("org.jboss.as.server");
+  final Module serverModule=moduleLoader.loadModule(serverModuleId);
+  final ModuleClassLoader serverModuleClassLoader=serverModule.getClassLoader();
+  Class<?> embeddedStandAloneServerFactoryClass=serverModuleClassLoader.loadClass("org.jboss.as.server.EmbeddedStandAloneServerFactory");
+  Method createMethod=embeddedStandAloneServerFactoryClass.getMethod("create",File.class,ModuleLoader.class,Properties.class,Map.class);
+  final StandaloneServer standaloneServer=(StandaloneServer)createMethod.invoke(null,jbossHomeDir,moduleLoader,systemProps,systemEnv);
+  return standaloneServer;
+}
