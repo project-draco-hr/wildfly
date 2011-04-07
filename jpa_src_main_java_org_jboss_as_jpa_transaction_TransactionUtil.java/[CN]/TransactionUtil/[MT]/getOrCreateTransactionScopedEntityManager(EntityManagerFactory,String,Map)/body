@@ -1,26 +1,16 @@
 {
-  EntityManager rtnSession=getPC(puScopedName);
-  if (rtnSession == null) {
-    rtnSession=EntityManagerUtil.createEntityManager(emf,properties);
-    Transaction tx=getTransaction();
-    if (log.isDebugEnabled())     log.debug(getEntityManagerDetails(rtnSession) + ": created entity managersession " + tx.toString());
-    try {
-      tx.registerSynchronization(new SessionSynchronization(rtnSession,tx,true,puScopedName));
-    }
- catch (    RollbackException e) {
-      throw new RuntimeException(e);
-    }
-catch (    SystemException e) {
-      throw new RuntimeException(e);
-    }
-    setPC(puScopedName,rtnSession);
-    rtnSession.joinTransaction();
+  EntityManager entityManager=getEntityManagerInTransactionRegistry(scopedPuName);
+  if (entityManager == null) {
+    entityManager=EntityManagerUtil.createEntityManager(emf,properties);
+    if (log.isDebugEnabled())     log.debug(getEntityManagerDetails(entityManager) + ": created entity manager session " + getTransaction().toString());
+    registerSynchronization(entityManager,scopedPuName,true);
+    putEntityManagerInTransactionRegistry(scopedPuName,entityManager);
+    entityManager.joinTransaction();
   }
  else {
     if (log.isDebugEnabled()) {
-      Transaction tx=getTransaction();
-      log.debug(getEntityManagerDetails(rtnSession) + ": reuse entity managersession already in tx" + tx.toString());
+      log.debug(getEntityManagerDetails(entityManager) + ": reuse entity manager session already in tx" + getTransaction().toString());
     }
   }
-  return rtnSession;
+  return entityManager;
 }
