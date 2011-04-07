@@ -2,6 +2,17 @@
   setupCleanDirectories(jbossHomeDir,systemProps);
   StandaloneServer standaloneServer=new StandaloneServer(){
     private ServiceContainer serviceContainer;
+    private ServerDeploymentManager serverDeploymentManager;
+    private Context context;
+    @Override public void deploy(    File file) throws IOException, ExecutionException, InterruptedException {
+      execute(serverDeploymentManager.newDeploymentPlan().add(file.getName(),VFSUtils.createJarFileInputStream(VFS.getChild(file.toURI()))).andDeploy().build());
+    }
+    private ServerDeploymentPlanResult execute(    DeploymentPlan deploymentPlan) throws ExecutionException, InterruptedException {
+      return serverDeploymentManager.execute(deploymentPlan).get();
+    }
+    @Override public Context getContext(){
+      return ifSet(context,"Server has not been started");
+    }
     @Override public void start() throws ServerStartException {
       try {
         ServerEnvironment serverEnviromment=Main.determineEnvironment(new String[0],systemProps,systemEnv);
@@ -11,6 +22,9 @@
         configuration.setModuleLoader(moduleLoader);
         Future<ServiceContainer> future=bootstrap.startup(configuration,Collections.<ServiceActivator>emptyList());
         serviceContainer=future.get();
+        Value<ServerController> serverControllerService=(Value<ServerController>)serviceContainer.getRequiredService(Services.JBOSS_SERVER_CONTROLLER);
+        serverDeploymentManager=new ModelControllerServerDeploymentManager(serverControllerService.getValue());
+        context=new InitialContext();
       }
  catch (      RuntimeException rte) {
         throw rte;
@@ -20,6 +34,16 @@ catch (      Exception ex) {
       }
     }
     @Override public void stop(){
+      if (context != null) {
+        try {
+          context.close();
+          context=null;
+        }
+ catch (        NamingException e) {
+          e.printStackTrace();
+        }
+      }
+      serverDeploymentManager=null;
       if (serviceContainer != null) {
         try {
           serviceContainer.shutdown();
@@ -32,6 +56,9 @@ catch (        Exception ex) {
           ex.printStackTrace();
         }
       }
+    }
+    @Override public void undeploy(    File file) throws ExecutionException, InterruptedException {
+      execute(serverDeploymentManager.newDeploymentPlan().undeploy(file.getName()).andRemoveUndeployed().build());
     }
   }
 ;

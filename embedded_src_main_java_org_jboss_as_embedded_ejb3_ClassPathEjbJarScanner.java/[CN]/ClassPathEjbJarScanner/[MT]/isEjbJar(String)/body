@@ -1,0 +1,56 @@
+{
+  final VirtualFile file=VFS.getChild(candidate);
+  Closeable handle=null;
+  TempFileProvider provider=null;
+  for (  final ExclusionFilter exclusionFilter : exclusionFilters) {
+    if (exclusionFilter.exclude(file)) {
+      if (log.isTraceEnabled()) {
+        log.tracef("%s matched %s for exclusion; skipping",exclusionFilter,file);
+      }
+      return false;
+    }
+  }
+  try {
+    if (file.exists()) {
+      if (file.isDirectory()) {
+        handle=VFS.mountReal(file.getPhysicalFile(),file);
+      }
+ else       if (file.getName().endsWith(EXTENSION_JAR)) {
+        if (provider == null) {
+          provider=TempFileProvider.create("jbossejbmodulescanner",ses);
+        }
+        handle=VFS.mountZip(file.getPhysicalFile(),file,provider);
+      }
+ else {
+        log.warn("Encountered unknown file type, skipping: " + file);
+        return false;
+      }
+    }
+ else {
+      log.warn("File on ClassPath could not be found: " + file);
+      return false;
+    }
+    final VirtualFile ejbJarXml=file.getChild(PATH_EJB_JAR_XML);
+    if (ejbJarXml.exists()) {
+      if (log.isTraceEnabled()) {
+        log.tracef("Found descriptor %s in %s",ejbJarXml.getPathNameRelativeTo(file),file);
+      }
+      return true;
+    }
+    if (containsEjbComponentClass(file)) {
+      return true;
+    }
+    return false;
+  }
+ catch (  final IOException e) {
+    throw new RuntimeException("Could not mount file from ClassPath for EJB JAR module scanning",e);
+  }
+ finally {
+    try {
+      handle.close();
+    }
+ catch (    final IOException e) {
+      log.warn("Could not close handle to mounted " + file,e);
+    }
+  }
+}
