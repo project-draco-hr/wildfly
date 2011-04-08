@@ -3,20 +3,20 @@
   populateModel(operation,subModel);
   final ModelNode address=operation.require(OP_ADDR);
   final ModelNode compensating=Util.getResourceRemoveOperation(address);
+  final String rawJndiName=operation.require(JNDINAME).asString();
+  final String jndiName;
+  if (!rawJndiName.startsWith("java:/") && operation.hasDefined(USE_JAVA_CONTEXT) && operation.get(USE_JAVA_CONTEXT).asBoolean()) {
+    jndiName="java:/" + rawJndiName;
+  }
+ else {
+    jndiName=rawJndiName;
+  }
+  final AbstractDataSourceService dataSourceService=createDataSourceService(jndiName,operation);
   if (context.getRuntimeContext() != null) {
     context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
       public void execute(      RuntimeTaskContext context) throws OperationFailedException {
         final ServiceTarget serviceTarget=context.getServiceTarget();
         boolean enabled=!operation.hasDefined(ENABLED) || operation.get(ENABLED).asBoolean();
-        final String rawJndiName=operation.require(JNDINAME).asString();
-        final String jndiName;
-        if (!rawJndiName.startsWith("java:/") && operation.hasDefined(USE_JAVA_CONTEXT) && operation.get(USE_JAVA_CONTEXT).asBoolean()) {
-          jndiName="java:/" + rawJndiName;
-        }
- else {
-          jndiName=rawJndiName;
-        }
-        final AbstractDataSourceService dataSourceService=createDataSourceService(jndiName,operation);
         final ServiceName dataSourceServiceName=AbstractDataSourceService.SERVICE_NAME_BASE.append(jndiName);
         final ServiceBuilder<?> dataSourceServiceBuilder=serviceTarget.addService(dataSourceServiceName,dataSourceService).addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,dataSourceService.getTransactionIntegrationInjector()).addDependency(ConnectorServices.MANAGEMENT_REPOSISTORY_SERVICE,ManagementRepository.class,dataSourceService.getmanagementRepositoryInjector()).addDependency(NamingService.SERVICE_NAME);
         final String driverName=operation.require(DRIVER).asString();
