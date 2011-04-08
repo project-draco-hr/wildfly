@@ -1,0 +1,53 @@
+{
+  this.globalConfiguration.setCacheManagerName(this.name);
+  String nodeName=this.environment.getValue().getNodeName();
+  this.globalConfiguration.setTransportNodeName(nodeName);
+  this.globalConfiguration.setClusterName(String.format("%s:%s",nodeName,this.name));
+  ChannelFactoryRegistry registry=this.channelFactoryRegistry.getValue();
+  String stack=(this.stack != null) ? this.stack : registry.getDefaultStack();
+  ChannelProvider.init(this.globalConfiguration,registry.getChannelFactory(stack));
+  MBeanServer server=this.mbeanServer.getOptionalValue();
+  if (server != null) {
+    this.globalConfiguration.setExposeGlobalJmxStatistics(true);
+    this.globalConfiguration.setMBeanServerLookupInstance(new MBeanServerProvider(server));
+    this.globalConfiguration.setJmxDomain(server.getDefaultDomain());
+    this.defaultConfiguration.setExposeJmxStatistics(true);
+  }
+ else {
+    this.globalConfiguration.setExposeGlobalJmxStatistics(false);
+    this.defaultConfiguration.setExposeJmxStatistics(false);
+  }
+  Executor listenerExecutor=this.listenerExecutor.getOptionalValue();
+  if (listenerExecutor != null) {
+    ExecutorProvider.initListenerExecutor(this.globalConfiguration,listenerExecutor);
+  }
+  Executor transportExecutor=this.transportExecutor.getOptionalValue();
+  if (transportExecutor != null) {
+    ExecutorProvider.initTransportExecutor(this.globalConfiguration,transportExecutor);
+  }
+  ScheduledExecutorService evictionExecutor=this.evictionExecutor.getOptionalValue();
+  if (evictionExecutor != null) {
+    ExecutorProvider.initEvictionExecutor(this.globalConfiguration,evictionExecutor);
+  }
+  ScheduledExecutorService replicationQueueExecutor=this.replicationQueueExecutor.getOptionalValue();
+  if (listenerExecutor != null) {
+    ExecutorProvider.initReplicationQueueExecutor(this.globalConfiguration,replicationQueueExecutor);
+  }
+  TransactionManager transactionManager=this.transactionManager.getOptionalValue();
+  if (transactionManager != null) {
+    this.defaultConfiguration.setTransactionManagerLookup(new TransactionManagerProvider(transactionManager));
+  }
+  SwitchContext switchContext=this.switcher.getSwitchContext(this.getClass().getClassLoader());
+  try {
+    EmbeddedCacheManager manager=new DefaultCacheManager(this.globalConfiguration,this.defaultConfiguration,false);
+    for (    Map.Entry<String,Configuration> entry : this.configurations.entrySet()) {
+      manager.defineConfiguration(entry.getKey(),entry.getValue());
+    }
+    this.container=new DefaultCacheContainer(manager,this.defaultCache);
+    this.container.start();
+  }
+  finally {
+    switchContext.reset();
+  }
+  this.registry.getValue().addCacheContainer(this.name,this.aliases,this.container);
+}

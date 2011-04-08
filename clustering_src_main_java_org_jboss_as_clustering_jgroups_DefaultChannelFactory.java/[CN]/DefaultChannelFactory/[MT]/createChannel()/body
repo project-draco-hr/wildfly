@@ -1,50 +1,14 @@
 {
-  ProtocolStack stack=this.createProtocolStack(this.configuration);
-  TransportConfiguration transportConfig=this.configuration.getTransport();
-  TP transport=this.getTransport(stack);
-  if (transportConfig.isShared() && (transport.getValue("singleton_name") == null)) {
-    transport.setValue("singleton_name",this.name);
+  JChannel channel=new JChannel(this);
+  TP transport=channel.getProtocolStack().getTransport();
+  if (transport.isSingleton()) {
+synchronized (transport) {
+      this.init(transport);
+    }
   }
-  ThreadFactory threadFactory=transportConfig.getThreadFactory();
-  if (threadFactory != null) {
-    transport.setThreadFactory(new ThreadFactoryAdapter(threadFactory));
+ else {
+    this.init(transport);
   }
-  SocketBinding socketBinding=transportConfig.getSocketBinding();
-  if (socketBinding != null) {
-    InetSocketAddress socketAddress=socketBinding.getSocketAddress();
-    transport.setValue("bind_addr",socketAddress.getAddress());
-    transport.setBindPort(socketAddress.getPort());
-    this.configureMulticastSocket(transport,socketBinding,"mcast_group_addr","mcast_port");
-    transport.setSocketFactory(new ManagedSocketFactory(transport.getSocketFactory(),socketBinding.getSocketBindings()));
-  }
-  SocketBinding diagnosticsSocketBinding=transportConfig.getDiagnosticsSocketBinding();
-  boolean diagnostics=(diagnosticsSocketBinding != null);
-  transport.setValue("enable_diagnostics",diagnostics);
-  if (diagnostics) {
-    this.configureMulticastSocket(transport,diagnosticsSocketBinding,"diagnostics_addr","diagnostics_port");
-  }
-  Executor threadPool=transportConfig.getThreadPool();
-  if (threadPool != null) {
-    transport.setDefaultThreadPool(threadPool);
-  }
-  Executor oobExecutor=transportConfig.getOOBThreadPool();
-  if (oobExecutor != null) {
-    transport.setOOBThreadPool(oobExecutor);
-  }
-  ScheduledExecutorService scheduledExecutor=transportConfig.getTimerThreadPool();
-  if (scheduledExecutor != null) {
-    transport.getTimer().stop();
-    transport.setValue("timer",new TimerSchedulerAdapter(scheduledExecutor));
-  }
-  Protocol protocol=transport;
-  for (  ProtocolConfiguration protocolConfig : this.configuration.getProtocols()) {
-    protocol=protocol.getUpProtocol();
-    this.configureMulticastSocket(protocol,protocolConfig.getSocketBinding(),"mcast_addr","mcast_port");
-    this.configureServerSocket(protocol,protocolConfig.getSocketBinding(),"start_port");
-  }
-  JChannel channel=new JChannel(false);
-  channel.setProtocolStack(stack);
-  stack.init();
   channel.setName(this.logicalName);
   if (this.server != null) {
   }
