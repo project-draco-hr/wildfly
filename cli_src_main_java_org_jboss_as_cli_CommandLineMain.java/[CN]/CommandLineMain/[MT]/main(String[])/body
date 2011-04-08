@@ -49,7 +49,7 @@
       fileName=arg.substring(5);
     }
  else     if (arg.startsWith("commands=")) {
-      commands=arg.substring(9).split(";");
+      commands=arg.substring(9).split(",+");
     }
   }
   if (connect) {
@@ -74,7 +74,10 @@
       }
   finally {
         StreamUtils.safeClose(reader);
-        cmdCtx.terminateSession();
+        if (!cmdCtx.terminate) {
+          cmdCtx.terminateSession();
+        }
+        cmdCtx.disconnectController();
       }
       return;
     }
@@ -83,12 +86,19 @@
     for (int i=0; i < commands.length && !cmdCtx.terminate; ++i) {
       processLine(cmdCtx,commands[i]);
     }
-    cmdCtx.terminateSession();
+    if (!cmdCtx.terminate) {
+      cmdCtx.terminateSession();
+    }
+    cmdCtx.disconnectController();
     return;
   }
-  while (!cmdCtx.terminate) {
-    String line=console.readLine(cmdCtx.getPrompt()).trim();
-    processLine(cmdCtx,line);
+  try {
+    while (!cmdCtx.terminate) {
+      String line=console.readLine(cmdCtx.getPrompt()).trim();
+      processLine(cmdCtx,line);
+    }
   }
-  StreamUtils.safeClose(cmdCtx.client);
+  finally {
+    cmdCtx.disconnectController();
+  }
 }
