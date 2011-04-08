@@ -1,0 +1,33 @@
+{
+  DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  EjbJarDescription ejbJarDescription=deploymentUnit.getAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_DESCRIPTION);
+  if (ejbJarDescription == null) {
+    return;
+  }
+  final CompositeIndex compositeIndex=deploymentUnit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
+  if (compositeIndex == null) {
+    return;
+  }
+  List<AnnotationInstance> applicationExceptionAnnotations=compositeIndex.getAnnotations(DotName.createSimple(ApplicationException.class.getName()));
+  if (applicationExceptionAnnotations == null || applicationExceptionAnnotations.isEmpty()) {
+    return;
+  }
+  for (  AnnotationInstance annotationInstance : applicationExceptionAnnotations) {
+    AnnotationTarget target=annotationInstance.target();
+    if (!(target instanceof ClassInfo)) {
+      throw new RuntimeException("@ApplicationException is allowed only on classes. " + target + " is not a class");
+    }
+    String exceptionClassName=((ClassInfo)target).name().toString();
+    boolean rollback=false;
+    AnnotationValue rollBackAnnValue=annotationInstance.value("rollback");
+    if (rollBackAnnValue != null) {
+      rollback=rollBackAnnValue.asBoolean();
+    }
+    boolean inherited=false;
+    AnnotationValue inheritedAnnValue=annotationInstance.value("inherited");
+    if (inheritedAnnValue != null) {
+      inherited=inheritedAnnValue.asBoolean();
+    }
+    ejbJarDescription.addApplicationException(exceptionClassName,rollback,inherited);
+  }
+}
