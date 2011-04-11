@@ -2,22 +2,31 @@
   BufferedOutputStream os=null;
   BufferedInputStream is=null;
   try {
-    final HttpURLConnection connection=(HttpURLConnection)new URL(UPLOAD_URL).openConnection();
+    HttpURLConnection connection=(HttpURLConnection)new URL(UPLOAD_URL).openConnection();
     connection.setDoInput(true);
     connection.setDoOutput(true);
     connection.setRequestMethod(POST_REQUEST_METHOD);
-    final WebArchive archive=ShrinkWrapUtils.createWebArchive(TEST_WAR);
+    final JavaArchive archive=ShrinkWrapUtils.createJavaArchive("servermodule/test-deployment.sar",Simple.class.getPackage());
     os=new BufferedOutputStream(connection.getOutputStream());
     is=new BufferedInputStream(archive.as(ZipExporter.class).exportZip());
-    writeRequest(is,os);
-    final ModelNode node=readResult(connection.getInputStream());
+    writeUploadRequest(is,os);
+    ModelNode node=readResult(connection.getInputStream());
     assertNotNull(node);
+    System.out.println(node);
+    assertEquals(SUCCESS,node.require(OUTCOME).asString());
+    byte[] hash=node.require(RESULT).asBytes();
+    connection=(HttpURLConnection)new URL(BASIC_URL).openConnection();
+    connection.setDoInput(true);
+    connection.setDoOutput(true);
+    connection.setRequestMethod(POST_REQUEST_METHOD);
+    os=new BufferedOutputStream(connection.getOutputStream());
+    writeAddRequest(os,hash);
+    node=readResult(connection.getInputStream());
+    assertNotNull(node);
+    System.out.println(node);
     assertEquals(SUCCESS,node.require(OUTCOME).asString());
   }
- catch (  final Exception e) {
-    fail("Exception not expected: " + e.getMessage());
-  }
- finally {
+  finally {
     closeQuietly(is);
     closeQuietly(os);
   }
