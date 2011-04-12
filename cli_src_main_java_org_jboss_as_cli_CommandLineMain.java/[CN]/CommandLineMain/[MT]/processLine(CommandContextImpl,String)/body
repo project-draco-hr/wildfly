@@ -3,8 +3,29 @@
     return;
   }
   if (isOperation(line)) {
-    cmdCtx.setArgs(line);
-    cmdCtx.operationHandler.handle(cmdCtx);
+    cmdCtx.setArgs(null,line);
+    if (cmdCtx.isBatchMode()) {
+      OperationRequestAddress address=new DefaultOperationRequestAddress(cmdCtx.getPrefix());
+      DefaultOperationCallbackHandler handler=new DefaultOperationCallbackHandler(address);
+      try {
+        cmdCtx.getOperationRequestParser().parse(line,handler);
+        if (!handler.hasOperationName()) {
+          cmdCtx.printLine("The request is missing the operation name");
+        }
+ else {
+          StringBuilder op=new StringBuilder();
+          op.append(cmdCtx.getPrefixFormatter().format(handler.getAddress()));
+          op.append(line.substring(line.indexOf(':')));
+          cmdCtx.addToBatch(op.toString());
+        }
+      }
+ catch (      CommandFormatException e) {
+        cmdCtx.printLine(e.getLocalizedMessage());
+      }
+    }
+ else {
+      cmdCtx.operationHandler.handle(cmdCtx);
+    }
   }
  else {
     String cmd=line;
@@ -16,10 +37,15 @@
         break;
       }
     }
-    cmdCtx.setArgs(cmdArgs);
+    cmdCtx.setArgs(cmd,cmdArgs);
     CommandHandler handler=cmdRegistry.getCommandHandler(cmd.toLowerCase());
     if (handler != null) {
-      handler.handle(cmdCtx);
+      if (cmdCtx.isBatchMode() && handler.isBatchMode()) {
+        cmdCtx.addToBatch(line);
+      }
+ else {
+        handler.handle(cmdCtx);
+      }
     }
  else {
       cmdCtx.printLine("Unexpected command '" + line + "'. Type 'help' for the list of supported commands.");
