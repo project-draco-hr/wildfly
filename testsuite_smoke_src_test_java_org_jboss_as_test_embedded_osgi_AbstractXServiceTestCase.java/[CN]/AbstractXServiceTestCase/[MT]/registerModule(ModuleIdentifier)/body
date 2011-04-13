@@ -1,27 +1,9 @@
 {
-  final ServiceController<?> bundleContextService=getServiceContainer().getRequiredService(ServiceNames.FRAMEWORK_ACTIVE);
-  if (bundleContextService.getMode() == Mode.ON_DEMAND && bundleContextService.getState() == State.DOWN) {
-    final CountDownLatch latch=new CountDownLatch(1);
-    bundleContextService.addListener(new AbstractServiceListener<Object>(){
-      @Override public void serviceStarted(      ServiceController<? extends Object> controller){
-        latch.countDown();
-        controller.removeListener(this);
-      }
-      @Override public void serviceFailed(      ServiceController<? extends Object> controller,      StartException reason){
-        latch.countDown();
-        controller.removeListener(this);
-      }
-    }
-);
-    bundleContextService.setMode(Mode.ACTIVE);
-    latch.await(10,TimeUnit.SECONDS);
-    if (bundleContextService.getState() != State.UP)     throw new IllegalStateException("BundleContextService not started");
-  }
-  final ServiceController<?> bundleManagerService=getServiceContainer().getRequiredService(ServiceNames.BUNDLE_MANAGER);
-  BundleManagement bundleManager=(BundleManagement)bundleManagerService.getValue();
-  if (bundleManager == null)   throw new IllegalStateException("BundleManagement not started");
-  ServiceContainer serviceContainer=getServiceContainer();
-  ServiceTarget serviceTarget=serviceContainer.subTarget();
+  ServiceController<Framework> frameworkController=(ServiceController<Framework>)getServiceContainer().getRequiredService(ServiceNames.FRAMEWORK_ACTIVE);
+  new FutureServiceValue<Framework>(frameworkController).get();
+  ServiceController<BundleManagement> bundleManagerService=(ServiceController<BundleManagement>)getServiceContainer().getRequiredService(ServiceNames.BUNDLE_MANAGER);
+  BundleManagement bundleManager=new FutureServiceValue<BundleManagement>(bundleManagerService).get();
+  ServiceTarget serviceTarget=getServiceContainer().subTarget();
   ServiceName serviceName=bundleManager.installBundle(serviceTarget,moduleId);
-  return getBundleFromService(serviceContainer,serviceName);
+  return getBundleFromService(serviceName);
 }
