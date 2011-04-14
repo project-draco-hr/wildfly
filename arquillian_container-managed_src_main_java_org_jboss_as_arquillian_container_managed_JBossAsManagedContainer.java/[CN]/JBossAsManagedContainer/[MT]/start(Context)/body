@@ -30,21 +30,6 @@
     processBuilder.redirectErrorStream(true);
     process=processBuilder.start();
     new Thread(new ConsoleConsumer()).start();
-    long timeout=5000;
-    boolean testRunnerMBeanAvaialble=false;
-    MBeanServerConnection mbeanServer=null;
-    while (timeout > 0 && testRunnerMBeanAvaialble == false) {
-      if (mbeanServer == null) {
-        try {
-          mbeanServer=getMBeanServerConnection();
-        }
- catch (        Exception ex) {
-        }
-      }
-      testRunnerMBeanAvaialble=(mbeanServer != null && mbeanServer.isRegistered(JMXTestRunnerMBean.OBJECT_NAME));
-      Thread.sleep(100);
-      timeout-=100;
-    }
     final Process proc=process;
     shutdownThread=new Thread(new Runnable(){
       @Override public void run(){
@@ -61,6 +46,33 @@
     }
 );
     Runtime.getRuntime().addShutdownHook(shutdownThread);
+    long timeout=getContainerConfiguration().getStartupTimeout();
+    boolean serverAvailable=false;
+    while (timeout > 0 && serverAvailable == false) {
+      serverAvailable=isServerStarted();
+      Thread.sleep(100);
+      timeout-=100;
+    }
+    if (!serverAvailable) {
+      throw new TimeoutException(String.format("Managed server was not started within [%d] ms",timeout));
+    }
+    boolean testRunnerMBeanAvailable=false;
+    MBeanServerConnection mbeanServer=null;
+    while (timeout > 0 && testRunnerMBeanAvailable == false) {
+      if (mbeanServer == null) {
+        try {
+          mbeanServer=getMBeanServerConnection();
+        }
+ catch (        Exception ex) {
+        }
+      }
+      testRunnerMBeanAvailable=(mbeanServer != null && mbeanServer.isRegistered(JMXTestRunnerMBean.OBJECT_NAME));
+      Thread.sleep(100);
+      timeout-=100;
+    }
+    if (!testRunnerMBeanAvailable) {
+      throw new TimeoutException(String.format("Could not connect to the managed server's MBeanServer within [%d] ms",timeout));
+    }
   }
  catch (  Exception e) {
     throw new LifecycleException("Could not start container",e);
