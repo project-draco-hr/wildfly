@@ -1,0 +1,62 @@
+{
+  final Map<ServiceName,OSGiModule> pendingServices=new HashMap<ServiceName,OSGiModule>();
+  try {
+    final BundleManagement bundleManager=injectedBundleManager.getValue();
+    final ServiceContainer serviceContainer=context.getController().getServiceContainer();
+    final ServiceTarget serviceTarget=context.getChildTarget();
+    final File modulesDir=injectedEnvironment.getValue().getModulesDir();
+    final File bundlesDir=new File(modulesDir.getPath() + "/../bundles").getCanonicalFile();
+    for (    OSGiModule moduleMetaData : subsystemState.getModules()) {
+      ServiceName serviceName;
+      ModuleIdentifier identifier=moduleMetaData.getIdentifier();
+      File bundleFile=getRepositoryEntry(bundlesDir,identifier);
+      if (bundleFile != null) {
+        URL url=bundleFile.toURI().toURL();
+        BundleInfo info=BundleInfo.createBundleInfo(url);
+        Deployment dep=DeploymentFactory.createDeployment(info);
+        dep.setAutoStart(moduleMetaData.isStart());
+        serviceName=bundleManager.installBundle(serviceTarget,dep);
+      }
+ else {
+        ModuleLoader moduleLoader=Module.getBootModuleLoader();
+        Module module=moduleLoader.loadModule(identifier);
+        OSGiMetaData metadata=getModuleMetadata(module);
+        serviceName=bundleManager.installBundle(serviceTarget,module,metadata);
+      }
+      pendingServices.put(serviceName,moduleMetaData);
+    }
+    ServiceName servicesInstalled=ServiceNames.AUTOINSTALL_BUNDLES.append("INSTALLED");
+    ServiceBuilder<Void> builder=serviceTarget.addService(servicesInstalled,new AbstractService<Void>(){
+      public void start(      StartContext context) throws StartException {
+        log.debugf("Auto bundles installed");
+      }
+    }
+);
+    builder.addDependencies(pendingServices.keySet());
+    builder.install();
+    builder=serviceTarget.addService(ServiceNames.AUTOINSTALL_BUNDLES_COMPLETE,new AbstractService<Void>(){
+      public void start(      StartContext context) throws StartException {
+        for (        ServiceName serviceName : pendingServices.keySet()) {
+          OSGiModule moduleMetaData=pendingServices.get(serviceName);
+          if (moduleMetaData.isStart()) {
+            @SuppressWarnings("unchecked") ServiceController<Bundle> controller=(ServiceController<Bundle>)serviceContainer.getRequiredService(serviceName);
+            Bundle bundle=controller.getValue();
+            try {
+              bundle.start();
+            }
+ catch (            BundleException ex) {
+              log.errorf(ex,"Cannot start persistent bundle: %s",bundle);
+            }
+          }
+        }
+        log.debugf("Auto bundles bundles started");
+      }
+    }
+);
+    builder.addDependencies(servicesInstalled);
+    builder.install();
+  }
+ catch (  Exception ex) {
+    throw new StartException("Failed to create auto install list",ex);
+  }
+}
