@@ -1,0 +1,46 @@
+{
+  final ClassLoader tccl=ClassLoaderProvider.getDefaultProvider().getServerIntegrationClassLoader();
+  final ClassLoader classLoader=new ClassLoader(this.getClass().getClassLoader()){
+    @Override public Class<?> loadClass(    String className) throws ClassNotFoundException {
+      try {
+        return super.loadClass(className);
+      }
+ catch (      ClassNotFoundException cnfe) {
+        return module.getClassLoader().loadClass(className);
+      }
+    }
+    @Override public Enumeration<URL> getResources(    String name) throws IOException {
+      final Enumeration<URL> superResources=super.getResources(name);
+      final Enumeration<URL> duModuleCLResources=module.getClassLoader().getResources(name);
+      if (superResources == null || !superResources.hasMoreElements()) {
+        return duModuleCLResources;
+      }
+      if (duModuleCLResources == null || !duModuleCLResources.hasMoreElements()) {
+        return superResources;
+      }
+      return new Enumeration<URL>(){
+        public boolean hasMoreElements(){
+          return superResources.hasMoreElements() || duModuleCLResources.hasMoreElements();
+        }
+        public URL nextElement(){
+          if (superResources.hasMoreElements()) {
+            return superResources.nextElement();
+          }
+          return duModuleCLResources.nextElement();
+        }
+      }
+;
+    }
+  }
+;
+  Thread.currentThread().setContextClassLoader(classLoader);
+  try {
+    return new CXFServiceObjectFactoryJAXWS().getObjectInstance(getReferenceable(),null,null,null);
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(e);
+  }
+ finally {
+    Thread.currentThread().setContextClassLoader(tccl);
+  }
+}
