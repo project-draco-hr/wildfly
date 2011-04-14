@@ -1,148 +1,23 @@
 {
-  if (!ctx.hasArguments()) {
-    ctx.printLine("Arguments are missing");
+  ModelNode request;
+  try {
+    request=buildRequest(ctx);
   }
-  String restype=null;
-  String propsStr=null;
-  String jndiName=null;
-  String[] args=ctx.getCommandArguments().split("\\s+");
-  int i=0;
-  while (i < args.length) {
-    String arg=args[i++];
-    if (arg.equals("--restype")) {
-      if (i < args.length) {
-        restype=args[i++];
-      }
-    }
- else     if (arg.equals("--target")) {
-    }
- else     if (arg.equals("--description")) {
-    }
- else     if (arg.equals("--property")) {
-      if (i < args.length) {
-        propsStr=args[i++];
-      }
-    }
- else     if (arg.equals("--enabled")) {
-    }
- else {
-      jndiName=arg;
-    }
-  }
-  if (restype == null) {
-    ctx.printLine("Required parameter --restype is missing.");
+ catch (  OperationFormatException e) {
+    ctx.printLine(e.getLocalizedMessage());
     return;
-  }
-  if (jndiName == null) {
-    ctx.printLine("JNDI name is missing.");
-    return;
-  }
-  String name=null;
-  final Map<String,String> props;
-  if (propsStr != null) {
-    props=new HashMap<String,String>();
-    String[] propsArr=propsStr.split(":");
-    for (    String prop : propsArr) {
-      int equalsIndex=prop.indexOf('=');
-      if (equalsIndex < 0 || equalsIndex == prop.length() - 1) {
-        ctx.printLine("Failed to parse property '" + prop + "'");
-        return;
-      }
-      String propName=prop.substring(0,equalsIndex).trim();
-      String propValue=prop.substring(equalsIndex + 1).trim();
-      if (propName.isEmpty()) {
-        ctx.printLine("Failed to parse property '" + prop + "'");
-        return;
-      }
-      if (propName.equals("imqDestinationName") || propName.equalsIgnoreCase("name")) {
-        name=propValue;
-      }
- else       if ("ClientId".equals(propName)) {
-        props.put("client-id",propValue);
-      }
-    }
-  }
- else {
-    props=Collections.emptyMap();
-  }
-  if (name == null) {
-    name=jndiName.replace('/','_');
   }
   ModelControllerClient client=ctx.getModelControllerClient();
-  if (restype.equals("javax.jms.Queue")) {
-    DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
-    builder.addNode("subsystem","jms");
-    builder.addNode("queue",name);
-    builder.setOperationName("add");
-    builder.getModelNode().get("entries").add(jndiName);
-    for (    String prop : props.keySet()) {
-      builder.addProperty(prop,props.get(prop));
-    }
-    final ModelNode result;
-    try {
-      ModelNode request=builder.buildRequest();
-      result=client.execute(request);
-    }
- catch (    Exception e) {
-      ctx.printLine("Failed to perform operation: " + e.getLocalizedMessage());
-      return;
-    }
-    if (!Util.isSuccess(result)) {
-      ctx.printLine(Util.getFailureDescription(result));
-      return;
-    }
-    ctx.printLine("Created queue " + name);
+  final ModelNode result;
+  try {
+    result=client.execute(request);
   }
- else   if (restype.equals("javax.jms.Topic")) {
-    DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
-    builder.addNode("subsystem","jms");
-    builder.addNode("topic",name);
-    builder.setOperationName("add");
-    builder.getModelNode().get("entries").add(jndiName);
-    for (    String prop : props.keySet()) {
-      builder.addProperty(prop,props.get(prop));
-    }
-    final ModelNode result;
-    try {
-      ModelNode request=builder.buildRequest();
-      result=client.execute(request);
-    }
- catch (    Exception e) {
-      ctx.printLine("Failed to perform operation: " + e.getLocalizedMessage());
-      return;
-    }
-    if (!Util.isSuccess(result)) {
-      ctx.printLine(Util.getFailureDescription(result));
-      return;
-    }
-    ctx.printLine("Created topic " + name);
+ catch (  Exception e) {
+    ctx.printLine("Failed to perform operation: " + e.getLocalizedMessage());
+    return;
   }
- else   if (restype.equals("javax.jms.ConnectionFactory") || restype.equals("javax.jms.TopicConnectionFactory") || restype.equals("javax.jms.QueueConnectionFactory")) {
-    DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
-    builder.addNode("subsystem","jms");
-    builder.addNode("connection-factory",name);
-    builder.setOperationName("add");
-    builder.getModelNode().get("entries").add(jndiName);
-    for (    String prop : props.keySet()) {
-      builder.addProperty(prop,props.get(prop));
-    }
-    final ModelNode result;
-    try {
-      ModelNode request=builder.buildRequest();
-      result=client.execute(request);
-    }
- catch (    Exception e) {
-      ctx.printLine("Failed to perform operation: " + e.getLocalizedMessage());
-      return;
-    }
-    if (!Util.isSuccess(result)) {
-      ctx.printLine(Util.getFailureDescription(result));
-      return;
-    }
-    ctx.printLine("Created connection factory " + name);
-  }
- else {
-    ctx.printLine("Resource type " + restype + " isn't supported.");
+  if (!Util.isSuccess(result)) {
+    ctx.printLine(Util.getFailureDescription(result));
     return;
   }
 }

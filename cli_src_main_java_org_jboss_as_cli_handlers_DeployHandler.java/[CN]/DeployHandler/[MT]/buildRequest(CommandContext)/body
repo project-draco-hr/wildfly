@@ -1,0 +1,66 @@
+{
+  if (!ctx.hasArguments()) {
+    throw new OperationFormatException("Required arguments are missing.");
+  }
+  String filePath=null;
+  String name=null;
+  String runtimeName=null;
+  for (  String arg : ctx.getArguments()) {
+    if (filePath == null) {
+      filePath=arg;
+    }
+ else     if (name == null) {
+      name=arg;
+    }
+ else {
+      runtimeName=arg;
+    }
+  }
+  if (filePath == null) {
+    throw new OperationFormatException("File path is missing.");
+  }
+  File f=new File(filePath);
+  if (!f.exists()) {
+    ctx.printLine("The path doesn't exist: " + f.getAbsolutePath());
+    throw new OperationFormatException(f.getAbsolutePath() + " doesn't exist.");
+  }
+  if (name == null) {
+    name=f.getName();
+  }
+  if (Util.isDeployed(name,ctx.getModelControllerClient())) {
+    if (ctx.hasSwitch("f")) {
+      DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
+      builder=new DefaultOperationRequestBuilder();
+      builder.setOperationName("full-replace-deployment");
+      builder.addProperty("name",name);
+      if (runtimeName != null) {
+        builder.addProperty("runtime-name",runtimeName);
+      }
+      byte[] bytes=readBytes(f);
+      builder.getModelNode().get("bytes").set(bytes);
+      return builder.buildRequest();
+    }
+ else {
+      throw new OperationFormatException("'" + name + "' is already deployed (use -f to force re-deploy).");
+    }
+  }
+  ModelNode composite=new ModelNode();
+  composite.get("operation").set("composite");
+  composite.get("address").setEmptyList();
+  ModelNode steps=composite.get("steps");
+  DefaultOperationRequestBuilder builder;
+  builder=new DefaultOperationRequestBuilder();
+  builder.setOperationName("add");
+  builder.addNode("deployment",name);
+  if (runtimeName != null) {
+    builder.addProperty("runtime-name",runtimeName);
+  }
+  byte[] bytes=readBytes(f);
+  builder.getModelNode().get("bytes").set(bytes);
+  steps.add(builder.buildRequest());
+  builder=new DefaultOperationRequestBuilder();
+  builder.setOperationName("deploy");
+  builder.addNode("deployment",name);
+  steps.add(builder.buildRequest());
+  return composite;
+}

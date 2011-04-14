@@ -1,5 +1,20 @@
 {
-  if (ctx.isBatchMode()) {
+  BatchManager batchManager=ctx.getBatchManager();
+  if (ctx.hasSwitch("l")) {
+    Set<String> heldbackNames=batchManager.getHeldbackNames();
+    if (!heldbackNames.isEmpty()) {
+      List<String> names=new ArrayList<String>(heldbackNames.size());
+      for (      String name : heldbackNames) {
+        names.add(name == null ? "<unnamed>" : name);
+      }
+      Collections.sort(names);
+      for (      String name : names) {
+        ctx.printLine(name);
+      }
+    }
+    return;
+  }
+  if (batchManager.isBatchActive()) {
     ctx.printLine("Can't start a new batch while in batch mode.");
     return;
   }
@@ -7,13 +22,29 @@
   if (ctx.hasArguments()) {
     name=ctx.getArguments().get(0);
   }
-  ctx.startBatch(name);
-  List<String> batch=ctx.getCurrentBatch();
-  if (!batch.isEmpty()) {
-    for (int i=0; i < batch.size(); ++i) {
-      String line=batch.get(i);
-      ctx.printLine("#" + (i + 1) + ' '+ line);
+  boolean activated;
+  if (batchManager.isHeldback(name)) {
+    activated=batchManager.activateHeldbackBatch(name);
+    if (activated) {
+      final String msg=name == null ? "Re-activated batch" : "Re-activated batch '" + name + "'";
+      ctx.printLine(msg);
+      List<BatchedCommand> batch=batchManager.getActiveBatch().getCommands();
+      if (!batch.isEmpty()) {
+        for (int i=0; i < batch.size(); ++i) {
+          BatchedCommand cmd=batch.get(i);
+          ctx.printLine("#" + (i + 1) + ' '+ cmd.getCommand());
+        }
+      }
     }
   }
-  return;
+ else   if (name != null) {
+    ctx.printLine("'" + name + "' not found among the held back batches.");
+    return;
+  }
+ else {
+    activated=batchManager.activateNewBatch();
+  }
+  if (!activated) {
+    ctx.printLine("Failed to activate batch.");
+  }
 }

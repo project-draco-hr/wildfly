@@ -5,19 +5,14 @@
   if (isOperation(line)) {
     cmdCtx.setArgs(null,line);
     if (cmdCtx.isBatchMode()) {
-      OperationRequestAddress address=new DefaultOperationRequestAddress(cmdCtx.getPrefix());
-      DefaultOperationCallbackHandler handler=new DefaultOperationCallbackHandler(address);
+      DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder(cmdCtx.getPrefix());
       try {
-        cmdCtx.getOperationRequestParser().parse(line,handler);
-        if (!handler.hasOperationName()) {
-          cmdCtx.printLine("The request is missing the operation name");
-        }
- else {
-          StringBuilder op=new StringBuilder();
-          op.append(cmdCtx.getPrefixFormatter().format(handler.getAddress()));
-          op.append(line.substring(line.indexOf(':')));
-          cmdCtx.addToBatch(op.toString());
-        }
+        cmdCtx.getOperationRequestParser().parse(line,builder);
+        ModelNode request=builder.buildRequest();
+        StringBuilder op=new StringBuilder();
+        op.append(cmdCtx.getPrefixFormatter().format(builder.getAddress()));
+        op.append(line.substring(line.indexOf(':')));
+        cmdCtx.getBatchManager().getActiveBatch().getCommands().add(new DefaultBatchedCommand(op.toString(),request));
       }
  catch (      CommandFormatException e) {
         cmdCtx.printLine(e.getLocalizedMessage());
@@ -41,7 +36,19 @@
     CommandHandler handler=cmdRegistry.getCommandHandler(cmd.toLowerCase());
     if (handler != null) {
       if (cmdCtx.isBatchMode() && handler.isBatchMode()) {
-        cmdCtx.addToBatch(line);
+        if (!(handler instanceof OperationCommand)) {
+          cmdCtx.printLine("The handler doesn't implement " + OperationCommand.class.getName());
+        }
+ else {
+          try {
+            ModelNode request=((OperationCommand)handler).buildRequest(cmdCtx);
+            BatchedCommand batchedCmd=new DefaultBatchedCommand(line,request);
+            cmdCtx.getBatchManager().getActiveBatch().getCommands().add(batchedCmd);
+          }
+ catch (          OperationFormatException e) {
+            cmdCtx.printLine("Failed to add to batch: " + e.getLocalizedMessage());
+          }
+        }
       }
  else {
         handler.handle(cmdCtx);
