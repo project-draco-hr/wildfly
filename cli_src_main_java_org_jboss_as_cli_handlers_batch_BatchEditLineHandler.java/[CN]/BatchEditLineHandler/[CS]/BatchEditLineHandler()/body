@@ -1,5 +1,5 @@
 {
-  super("edit-batch-line",new SimpleTabCompleterWithDelegate(new String[]{"--help"},new CommandLineCompleter(){
+  super("edit-batch-line",new CommandLineCompleter(){
     @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
       final BatchManager batchManager=ctx.getBatchManager();
       if (!batchManager.isBatchActive()) {
@@ -48,20 +48,26 @@
         }
         ++nextCharIndex;
       }
-      final String chunk;
-      if (nextCharIndex == buffer.length()) {
-        chunk=null;
+      String cmd=buffer.substring(nextCharIndex);
+      if ("--help".startsWith(cmd)) {
+        candidates.add("--help");
       }
+      int cmdResult=ctx.getDefaultCommandCompleter().complete(ctx,cmd,0,candidates);
+      final String batchedCmd=batch.getCommands().get(lineNumber - 1).getCommand();
+      if (cmd.isEmpty() || batchedCmd.startsWith(cmd)) {
+        int lastWsIndex=cmd.lastIndexOf(' ');
+        if (lastWsIndex > 0) {
+          candidates.add(batchedCmd.substring(lastWsIndex + 1).trim());
+        }
  else {
-        chunk=buffer.substring(nextCharIndex);
+          candidates.add(batchedCmd);
+        }
       }
-      final BatchedCommand batched=batch.getCommands().get(lineNumber - 1);
-      final String cmd=batched.getCommand();
-      if (chunk == null || cmd.isEmpty() || cmd.startsWith(chunk)) {
-        candidates.add(cmd);
+      if (cmdResult < 0) {
+        return candidates.isEmpty() ? -1 : nextCharIndex;
       }
-      return nextCharIndex;
+      return nextCharIndex + cmdResult;
     }
   }
-));
+);
 }
