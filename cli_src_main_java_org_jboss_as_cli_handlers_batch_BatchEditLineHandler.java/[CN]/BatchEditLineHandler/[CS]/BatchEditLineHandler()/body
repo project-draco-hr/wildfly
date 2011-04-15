@@ -1,0 +1,67 @@
+{
+  super("edit-batch-line",new SimpleTabCompleterWithDelegate(new String[]{"--help"},new CommandLineCompleter(){
+    @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
+      final BatchManager batchManager=ctx.getBatchManager();
+      if (!batchManager.isBatchActive()) {
+        return -1;
+      }
+      final Batch batch=batchManager.getActiveBatch();
+      int batchSize=batch.size();
+      if (batchSize == 0) {
+        return -1;
+      }
+      int nextCharIndex=0;
+      while (nextCharIndex < buffer.length()) {
+        if (!Character.isWhitespace(buffer.charAt(nextCharIndex))) {
+          break;
+        }
+        ++nextCharIndex;
+      }
+      if (nextCharIndex == buffer.length()) {
+        return -1;
+      }
+      int nextWsIndex=nextCharIndex + 1;
+      while (nextWsIndex < buffer.length()) {
+        if (Character.isWhitespace(buffer.charAt(nextWsIndex))) {
+          break;
+        }
+        ++nextWsIndex;
+      }
+      if (nextWsIndex == buffer.length()) {
+        return -1;
+      }
+      String lineNumberStr=buffer.substring(nextCharIndex,nextWsIndex);
+      final int lineNumber;
+      try {
+        lineNumber=Integer.parseInt(lineNumberStr);
+      }
+ catch (      NumberFormatException e) {
+        return -1;
+      }
+      if (lineNumber < 1 || lineNumber > batchSize) {
+        return -1;
+      }
+      nextCharIndex=nextWsIndex + 1;
+      while (nextCharIndex < buffer.length()) {
+        if (!Character.isWhitespace(buffer.charAt(nextCharIndex))) {
+          break;
+        }
+        ++nextCharIndex;
+      }
+      final String chunk;
+      if (nextCharIndex == buffer.length()) {
+        chunk=null;
+      }
+ else {
+        chunk=buffer.substring(nextCharIndex);
+      }
+      final BatchedCommand batched=batch.getCommands().get(lineNumber - 1);
+      final String cmd=batched.getCommand();
+      if (chunk == null || cmd.isEmpty() || cmd.startsWith(chunk)) {
+        candidates.add(cmd);
+      }
+      return nextCharIndex;
+    }
+  }
+));
+}
