@@ -1,5 +1,5 @@
 {
-  List<BindingDescription> bindings=new ArrayList<BindingDescription>();
+  List<BindingConfiguration> bindings=new ArrayList<BindingConfiguration>();
   final ResourceEnvironmentReferencesMetaData entries=environment.getEnvironment().getResourceEnvironmentReferences();
   if (entries == null) {
     return bindings;
@@ -12,7 +12,6 @@
  else {
       name=environment.getDefaultContext() + envEntry.getName();
     }
-    BindingDescription description=new BindingDescription(name);
     Class<?> classType=null;
     if (envEntry.getType() != null) {
       try {
@@ -22,21 +21,16 @@
         throw new DeploymentUnitProcessingException("Could not load " + envEntry.getType() + " referenced in env-entry ",e);
       }
     }
-    description.setDependency(true);
-    classType=processInjectionTargets(classLoader,deploymentReflectionIndex,envEntry,description,classType);
-    description.setBindingType(classType.getName());
+    LookupInjectionSource injectionSource=new LookupInjectionSource(name);
+    classType=processInjectionTargets(componentDescription.getClassDescription(),injectionSource,classLoader,deploymentReflectionIndex,envEntry,classType);
+    BindingConfiguration bindingConfiguration=null;
     if (!isEmpty(envEntry.getLookupName())) {
-      if (componentDescription != null) {
-        description.setReferenceSourceDescription(new LookupBindingSourceDescription(envEntry.getLookupName(),componentDescription));
-      }
- else {
-        description.setReferenceSourceDescription(new LookupBindingSourceDescription(envEntry.getLookupName(),moduleDescription));
-      }
+      bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(envEntry.getLookupName()));
     }
  else {
-      description.setReferenceSourceDescription(new LazyBindingSourceDescription());
+      throw new RuntimeException("res-env-ref without a lookup-name isn't yet supported");
     }
-    bindings.add(description);
+    bindings.add(bindingConfiguration);
   }
   return bindings;
 }
