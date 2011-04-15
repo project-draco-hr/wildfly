@@ -1,0 +1,23 @@
+{
+  final CountDownLatch latch=new CountDownLatch(1);
+  ServiceController<ConfiguredService> controller=(ServiceController<ConfiguredService>)registry.getService(ConfiguredService.SERVICE_NAME);
+  controller.addListener(new AbstractServiceListener<ConfiguredService>(){
+    @Override public void listenerAdded(    ServiceController<? extends ConfiguredService> controller){
+      State state=controller.getState();
+      if (state == State.UP || state == State.START_FAILED)       done(controller,controller.getStartException());
+    }
+    @Override public void serviceStarted(    ServiceController<? extends ConfiguredService> controller){
+      done(controller,null);
+    }
+    @Override public void serviceFailed(    ServiceController<? extends ConfiguredService> controller,    StartException reason){
+      done(controller,reason);
+    }
+    private void done(    ServiceController<? extends ConfiguredService> controller,    StartException startException){
+      controller.removeListener(this);
+      latch.countDown();
+    }
+  }
+);
+  if (latch.await(5,TimeUnit.SECONDS) == false)   throw new TimeoutException();
+  return controller.getValue();
+}

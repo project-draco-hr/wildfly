@@ -1,0 +1,31 @@
+{
+  bundle.start();
+  BundleContext context=bundle.getBundleContext();
+  ServiceReference sref=context.getServiceReference(ConfigurationAdmin.class.getName());
+  ConfigurationAdmin configAdmin=(ConfigurationAdmin)context.getService(sref);
+  final CountDownLatch latch=new CountDownLatch(1);
+  ConfigurationListener listener=new ConfigurationListener(){
+    @Override public void configurationEvent(    ConfigurationEvent event){
+      if (ConfiguredService.SERVICE_PID.equals(event.getPid()))       latch.countDown();
+    }
+  }
+;
+  context.registerService(ConfigurationListener.class.getName(),listener,null);
+  Configuration config=configAdmin.getConfiguration(ConfiguredService.SERVICE_PID);
+  assertNotNull("Config not null",config);
+  try {
+    Dictionary<String,String> configProps=new Hashtable<String,String>();
+    configProps.put("foo","bar");
+    config.update(configProps);
+    Dictionary<String,String> serviceProps=new Hashtable<String,String>();
+    serviceProps.put(Constants.SERVICE_PID,ConfiguredService.SERVICE_PID);
+    context.registerService(new String[]{ConfiguredService.class.getName(),ManagedService.class.getName()},new ConfiguredService(),serviceProps);
+    if (latch.await(5,TimeUnit.SECONDS) == false)     throw new TimeoutException();
+    sref=context.getServiceReference(ConfiguredService.class.getName());
+    ConfiguredService service=(ConfiguredService)context.getService(sref);
+    assertEquals("bar",service.getValue("foo"));
+  }
+  finally {
+    config.delete();
+  }
+}
