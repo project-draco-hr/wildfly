@@ -1,7 +1,7 @@
 {
-  List<BindingDescription> bindingDescriptions=new ArrayList<BindingDescription>();
+  List<BindingConfiguration> bindingConfigurations=new ArrayList<BindingConfiguration>();
   if (environment.getEnvironment() == null) {
-    return bindingDescriptions;
+    return bindingConfigurations;
   }
   PersistenceContextReferencesMetaData persistenceUnitRefs=environment.getEnvironment().getPersistenceContextRefs();
   if (persistenceUnitRefs != null) {
@@ -15,17 +15,11 @@
       if (!name.startsWith("java:")) {
         name=environment.getDefaultContext() + name;
       }
-      BindingDescription bindingDescription=new BindingDescription(name);
-      bindingDescriptions.add(bindingDescription);
-      processInjectionTargets(classLoader,deploymentReflectionIndex,puRef,bindingDescription,EntityManager.class);
-      bindingDescription.setBindingType(EntityManager.class.getName());
+      LookupInjectionSource injectionSource=new LookupInjectionSource(name);
+      processInjectionTargets(componentDescription.getClassDescription(),injectionSource,classLoader,deploymentReflectionIndex,puRef,EntityManager.class);
+      BindingConfiguration bindingConfiguration=null;
       if (!isEmpty(lookup)) {
-        if (componentDescription != null) {
-          bindingDescription.setReferenceSourceDescription(new LookupBindingSourceDescription(lookup,componentDescription));
-        }
- else {
-          bindingDescription.setReferenceSourceDescription(new LookupBindingSourceDescription(lookup,moduleDescription));
-        }
+        bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(lookup));
       }
  else       if (!isEmpty(persistenceUnitName)) {
         PropertiesMetaData properties=puRef.getProperties();
@@ -36,12 +30,13 @@
           }
         }
         PersistenceContextType type=puRef.getPersistenceContextType() == null ? PersistenceContextType.TRANSACTION : puRef.getPersistenceContextType();
-        bindingDescription.setReferenceSourceDescription(getPersistenceContextBindingSource(deploymentUnit,persistenceUnitName,type,map));
+        InjectionSource pcBindingSource=this.getPersistenceContextBindingSource(deploymentUnit,persistenceUnitName,type,map);
+        bindingConfiguration=new BindingConfiguration(name,pcBindingSource);
       }
  else {
-        bindingDescription.setReferenceSourceDescription(new LazyBindingSourceDescription());
+        throw new RuntimeException("Support for persistence-context-ref without a lookup or persistence-unit-name, isn't yet implemented");
       }
     }
   }
-  return bindingDescriptions;
+  return bindingConfigurations;
 }

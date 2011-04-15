@@ -1,7 +1,7 @@
 {
-  List<BindingDescription> bindingDescriptions=new ArrayList<BindingDescription>();
+  List<BindingConfiguration> bindingConfigurations=new ArrayList<BindingConfiguration>();
   if (environment.getEnvironment() == null) {
-    return bindingDescriptions;
+    return bindingConfigurations;
   }
   PersistenceUnitReferencesMetaData persistenceUnitRefs=environment.getEnvironment().getPersistenceUnitRefs();
   if (persistenceUnitRefs != null) {
@@ -18,25 +18,21 @@
       if (!name.startsWith("java:")) {
         name=environment.getDefaultContext() + name;
       }
-      BindingDescription bindingDescription=new BindingDescription(name);
-      bindingDescriptions.add(bindingDescription);
-      processInjectionTargets(classLoader,deploymentReflectionIndex,puRef,bindingDescription,EntityManagerFactory.class);
-      bindingDescription.setBindingType(EntityManagerFactory.class.getName());
+      LookupInjectionSource injectionSource=new LookupInjectionSource(name);
+      processInjectionTargets(componentDescription.getClassDescription(),injectionSource,classLoader,deploymentReflectionIndex,puRef,EntityManagerFactory.class);
+      BindingConfiguration bindingConfiguration=null;
       if (!isEmpty(lookup)) {
-        if (componentDescription != null) {
-          bindingDescription.setReferenceSourceDescription(new LookupBindingSourceDescription(lookup,componentDescription));
-        }
- else {
-          bindingDescription.setReferenceSourceDescription(new LookupBindingSourceDescription(lookup,moduleDescription));
-        }
+        bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(lookup));
       }
  else       if (!isEmpty(persistenceUnitName)) {
-        bindingDescription.setReferenceSourceDescription(getPersistenceUnitBindingSource(deploymentUnit,persistenceUnitName));
+        InjectionSource puBindingSource=this.getPersistenceUnitBindingSource(deploymentUnit,persistenceUnitName);
+        bindingConfiguration=new BindingConfiguration(name,puBindingSource);
       }
  else {
-        bindingDescription.setReferenceSourceDescription(new LazyBindingSourceDescription());
+        throw new RuntimeException("Support for persistence-unit-ref without a lookup or persistence-unit-name, isn't yet implemented");
       }
+      bindingConfigurations.add(bindingConfiguration);
     }
   }
-  return bindingDescriptions;
+  return bindingConfigurations;
 }
