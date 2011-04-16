@@ -1,4 +1,5 @@
 {
+  setupNodes();
   final ProtocolServer.Configuration config=new ProtocolServer.Configuration();
   config.setBindAddress(new InetSocketAddress(InetAddress.getByName("localhost"),0));
   final AtomicInteger increment=new AtomicInteger();
@@ -8,17 +9,33 @@
     }
   }
 );
-  config.setReadExecutor(Executors.newCachedThreadPool());
+  final ThreadFactory threadFactory=new JBossThreadFactory(new ThreadGroup("MainController-ProtocolServer-threads"),Boolean.FALSE,null,"%G - %t",null,null,AccessController.getContext());
+  config.setThreadFactory(threadFactory);
+  config.setReadExecutor(Executors.newCachedThreadPool(threadFactory));
   config.setSocketFactory(ServerSocketFactory.getDefault());
   config.setBacklog(50);
-  config.setConnectionHandler(this);
+  final CountDownLatch connectionLatch=new CountDownLatch(1);
+  config.setConnectionHandler(new ConnectionHandler(){
+    @Override public MessageHandler handleConnected(    Connection connection) throws IOException {
+      serverConn=connection;
+      try {
+        MessageHandler handler=new TestManagementHeaderMessageHandler();
+        return handler;
+      }
+  finally {
+        connectionLatch.countDown();
+      }
+    }
+  }
+);
   server=new ProtocolServer(config);
   server.start();
   int port=server.getBoundAddress().getPort();
-  Connection clientConn=new ManagementRequestConnectionStrategy.EstablishConnectingStrategy(InetAddress.getByName("localhost"),port,5000,Executors.newCachedThreadPool(),Executors.defaultThreadFactory()).getConnection();
+  final ThreadFactory clientThreadFactory=new JBossThreadFactory(new ThreadGroup("ProxiedController-ProtocolServer-threads"),Boolean.FALSE,null,"%G - %t",null,null,AccessController.getContext());
+  clientConn=new ManagementRequestConnectionStrategy.EstablishConnectingStrategy(InetAddress.getByName("localhost"),port,5000,Executors.newCachedThreadPool(clientThreadFactory),clientThreadFactory).getConnection();
   connectionLatch.await();
   System.out.println("connected");
-  MessageHandler handler=new RemoteModelControllerSetup.SetupManagementHeaderMessageHandler(proxyController);
+  MessageHandler handler=new RemoteModelControllerSetup.SetupManagementHeaderMessageHandler(proxiedController);
   clientConn.setMessageHandler(handler);
-  testController.setDelegate(RemoteProxyController.create(serverConn,proxyNodeAddress));
+  proxyController.setDelegate(RemoteProxyController.create(serverConn,proxyNodeAddress));
 }
