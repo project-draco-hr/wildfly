@@ -2,11 +2,14 @@
   PersistenceUnitService service=(PersistenceUnitService)deploymentUnit.getServiceRegistry().getRequiredService(puServiceName).getValue();
   EntityManagerFactory emf=service.getEntityManagerFactory();
   EntityManager entityManager;
+  boolean isExtended;
   if (type.equals(PersistenceContextType.TRANSACTION)) {
+    isExtended=false;
     entityManager=new TransactionScopedEntityManager(unitName,properties,emf);
     if (log.isDebugEnabled())     log.debug("created new TransactionScopedEntityManager for unit name=" + unitName);
   }
  else {
+    isExtended=true;
     EntityManager entityManager1=SFSBCallStack.findPersistenceContext(unitName);
     if (entityManager1 == null) {
       entityManager1=emf.createEntityManager(properties);
@@ -27,7 +30,14 @@
  catch (    ClassNotFoundException e) {
       throw new RuntimeException("couldn't load " + injectionTypeName + " from JPA modules classloader",e);
     }
+    boolean skipAutoCloseAfterUnwrap=skipEntityManagerCloseFor.contains(injectionTypeName);
+    if (!skipAutoCloseAfterUnwrap && !isExtended) {
+      NonTxEmCloser.pushCall();
+    }
     Object targetValueToInject=entityManager.unwrap(extensionClass);
+    if (!skipAutoCloseAfterUnwrap && !isExtended) {
+      NonTxEmCloser.popCall();
+    }
     return new ValueManagedReference(new ImmediateValue<Object>(targetValueToInject));
   }
   return new ValueManagedReference(new ImmediateValue<Object>(entityManager));
