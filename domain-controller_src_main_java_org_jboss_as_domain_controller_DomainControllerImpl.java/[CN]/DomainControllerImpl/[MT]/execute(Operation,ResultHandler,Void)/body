@@ -1,106 +1,28 @@
 {
-  ModelNode operationNode=operation.getOperation();
-  OperationRouting routing=determineRouting(operationNode);
-  if ((routing.isRouteToMaster() || !routing.isLocalOnly()) && masterDomainControllerClient != null) {
-    PathAddress addr=PathAddress.pathAddress(operationNode.get(OP_ADDR));
-    handler.handleFailed(new ModelNode().set("Operations for address " + addr + " can only handled by the master Domain Controller; this host is not the master Domain Controller"));
-    return new BasicOperationResult();
-  }
- else   if (!routing.isTwoStep()) {
-    String host=routing.getSingleHost();
-    return executeOnHost(host,operation,handler);
-  }
-  ModelNode rolloutPlan=operationNode.hasDefined(OPERATION_HEADERS) && operationNode.get(OPERATION_HEADERS).has(ROLLOUT_PLAN) ? operationNode.get(OPERATION_HEADERS).remove(ROLLOUT_PLAN) : null;
-  ControllerTransaction transaction=new ControllerTransaction();
-  Map<String,ModelNode> hostResults=null;
   try {
-    hostResults=pushToHosts(operation,routing,transaction);
-  }
- catch (  Exception e) {
-    transaction.setRollbackOnly();
-    transaction.commit();
-    handler.handleResultFragment(new String[]{DOMAIN_FAILURE_DESCRIPTION},new ModelNode().set(e.toString()));
-    handler.handleFailed(null);
-    return new BasicOperationResult();
-  }
-  ModelNode masterFailureResult=null;
-  ModelNode hostFailureResults=null;
-  ModelNode masterResult=hostResults.get(localHostName);
-  if (masterResult != null && masterResult.hasDefined(OUTCOME) && FAILED.equals(masterResult.get(OUTCOME).asString())) {
-    transaction.setRollbackOnly();
-    masterFailureResult=masterResult.hasDefined(FAILURE_DESCRIPTION) ? masterResult.get(FAILURE_DESCRIPTION) : new ModelNode().set("Unexplained failure");
-  }
- else {
-    for (    Map.Entry<String,ModelNode> entry : hostResults.entrySet()) {
-      ModelNode hostResult=entry.getValue();
-      if (hostResult.hasDefined(OUTCOME) && FAILED.equals(hostResult.get(OUTCOME).asString())) {
-        if (hostFailureResults == null) {
-          transaction.setRollbackOnly();
-          hostFailureResults=new ModelNode();
-        }
-        ModelNode desc=hostResult.hasDefined(FAILURE_DESCRIPTION) ? hostResult.get(FAILURE_DESCRIPTION) : new ModelNode().set("Unexplained failure");
-        hostFailureResults.add(entry.getKey(),desc);
-      }
-    }
-  }
-  if (transaction.isRollbackOnly()) {
-    transaction.commit();
-    if (masterFailureResult != null) {
-      handler.handleResultFragment(new String[]{DOMAIN_FAILURE_DESCRIPTION},masterFailureResult);
-    }
- else     if (hostFailureResults != null) {
-      handler.handleResultFragment(new String[]{HOST_FAILURE_DESCRIPTIONS},hostFailureResults);
-    }
-    handler.handleFailed(null);
-    return new BasicOperationResult();
-  }
- else {
-    Map<String,Map<ServerIdentity,ModelNode>> opsByGroup=getOpsByGroup(hostResults);
-    try {
-      rolloutPlan=getRolloutPlan(rolloutPlan,opsByGroup);
-    }
- catch (    OperationFailedException ofe) {
-      transaction.setRollbackOnly();
-      handler.handleResultFragment(new String[]{DOMAIN_FAILURE_DESCRIPTION},ofe.getFailureDescription());
-      handler.handleFailed(null);
+    ModelNode operationNode=operation.getOperation();
+    OperationRouting routing=determineRouting(operationNode);
+    if ((routing.isRouteToMaster() || !routing.isLocalOnly()) && masterDomainControllerClient != null) {
+      PathAddress addr=PathAddress.pathAddress(operationNode.get(OP_ADDR));
+      handler.handleFailed(new ModelNode().set("Operations for address " + addr + " can only handled by the master Domain Controller; this host is not the master Domain Controller"));
       return new BasicOperationResult();
     }
- finally {
-      transaction.commit();
+ else     if (!routing.isTwoStep()) {
+      String host=routing.getSingleHost();
+      return executeOnHost(host,operation,handler);
     }
-    ModelNode compensatingOperation=getCompensatingOperation(operationNode,hostResults);
-    if (opsByGroup.size() == 0) {
-      final ModelNode result=getSingleHostResult(hostResults);
-      if (result.hasDefined(DOMAIN_RESULTS) && !result.hasDefined(SERVER_OPERATIONS)) {
-        final List<Property> steps=result.get(DOMAIN_RESULTS).asPropertyList();
-        if (steps.size() == 1) {
-          final ModelNode fragment=result.get(DOMAIN_RESULTS).get("step-1");
-          handler.handleResultFragment(Util.NO_LOCATION,fragment);
-        }
-      }
-      handler.handleResultComplete();
-      return new BasicOperationResult(compensatingOperation);
+ else {
+      return executeTwoPhaseOperation(operation,handler,operationNode,routing);
     }
-    RolloutPlanController controller=new RolloutPlanController(opsByGroup,rolloutPlan,handler,serverOperationExecutor,scheduledExecutorService,false);
-    RolloutPlanController.Result controllerResult=controller.execute();
-switch (controllerResult) {
-case FAILED:
-{
-        controller.rollback();
-        handler.handleFailed(new ModelNode().set("Operation was not applied successfully to any servers"));
-        return new BasicOperationResult(compensatingOperation);
-      }
-case PARTIAL:
-{
-      controller.rollback();
-    }
-case SUCCESS:
-{
-    handler.handleResultComplete();
-    return new BasicOperationResult(compensatingOperation);
   }
-default :
-throw new IllegalStateException("Unknown result " + controllerResult);
-}
-}
+ catch (  OperationFailedException e) {
+    log.debugf(e,"operation (%s) failed - address: (%s)",operation.getOperation().get(OP),operation.getOperation().get(OP_ADDR));
+    handler.handleFailed(e.getFailureDescription());
+    return new BasicOperationResult();
+  }
+catch (  final Throwable t) {
+    log.errorf(t,"operation (%s) failed - address: (%s)",operation.getOperation().get(OP),operation.getOperation().get(OP_ADDR));
+    handler.handleFailed(getFailureResult(t));
+    return new BasicOperationResult();
+  }
 }

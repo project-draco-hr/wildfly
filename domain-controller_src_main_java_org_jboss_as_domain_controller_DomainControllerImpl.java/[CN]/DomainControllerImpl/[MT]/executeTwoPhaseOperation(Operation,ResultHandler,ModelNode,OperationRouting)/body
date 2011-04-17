@@ -1,0 +1,35 @@
+{
+  DomainLevelResult domainResult=executeOnDomainControllers(operation,handler,routing);
+  if (domainResult.singleHostResult != null) {
+    if (domainResult.singleHostResult.hasDefined(DOMAIN_RESULTS) && !domainResult.singleHostResult.hasDefined(SERVER_OPERATIONS)) {
+      final List<Property> steps=domainResult.singleHostResult.get(DOMAIN_RESULTS).asPropertyList();
+      if (steps.size() == 1) {
+        final ModelNode fragment=domainResult.singleHostResult.get(DOMAIN_RESULTS).get("step-1");
+        handler.handleResultFragment(Util.NO_LOCATION,fragment);
+      }
+    }
+    handler.handleResultComplete();
+    return new BasicOperationResult(domainResult.compensatingOperation);
+  }
+  RolloutPlanController controller=new RolloutPlanController(domainResult.opsByGroup,domainResult.rolloutPlan,handler,serverOperationExecutor,scheduledExecutorService,false);
+  RolloutPlanController.Result controllerResult=controller.execute();
+switch (controllerResult) {
+case FAILED:
+{
+      controller.rollback();
+      handler.handleFailed(new ModelNode().set("Operation was not applied successfully to any servers"));
+      return new BasicOperationResult(domainResult.compensatingOperation);
+    }
+case PARTIAL:
+{
+    controller.rollback();
+  }
+case SUCCESS:
+{
+  handler.handleResultComplete();
+  return new BasicOperationResult(domainResult.compensatingOperation);
+}
+default :
+throw new IllegalStateException(String.format("Unknown %s %s",RolloutPlanController.Result.class.getCanonicalName(),controllerResult));
+}
+}

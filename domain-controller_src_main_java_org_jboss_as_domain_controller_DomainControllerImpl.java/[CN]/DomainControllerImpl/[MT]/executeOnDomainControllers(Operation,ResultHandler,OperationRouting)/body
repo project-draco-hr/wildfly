@@ -1,0 +1,72 @@
+{
+  ControllerTransaction transaction=new ControllerTransaction();
+  try {
+    ModelNode operationNode=operation.getOperation();
+    ModelNode rolloutPlan=operationNode.hasDefined(OPERATION_HEADERS) && operationNode.get(OPERATION_HEADERS).has(ROLLOUT_PLAN) ? operationNode.get(OPERATION_HEADERS).remove(ROLLOUT_PLAN) : null;
+    Map<String,ModelNode> hostResults=null;
+    try {
+      hostResults=pushToHosts(operation,routing,transaction);
+    }
+ catch (    Exception e) {
+      ModelNode failureMsg=new ModelNode();
+      failureMsg.get(DOMAIN_FAILURE_DESCRIPTION).set(e.toString());
+      throw new OperationFailedException(failureMsg);
+    }
+    ModelNode masterFailureResult=null;
+    ModelNode hostFailureResults=null;
+    ModelNode masterResult=hostResults.get(localHostName);
+    if (masterResult != null && masterResult.hasDefined(OUTCOME) && FAILED.equals(masterResult.get(OUTCOME).asString())) {
+      transaction.setRollbackOnly();
+      masterFailureResult=masterResult.hasDefined(FAILURE_DESCRIPTION) ? masterResult.get(FAILURE_DESCRIPTION) : new ModelNode().set("Unexplained failure");
+    }
+ else {
+      for (      Map.Entry<String,ModelNode> entry : hostResults.entrySet()) {
+        ModelNode hostResult=entry.getValue();
+        if (hostResult.hasDefined(OUTCOME) && FAILED.equals(hostResult.get(OUTCOME).asString())) {
+          if (hostFailureResults == null) {
+            transaction.setRollbackOnly();
+            hostFailureResults=new ModelNode();
+          }
+          ModelNode desc=hostResult.hasDefined(FAILURE_DESCRIPTION) ? hostResult.get(FAILURE_DESCRIPTION) : new ModelNode().set("Unexplained failure");
+          hostFailureResults.add(entry.getKey(),desc);
+        }
+      }
+    }
+    if (transaction.isRollbackOnly()) {
+      ModelNode failureMsg=new ModelNode();
+      if (masterFailureResult != null) {
+        failureMsg.get(DOMAIN_FAILURE_DESCRIPTION).set(masterFailureResult);
+      }
+ else       if (hostFailureResults != null) {
+        failureMsg.get(HOST_FAILURE_DESCRIPTIONS).set(hostFailureResults);
+      }
+      throw new OperationFailedException(failureMsg);
+    }
+    Map<String,Map<ServerIdentity,ModelNode>> opsByGroup=getOpsByGroup(hostResults);
+    ModelNode compensatingOperation=getCompensatingOperation(operationNode,hostResults);
+    DomainLevelResult result;
+    if (opsByGroup.size() == 0) {
+      ModelNode singleHostResult=getSingleHostResult(hostResults);
+      result=new DomainLevelResult(singleHostResult,compensatingOperation);
+    }
+ else {
+      try {
+        rolloutPlan=getRolloutPlan(rolloutPlan,opsByGroup);
+      }
+ catch (      OperationFailedException ofe) {
+        ModelNode failureMsg=new ModelNode();
+        failureMsg.get(DOMAIN_FAILURE_DESCRIPTION).set(ofe.getFailureDescription());
+        throw new OperationFailedException(failureMsg);
+      }
+      result=new DomainLevelResult(opsByGroup,compensatingOperation,rolloutPlan);
+    }
+    return result;
+  }
+ catch (  OperationFailedException ofe) {
+    transaction.setRollbackOnly();
+    throw ofe;
+  }
+ finally {
+    transaction.commit();
+  }
+}
