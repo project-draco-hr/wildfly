@@ -1,0 +1,33 @@
+{
+  final Map<ServiceController<?>,String> newFailedControllers=new IdentityHashMap<ServiceController<?>,String>(latestSettledFailedControllers);
+  newFailedControllers.keySet().removeAll(lastReportFailedControllers.keySet());
+  lastReportFailedControllers.clear();
+  lastReportFailedControllers.putAll(latestSettledFailedControllers);
+  final Set<ServiceName> newReportMissingDepSet=new TreeSet<ServiceName>(previousMissingDepSet);
+  newReportMissingDepSet.removeAll(lastReportMissingDepSet);
+  lastReportMissingDepSet.clear();
+  lastReportMissingDepSet.addAll(previousMissingDepSet);
+  ModelNode report=null;
+  if (!newFailedControllers.isEmpty() || !newReportMissingDepSet.isEmpty()) {
+    report=new ModelNode();
+    if (!newReportMissingDepSet.isEmpty()) {
+      ModelNode missing=report.get("New missing/unsatisfied dependencies");
+      for (      ServiceName name : newReportMissingDepSet) {
+        ServiceController<?> controller=serviceRegistry.getService(name);
+        if (controller == null) {
+          missing.add(name + " (missing)");
+        }
+ else {
+          missing.add(name + " (unavailable)\n");
+        }
+      }
+    }
+    if (!newFailedControllers.isEmpty()) {
+      ModelNode failed=report.get("Services which failed to start:");
+      for (      Map.Entry<ServiceController<?>,String> entry : newFailedControllers.entrySet()) {
+        failed.add(entry.getKey().getName().toString());
+      }
+    }
+  }
+  return report;
+}

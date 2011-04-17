@@ -1,0 +1,44 @@
+{
+  return new NewModelControllerClient(){
+    public AsyncFuture<ModelNode> executeOperationAsync(    final ModelNode operation,    final OperationMessageHandler messageHandler){
+      if (executor == null) {
+        throw new IllegalStateException("Cannot execute asynchronous operation without an executor");
+      }
+      final AtomicReference<Thread> opThread=new AtomicReference<Thread>();
+class OpTask extends AsyncFutureTask<ModelNode> {
+        OpTask(){
+          super(executor);
+        }
+        public void asyncCancel(        final boolean interruptionDesired){
+          Thread thread=opThread.get();
+          if (thread != null) {
+            thread.interrupt();
+          }
+        }
+        void handleResult(        final ModelNode result){
+          setResult(result);
+        }
+      }
+      final OpTask opTask=new OpTask();
+      executor.execute(new Runnable(){
+        public void run(){
+          opThread.set(Thread.currentThread());
+          try {
+            opTask.handleResult(execute(operation,messageHandler,OperationTransactionControl.COMMIT,null));
+          }
+  finally {
+            opThread.set(null);
+          }
+        }
+      }
+);
+      return opTask;
+    }
+    public ModelNode executeOperation(    final ModelNode operation,    final OperationMessageHandler messageHandler){
+      return execute(operation,messageHandler,OperationTransactionControl.COMMIT,null);
+    }
+    public void close() throws IOException {
+    }
+  }
+;
+}
