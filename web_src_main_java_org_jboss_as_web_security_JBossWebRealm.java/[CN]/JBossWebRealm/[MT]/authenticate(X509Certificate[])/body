@@ -1,0 +1,37 @@
+{
+  if ((certs == null) || (certs.length < 1))   return (null);
+  if (authenticationManager == null)   throw new IllegalStateException("Authentication Manager has not been set");
+  if (authorizationManager == null)   throw new IllegalStateException("Authorization Manager has not been set");
+  Principal userPrincipal=null;
+  try {
+    userPrincipal=certMapping.toPrincipal(certs);
+    Subject subject=new Subject();
+    boolean isValid=authenticationManager.isValid(userPrincipal,certs,subject);
+    if (isValid) {
+      if (log.isTraceEnabled()) {
+        log.trace("User: " + userPrincipal + " is authenticated");
+      }
+      SecurityContext sc=SecurityActions.createSecurityContext(authenticationManager.getSecurityDomain());
+      sc.getUtil().createSubjectInfo(userPrincipal,certs,subject);
+      SecurityActions.setSecurityContextOnAssociation(sc);
+      SecurityContextCallbackHandler scb=new SecurityContextCallbackHandler(sc);
+      RoleGroup roles=authorizationManager.getSubjectRoles(subject,scb);
+      List<Role> rolesAsList=roles.getRoles();
+      List<String> rolesAsStringList=new ArrayList<String>();
+      for (      Role role : rolesAsList) {
+        rolesAsStringList.add(role.getRoleName());
+      }
+      userPrincipal=new GenericPrincipal(this,userPrincipal.getName(),null,rolesAsStringList);
+    }
+ else {
+      if (log.isTraceEnabled()) {
+        log.trace("User: " + userPrincipal + " is NOT authenticated");
+      }
+      userPrincipal=null;
+    }
+  }
+ catch (  Exception e) {
+    log.error("Error during authenticate(X509Certificate[])");
+  }
+  return userPrincipal;
+}

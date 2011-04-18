@@ -1,0 +1,25 @@
+{
+  try {
+    SSLContext ctx=SSLContext.getInstance("TLS");
+    JBossJSSESecurityDomain jsseSecurityDomain=new JBossJSSESecurityDomain("client-cert");
+    jsseSecurityDomain.setKeyStorePassword("changeit");
+    ClassLoader tccl=Thread.currentThread().getContextClassLoader();
+    URL keystore=tccl.getResource("security/client.keystore");
+    jsseSecurityDomain.setKeyStoreURL(keystore.getPath());
+    jsseSecurityDomain.setClientAlias(alias);
+    jsseSecurityDomain.reloadKeyAndTrustStore();
+    KeyManager[] keyManagers=jsseSecurityDomain.getKeyManagers();
+    TrustManager[] trustManagers=jsseSecurityDomain.getTrustManagers();
+    ctx.init(keyManagers,trustManagers,null);
+    SSLSocketFactory ssf=new SSLSocketFactory(ctx);
+    ssf.setHostnameVerifier(SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER);
+    ClientConnectionManager ccm=base.getConnectionManager();
+    SchemeRegistry sr=ccm.getSchemeRegistry();
+    sr.register(new Scheme("https",ssf,8380));
+    return new DefaultHttpClient(ccm,base.getParams());
+  }
+ catch (  Exception ex) {
+    ex.printStackTrace();
+    return null;
+  }
+}
