@@ -1,0 +1,76 @@
+{
+  try {
+    JBossAsManagedConfiguration config=getContainerConfiguration();
+    final String jbossHomeDir=config.getJbossHome();
+    final String additionalJavaOpts=config.getJavaVmArguments();
+    File modulesJar=new File(jbossHomeDir + "/jboss-modules.jar");
+    if (modulesJar.exists() == false)     throw new IllegalStateException("Cannot find: " + modulesJar);
+    List<String> cmd=new ArrayList<String>();
+    if (config.getJavaHome() != null) {
+      cmd.add(config.getJavaHome() + "/bin/java");
+    }
+ else {
+      cmd.add("java");
+    }
+    if (additionalJavaOpts != null) {
+      for (      String opt : additionalJavaOpts.split("\\s+")) {
+        cmd.add(opt);
+      }
+    }
+    cmd.add("-Djboss.home.dir=" + jbossHomeDir);
+    cmd.add("-Dorg.jboss.boot.log.file=" + jbossHomeDir + "/standalone/log/boot.log");
+    cmd.add("-Dlogging.configuration=file:" + jbossHomeDir + "/standalone/configuration/logging.properties");
+    cmd.add("-jar");
+    cmd.add(modulesJar.getAbsolutePath());
+    cmd.add("-mp");
+    cmd.add(jbossHomeDir + "/modules");
+    cmd.add("-logmodule");
+    cmd.add("org.jboss.logmanager");
+    cmd.add("-jaxpmodule");
+    cmd.add("javax.xml.jaxp-provider");
+    cmd.add("org.jboss.as.standalone");
+    log.info("Starting container with: " + cmd.toString());
+    ProcessBuilder processBuilder=new ProcessBuilder(cmd);
+    processBuilder.redirectErrorStream(true);
+    process=processBuilder.start();
+    new Thread(new ConsoleConsumer()).start();
+    long timeout=config.getStartupTimeoutInSeconds() * 1000;
+    boolean testRunnerMBeanAvaialble=false;
+    MBeanServerConnection mbeanServer=null;
+    do {
+      Thread.sleep(100);
+      timeout-=100;
+      if (mbeanServer == null) {
+        try {
+          mbeanServer=getMBeanServerConnection();
+        }
+ catch (        Exception ex) {
+        }
+      }
+      testRunnerMBeanAvaialble=(mbeanServer != null && mbeanServer.isRegistered(OBJECT_NAME));
+    }
+ while (timeout > 0 && testRunnerMBeanAvaialble == false);
+    final Process proc=process;
+    shutdownThread=new Thread(new Runnable(){
+      @Override public void run(){
+        if (proc != null) {
+          proc.destroy();
+          try {
+            proc.waitFor();
+          }
+ catch (          InterruptedException e) {
+            throw new RuntimeException(e);
+          }
+        }
+      }
+    }
+);
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
+    if (!testRunnerMBeanAvaialble) {
+      throw new RuntimeException("Process did not start in time, waited for " + config.getStartupTimeoutInSeconds() + " ms. "+ OBJECT_NAME+ " was never registered");
+    }
+  }
+ catch (  Exception e) {
+    throw new LifecycleException("Could not start container",e);
+  }
+}
