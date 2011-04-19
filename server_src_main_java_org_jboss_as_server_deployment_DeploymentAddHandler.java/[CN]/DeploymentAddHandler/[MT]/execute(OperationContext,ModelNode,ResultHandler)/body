@@ -4,18 +4,17 @@
   PathAddress address=PathAddress.pathAddress(opAddr);
   String name=address.getLastElement().getValue();
   String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : name;
-  byte[] hash;
-  if (tooManyDeploymentParametersDefined(operation)) {
-    throw createFailureException("Only allowed one of the following parameters is allowed %s.",VALID_DEPLOYMENT_PARAMETERS);
+  final byte[] hash;
+  final ModelNode content=operation.require(CONTENT);
+  final ModelNode contentItem=content.require(0);
+  if (contentItem.hasDefined(HASH)) {
+    hash=contentItem.require(HASH).asBytes();
   }
- else   if (operation.hasDefined(HASH)) {
-    hash=operation.get(HASH).asBytes();
-  }
- else   if (hasValidDeploymentParameterDefined(operation)) {
-    InputStream in=getContents(context,operation);
+ else   if (hasValidContentParameterDefined(contentItem)) {
+    InputStream in=getContents(context,contentItem);
     try {
       try {
-        hash=deploymentRepository.addDeploymentContent(in);
+        hash=contentRepository.addContent(in);
       }
  catch (      IOException e) {
         throw createFailureException(e.toString());
@@ -29,7 +28,7 @@
     throw createFailureException("None of the following parameters were defined %s.",VALID_DEPLOYMENT_PARAMETERS);
   }
   boolean isResultComplete=false;
-  if (deploymentRepository.hasDeploymentContent(hash)) {
+  if (contentRepository.hasContent(hash)) {
     ModelNode subModel=context.getSubModel();
     subModel.get(NAME).set(name);
     subModel.get(RUNTIME_NAME).set(runtimeName);
