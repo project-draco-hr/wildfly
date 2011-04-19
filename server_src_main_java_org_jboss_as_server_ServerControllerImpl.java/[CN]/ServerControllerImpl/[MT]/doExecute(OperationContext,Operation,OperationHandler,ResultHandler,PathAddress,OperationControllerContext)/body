@@ -1,17 +1,16 @@
 {
   boolean rollback=isRollbackOnRuntimeFailure(context,operation.getOperation());
-  RollbackAwareResultHandler rollbackAwareHandler=null;
-  if (rollback) {
-    rollbackAwareHandler=new RollbackAwareResultHandler(resultHandler);
-    resultHandler=rollbackAwareHandler;
-  }
-  final OperationResult result=super.doExecute(context,operation,operationHandler,resultHandler,address,operationControllerContext);
+  RollbackAwareResultHandler rollbackAwareHandler=new RollbackAwareResultHandler(resultHandler);
+  final OperationResult result=super.doExecute(context,operation,operationHandler,rollbackAwareHandler,address,operationControllerContext);
   if (context instanceof ServerOperationContextImpl) {
-    if (rollbackAwareHandler != null) {
+    if (rollback) {
       rollbackAwareHandler.setRollbackOperation(result.getCompensatingOperation());
     }
     final ServerOperationContextImpl serverOperationContext=ServerOperationContextImpl.class.cast(context);
     if (serverOperationContext.getRuntimeTask() != null) {
+      if (!serverStateMonitorListener.isFirstReportComplete() && state.getReference() != State.STARTING) {
+        serverStateMonitorListener.awaitUninterruptibly();
+      }
       try {
         serverOperationContext.getRuntimeTask().execute(new RuntimeTaskContext(){
           @Override public ServiceTarget getServiceTarget(){
@@ -24,14 +23,21 @@
 );
       }
  catch (      OperationFailedException e) {
-        resultHandler.handleFailed(e.getFailureDescription());
+        rollbackAwareHandler.handleFailed(e.getFailureDescription());
       }
 catch (      Exception e) {
-        resultHandler.handleFailed(new ModelNode().set(e.toString()));
+        rollbackAwareHandler.handleFailed(new ModelNode().set(e.toString()));
       }
+      ModelNode serverStateChangeReport=null;
       if (state.getReference() != State.STARTING) {
-        serverStateMonitorListener.awaitUninterruptibly();
+        serverStateChangeReport=serverStateMonitorListener.awaitUninterruptibly();
       }
+      if (serverStateChangeReport != null && !rollbackAwareHandler.isTerminalState()) {
+        rollbackAwareHandler.handleFailed(serverStateChangeReport);
+      }
+    }
+    if (!rollbackAwareHandler.isTerminalState()) {
+      rollbackAwareHandler.notifySuccess();
     }
   }
   return result;

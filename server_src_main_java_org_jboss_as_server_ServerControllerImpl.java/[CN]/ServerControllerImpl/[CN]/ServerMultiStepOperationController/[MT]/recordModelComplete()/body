@@ -1,5 +1,7 @@
 {
-  super.recordModelComplete();
+  if (isModelUpdated()) {
+    updateModelAndPersist();
+  }
   if (runtimeTasks.size() > 0) {
     RuntimeTaskContext rtc=new RuntimeTaskContext(){
       @Override public ServiceTarget getServiceTarget(){
@@ -26,8 +28,20 @@ catch (      Throwable t) {
         stepResultHandlers.get(id).handleFailed(new ModelNode().set(t.toString()));
       }
     }
-    if (state.getReference() != State.STARTING) {
-      serverStateMonitorListener.awaitUninterruptibly();
+  }
+  if (state.getReference() != State.STARTING && !(resultHandler instanceof StepResultHandler)) {
+    overallFailure=serverStateMonitorListener.awaitUninterruptibly();
+  }
+  for (int i=0; i < steps.size(); i++) {
+    Integer id=Integer.valueOf(i);
+    StepResultHandler stepHandler=stepResultHandlers.get(id);
+    if (!stepHandler.isTerminalState()) {
+      stepHandler.handleResultComplete();
     }
   }
+  if (!hasFailures() && overallFailure != null && !(resultHandler instanceof StepResultHandler)) {
+    hasFailures=true;
+  }
+  modelComplete.set(true);
+  processComplete();
 }

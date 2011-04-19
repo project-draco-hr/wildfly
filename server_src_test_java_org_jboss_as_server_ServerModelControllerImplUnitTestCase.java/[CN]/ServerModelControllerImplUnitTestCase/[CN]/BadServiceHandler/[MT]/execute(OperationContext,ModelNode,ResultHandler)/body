@@ -1,0 +1,35 @@
+{
+  String name=operation.require("name").asString();
+  ModelNode attr=context.getSubModel().get(name);
+  final int current=attr.asInt();
+  attr.set(operation.require("value"));
+  final boolean remove=operation.hasDefined("async") && operation.get("async").asBoolean();
+  context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
+    @Override public void execute(    RuntimeTaskContext context) throws OperationFailedException {
+      resultHandler.handleResultFragment(new String[0],new ModelNode().set(current));
+      if (remove) {
+        ServiceController<?> sc=context.getServiceRegistry().getService(ServiceName.JBOSS.append("bad-service"));
+        if (sc != null) {
+          sc.setMode(Mode.REMOVE);
+        }
+      }
+ else {
+        Service<Void> bad=new Service<Void>(){
+          @Override public Void getValue() throws IllegalStateException, IllegalArgumentException {
+            return null;
+          }
+          @Override public void start(          StartContext context) throws StartException {
+            throw new RuntimeException("Bad service!");
+          }
+          @Override public void stop(          StopContext context){
+          }
+        }
+;
+        context.getServiceTarget().addService(ServiceName.JBOSS.append("bad-service"),bad).install();
+      }
+      resultHandler.handleResultComplete();
+    }
+  }
+);
+  return new BasicOperationResult(getOperation("bad-service",name,current,operation.get("rollbackName").asString(),true).getOperation());
+}
