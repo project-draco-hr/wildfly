@@ -1,36 +1,42 @@
 {
-  Archive<?> apiArchive=deploymentProvider.getClientDeployment(API_MODULE_NAME);
-  String apiDeploymentName=archiveDeployer.deploy(apiArchive);
-  assertNotNull("Deployment name not null",apiDeploymentName);
+  Archive<?> targetArchive=deploymentProvider.getClientDeployment(TARGET_BUNDLE_NAME);
+  String targetDeploymentName=archiveDeployer.deploy(targetArchive);
+  assertNotNull("Deployment name not null",targetDeploymentName);
   try {
-    Bundle apiBundle=registerModule(ModuleIdentifier.create("deployment." + apiDeploymentName));
-    try {
-      assertEquals("Bundle INSTALLED",Bundle.INSTALLED,apiBundle.getState());
-      InputStream input=deploymentProvider.getClientDeploymentAsStream(TARGET_BUNDLE_NAME);
-      Bundle targetBundle=context.installBundle(TARGET_BUNDLE_NAME,input);
-      assertEquals("Bundle INSTALLED",Bundle.INSTALLED,targetBundle.getState());
-      try {
-        targetBundle.start();
-        assertEquals("Bundle ACTIVE",Bundle.ACTIVE,targetBundle.getState());
-        Archive<?> clientArchive=deploymentProvider.getClientDeployment(CLIENT_MODULE_NAME);
-        String clientDeploymentName=archiveDeployer.deploy(clientArchive);
-        assertNotNull("Deployment name not null",clientDeploymentName);
-        try {
-          assertServiceState(ServiceName.parse("jboss.osgi.example.invoker.service"),State.UP,5000);
-        }
-  finally {
-          archiveDeployer.undeploy(clientDeploymentName);
+    ServiceReference sref=systemContext.getServiceReference(PackageAdmin.class.getName());
+    PackageAdmin packageAdmin=(PackageAdmin)systemContext.getService(sref);
+    Bundle[] bundles=packageAdmin.getBundles(TARGET_BUNDLE_NAME,null);
+    assertNotNull("Bundles not null",bundles);
+    assertEquals("One Bundle",1,bundles.length);
+    final Bundle targetBundle=bundles[0];
+    if (targetBundle.getState() != Bundle.ACTIVE) {
+      final CountDownLatch startedLatch=new CountDownLatch(1);
+      systemContext.addBundleListener(new BundleListener(){
+        public void bundleChanged(        BundleEvent event){
+          Bundle auxBundle=event.getBundle();
+          if (targetBundle.equals(auxBundle) && BundleEvent.STARTED == event.getType()) {
+            startedLatch.countDown();
+          }
         }
       }
-  finally {
-        targetBundle.uninstall();
+);
+      if (startedLatch.await(2000,TimeUnit.MILLISECONDS) == false) {
+        fail("Timeout starting: " + targetBundle);
       }
     }
+    OSGiTestHelper.assertBundleState(Bundle.ACTIVE,targetBundle.getState());
+    Archive<?> clientArchive=deploymentProvider.getClientDeployment(CLIENT_MODULE_NAME);
+    String clientDeploymentName=archiveDeployer.deploy(clientArchive);
+    assertNotNull("Deployment name not null",clientDeploymentName);
+    try {
+      ServiceName clientService=ServiceName.parse("jboss.osgi.example.invoker.service");
+      assertServiceState(clientService,State.UP,5000);
+    }
   finally {
-      apiBundle.uninstall();
+      archiveDeployer.undeploy(clientDeploymentName);
     }
   }
   finally {
-    archiveDeployer.undeploy(apiDeploymentName);
+    archiveDeployer.undeploy(targetDeploymentName);
   }
 }
