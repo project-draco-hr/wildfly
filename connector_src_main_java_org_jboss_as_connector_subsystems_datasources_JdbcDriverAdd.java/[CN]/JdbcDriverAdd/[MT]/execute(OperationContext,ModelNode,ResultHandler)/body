@@ -8,11 +8,13 @@
   final ModelNode compensating=Util.getResourceRemoveOperation(address);
   if (context.getRuntimeContext() != null) {
     context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
-      public void execute(      RuntimeTaskContext context) throws OperationFailedException {
+      @Override public void execute(      RuntimeTaskContext context) throws OperationFailedException {
         final ServiceTarget target=context.getServiceTarget();
+        final ModuleIdentifier moduleId;
         final Module module;
         try {
-          module=Module.getCallerModuleLoader().loadModule(ModuleIdentifier.create(moduleName));
+          moduleId=ModuleIdentifier.create(moduleName);
+          module=Module.getCallerModuleLoader().loadModule(moduleId);
         }
  catch (        ModuleLoadException e) {
           throw new OperationFailedException(e,new ModelNode().set("Failed to load module for driver [" + moduleName + "]"));
@@ -28,7 +30,9 @@
  else {
             log.infof("Deploying non-JDBC-compliant driver %s (version %d.%d)",driver.getClass(),Integer.valueOf(majorVersion),Integer.valueOf(minorVersion));
           }
-          target.addService(ServiceName.JBOSS.append("jdbc-driver",driver.getClass().getName(),Integer.toString(majorVersion),Integer.toString(minorVersion)),new ValueService<Driver>(new ImmediateValue<Driver>(driver))).setInitialMode(ServiceController.Mode.ACTIVE).install();
+          InstalledDriver driverMetadata=new InstalledDriver(moduleId,driver.getClass().getName(),majorVersion,minorVersion,compliant);
+          DriverService driverService=new DriverService(driverMetadata,driver);
+          target.addService(ServiceName.JBOSS.append("jdbc-driver",driver.getClass().getName(),Integer.toString(majorVersion),Integer.toString(minorVersion)),driverService).addDependency(ConnectorServices.JDBC_DRIVER_REGISTRY_SERVICE,DriverRegistry.class,driverService.getDriverRegistryServiceInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
         }
         resultHandler.handleResultComplete();
       }
