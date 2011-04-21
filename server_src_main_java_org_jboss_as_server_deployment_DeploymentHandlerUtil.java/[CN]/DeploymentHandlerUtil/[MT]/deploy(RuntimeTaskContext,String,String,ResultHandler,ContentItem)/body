@@ -8,9 +8,21 @@
  else {
     final ServiceTarget serviceTarget=context.getServiceTarget();
     final ServiceName contentsServiceName=deploymentUnitServiceName.append("contents");
-    ContentServitor.addService(serviceTarget,contentsServiceName,contentHash);
+    if (contents[0].hash != null)     ContentServitor.addService(serviceTarget,contentsServiceName,contents[0].hash);
+ else {
+      final String path=contents[0].path;
+      final ServiceName pathServiceName=AbstractPathService.pathNameOf(path);
+      final String relativeTo=contents[0].relativeTo;
+      if (relativeTo != null) {
+        RelativePathService.addService(pathServiceName,path,relativeTo,serviceTarget);
+      }
+ else {
+        AbsolutePathService.addService(pathServiceName,path,serviceTarget);
+      }
+      PathContentServitor.addService(serviceTarget,contentsServiceName,pathServiceName);
+    }
     final RootDeploymentUnitService service=new RootDeploymentUnitService(deploymentUnitName,runtimeName,null);
     serviceTarget.addService(deploymentUnitServiceName,service).addDependency(Services.JBOSS_DEPLOYMENT_CHAINS,DeployerChains.class,service.getDeployerChainsInjector()).addDependency(ServerDeploymentRepository.SERVICE_NAME,ServerDeploymentRepository.class,service.getServerDeploymentRepositoryInjector()).addDependency(contentsServiceName,VirtualFile.class,service.contentsInjector).setInitialMode(ServiceController.Mode.ACTIVE).install();
-    resultHandler.handleResultComplete();
   }
+  resultHandler.handleResultComplete();
 }

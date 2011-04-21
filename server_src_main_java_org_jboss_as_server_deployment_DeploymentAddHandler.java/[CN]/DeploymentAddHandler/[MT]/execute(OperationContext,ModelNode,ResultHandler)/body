@@ -5,13 +5,16 @@
   String name=address.getLastElement().getValue();
   String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : name;
   final byte[] hash;
-  final ModelNode content=operation.require(CONTENT);
-  final ModelNode contentItem=content.require(0);
-  if (contentItem.hasDefined(HASH)) {
-    hash=contentItem.require(HASH).asBytes();
+  final ModelNode content=operation.require(CONTENT).clone();
+  final DeploymentHandlerUtil.ContentItem contentItem;
+  final ModelNode contentItemNode=content.require(0);
+  if (contentItemNode.hasDefined(HASH)) {
+    hash=contentItemNode.require(HASH).asBytes();
+    if (!contentRepository.hasContent(hash))     throw createFailureException("No deployment content with hash %s is available in the deployment content repository.",HashUtil.bytesToHexString(hash));
+    contentItem=new DeploymentHandlerUtil.ContentItem(hash);
   }
- else   if (hasValidContentParameterDefined(contentItem)) {
-    InputStream in=getInputStream(context,contentItem);
+ else   if (hasValidContentAdditionParameterDefined(contentItemNode)) {
+    InputStream in=getInputStream(context,contentItemNode);
     try {
       try {
         hash=contentRepository.addContent(in);
@@ -23,26 +26,24 @@
   finally {
       StreamUtils.safeClose(in);
     }
+    contentItemNode.get(HASH).set(hash);
+    contentItem=new DeploymentHandlerUtil.ContentItem(hash);
   }
  else {
-    throw createFailureException("None of the following parameters were defined %s.",VALID_DEPLOYMENT_PARAMETERS);
+    final String path=contentItemNode.require(PATH).asString();
+    final String relativeTo=asString(contentItemNode,RELATIVE_TO);
+    final boolean archive=contentItemNode.require(ARCHIVE).asBoolean();
+    contentItem=new DeploymentHandlerUtil.ContentItem(path,relativeTo,archive);
   }
-  boolean isResultComplete=false;
-  if (contentRepository.hasContent(hash)) {
-    ModelNode subModel=context.getSubModel();
-    subModel.get(NAME).set(name);
-    subModel.get(RUNTIME_NAME).set(runtimeName);
-    subModel.get(HASH).set(hash);
-    subModel.get(ENABLED).set(operation.has(ENABLED) && operation.get(ENABLED).asBoolean());
-    if (context.getRuntimeContext() != null && subModel.get(ENABLED).asBoolean()) {
-      DeploymentHandlerUtil.deploy(context,name,runtimeName,hash,resultHandler);
-      isResultComplete=true;
-    }
+  ModelNode subModel=context.getSubModel();
+  subModel.get(NAME).set(name);
+  subModel.get(RUNTIME_NAME).set(runtimeName);
+  subModel.get(CONTENT).set(content);
+  subModel.get(ENABLED).set(operation.has(ENABLED) && operation.get(ENABLED).asBoolean());
+  if (context.getRuntimeContext() != null && subModel.get(ENABLED).asBoolean()) {
+    DeploymentHandlerUtil.deploy(context,name,runtimeName,resultHandler,contentItem);
   }
  else {
-    throw createFailureException("No deployment content with hash %s is available in the deployment content repository.",HashUtil.bytesToHexString(hash));
-  }
-  if (!isResultComplete) {
     resultHandler.handleResultComplete();
   }
   return new BasicOperationResult(Util.getResourceRemoveOperation(operation.get(OP_ADDR)));
