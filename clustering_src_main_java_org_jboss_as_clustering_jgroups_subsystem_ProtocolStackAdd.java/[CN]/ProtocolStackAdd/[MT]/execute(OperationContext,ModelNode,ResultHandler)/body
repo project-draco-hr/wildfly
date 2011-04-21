@@ -9,46 +9,44 @@
     RuntimeTask task=new RuntimeTask(){
       @Override public void execute(      RuntimeTaskContext context) throws OperationFailedException {
         ModelNode transport=operation.get(ModelKeys.TRANSPORT);
-        String type=transport.require(ModelKeys.TYPE).asString();
-        TransportConfigurationImpl transportConfig=new TransportConfigurationImpl(type,ProtocolStackAdd.this.defaults.get(type));
-        ProtocolStackConfigurationImpl stackConfig=new ProtocolStackConfigurationImpl(transportConfig);
-        InjectionCollector injections=new InjectionCollector();
-        this.process(transport,transportConfig,injections);
-        if (transport.has(ModelKeys.DIAGNOSTICS_SOCKET_BINDING)) {
-          injections.addSocketBindingInjector(transport.get(ModelKeys.DIAGNOSTICS_SOCKET_BINDING).asString(),transportConfig.getDiagnosticsSocketBindingInjector());
+        Transport transportConfig=new Transport(transport.require(ModelKeys.TYPE).asString());
+        ProtocolStack stackConfig=new ProtocolStack(name,transportConfig);
+        ServiceBuilder<ChannelFactory> builder=context.getServiceTarget().addService(ChannelFactoryService.getServiceName(name),new ValueService<ChannelFactory>(new ImmediateValue<ChannelFactory>(new JChannelFactory(stackConfig)))).addDependency(ProtocolDefaultsService.SERVICE_NAME,ProtocolDefaults.class,stackConfig.getDefaultsInjector()).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,stackConfig.getMBeanServerInjector());
+        this.build(builder,transport,transportConfig);
+        this.addSocketBindingDependency(builder,transport,ModelKeys.DIAGNOSTICS_SOCKET_BINDING,transportConfig.getDiagnosticsSocketBindingInjector());
+        this.addExecutorDependency(builder,transport,ModelKeys.DEFAULT_EXECUTOR,transportConfig.getDefaultExecutorInjector());
+        this.addExecutorDependency(builder,transport,ModelKeys.OOB_EXECUTOR,transportConfig.getOOBExecutorInjector());
+        if (transport.hasDefined(ModelKeys.TIMER_EXECUTOR)) {
+          builder.addDependency(ThreadsServices.executorName(transport.get(ModelKeys.TIMER_EXECUTOR).asString()),ScheduledExecutorService.class,transportConfig.getTimerExecutorInjector());
         }
-        if (transport.has(ModelKeys.DEFAULT_EXECUTOR)) {
-          injections.addExecutorInjector(transport.get(ModelKeys.DEFAULT_EXECUTOR).asString(),transportConfig.getDefaultExecutorInjector());
-        }
-        if (transport.has(ModelKeys.OOB_EXECUTOR)) {
-          injections.addExecutorInjector(transport.get(ModelKeys.OOB_EXECUTOR).asString(),transportConfig.getOOBExecutorInjector());
-        }
-        if (transport.has(ModelKeys.TIMER_EXECUTOR)) {
-          injections.addScheduledExecutorInjector(transport.get(ModelKeys.TIMER_EXECUTOR).asString(),transportConfig.getTimerExecutorInjector());
-        }
-        if (transport.has(ModelKeys.THREAD_FACTORY)) {
-          injections.addThreadFactoryInjector(transport.get(ModelKeys.THREAD_FACTORY).asString(),transportConfig.getThreadFactoryInjector());
+        if (transport.hasDefined(ModelKeys.THREAD_FACTORY)) {
+          builder.addDependency(ThreadsServices.threadFactoryName(transport.get(ModelKeys.THREAD_FACTORY).asString()),ThreadFactory.class,transportConfig.getThreadFactoryInjector());
         }
         for (        ModelNode protocol : operation.get(ModelKeys.PROTOCOL).asList()) {
-          type=protocol.require(ModelKeys.TYPE).asString();
-          ProtocolConfigurationImpl protocolConfig=new ProtocolConfigurationImpl(type,ProtocolStackAdd.this.defaults.get(type));
-          this.process(protocol,protocolConfig,injections);
+          Protocol protocolConfig=new Protocol(protocol.require(ModelKeys.TYPE).asString());
+          this.build(builder,protocol,protocolConfig);
           stackConfig.getProtocols().add(protocolConfig);
         }
-        ServiceBuilder<ChannelFactory> builder=new ChannelFactoryService(name,stackConfig).build(context.getServiceTarget());
-        injections.addDependencies(builder);
         builder.install();
         resultHandler.handleResultComplete();
       }
-      private void process(      ModelNode protocol,      ProtocolConfigurationImpl protocolConfig,      InjectionCollector injections){
-        if (protocol.has(ModelKeys.SOCKET_BINDING)) {
-          injections.addSocketBindingInjector(protocol.get(ModelKeys.SOCKET_BINDING).asString(),protocolConfig.getSocketBindingInjector());
-        }
+      private void build(      ServiceBuilder<ChannelFactory> builder,      ModelNode protocol,      Protocol protocolConfig){
+        this.addSocketBindingDependency(builder,protocol,ModelKeys.SOCKET_BINDING,protocolConfig.getSocketBindingInjector());
         Map<String,String> properties=protocolConfig.getProperties();
-        if (protocol.has(ModelKeys.PROPERTY)) {
+        if (protocol.hasDefined(ModelKeys.PROPERTY)) {
           for (          Property property : protocol.get(ModelKeys.PROPERTY).asPropertyList()) {
             properties.put(property.getName(),property.getValue().asString());
           }
+        }
+      }
+      private void addSocketBindingDependency(      ServiceBuilder<ChannelFactory> builder,      ModelNode model,      String key,      Injector<SocketBinding> injector){
+        if (model.hasDefined(key)) {
+          builder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(model.get(key).asString()),SocketBinding.class,injector);
+        }
+      }
+      private void addExecutorDependency(      ServiceBuilder<ChannelFactory> builder,      ModelNode model,      String key,      Injector<Executor> injector){
+        if (model.hasDefined(key)) {
+          builder.addDependency(ThreadsServices.executorName(model.get(key).asString()),Executor.class,injector);
         }
       }
     }

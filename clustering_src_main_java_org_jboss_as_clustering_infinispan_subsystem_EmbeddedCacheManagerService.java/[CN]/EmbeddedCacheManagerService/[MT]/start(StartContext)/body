@@ -1,47 +1,72 @@
 {
-  this.globalConfiguration.setCacheManagerName(this.name);
-  String nodeName=this.environment.getValue().getNodeName();
-  this.globalConfiguration.setTransportNodeName(nodeName);
-  this.globalConfiguration.setClusterName(String.format("%s:%s",nodeName,this.name));
-  ChannelProvider.init(this.globalConfiguration,this.channelFactory.getValue());
-  MBeanServer server=this.mbeanServer.getOptionalValue();
+  EmbeddedCacheManagerDefaults defaults=this.configuration.getDefaults();
+  GlobalConfiguration global=defaults.getGlobalConfiguration().clone();
+  TransportConfiguration transport=this.configuration.getTransportConfiguration();
+  if (transport != null) {
+    Long timeout=transport.getLockTimeout();
+    if (timeout != null) {
+      global.setDistributedSyncTimeout(timeout.longValue());
+    }
+    String site=transport.getSite();
+    if (site != null) {
+      global.setSiteId(site);
+    }
+    String rack=transport.getRack();
+    if (rack != null) {
+      global.setRackId(rack);
+    }
+    String machine=transport.getMachine();
+    if (machine != null) {
+      global.setMachineId(machine);
+    }
+    String nodeName=transport.getEnvironment().getNodeName();
+    global.setTransportNodeName(nodeName);
+    global.setClusterName(String.format("%s-%s",nodeName,this.configuration.getName()));
+    ChannelProvider.init(global,transport.getChannelFactory());
+    Executor executor=transport.getExecutor();
+    if (executor != null) {
+      ExecutorProvider.initTransportExecutor(global,executor);
+    }
+  }
+  global.setCacheManagerName(this.configuration.getName());
+  Configuration defaultConfig=new Configuration();
+  MBeanServer server=this.configuration.getMBeanServer();
   if (server != null) {
-    this.globalConfiguration.setExposeGlobalJmxStatistics(true);
-    this.globalConfiguration.setMBeanServerLookupInstance(new MBeanServerProvider(server));
-    this.globalConfiguration.setJmxDomain(server.getDefaultDomain());
-    this.defaultConfiguration.setExposeJmxStatistics(true);
+    global.setExposeGlobalJmxStatistics(true);
+    global.setMBeanServerLookupInstance(new MBeanServerProvider(server));
+    global.setJmxDomain(server.getDefaultDomain());
+    defaultConfig.setExposeJmxStatistics(true);
   }
  else {
-    this.globalConfiguration.setExposeGlobalJmxStatistics(false);
-    this.defaultConfiguration.setExposeJmxStatistics(false);
+    global.setExposeGlobalJmxStatistics(false);
+    defaultConfig.setExposeJmxStatistics(false);
   }
-  Executor listenerExecutor=this.listenerExecutor.getOptionalValue();
+  Executor listenerExecutor=this.configuration.getListenerExecutor();
   if (listenerExecutor != null) {
-    ExecutorProvider.initListenerExecutor(this.globalConfiguration,listenerExecutor);
+    ExecutorProvider.initListenerExecutor(global,listenerExecutor);
   }
-  Executor transportExecutor=this.transportExecutor.getOptionalValue();
-  if (transportExecutor != null) {
-    ExecutorProvider.initTransportExecutor(this.globalConfiguration,transportExecutor);
-  }
-  ScheduledExecutorService evictionExecutor=this.evictionExecutor.getOptionalValue();
+  ScheduledExecutorService evictionExecutor=this.configuration.getEvictionExecutor();
   if (evictionExecutor != null) {
-    ExecutorProvider.initEvictionExecutor(this.globalConfiguration,evictionExecutor);
+    ExecutorProvider.initEvictionExecutor(global,evictionExecutor);
   }
-  ScheduledExecutorService replicationQueueExecutor=this.replicationQueueExecutor.getOptionalValue();
-  if (listenerExecutor != null) {
-    ExecutorProvider.initReplicationQueueExecutor(this.globalConfiguration,replicationQueueExecutor);
+  ScheduledExecutorService replicationQueueExecutor=this.configuration.getReplicationQueueExecutor();
+  if (replicationQueueExecutor != null) {
+    ExecutorProvider.initReplicationQueueExecutor(global,replicationQueueExecutor);
   }
-  TransactionManager transactionManager=this.transactionManager.getOptionalValue();
+  TransactionManager transactionManager=this.configuration.getTransactionManager();
   if (transactionManager != null) {
-    this.defaultConfiguration.setTransactionManagerLookup(new TransactionManagerProvider(transactionManager));
+    defaultConfig.setTransactionManagerLookup(new TransactionManagerProvider(transactionManager));
   }
-  SwitchContext switchContext=this.switcher.getSwitchContext(this.getClass().getClassLoader());
+  SwitchContext switchContext=switcher.getSwitchContext(this.getClass().getClassLoader());
   try {
-    EmbeddedCacheManager manager=new DefaultCacheManager(this.globalConfiguration,this.defaultConfiguration,false);
-    for (    Map.Entry<String,Configuration> entry : this.configurations.entrySet()) {
-      manager.defineConfiguration(entry.getKey(),entry.getValue());
+    EmbeddedCacheManager manager=new DefaultCacheManager(global,defaultConfig,false);
+    for (    Map.Entry<String,Configuration> entry : this.configuration.getConfigurations().entrySet()) {
+      Configuration overrides=entry.getValue();
+      Configuration configuration=defaults.getDefaultConfiguration(overrides.getCacheMode()).clone();
+      configuration.applyOverrides(overrides);
+      manager.defineConfiguration(entry.getKey(),configuration);
     }
-    this.container=new DefaultCacheContainer(manager,this.defaultCache);
+    this.container=new DefaultEmbeddedCacheManager(manager,this.configuration.getDefaultCache());
     this.container.start();
   }
   finally {
