@@ -1,23 +1,17 @@
 {
   ModelControllerClient client=ctx.getModelControllerClient();
-  if (!ctx.hasArguments()) {
-    printList(ctx,Util.getDeployments(client));
+  ParsedArguments args=ctx.getParsedArguments();
+  boolean l=this.l.isPresent(args);
+  if (!args.hasArguments() || l) {
+    printList(ctx,Util.getDeployments(client),l);
     return;
   }
-  List<String> otherArgs=ctx.getOtherArguments();
-  if (otherArgs.size() > 1) {
-    ctx.printLine("Only one unnamed argument is expected for this command but received " + otherArgs.size() + ": "+ otherArgs);
-    return;
+  final String path;
+  try {
+    path=this.path.getValue(args);
   }
-  String path=null;
-  if (otherArgs.size() > 0) {
-    path=otherArgs.get(0);
-  }
- else {
-    path=ctx.getArgument("path");
-  }
-  if (path == null) {
-    ctx.printLine("The required path argument is missing.");
+ catch (  IllegalArgumentException e) {
+    ctx.printLine("The path argument is missing");
     return;
   }
   File f=new File(path);
@@ -25,13 +19,13 @@
     ctx.printLine("Path " + f.getAbsolutePath() + " doesn't exist.");
     return;
   }
-  String name=ctx.getArgument("name");
+  String name=this.name.getValue(args);
   if (name == null) {
     name=f.getName();
   }
-  String runtimeName=ctx.getArgument("runtime-name");
+  String runtimeName=rtName.getValue(args);
   if (Util.isDeployed(name,client)) {
-    if (ctx.hasArgument("f")) {
+    if (force.isPresent(args)) {
       DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
       ModelNode result;
       builder=new DefaultOperationRequestBuilder();
@@ -63,7 +57,7 @@
       ctx.printLine("'" + name + "' re-deployed successfully.");
     }
  else {
-      ctx.printLine("'" + name + "' is already deployed (use -f to force re-deploy).");
+      ctx.printLine("'" + name + "' is already deployed (use "+ force.getDefaultName()+ " to force re-deploy).");
     }
     return;
   }
