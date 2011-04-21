@@ -2,21 +2,21 @@
   String symbolicName="archive-deployer-test-bundle";
   Archive<?> archive=provider.getClientDeployment(symbolicName);
   String depname=archiveDeployer.deploy(archive);
-  Bundle bundle=null;
-  try {
-    for (    Bundle aux : context.getBundles()) {
-      if (symbolicName.equals(aux.getSymbolicName())) {
-        bundle=aux;
-        break;
-      }
+  final Bundle bundle=getDeployedBundle(symbolicName);
+  assertNotNull("Bundle found",bundle);
+  bundle.start();
+  OSGiTestHelper.assertBundleState(Bundle.ACTIVE,bundle.getState());
+  bundle.stop();
+  OSGiTestHelper.assertBundleState(Bundle.RESOLVED,bundle.getState());
+  final CountDownLatch uninstallLatch=new CountDownLatch(1);
+  context.addBundleListener(new BundleListener(){
+    public void bundleChanged(    BundleEvent event){
+      Bundle eventSource=event.getBundle();
+      if (eventSource.equals(bundle) && event.getType() == BundleEvent.UNINSTALLED)       uninstallLatch.countDown();
     }
-    assertNotNull("Bundle found",bundle);
-    bundle.start();
-    OSGiTestHelper.assertBundleState(Bundle.ACTIVE,bundle.getState());
-    bundle.stop();
-    OSGiTestHelper.assertBundleState(Bundle.RESOLVED,bundle.getState());
   }
-  finally {
-    archiveDeployer.undeploy(depname);
-  }
+);
+  archiveDeployer.undeploy(depname);
+  if (uninstallLatch.await(1000,TimeUnit.MILLISECONDS) == false)   fail("UNINSTALLED event not received");
+  OSGiTestHelper.assertBundleState(Bundle.UNINSTALLED,bundle.getState());
 }
