@@ -1,0 +1,43 @@
+{
+  final String mBeanClassName=mBeanConfig.getCode();
+  final Class<?> mBeanClass=ReflectionUtils.getClass(mBeanClassName,classLoader);
+  final ClassReflectionIndex<?> mBeanClassIndex=index.getClassIndex(mBeanClass);
+  final Object mBeanInstance=newInstance(mBeanConfig,mBeanClassIndex,classLoader);
+  final String mBeanName=mBeanConfig.getName();
+  final MBeanServices mBeanServices=new MBeanServices(mBeanName,mBeanInstance,target);
+  final JBossServiceDependencyConfig[] dependencyConfigs=mBeanConfig.getDependencyConfigs();
+  if (dependencyConfigs != null) {
+    final Service<Object> createDestroyService=mBeanServices.getCreateDestroyService();
+    for (    final JBossServiceDependencyConfig dependencyConfig : dependencyConfigs) {
+      final Injector<Object> injector=getInjector(dependencyConfig,mBeanClassIndex,createDestroyService);
+      mBeanServices.addDependency(dependencyConfig.getDependencyName(),injector);
+    }
+  }
+  final JBossServiceAttributeConfig[] attributeConfigs=mBeanConfig.getAttributeConfigs();
+  if (attributeConfigs != null) {
+    final Service<Object> createDestroyService=mBeanServices.getCreateDestroyService();
+    for (    final JBossServiceAttributeConfig attributeConfig : attributeConfigs) {
+      final String propertyName=attributeConfig.getName();
+      final Inject injectConfig=attributeConfig.getInject();
+      final ValueFactory valueFactoryConfig=attributeConfig.getValueFactory();
+      if (injectConfig != null) {
+        final Value<?> value=getValue(injectConfig,mBeanClassIndex);
+        final Injector<Object> injector=getPropertyInjector(propertyName,mBeanClassIndex,createDestroyService,value);
+        mBeanServices.addDependency(injectConfig.getBeanName(),injector);
+      }
+ else       if (valueFactoryConfig != null) {
+        final Value<?> value=getValue(valueFactoryConfig,mBeanClassIndex,classLoader);
+        final Injector<Object> injector=getPropertyInjector(propertyName,mBeanClassIndex,createDestroyService,value);
+        mBeanServices.addDependency(valueFactoryConfig.getBeanName(),injector);
+      }
+ else {
+        final Value<?> value=getValue(attributeConfig,mBeanClassIndex);
+        final Injector<Object> injector=getPropertyInjector(propertyName,mBeanClassIndex,createDestroyService,Values.injectedValue());
+        mBeanServices.addInjectionValue(injector,value);
+      }
+    }
+  }
+  final MBeanRegistrationService<Object> mbeanRegistrationService=new MBeanRegistrationService<Object>(mBeanName);
+  target.addService(MBeanRegistrationService.SERVICE_NAME.append(mBeanName),mbeanRegistrationService).addDependency(MBeanServerService.SERVICE_NAME,MBeanServer.class,mbeanRegistrationService.getMBeanServerInjector()).addDependency(mBeanServices.getStartStopServiceName(),Object.class,mbeanRegistrationService.getValueInjector()).install();
+  mBeanServices.install();
+}
