@@ -11,22 +11,29 @@
   final String deploymentRuntimeName=deploymentUnit.getAttachment(Attachments.RUNTIME_NAME);
   final VirtualFile deploymentContents=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_CONTENTS);
   if (deploymentContents == null)   return;
-  final VirtualFile deploymentRoot=VFS.getChild("content/" + deploymentRuntimeName);
-  boolean failed=false;
-  Closeable handle=null;
+  final VirtualFile deploymentRoot;
   final MountHandle mountHandle;
-  try {
-    final boolean mountExploded=deploymentName.endsWith("war");
-    handle=serverDeploymentRepository.mountDeploymentContent(deploymentName,deploymentRuntimeName,deploymentContents,deploymentRoot,mountExploded);
-    mountHandle=new MountHandle(handle);
+  if (deploymentContents.isDirectory()) {
+    deploymentRoot=deploymentContents;
+    mountHandle=null;
   }
- catch (  IOException e) {
-    failed=true;
-    throw new DeploymentUnitProcessingException("Failed to mount deployment content",e);
-  }
+ else {
+    deploymentRoot=VFS.getChild("content/" + deploymentRuntimeName);
+    boolean failed=false;
+    Closeable handle=null;
+    try {
+      final boolean mountExploded=deploymentName.endsWith("war");
+      handle=serverDeploymentRepository.mountDeploymentContent(deploymentName,deploymentRuntimeName,deploymentContents,deploymentRoot,mountExploded);
+      mountHandle=new MountHandle(handle);
+    }
+ catch (    IOException e) {
+      failed=true;
+      throw new DeploymentUnitProcessingException("Failed to mount deployment content",e);
+    }
  finally {
-    if (failed) {
-      VFSUtils.safeClose(handle);
+      if (failed) {
+        VFSUtils.safeClose(handle);
+      }
     }
   }
   final ResourceRoot resourceRoot=new ResourceRoot(deploymentRoot,mountHandle);
