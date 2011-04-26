@@ -20,7 +20,7 @@
     name=f.getName();
   }
   if (Util.isDeployed(name,ctx.getModelControllerClient())) {
-    if (args.hasArgument("f")) {
+    if (force.isPresent(args)) {
       DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
       builder=new DefaultOperationRequestBuilder();
       builder.setOperationName("full-replace-deployment");
@@ -36,6 +36,19 @@
       throw new OperationFormatException("'" + name + "' is already deployed (use -f to force re-deploy).");
     }
   }
+  final String[] serverGroups;
+  if (ctx.isDomainMode()) {
+    try {
+      String serverGroupsStr=this.serverGroups.getValue(args);
+      serverGroups=serverGroupsStr.split(",");
+    }
+ catch (    IllegalArgumentException e) {
+      throw new OperationFormatException("--server-groups is missing");
+    }
+  }
+ else {
+    serverGroups=null;
+  }
   ModelNode composite=new ModelNode();
   composite.get("operation").set("composite");
   composite.get("address").setEmptyList();
@@ -50,9 +63,19 @@
   byte[] bytes=readBytes(f);
   builder.getModelNode().get("bytes").set(bytes);
   steps.add(builder.buildRequest());
-  builder=new DefaultOperationRequestBuilder();
-  builder.setOperationName("deploy");
-  builder.addNode("deployment",name);
-  steps.add(builder.buildRequest());
+  if (ctx.isDomainMode()) {
+    for (    String serverGroup : serverGroups) {
+      steps.add(Util.configureDeploymentOperation("add",name,serverGroup));
+    }
+    for (    String serverGroup : serverGroups) {
+      steps.add(Util.configureDeploymentOperation("deploy",name,serverGroup));
+    }
+  }
+ else {
+    builder=new DefaultOperationRequestBuilder();
+    builder.setOperationName("deploy");
+    builder.addNode("deployment",name);
+    steps.add(builder.buildRequest());
+  }
   return composite;
 }

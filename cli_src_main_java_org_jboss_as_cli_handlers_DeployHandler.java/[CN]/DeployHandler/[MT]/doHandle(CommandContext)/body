@@ -11,7 +11,7 @@
     path=this.path.getValue(args);
   }
  catch (  IllegalArgumentException e) {
-    ctx.printLine("The path argument is missing");
+    ctx.printLine("The path argument is missing.");
     return;
   }
   File f=new File(path);
@@ -62,6 +62,20 @@
     return;
   }
  else {
+    final String[] serverGroups;
+    if (ctx.isDomainMode()) {
+      try {
+        String serverGroupsStr=this.serverGroups.getValue(args);
+        serverGroups=serverGroupsStr.split(",");
+      }
+ catch (      IllegalArgumentException e) {
+        ctx.printLine("--server-groups is missing");
+        return;
+      }
+    }
+ else {
+      serverGroups=null;
+    }
     DefaultOperationRequestBuilder builder;
     ModelNode result;
     builder=new DefaultOperationRequestBuilder();
@@ -90,11 +104,32 @@
       ctx.printLine(Util.getFailureDescription(result));
       return;
     }
-    builder=new DefaultOperationRequestBuilder();
-    builder.setOperationName("deploy");
-    builder.addNode("deployment",name);
+    final ModelNode request;
+    if (ctx.isDomainMode()) {
+      request=new ModelNode();
+      request.get("operation").set("composite");
+      request.get("address").setEmptyList();
+      ModelNode steps=request.get("steps");
+      for (      String serverGroup : serverGroups) {
+        steps.add(Util.configureDeploymentOperation("add",name,serverGroup));
+      }
+      for (      String serverGroup : serverGroups) {
+        steps.add(Util.configureDeploymentOperation("deploy",name,serverGroup));
+      }
+    }
+ else {
+      builder=new DefaultOperationRequestBuilder();
+      builder.setOperationName("deploy");
+      builder.addNode("deployment",name);
+      try {
+        request=builder.buildRequest();
+      }
+ catch (      Exception e) {
+        ctx.printLine("Failed to deploy: " + e.getLocalizedMessage());
+        return;
+      }
+    }
     try {
-      ModelNode request=builder.buildRequest();
       result=client.execute(request);
     }
  catch (    Exception e) {
