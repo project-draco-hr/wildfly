@@ -18,7 +18,9 @@
             aliases[i]=EmbeddedCacheManagerService.getServiceName(list.get(i).asString());
           }
         }
-        ServiceBuilder<CacheContainer> builder=context.getServiceTarget().addService(EmbeddedCacheManagerService.getServiceName(name),new EmbeddedCacheManagerService(config)).setInitialMode(ServiceController.Mode.ON_DEMAND).addDependency(EmbeddedCacheManagerDefaultsService.SERVICE_NAME,EmbeddedCacheManagerDefaults.class,config.getDefaultsInjector()).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("txn","TransactionManager"),TransactionManager.class,config.getTransactionManagerInjector()).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,config.getMBeanServerInjector()).addAliases(aliases);
+        ServiceTarget target=context.getServiceTarget();
+        ServiceName serviceName=EmbeddedCacheManagerService.getServiceName(name);
+        ServiceBuilder<CacheContainer> builder=target.addService(serviceName,new EmbeddedCacheManagerService(config)).setInitialMode(ServiceController.Mode.ON_DEMAND).addDependency(EmbeddedCacheManagerDefaultsService.SERVICE_NAME,EmbeddedCacheManagerDefaults.class,config.getDefaultsInjector()).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("txn","TransactionManager"),TransactionManager.class,config.getTransactionManagerInjector()).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,config.getMBeanServerInjector()).addAliases(aliases);
         boolean requiresTransport=false;
         Map<String,Configuration> configurations=config.getConfigurations();
         for (        ModelNode cache : operation.require(ModelKeys.CACHE).asList()) {
@@ -175,6 +177,11 @@
         this.addScheduledExecutorDependency(builder,operation,ModelKeys.EVICTION_EXECUTOR,config.getEvictionExecutorInjector());
         this.addScheduledExecutorDependency(builder,operation,ModelKeys.REPLICATION_QUEUE_EXECUTOR,config.getReplicationQueueExecutorInjector());
         builder.install();
+        if (operation.hasDefined(ModelKeys.JNDI_NAME)) {
+          String binding=operation.get(ModelKeys.JNDI_NAME).asString();
+          BinderService binder=new BinderService(binding);
+          target.addService(EmbeddedCacheManagerService.getContextName(name),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(binding)).addDependency(serviceName,CacheContainer.class,new ManagedReferenceInjector<CacheContainer>(binder.getManagedObjectInjector())).addDependency(ContextNames.JAVA_CONTEXT_SERVICE_NAME,NamingStore.class,binder.getNamingStoreInjector()).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+        }
         resultHandler.handleResultComplete();
       }
       private void addExecutorDependency(      ServiceBuilder<CacheContainer> builder,      ModelNode model,      String key,      Injector<Executor> injector){

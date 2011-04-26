@@ -1,0 +1,25 @@
+{
+  String cacheName=event.getCacheName();
+  EmbeddedCacheManager container=event.getCacheManager();
+  GlobalConfiguration global=container.getGlobalConfiguration();
+  String containerName=global.getCacheManagerName();
+  log.infof("Stopped %s cache from %s container",cacheName,containerName);
+  MBeanServer server=this.configuration.getMBeanServer();
+  if (server != null) {
+    Configuration configuration=cacheName.equals(CacheContainer.DEFAULT_CACHE_NAME) ? container.getDefaultConfiguration() : container.defineConfiguration(cacheName,new Configuration());
+    if (configuration.isExposeJmxStatistics()) {
+      String domain=global.getJmxDomain();
+      String jmxCacheName=String.format("%s(%s)",cacheName,configuration.getCacheModeString().toLowerCase(Locale.ENGLISH));
+      try {
+        ObjectName name=ObjectName.getInstance(String.format("%s:%s,%s=%s,manager=%s,%s=%s",domain,CacheJmxRegistration.CACHE_JMX_GROUP,ComponentsJmxRegistration.NAME_KEY,ObjectName.quote(jmxCacheName),ObjectName.quote(containerName),ComponentsJmxRegistration.COMPONENT_KEY,"Cache"));
+        if (server.isRegistered(name)) {
+          server.unregisterMBean(name);
+          log.tracef("Unregistered cache mbean: %s",name);
+        }
+      }
+ catch (      JMException e) {
+        log.debugf(e,"Failed to unregister mbean for %s cache",cacheName);
+      }
+    }
+  }
+}
