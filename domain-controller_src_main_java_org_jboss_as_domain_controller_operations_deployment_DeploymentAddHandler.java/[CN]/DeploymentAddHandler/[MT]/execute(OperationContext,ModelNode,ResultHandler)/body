@@ -5,31 +5,38 @@
   String name=address.getLastElement().getValue();
   String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : name;
   byte[] hash;
-  if (tooManyDeploymentParametersDefined(operation)) {
-    throw createFailureException("Only allowed one of the following parameters is allowed %s.",VALID_DEPLOYMENT_PARAMETERS);
+  final ModelNode content=operation.require(CONTENT).clone();
+  final ModelNode contentItemNode=content.require(0);
+  if (contentItemNode.hasDefined(HASH)) {
+    hash=contentItemNode.require(HASH).asBytes();
+    if (!contentRepository.hasContent(hash))     throw createFailureException("No deployment content with hash %s is available in the deployment content repository.",HashUtil.bytesToHexString(hash));
   }
- else   if (operation.hasDefined(HASH)) {
-    hash=operation.get(HASH).asBytes();
-  }
- else   if (hasValidDeploymentParameterDefined(operation)) {
+ else   if (hasValidContentAdditionParameterDefined(contentItemNode)) {
     if (!isMaster) {
       throw createFailureException("A slave domain controller cannot accept deployment content uploads");
     }
+    InputStream in=getInputStream(context,contentItemNode);
     try {
-      hash=DeploymentUploadUtil.storeDeploymentContent(context,operation,contentRepository);
+      try {
+        hash=contentRepository.addContent(in);
+      }
+ catch (      IOException e) {
+        throw createFailureException(e.toString());
+      }
     }
- catch (    IOException e) {
-      throw createFailureException(e.toString());
+  finally {
+      StreamUtils.safeClose(in);
     }
+    contentItemNode.get(HASH).set(hash);
   }
  else {
-    throw createFailureException("None of the following parameters were defined %s.",VALID_DEPLOYMENT_PARAMETERS);
+    throw createFailureException("A domain controller cannot accept unmanaged content");
   }
   if (!isMaster || contentRepository.hasContent(hash)) {
     ModelNode subModel=context.getSubModel();
     subModel.get(NAME).set(name);
     subModel.get(RUNTIME_NAME).set(runtimeName);
-    subModel.get(HASH).set(hash);
+    subModel.get(CONTENT).set(content);
   }
  else {
     throw createFailureException("No deployment content with hash %s is available in the deployment content repository.",HashUtil.bytesToHexString(hash));
