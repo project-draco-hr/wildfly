@@ -3,24 +3,26 @@
   composite.get("operation").set("composite");
   composite.get("address").setEmptyList();
   ModelNode steps=composite.get("steps");
-  final String name=this.name.getValue(ctx.getParsedArguments());
+  final ParsedArguments args=ctx.getParsedArguments();
+  final String name=this.name.getValue(args);
   if (name == null) {
     throw new OperationFormatException("Required argument name are missing.");
   }
   DefaultOperationRequestBuilder builder;
   if (ctx.isDomainMode()) {
-    final String[] serverGroups;
-    if (ctx.isDomainMode()) {
-      try {
-        String serverGroupsStr=this.serverGroups.getValue(ctx.getParsedArguments());
-        serverGroups=serverGroupsStr.split(",");
-      }
- catch (      IllegalArgumentException e) {
-        throw new OperationFormatException("--server-groups is missing");
-      }
+    final List<String> serverGroups;
+    if (allServerGroups.isPresent(args)) {
+      serverGroups=Util.getServerGroups(ctx.getModelControllerClient());
     }
  else {
-      serverGroups=null;
+      String serverGroupsStr=this.serverGroups.getValue(args);
+      if (serverGroupsStr == null) {
+        new OperationFormatException("Either --all-server-groups or --server-groups must be specified.");
+      }
+      serverGroups=Arrays.asList(serverGroupsStr.split(","));
+    }
+    if (serverGroups.isEmpty()) {
+      new OperationFormatException("No server group is available.");
     }
     for (    String group : serverGroups) {
       ModelNode groupStep=Util.configureDeploymentOperation(DEPLOYMENT_UNDEPLOY_OPERATION,name,group);
