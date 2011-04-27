@@ -23,9 +23,6 @@
     callbackHandlerClassName=operation.get(DEFAULT_CALLBACK_HANDLER_CLASS_NAME).asString();
     subModel.get(DEFAULT_CALLBACK_HANDLER_CLASS_NAME).set(callbackHandlerClassName);
   }
- else {
-    callbackHandlerClassName=CALLBACK_HANDLER;
-  }
   if (operation.hasDefined(SUBJECT_FACTORY_CLASS_NAME)) {
     subjectFactoryClassName=operation.get(SUBJECT_FACTORY_CLASS_NAME).asString();
     subModel.get(SUBJECT_FACTORY_CLASS_NAME).set(subjectFactoryClassName);
@@ -101,6 +98,7 @@
     context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
       public void execute(      RuntimeTaskContext context) throws OperationFailedException {
         updateContext.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_MODULE,new SecurityDependencyProcessor());
+        log.info("Activating Security Subsystem");
         final ServiceTarget target=context.getServiceTarget();
         final SecurityBootstrapService bootstrapService=new SecurityBootstrapService();
         target.addService(SecurityBootstrapService.SERVICE_NAME,bootstrapService).setInitialMode(ServiceController.Mode.ACTIVE).install();
@@ -108,7 +106,7 @@
         final BinderService binderService=new BinderService("jaas");
         target.addService(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append("jboss","jaas"),binderService).addInjection(binderService.getManagedObjectInjector(),securityDomainJndiInjectable).addDependency(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append("jboss"),NamingStore.class,binderService.getNamingStoreInjector()).addDependency(SecurityManagementService.SERVICE_NAME,ISecurityManagement.class,securityDomainJndiInjectable.getSecurityManagementInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
         final SecurityManagementService securityManagementService=new SecurityManagementService(resolvedAuthenticationManagerClassName,deepCopySubject,resolvedCallbackHandlerClassName,resolvedAuthorizationManagerClassName,resolvedAuditManagerClassName,resolvedIdentityTrustManagerClassName,resolvedMappingManagerClassName);
-        target.addService(SecurityManagementService.SERVICE_NAME,securityManagementService).setInitialMode(ServiceController.Mode.ACTIVE).install();
+        target.addService(SecurityManagementService.SERVICE_NAME,securityManagementService).addDependency(DependencyType.REQUIRED,EmbeddedCacheManagerService.getServiceName(CACHE_CONTAINER_NAME),EmbeddedCacheManager.class,securityManagementService.getAuthenticationCacheManagerInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
         final SubjectFactoryService subjectFactoryService=new SubjectFactoryService(resolvedSubjectFactoryClassName);
         target.addService(SubjectFactoryService.SERVICE_NAME,subjectFactoryService).addDependency(SecurityManagementService.SERVICE_NAME,ISecurityManagement.class,subjectFactoryService.getSecurityManagementInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
         Configuration loginConfig=XMLLoginConfigImpl.getInstance();
