@@ -6,25 +6,28 @@
     printList(ctx,Util.getDeployments(client),l);
     return;
   }
-  final String path;
-  try {
-    path=this.path.getValue(args);
+  final String path=this.path.getValue(args);
+  final File f;
+  if (path != null) {
+    f=new File(path);
+    if (!f.exists()) {
+      ctx.printLine("Path " + f.getAbsolutePath() + " doesn't exist.");
+      return;
+    }
   }
- catch (  IllegalArgumentException e) {
-    ctx.printLine("The path argument is missing.");
-    return;
-  }
-  File f=new File(path);
-  if (!f.exists()) {
-    ctx.printLine("Path " + f.getAbsolutePath() + " doesn't exist.");
-    return;
+ else {
+    f=null;
   }
   String name=this.name.getValue(args);
   if (name == null) {
+    if (f == null) {
+      ctx.printLine("Either path or --name is requied.");
+      return;
+    }
     name=f.getName();
   }
   String runtimeName=rtName.getValue(args);
-  if (Util.isDeployed(name,client)) {
+  if (Util.isDeployed(name,client) && f != null) {
     if (force.isPresent(args)) {
       DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
       ModelNode result;
@@ -85,31 +88,33 @@
     }
     DefaultOperationRequestBuilder builder;
     ModelNode result;
-    builder=new DefaultOperationRequestBuilder();
-    builder.setOperationName("add");
-    builder.addNode("deployment",name);
-    if (runtimeName != null) {
-      builder.addProperty("runtime-name",runtimeName);
-    }
-    FileInputStream is=null;
-    try {
-      is=new FileInputStream(f);
-      ModelNode request=builder.buildRequest();
-      OperationBuilder op=OperationBuilder.Factory.create(request);
-      op.addInputStream(is);
-      request.get("input-stream-index").set(0);
-      result=client.execute(op.build());
-    }
- catch (    Exception e) {
-      ctx.printLine("Failed to add the deployment content to the repository: " + e.getLocalizedMessage());
-      return;
-    }
+    if (f != null) {
+      builder=new DefaultOperationRequestBuilder();
+      builder.setOperationName("add");
+      builder.addNode("deployment",name);
+      if (runtimeName != null) {
+        builder.addProperty("runtime-name",runtimeName);
+      }
+      FileInputStream is=null;
+      try {
+        is=new FileInputStream(f);
+        ModelNode request=builder.buildRequest();
+        OperationBuilder op=OperationBuilder.Factory.create(request);
+        op.addInputStream(is);
+        request.get("input-stream-index").set(0);
+        result=client.execute(op.build());
+      }
+ catch (      Exception e) {
+        ctx.printLine("Failed to add the deployment content to the repository: " + e.getLocalizedMessage());
+        return;
+      }
  finally {
-      StreamUtils.safeClose(is);
-    }
-    if (!Util.isSuccess(result)) {
-      ctx.printLine(Util.getFailureDescription(result));
-      return;
+        StreamUtils.safeClose(is);
+      }
+      if (!Util.isSuccess(result)) {
+        ctx.printLine(Util.getFailureDescription(result));
+        return;
+      }
     }
     final ModelNode request;
     if (ctx.isDomainMode()) {
