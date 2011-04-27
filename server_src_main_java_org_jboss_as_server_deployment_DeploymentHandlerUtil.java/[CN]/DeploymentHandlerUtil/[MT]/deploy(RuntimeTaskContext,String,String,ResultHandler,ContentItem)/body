@@ -7,22 +7,37 @@
   }
  else {
     final ServiceTarget serviceTarget=context.getServiceTarget();
+    final ServiceController<?> previous;
     final ServiceName contentsServiceName=deploymentUnitServiceName.append("contents");
-    if (contents[0].hash != null)     ContentServitor.addService(serviceTarget,contentsServiceName,contents[0].hash);
+    if (contents[0].hash != null)     previous=ContentServitor.addService(serviceTarget,contentsServiceName,contents[0].hash);
  else {
       final String path=contents[0].path;
       final ServiceName pathServiceName=AbstractPathService.pathNameOf(path);
       final String relativeTo=contents[0].relativeTo;
       if (relativeTo != null) {
-        RelativePathService.addService(pathServiceName,path,relativeTo,serviceTarget);
+        previous=RelativePathService.addService(pathServiceName,path,relativeTo,serviceTarget);
       }
  else {
-        AbsolutePathService.addService(pathServiceName,path,serviceTarget);
+        previous=AbsolutePathService.addService(pathServiceName,path,serviceTarget);
       }
-      PathContentServitor.addService(serviceTarget,contentsServiceName,pathServiceName);
+      final ServiceController<VirtualFile> contentServiceController=PathContentServitor.addService(serviceTarget,contentsServiceName,pathServiceName);
+      contentServiceController.addListener(new AbstractServiceListener<VirtualFile>(){
+        @Override public void serviceRemoved(        ServiceController<? extends VirtualFile> serviceController){
+          contentServiceController.removeListener(this);
+          previous.setMode(REMOVE);
+        }
+      }
+);
     }
     final RootDeploymentUnitService service=new RootDeploymentUnitService(deploymentUnitName,runtimeName,null);
-    serviceTarget.addService(deploymentUnitServiceName,service).addDependency(Services.JBOSS_DEPLOYMENT_CHAINS,DeployerChains.class,service.getDeployerChainsInjector()).addDependency(ServerDeploymentRepository.SERVICE_NAME,ServerDeploymentRepository.class,service.getServerDeploymentRepositoryInjector()).addDependency(contentsServiceName,VirtualFile.class,service.contentsInjector).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    final ServiceController<DeploymentUnit> deploymentUnitController=serviceTarget.addService(deploymentUnitServiceName,service).addDependency(Services.JBOSS_DEPLOYMENT_CHAINS,DeployerChains.class,service.getDeployerChainsInjector()).addDependency(ServerDeploymentRepository.SERVICE_NAME,ServerDeploymentRepository.class,service.getServerDeploymentRepositoryInjector()).addDependency(contentsServiceName,VirtualFile.class,service.contentsInjector).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    previous.addListener(new AbstractServiceListener<Object>(){
+      @Override public void serviceRemoved(      ServiceController<? extends Object> controller){
+        controller.removeListener(this);
+        deploymentUnitController.setMode(REMOVE);
+      }
+    }
+);
   }
   resultHandler.handleResultComplete();
 }
