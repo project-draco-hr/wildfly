@@ -1,48 +1,17 @@
 {
+  final File deployDir=createDeploymentDir("exploded-deployments");
+  ModelControllerClient client=ModelControllerClient.Factory.create(InetAddress.getByName("localhost"),9999);
+  ModelNode result=addDeploymentScanner(deployDir,client,"exploded");
   final JavaArchive archive=ShrinkWrapUtils.createJavaArchive("servermodule/test-deployment.sar",Simple.class.getPackage());
   final File dir=new File("target/archives");
   dir.mkdirs();
   final File file=new File(dir,"test-deployment.sar");
-  archive.as(ZipExporter.class).exportZip(file,true);
-  final File deployDir=new File("target","deployments");
-  cleanFile(deployDir);
-  deployDir.mkdirs();
-  Assert.assertTrue(deployDir.exists());
-  ModelControllerClient client=ModelControllerClient.Factory.create(InetAddress.getByName("localhost"),9999);
-  ModelNode add=new ModelNode();
-  add.get(OP).set(ADD);
-  ModelNode addr=new ModelNode();
-  addr.add("subsystem","deployment-scanner");
-  addr.add("scanner","test");
-  add.get(OP_ADDR).set(addr);
-  add.get("path").set(deployDir.getAbsolutePath());
-  add.get("scan-enabled").set(true);
-  add.get("scan-interval").set(1000);
-  ModelNode result=client.execute(add);
-  Assert.assertEquals(ModelDescriptionConstants.SUCCESS,result.require(ModelDescriptionConstants.OUTCOME).asString());
+  archive.as(ExplodedExporter.class).exportExploded(deployDir);
   try {
-    final File target=new File(deployDir,"test-deployment.sar");
     final File deployed=new File(deployDir,"test-deployment.sar.deployed");
-    Assert.assertFalse(target.exists());
+    Assert.assertFalse(deployed.exists());
     testDeployments(new DeploymentExecutor(){
       @Override public void initialDeploy() throws IOException {
-        final InputStream in=new BufferedInputStream(new FileInputStream(file));
-        try {
-          final OutputStream out=new BufferedOutputStream(new FileOutputStream(target));
-          try {
-            int i=in.read();
-            while (i != -1) {
-              out.write(i);
-              i=in.read();
-            }
-          }
-  finally {
-            StreamUtils.safeClose(out);
-          }
-        }
-  finally {
-          StreamUtils.safeClose(in);
-        }
         final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
         final OutputStream out=new BufferedOutputStream(new FileOutputStream(dodeploy));
         try {
