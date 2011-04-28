@@ -55,27 +55,8 @@ String metaDataSecurityDomain=metaData.getSecurityDomain();
 if (metaDataSecurityDomain != null) {
 metaDataSecurityDomain=metaDataSecurityDomain.trim();
 }
-JBossWebRealm realm=new JBossWebRealm();
 String securityDomain=metaDataSecurityDomain == null ? SecurityConstants.DEFAULT_APPLICATION_POLICY : SecurityUtil.unprefixSecurityDomain(metaDataSecurityDomain);
-@SuppressWarnings("unchecked") ContextClassLoaderSwitcher switcher=(ContextClassLoaderSwitcher)AccessController.doPrivileged(ContextClassLoaderSwitcher.INSTANTIATOR);
-SwitchContext switchContext=switcher.getSwitchContext(classLoader);
-try {
-AuthenticationManager authM=getAuthenticationManager(securityDomain);
-realm.setAuthenticationManager(authM);
-AuthorizationManager authzM=getAuthorizationManager(securityDomain);
-realm.setAuthorizationManager(authzM);
-MappingManager mapM=getMappingManager(securityDomain);
-realm.setMappingManager(mapM);
 Map<String,Set<String>> principalVersusRolesMap=metaData.getSecurityRoles().getPrincipalVersusRolesMap();
-realm.setPrincipalVersusRolesMap(principalVersusRolesMap);
-webContext.setRealm(realm);
-}
- catch (NamingException ne) {
-throw new RuntimeException(ne);
-}
- finally {
-switchContext.reset();
-}
 final List<ServletContextAttribute> attributes=deploymentUnit.getAttachment(ServletContextAttribute.ATTACHMENT_KEY);
 if (attributes != null) {
 final ServletContext context=webContext.getServletContext();
@@ -84,10 +65,14 @@ context.setAttribute(attribute.getName(),attribute.getValue());
 }
 }
 try {
+JBossWebRealmService realmService=new JBossWebRealmService(principalVersusRolesMap);
+ServiceBuilder<?> builder=serviceTarget.addService(WebSubsystemServices.JBOSS_WEB_REALM.append(securityDomain),realmService);
+builder.addDependency(DependencyType.REQUIRED,SecurityDomainService.SERVICE_NAME.append(securityDomain),SecurityDomainContext.class,realmService.getSecurityDomainContextInjector()).setInitialMode(Mode.ACTIVE).install();
 ServiceName namespaceSelectorServiceName=deploymentUnit.getServiceName().append(NamespaceSelectorService.NAME);
 WebDeploymentService webDeploymentService=new WebDeploymentService(webContext);
-ServiceBuilder<Context> builder=serviceTarget.addService(WebSubsystemServices.JBOSS_WEB.append(deploymentName),webDeploymentService);
+builder=serviceTarget.addService(WebSubsystemServices.JBOSS_WEB.append(deploymentName),webDeploymentService);
 builder.addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(hostName),Host.class,new WebContextInjector(webContext)).addDependencies(injectionContainer.getServiceNames());
+builder.addDependency(WebSubsystemServices.JBOSS_WEB_REALM.append(securityDomain),Realm.class,webDeploymentService.getRealm());
 builder.addDependency(namespaceSelectorServiceName,NamespaceContextSelector.class,webDeploymentService.getNamespaceSelector()).setInitialMode(Mode.ACTIVE);
 builder.addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES));
 builder.install();
