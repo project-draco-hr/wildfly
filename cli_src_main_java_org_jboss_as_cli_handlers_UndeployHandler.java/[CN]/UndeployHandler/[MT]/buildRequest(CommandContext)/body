@@ -8,38 +8,46 @@
   if (name == null) {
     throw new OperationFormatException("Required argument name are missing.");
   }
+  ModelControllerClient client=ctx.getModelControllerClient();
   DefaultOperationRequestBuilder builder;
+  boolean keepContent=this.keepContent.isPresent(args);
   if (ctx.isDomainMode()) {
     final List<String> serverGroups;
-    if (allServerGroups.isPresent(args)) {
-      serverGroups=Util.getServerGroups(ctx.getModelControllerClient());
+    if (allRelevantServerGroups.isPresent(args)) {
+      if (keepContent) {
+        serverGroups=Util.getAllEnabledServerGroups(name,client);
+      }
+ else {
+        serverGroups=Util.getAllReferencingServerGroups(name,client);
+      }
     }
  else {
       final String serverGroupsStr=this.serverGroups.getValue(args);
       if (serverGroupsStr == null) {
         throw new OperationFormatException("Either --all-server-groups or --server-groups must be specified.");
       }
-      serverGroups=Arrays.asList(serverGroupsStr.split(","));
-    }
-    if (serverGroups.isEmpty()) {
-      new OperationFormatException("No server group is available.");
+ else {
+        serverGroups=Arrays.asList(serverGroupsStr.split(","));
+      }
     }
     for (    String group : serverGroups) {
       ModelNode groupStep=Util.configureDeploymentOperation(DEPLOYMENT_UNDEPLOY_OPERATION,name,group);
       steps.add(groupStep);
     }
-    for (    String group : serverGroups) {
-      ModelNode groupStep=Util.configureDeploymentOperation(DEPLOYMENT_REMOVE_OPERATION,name,group);
-      steps.add(groupStep);
+    if (!keepContent) {
+      for (      String group : serverGroups) {
+        ModelNode groupStep=Util.configureDeploymentOperation(DEPLOYMENT_REMOVE_OPERATION,name,group);
+        steps.add(groupStep);
+      }
     }
   }
- else {
+ else   if (Util.isDeployedAndEnabledInStandalone(name,client)) {
     builder=new DefaultOperationRequestBuilder();
     builder.setOperationName("undeploy");
     builder.addNode("deployment",name);
     steps.add(builder.buildRequest());
   }
-  if (!keepContent.isPresent(args)) {
+  if (!keepContent) {
     builder=new DefaultOperationRequestBuilder();
     builder.setOperationName("remove");
     builder.addNode("deployment",name);

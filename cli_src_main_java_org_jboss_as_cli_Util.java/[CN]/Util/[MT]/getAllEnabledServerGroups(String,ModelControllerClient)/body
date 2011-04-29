@@ -1,0 +1,60 @@
+{
+  List<String> serverGroups=getServerGroups(client);
+  if (serverGroups.isEmpty()) {
+    return Collections.emptyList();
+  }
+  List<String> result=new ArrayList<String>();
+  for (  String serverGroup : serverGroups) {
+    DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
+    ModelNode request;
+    try {
+      builder.operationName("read-children-names");
+      builder.addNode("server-group",serverGroup);
+      builder.addProperty("child-type","deployment");
+      request=builder.buildRequest();
+    }
+ catch (    OperationFormatException e) {
+      throw new IllegalStateException("Failed to build operation",e);
+    }
+    try {
+      ModelNode outcome=client.execute(request);
+      if (isSuccess(outcome)) {
+        if (!listContains(outcome,deploymentName)) {
+          continue;
+        }
+      }
+ else {
+        continue;
+      }
+    }
+ catch (    Exception e) {
+      continue;
+    }
+    builder=new DefaultOperationRequestBuilder();
+    builder.addNode("server-group",serverGroup);
+    builder.addNode("deployment",deploymentName);
+    builder.setOperationName("read-attribute");
+    builder.addProperty("name","enabled");
+    try {
+      request=builder.buildRequest();
+    }
+ catch (    OperationFormatException e) {
+      throw new IllegalStateException("Failed to build operation",e);
+    }
+    try {
+      ModelNode outcome=client.execute(request);
+      if (isSuccess(outcome)) {
+        if (!outcome.hasDefined("result")) {
+          continue;
+        }
+        if (outcome.get("result").asBoolean()) {
+          result.add(serverGroup);
+        }
+      }
+    }
+ catch (    Exception e) {
+      continue;
+    }
+  }
+  return result;
+}
