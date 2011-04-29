@@ -1,0 +1,34 @@
+{
+  log.debugf("Starting Service " + context.getController().getName().getCanonicalName());
+  ORB orb=this.orbInjector.getOptionalValue();
+  POA parentPOA=this.parentPOAInjector.getOptionalValue();
+  if (orb != null) {
+    try {
+      this.poa=POAHelper.narrow(orb.resolve_initial_references(this.poaName));
+    }
+ catch (    Exception e) {
+      throw new StartException("Failed to resolve initial reference " + this.poaName,e);
+    }
+  }
+ else   if (parentPOA != null) {
+    try {
+      Policy[] poaPolicies=this.createPolicies(parentPOA);
+      this.poa=parentPOA.create_POA(this.poaName,null,poaPolicies);
+    }
+ catch (    Exception e) {
+      throw new StartException("Failed to create POA from parent POA",e);
+    }
+  }
+ else {
+    throw new StartException("Unable to instantiate POA: either the running ORB or the parent POA must be specified");
+  }
+  if (this.bindingName != null) {
+    CorbaServiceUtil.bindObject(context.getChildTarget(),this.bindingName,this.poa);
+  }
+  try {
+    this.poa.the_POAManager().activate();
+  }
+ catch (  Exception e) {
+    throw new StartException("Failed to activate POA",e);
+  }
+}

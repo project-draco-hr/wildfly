@@ -1,0 +1,33 @@
+{
+  CompoundSecMechList csmList;
+  try {
+    TaggedComponent tc=ri.get_effective_component(TAG_CSI_SEC_MECH_LIST.value);
+    Any any=codec.decode_value(tc.component_data,CompoundSecMechListHelper.type());
+    csmList=CompoundSecMechListHelper.extract(any);
+    for (int i=0; i < csmList.mechanism_list.length; i++) {
+      CompoundSecMech securityMech=csmList.mechanism_list[i];
+      AS_ContextSec authConfig=securityMech.as_context_mech;
+      if ((EstablishTrustInTarget.value & (clientRequires ^ authConfig.target_supports) & ~authConfig.target_supports) != 0) {
+        continue;
+      }
+      if ((EstablishTrustInClient.value & (authConfig.target_requires ^ clientSupports) & ~clientSupports) != 0) {
+        continue;
+      }
+      SAS_ContextSec identityConfig=securityMech.sas_context_mech;
+      if ((IdentityAssertion.value & (identityConfig.target_requires ^ clientSupports) & ~clientSupports) != 0) {
+        continue;
+      }
+      return securityMech;
+    }
+    return null;
+  }
+ catch (  BAD_PARAM e) {
+    return null;
+  }
+catch (  org.omg.IOP.CodecPackage.TypeMismatch e) {
+    throw new MARSHAL("Unexpected exception: " + e);
+  }
+catch (  org.omg.IOP.CodecPackage.FormatMismatch e) {
+    throw new MARSHAL("Unexpected exception: " + e);
+  }
+}

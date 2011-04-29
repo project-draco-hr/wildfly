@@ -1,0 +1,75 @@
+{
+  if (traceEnabled) {
+    log.trace("receive_request " + ri.operation());
+  }
+  CurrentRequestInfo threadLocal=(CurrentRequestInfo)threadLocalData.get();
+  threadLocal.sasContextReceived=false;
+  threadLocal.authenticationTokenReceived=false;
+  threadLocal.incomingUsername=empty;
+  threadLocal.incomingPassword=empty;
+  threadLocal.incomingTargetName=empty;
+  threadLocal.incomingIdentity=absent;
+  threadLocal.incomingPrincipalName=empty;
+  threadLocal.sasReply=null;
+  threadLocal.sasReplyIsAccept=false;
+  try {
+    ServiceContext sc=ri.get_request_service_context(sasContextId);
+    Any any=codec.decode_value(sc.context_data,SASContextBodyHelper.type());
+    SASContextBody contextBody=SASContextBodyHelper.extract(any);
+    if (contextBody != null) {
+      if (contextBody.discriminator() == MTMessageInContext.value) {
+        long contextId=contextBody.in_context_msg().client_context_id;
+        threadLocal.sasReply=createMsgCtxError(contextId,4);
+        throw new NO_PERMISSION("SAS context does not exist.");
+      }
+ else       if (contextBody.discriminator() == MTEstablishContext.value) {
+        EstablishContext message=contextBody.establish_msg();
+        threadLocal.contextId=message.client_context_id;
+        threadLocal.sasContextReceived=true;
+        if (message.client_authentication_token != null && message.client_authentication_token.length > 0) {
+          if (traceEnabled) {
+            log.trace("received client authentication token");
+          }
+          InitialContextToken authToken=CSIv2Util.decodeInitialContextToken(message.client_authentication_token,codec);
+          if (authToken == null) {
+            threadLocal.sasReply=createMsgCtxError(message.client_context_id,2);
+            throw new NO_PERMISSION("Could not decode initial context token.");
+          }
+          threadLocal.incomingUsername=authToken.username;
+          threadLocal.incomingPassword=authToken.password;
+          threadLocal.incomingTargetName=CSIv2Util.decodeGssExportedName(authToken.target_name);
+          if (threadLocal.incomingTargetName == null) {
+            threadLocal.sasReply=createMsgCtxError(message.client_context_id,2);
+            throw new NO_PERMISSION("Could not decode target name in initial context token.");
+          }
+          threadLocal.authenticationTokenReceived=true;
+        }
+        if (message.identity_token != null) {
+          if (traceEnabled) {
+            log.trace("received identity token");
+          }
+          threadLocal.incomingIdentity=message.identity_token;
+          if (message.identity_token.discriminator() == ITTPrincipalName.value) {
+            Any a=codec.decode_value(message.identity_token.principal_name(),GSS_NT_ExportedNameHelper.type());
+            byte[] encodedName=GSS_NT_ExportedNameHelper.extract(a);
+            threadLocal.incomingPrincipalName=CSIv2Util.decodeGssExportedName(encodedName);
+            if (threadLocal.incomingPrincipalName == null) {
+              threadLocal.sasReply=createMsgCtxError(message.client_context_id,2);
+              throw new NO_PERMISSION("Could not decode incoming principal name.");
+            }
+          }
+        }
+        threadLocal.sasReply=(threadLocal.contextId == 0) ? msgCtx0Accepted : createMsgCtxAccepted(threadLocal.contextId);
+        threadLocal.sasReplyIsAccept=true;
+      }
+    }
+  }
+ catch (  BAD_PARAM e) {
+  }
+catch (  FormatMismatch e) {
+    throw new MARSHAL("Exception decoding context data in SASTargetInterceptor: " + e);
+  }
+catch (  TypeMismatch e) {
+    throw new MARSHAL("Exception decoding context data in SASTargetInterceptor: " + e);
+  }
+}

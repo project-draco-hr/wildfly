@@ -1,0 +1,51 @@
+{
+  log.debugf("Starting Service " + context.getController().getName().getCanonicalName());
+  try {
+    properties.setProperty(JacORBConstants.ORB_CLASS,JacORBConstants.JACORB_ORB_CLASS);
+    properties.setProperty(JacORBConstants.ORB_SINGLETON_CLASS,JacORBConstants.JacORB_ORB_SINGLETON_CLASS);
+    SecurityActions.setSystemProperty(JacORBConstants.ORB_CLASS,JacORBConstants.JACORB_ORB_CLASS);
+    SecurityActions.setSystemProperty(JacORBConstants.ORB_SINGLETON_CLASS,JacORBConstants.JacORB_ORB_SINGLETON_CLASS);
+    if (this.jacORBSocketBindingInjector.getValue() != null) {
+      InetSocketAddress address=this.jacORBSocketBindingInjector.getValue().getSocketAddress();
+      properties.setProperty(JacORBConstants.ORB_ADDRESS,address.getHostName());
+      properties.setProperty(JacORBConstants.ORB_PORT,String.valueOf(address.getPort()));
+    }
+    if (this.jacORBSSLSocketBindingInjector.getValue() != null) {
+      InetSocketAddress address=this.jacORBSSLSocketBindingInjector.getValue().getSocketAddress();
+      properties.setProperty(JacORBConstants.ORB_SSL_PORT,String.valueOf(address.getPort()));
+      if (!properties.containsKey(JacORBConstants.ORB_ADDRESS)) {
+        properties.setProperty(JacORBConstants.ORB_ADDRESS,address.getHostName());
+      }
+    }
+    String rootContext=properties.getProperty(JacORBConstants.NAMING_ROOT_CONTEXT);
+    if (rootContext == null)     rootContext=JacORBConstants.NAMING_DEFAULT_ROOT_CONTEXT;
+    String host=properties.getProperty(JacORBConstants.ORB_ADDRESS);
+    String port=properties.getProperty(JacORBConstants.ORB_PORT);
+    properties.setProperty(JacORBConstants.JACORB_NAME_SERVICE_INIT_REF,"corbaloc::" + host + ":"+ port+ "/"+ rootContext);
+    String exportCorbalocProperty=properties.getProperty(JacORBConstants.NAMING_EXPORT_CORBALOC,"on");
+    if (exportCorbalocProperty != null && exportCorbalocProperty.equalsIgnoreCase("on")) {
+      properties.setProperty(JacORBConstants.JACORB_NAME_SERVICE_MAP_KEY,rootContext);
+    }
+    properties.setProperty(JacORBConstants.JACORB_STD_INITIALIZER_KEY,JacORBConstants.JACORB_STD_INITIALIZER_VALUE);
+    for (    ORBInitializer initializer : this.initializers) {
+      properties.setProperty(JacORBConstants.ORB_INITIALIZER_PREFIX + initializer.getInitializerClass(),"");
+    }
+    ClassLoader loader=SecurityActions.getThreadContextClassLoader();
+    try {
+      SecurityActions.setThreadContextClassLoader(SecurityActions.getClassLoader(this.getClass()));
+      this.orb=ORB.init(new String[0],properties);
+    }
+  finally {
+      SecurityActions.setThreadContextClassLoader(loader);
+    }
+    Thread orbThread=SecurityActions.createThread(new ORBRunner(this.orb),"ORB Run Thread");
+    orbThread.start();
+    ORBInitialContextFactory.setORB(this.orb);
+    ServiceTarget target=context.getChildTarget();
+    CorbaServiceUtil.bindObject(target,"orb",this.orb);
+  }
+ catch (  Exception e) {
+    throw new StartException(e);
+  }
+  log.info("CORBA ORB Service Started");
+}

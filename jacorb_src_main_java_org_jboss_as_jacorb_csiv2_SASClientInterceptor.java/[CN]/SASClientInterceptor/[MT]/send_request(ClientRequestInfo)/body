@@ -1,0 +1,47 @@
+{
+  try {
+    CompoundSecMech secMech=CSIv2Util.getMatchingSecurityMech(ri,codec,EstablishTrustInClient.value,(short)0);
+    if (secMech == null) {
+      return;
+    }
+    if ((secMech.as_context_mech.target_supports & EstablishTrustInClient.value) != 0) {
+      Principal p=SecurityContextAssociation.getPrincipal();
+      if (p != null) {
+        byte[] encodedTargetName=secMech.as_context_mech.target_name;
+        String name=p.getName();
+        if (name.indexOf('@') < 0) {
+          byte[] decodedTargetName=CSIv2Util.decodeGssExportedName(encodedTargetName);
+          String targetName=new String(decodedTargetName,"UTF-8");
+          name+="@" + targetName;
+        }
+        byte[] username=name.getBytes("UTF-8");
+        Object credential=SecurityContextAssociation.getCredential();
+        byte[] password={};
+        if (credential instanceof char[]) {
+          String tmp=new String((char[])credential);
+          password=tmp.getBytes("UTF-8");
+        }
+ else         if (credential instanceof byte[])         password=(byte[])credential;
+ else         if (credential != null) {
+          String tmp=credential.toString();
+          password=tmp.getBytes("UTF-8");
+        }
+        InitialContextToken authenticationToken=new InitialContextToken(username,password,encodedTargetName);
+        byte[] encodedAuthenticationToken=CSIv2Util.encodeInitialContextToken(authenticationToken,codec);
+        EstablishContext message=new EstablishContext(0,noAuthorizationToken,absentIdentityToken,encodedAuthenticationToken);
+        SASContextBody contextBody=new SASContextBody();
+        contextBody.establish_msg(message);
+        Any any=ORB.init().create_any();
+        SASContextBodyHelper.insert(any,contextBody);
+        ServiceContext sc=new ServiceContext(sasContextId,codec.encode_value(any));
+        ri.add_request_service_context(sc,true);
+      }
+    }
+  }
+ catch (  java.io.UnsupportedEncodingException e) {
+    throw new MARSHAL("Unexpected exception: " + e);
+  }
+catch (  org.omg.IOP.CodecPackage.InvalidTypeForEncoding e) {
+    throw new MARSHAL("Unexpected exception: " + e);
+  }
+}
