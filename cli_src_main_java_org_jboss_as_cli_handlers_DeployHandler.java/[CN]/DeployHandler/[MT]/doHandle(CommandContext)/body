@@ -116,41 +116,43 @@
         return;
       }
     }
-    final ModelNode request;
-    if (ctx.isDomainMode()) {
-      request=new ModelNode();
-      request.get("operation").set("composite");
-      request.get("address").setEmptyList();
-      ModelNode steps=request.get("steps");
-      for (      String serverGroup : serverGroups) {
-        steps.add(Util.configureDeploymentOperation("add",name,serverGroup));
+    if (!disabled.isPresent(args)) {
+      final ModelNode request;
+      if (ctx.isDomainMode()) {
+        request=new ModelNode();
+        request.get("operation").set("composite");
+        request.get("address").setEmptyList();
+        ModelNode steps=request.get("steps");
+        for (        String serverGroup : serverGroups) {
+          steps.add(Util.configureDeploymentOperation("add",name,serverGroup));
+        }
+        for (        String serverGroup : serverGroups) {
+          steps.add(Util.configureDeploymentOperation("deploy",name,serverGroup));
+        }
       }
-      for (      String serverGroup : serverGroups) {
-        steps.add(Util.configureDeploymentOperation("deploy",name,serverGroup));
-      }
-    }
  else {
-      builder=new DefaultOperationRequestBuilder();
-      builder.setOperationName("deploy");
-      builder.addNode("deployment",name);
+        builder=new DefaultOperationRequestBuilder();
+        builder.setOperationName("deploy");
+        builder.addNode("deployment",name);
+        try {
+          request=builder.buildRequest();
+        }
+ catch (        Exception e) {
+          ctx.printLine("Failed to deploy: " + e.getLocalizedMessage());
+          return;
+        }
+      }
       try {
-        request=builder.buildRequest();
+        result=client.execute(request);
       }
  catch (      Exception e) {
         ctx.printLine("Failed to deploy: " + e.getLocalizedMessage());
         return;
       }
-    }
-    try {
-      result=client.execute(request);
-    }
- catch (    Exception e) {
-      ctx.printLine("Failed to deploy: " + e.getLocalizedMessage());
-      return;
-    }
-    if (!Util.isSuccess(result)) {
-      ctx.printLine(Util.getFailureDescription(result));
-      return;
+      if (!Util.isSuccess(result)) {
+        ctx.printLine(Util.getFailureDescription(result));
+        return;
+      }
     }
     ctx.printLine("'" + name + "' deployed successfully.");
   }
