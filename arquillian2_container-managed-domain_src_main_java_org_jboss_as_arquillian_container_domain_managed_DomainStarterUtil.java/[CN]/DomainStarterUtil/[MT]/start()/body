@@ -59,42 +59,61 @@
     }
 );
     Runtime.getRuntime().addShutdownHook(shutdownThread);
+    domainClient=DomainClient.Factory.create(managementAddress,managementPort);
     long timeout=this.timeout;
-    final boolean[] testRunnerMBeansAvailable=new boolean[portOffsets.length];
-    int available=0;
-    while (timeout > 0 && available < portOffsets.length) {
-      for (int i=0; i < portOffsets.length; i++) {
-        if (!testRunnerMBeansAvailable[i]) {
-          try {
-            MBeanServerConnection mbeanServer=providers[i].getConnection();
-            boolean isAvailable=mbeanServer != null && mbeanServer.isRegistered(OBJECT_NAME);
-            if (isAvailable) {
-              available++;
-              testRunnerMBeansAvailable[i]=true;
-            }
-          }
- catch (          Exception ignore) {
-          }
-        }
-      }
-      if (available < portOffsets.length) {
-        final long sleep=100;
-        Thread.sleep(sleep);
-        timeout-=sleep;
+    boolean serversAvailable=false;
+    while (timeout > 0 && serversAvailable == false) {
+      serversAvailable=areServersStarted();
+      if (!serversAvailable) {
+        Thread.sleep(100);
+        timeout-=100;
       }
     }
-    if (available < portOffsets.length) {
-      ArrayList<Integer> notStartedPorts=new ArrayList<Integer>();
-      for (int i=0; i < testRunnerMBeansAvailable.length; i++) {
-        if (!testRunnerMBeansAvailable[i]) {
-          notStartedPorts.add(portOffsets[i]);
+    if (!serversAvailable) {
+      throw new TimeoutException(String.format("Managed servers were not started within [%d] ms",timeout));
+    }
+    Map<ServerIdentity,MBeanServerConnection> connections=new HashMap<ServerIdentity,MBeanServerConnection>();
+    for (    Map.Entry<ServerIdentity,ServerStatus> entry : serverStatuses.entrySet()) {
+switch (entry.getValue()) {
+case STARTED:
+        connections.put(entry.getKey(),null);
+    }
+  }
+  int available=0;
+  int enabledCount=connections.size();
+  while (timeout > 0 && available < enabledCount) {
+    for (    Map.Entry<ServerIdentity,MBeanServerConnection> entry : connections.entrySet()) {
+      if (entry.getValue() == null) {
+        try {
+          MBeanServerConnectionProvider provider=getMBeanServerConnectionProvider(entry.getKey());
+          MBeanServerConnection mbeanServer=provider == null ? null : provider.getConnection();
+          boolean isAvailable=mbeanServer != null && mbeanServer.isRegistered(OBJECT_NAME);
+          if (isAvailable) {
+            connections.put(entry.getKey(),mbeanServer);
+          }
+        }
+ catch (        Exception ignore) {
         }
       }
-      throw new TimeoutException(String.format("Could not connect to the managed server's MBeanServer for servers with port offsets %s within [%d] ms",notStartedPorts.toString(),this.timeout));
     }
-    log.info("All containers started");
+    if (available < enabledCount) {
+      final long sleep=100;
+      Thread.sleep(sleep);
+      timeout-=sleep;
+    }
   }
- catch (  Exception e) {
-    throw new RuntimeException("Could not start container",e);
+  if (available < enabledCount) {
+    ArrayList<ServerIdentity> notStartedServers=new ArrayList<ServerIdentity>();
+    for (    Map.Entry<ServerIdentity,MBeanServerConnection> entry : connections.entrySet()) {
+      if (entry.getValue() == null) {
+        notStartedServers.add(entry.getKey());
+      }
+    }
+    throw new TimeoutException(String.format("Could not connect to the managed server's MBeanServer for servers with port offsets %s within [%d] ms",notStartedServers.toString(),this.timeout));
   }
+  log.info("All containers started");
+}
+ catch (Exception e) {
+  throw new RuntimeException("Could not start container",e);
+}
 }
