@@ -10,5 +10,27 @@
   if (iterator.hasNext()) {
     throw new DeploymentUnitProcessingException("Multiple components found for type '" + typeName + "'");
   }
-  serviceBuilder.addDependency(description.getServiceName(),ManagedReferenceFactory.class,injector);
+  serviceBuilder.addDependency(description.getServiceName(),ComponentView.class,new Injector<ComponentView>(){
+    @Override public void inject(    ComponentView value) throws InjectionException {
+      final ComponentViewInstance instance=value.createInstance();
+      final Object proxy=instance.createProxy();
+      injector.inject(new ManagedReferenceFactory(){
+        @Override public ManagedReference getReference(){
+          return new ManagedReference(){
+            @Override public void release(){
+              instance.destroy();
+            }
+            @Override public Object getInstance(){
+              return proxy;
+            }
+          }
+;
+        }
+      }
+);
+    }
+    @Override public void uninject(){
+    }
+  }
+);
 }

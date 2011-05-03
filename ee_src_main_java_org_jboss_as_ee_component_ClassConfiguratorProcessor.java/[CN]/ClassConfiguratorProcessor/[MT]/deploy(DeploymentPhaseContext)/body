@@ -1,6 +1,7 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
+  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
   if (moduleDescription == null) {
     return;
   }
@@ -10,9 +11,17 @@
   }
   final Collection<EEModuleClassDescription> classDescriptions=moduleDescription.getClassDescriptions();
   if (classDescriptions != null)   for (  EEModuleClassDescription classDescription : classDescriptions) {
-    final EEModuleClassConfiguration classConfiguration=moduleConfiguration.getClassConfiguration(classDescription.getClassName());
+    Class<?> clazz=null;
+    try {
+      clazz=Class.forName(classDescription.getClassName(),false,module.getClassLoader());
+    }
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException("Failed to load class " + classDescription.getClassName(),e);
+    }
+    final EEModuleClassConfiguration classConfiguration=new EEModuleClassConfiguration(clazz,moduleConfiguration);
     for (    ClassConfigurator classConfigurator : classDescription.getConfigurators()) {
       classConfigurator.configure(phaseContext,classDescription,classConfiguration);
     }
+    moduleConfiguration.addClassConfiguration(classConfiguration);
   }
 }

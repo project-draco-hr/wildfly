@@ -18,10 +18,14 @@
     configurator.configureDependency(startBuilder);
   }
   startBuilder.addDependency(createServiceName,BasicComponent.class,startService.getComponentInjector());
+  final ServiceName contextServiceName;
   if (configuration.getComponentDescription().getNamingMode() == ComponentNamingMode.CREATE) {
     final RootContextService contextService=new RootContextService();
-    final ServiceName contextServiceName=ContextNames.contextServiceNameOfComponent(configuration.getApplicationName(),configuration.getModuleName(),configuration.getComponentName());
+    contextServiceName=ContextNames.contextServiceNameOfComponent(configuration.getApplicationName(),configuration.getModuleName(),configuration.getComponentName());
     serviceTarget.addService(contextServiceName,contextService).install();
+  }
+ else {
+    contextServiceName=ContextNames.contextServiceNameOfModule(configuration.getApplicationName(),configuration.getModuleName());
   }
   InjectionSource.ResolutionContext resolutionContext=new InjectionSource.ResolutionContext(configuration.getComponentDescription().getNamingMode() == ComponentNamingMode.USE_MODULE,configuration.getComponentName(),configuration.getModuleName(),configuration.getApplicationName());
   for (  ViewConfiguration viewConfiguration : configuration.getViews()) {
@@ -33,13 +37,24 @@
       final BinderService service=new BinderService(bindingName);
       ServiceBuilder<ManagedReferenceFactory> serviceBuilder=serviceTarget.addService(ContextNames.serviceNameOfContext(applicationName,moduleName,componentName,bindingName),service);
       bindingConfiguration.getSource().getResourceValue(resolutionContext,serviceBuilder,phaseContext,service.getManagedObjectInjector());
+      serviceBuilder.install();
     }
   }
   for (  BindingConfiguration bindingConfiguration : configuration.getBindingConfigurations()) {
     final String bindingName=bindingConfiguration.getName();
     final BinderService service=new BinderService(bindingName);
-    ServiceBuilder<ManagedReferenceFactory> serviceBuilder=serviceTarget.addService(ContextNames.serviceNameOfContext(applicationName,moduleName,componentName,bindingName),service);
+    ServiceBuilder<ManagedReferenceFactory> serviceBuilder=serviceTarget.addService(ContextNames.serviceNameOfEnvEntry(configuration,bindingName),service);
     bindingConfiguration.getSource().getResourceValue(resolutionContext,serviceBuilder,phaseContext,service.getManagedObjectInjector());
+    serviceBuilder.addDependency(contextServiceName,NamingStore.class,service.getNamingStoreInjector());
+    serviceBuilder.install();
+  }
+  for (  BindingConfiguration bindingConfiguration : configuration.getModuleClassConfiguration().getBindingConfigurations()) {
+    final String bindingName=bindingConfiguration.getName();
+    final BinderService service=new BinderService(bindingName);
+    ServiceBuilder<ManagedReferenceFactory> serviceBuilder=serviceTarget.addService(ContextNames.serviceNameOfEnvEntry(configuration,bindingName),service);
+    bindingConfiguration.getSource().getResourceValue(resolutionContext,serviceBuilder,phaseContext,service.getManagedObjectInjector());
+    serviceBuilder.addDependency(contextServiceName,NamingStore.class,service.getNamingStoreInjector());
+    serviceBuilder.install();
   }
   createBuilder.install();
   startBuilder.install();
