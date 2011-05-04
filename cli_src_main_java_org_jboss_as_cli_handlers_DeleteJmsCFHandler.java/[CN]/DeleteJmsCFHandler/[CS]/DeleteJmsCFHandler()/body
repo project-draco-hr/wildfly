@@ -1,39 +1,48 @@
 {
   super("delete-jms-cf",true);
   SimpleArgumentTabCompleter argsCompleter=(SimpleArgumentTabCompleter)this.getArgumentCompleter();
-  name=new ArgumentWithValue(true,new CommandLineCompleter(){
-    @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
-      int nextCharIndex=0;
-      while (nextCharIndex < buffer.length()) {
-        if (!Character.isWhitespace(buffer.charAt(nextCharIndex))) {
-          break;
-        }
-        ++nextCharIndex;
-      }
-      if (ctx.getModelControllerClient() != null) {
-        List<String> deployments=Util.getJmsResources(ctx.getModelControllerClient(),"connection-factory");
-        if (deployments.isEmpty()) {
-          return -1;
-        }
-        String opBuffer=buffer.substring(nextCharIndex).trim();
-        if (opBuffer.isEmpty()) {
-          candidates.addAll(deployments);
-        }
- else {
-          for (          String name : deployments) {
-            if (name.startsWith(opBuffer)) {
-              candidates.add(name);
-            }
-          }
-          Collections.sort(candidates);
-        }
-        return nextCharIndex;
-      }
- else {
-        return -1;
-      }
+  profile=new ArgumentWithValue(new DefaultCompleter(new CandidatesProvider(){
+    @Override public List<String> getAllCandidates(    CommandContext ctx){
+      return Util.getNodeNames(ctx.getModelControllerClient(),null,"profile");
     }
   }
-,0,"--name");
+),"--profile"){
+    @Override public boolean canAppearNext(    CommandContext ctx){
+      if (!ctx.isDomainMode()) {
+        return false;
+      }
+      return super.canAppearNext(ctx);
+    }
+  }
+;
+  argsCompleter.addArgument(profile);
+  name=new ArgumentWithValue(true,new DefaultCompleter(new DefaultCompleter.CandidatesProvider(){
+    @Override public List<String> getAllCandidates(    CommandContext ctx){
+      ModelControllerClient client=ctx.getModelControllerClient();
+      if (client == null) {
+        return Collections.emptyList();
+      }
+      final String profileArg;
+      if (!ctx.isDomainMode()) {
+        profileArg=null;
+      }
+ else {
+        profileArg=profile.getValue(ctx.getParsedArguments());
+        if (profileArg == null) {
+          return Collections.emptyList();
+        }
+      }
+      return Util.getJmsResources(ctx.getModelControllerClient(),profileArg,"connection-factory");
+    }
+  }
+),0,"--name"){
+    @Override public boolean canAppearNext(    CommandContext ctx){
+      if (ctx.isDomainMode() && !profile.isPresent(ctx.getParsedArguments())) {
+        return false;
+      }
+      return super.canAppearNext(ctx);
+    }
+  }
+;
   argsCompleter.addArgument(name);
 }
