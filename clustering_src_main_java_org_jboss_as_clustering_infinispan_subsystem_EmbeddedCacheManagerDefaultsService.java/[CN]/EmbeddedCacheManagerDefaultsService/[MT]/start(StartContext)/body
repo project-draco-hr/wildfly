@@ -1,15 +1,27 @@
 {
-  InfinispanConfiguration config=load(this.resource);
-  Defaults defaults=new Defaults(config.parseGlobalConfiguration());
-  Configuration defaultConfig=config.parseDefaultConfiguration();
-  Map<String,Configuration> namedConfigs=config.parseNamedConfigurations();
+  GlobalConfiguration global=new GlobalConfiguration();
+  global.fluent().transport().strictPeerToPeer(false).shutdown().hookBehavior(ShutdownHookBehavior.DONT_REGISTER);
+  Defaults defaults=new Defaults(global);
+  Configuration defaultConfig=new Configuration();
+  defaultConfig.fluent().locking().lockAcquisitionTimeout(15000L).useLockStriping(false).concurrencyLevel(1000).eviction().strategy(EvictionStrategy.NONE).maxEntries(10000);
   for (  Configuration.CacheMode mode : Configuration.CacheMode.values()) {
     Configuration configuration=defaultConfig.clone();
-    Configuration overrides=namedConfigs.get(mode.name());
-    if (overrides != null) {
-      configuration.applyOverrides(overrides);
+    FluentConfiguration fluent=configuration.fluent();
+    if (mode.isClustered()) {
+      fluent.mode(mode).storeAsBinary();
     }
-    configuration.fluent().mode(mode);
+    if (mode.isReplicated()) {
+      fluent.stateRetrieval().fetchInMemoryState(true).timeout(60000L);
+    }
+    if (mode.isSynchronous()) {
+      fluent.sync().replTimeout(17500L);
+    }
+ else {
+      FluentConfiguration.AsyncConfig async=fluent.async();
+      if (configuration.isFetchInMemoryState()) {
+        async.useReplQueue(true).replQueueMaxElements(10);
+      }
+    }
     defaults.add(mode,configuration);
   }
   this.defaults=defaults;
