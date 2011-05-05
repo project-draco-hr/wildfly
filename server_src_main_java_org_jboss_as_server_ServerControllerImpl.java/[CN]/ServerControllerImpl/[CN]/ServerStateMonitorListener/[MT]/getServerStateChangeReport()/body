@@ -3,23 +3,38 @@
   newFailedControllers.keySet().removeAll(lastReportFailedControllers.keySet());
   lastReportFailedControllers.clear();
   lastReportFailedControllers.putAll(latestSettledFailedControllers);
-  final Set<ServiceName> newReportMissingDepSet=new TreeSet<ServiceName>(previousMissingDepSet);
-  newReportMissingDepSet.removeAll(lastReportMissingDepSet);
+  final Map<ServiceName,Set<ServiceName>> newReportMissingDeps=new TreeMap<ServiceName,Set<ServiceName>>(previousMissingDeps);
+  for (  ServiceName dep : lastReportMissingDepSet) {
+    newReportMissingDeps.remove(dep);
+  }
   lastReportMissingDepSet.clear();
-  lastReportMissingDepSet.addAll(previousMissingDepSet);
+  lastReportMissingDepSet.addAll(previousMissingDeps.keySet());
   ModelNode report=null;
-  if (!newFailedControllers.isEmpty() || !newReportMissingDepSet.isEmpty()) {
+  if (!newFailedControllers.isEmpty() || !newReportMissingDeps.isEmpty()) {
     report=new ModelNode();
-    if (!newReportMissingDepSet.isEmpty()) {
+    if (!newReportMissingDeps.isEmpty()) {
       ModelNode missing=report.get("New missing/unsatisfied dependencies");
-      for (      ServiceName name : newReportMissingDepSet) {
+      for (      Map.Entry<ServiceName,Set<ServiceName>> entry : newReportMissingDeps.entrySet()) {
+        final ServiceName name=entry.getKey();
         ServiceController<?> controller=serviceRegistry.getService(name);
+        StringBuilder missingText=new StringBuilder(name.toString());
         if (controller == null) {
-          missing.add(name + " (missing)");
+          missingText.append(" (missing)");
         }
  else {
-          missing.add(name + " (unavailable)\n");
+          missingText.append(" (unavailable)\n");
         }
+        missingText.append(" required by [");
+        Iterator<ServiceName> it=entry.getValue().iterator();
+        while (it.hasNext()) {
+          ServiceName requiring=it.next();
+          missingText.append(requiring);
+          if (it.hasNext()) {
+            missingText.append(", ");
+          }
+        }
+        missingText.append("]");
+        missing.add(missingText.toString());
       }
     }
     if (!newFailedControllers.isEmpty()) {
