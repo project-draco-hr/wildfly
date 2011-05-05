@@ -1,0 +1,58 @@
+{
+  Map<Set<ServerIdentity>,ModelNode> result=null;
+  if (isServerAffectingSystemPropertyOperation(operation)) {
+    String propName=address.getLastElement().getValue();
+    boolean overridden=false;
+    Set<String> groups=null;
+    if (level == Level.DOMAIN || level == Level.SERVER_GROUP) {
+      if (hasSystemProperty(host,propName)) {
+        overridden=true;
+      }
+ else       if (affectedGroup != null) {
+        groups=Collections.singleton(affectedGroup);
+      }
+ else       if (domain.hasDefined(SERVER_GROUP)) {
+        groups=new HashSet<String>();
+        for (        Property groupProp : domain.get(SERVER_GROUP).asPropertyList()) {
+          String groupName=groupProp.getName();
+          if (!hasSystemProperty(groupProp.getValue(),propName)) {
+            groups.add(groupName);
+          }
+        }
+      }
+    }
+    Set<ServerIdentity> servers=null;
+    if (!overridden && host.hasDefined(SERVER_CONFIG)) {
+      servers=new HashSet<ServerIdentity>();
+      for (      Property serverProp : host.get(SERVER_CONFIG).asPropertyList()) {
+        ModelNode server=serverProp.getValue();
+        if (!hasSystemProperty(server,propName) && (!server.hasDefined(AUTO_START) || server.get(AUTO_START).asBoolean())) {
+          String groupName=server.require(GROUP).asString();
+          if (groups == null || groups.contains(groupName)) {
+            servers.add(new ServerIdentity(localHostName,groupName,serverProp.getName()));
+          }
+        }
+      }
+    }
+    if (servers != null && servers.size() > 0) {
+      Map<ModelNode,Set<ServerIdentity>> ops=new HashMap<ModelNode,Set<ServerIdentity>>();
+      for (      ServerIdentity server : servers) {
+        ModelNode serverOp=getServerSystemPropertyOperation(operation,propName,server,level,domain,host);
+        Set<ServerIdentity> set=ops.get(serverOp);
+        if (set == null) {
+          set=new HashSet<ServerIdentity>();
+          ops.put(serverOp,set);
+        }
+        set.add(server);
+      }
+      result=new HashMap<Set<ServerIdentity>,ModelNode>();
+      for (      Map.Entry<ModelNode,Set<ServerIdentity>> entry : ops.entrySet()) {
+        result.put(entry.getValue(),entry.getKey());
+      }
+    }
+  }
+  if (result == null) {
+    result=Collections.emptyMap();
+  }
+  return result;
+}
