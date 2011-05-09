@@ -1,0 +1,41 @@
+{
+  TesteeSet ts=getTesteeSet(node1,0,3);
+  if (!newLock || newLockPos >= 0) {
+    List<RemoteLockResponse> rspList=getOKResponses(2);
+    when(ts.rpcDispatcher.getMethodCallTimeout()).thenReturn(60000l);
+    when(ts.rpcDispatcher.callMethodOnCluster(eq("test"),eq("remoteLock"),eqLockParams(node1,200000),aryEq(AbstractClusterLockSupport.REMOTE_LOCK_TYPES),eq(RemoteLockResponse.class),eq(true),eq(NULL_FILTER),anyInt(),eq(false))).thenReturn(rspList);
+  }
+  Locker[] lockers=new Locker[4];
+  CountDownLatch readyLatch=new CountDownLatch(lockers.length);
+  CountDownLatch startLatch=new CountDownLatch(1);
+  CountDownLatch endLatch=new CountDownLatch(lockers.length);
+  ExecutorService executor=Executors.newFixedThreadPool(lockers.length);
+  for (int i=0; i < lockers.length; i++) {
+    boolean newOne=newLock && (i == newLockPos || newLockPos < 0);
+    lockers[i]=new Locker(ts,newOne,readyLatch,startLatch,endLatch);
+    executor.submit(lockers[i]);
+  }
+  readyLatch.await(5,TimeUnit.SECONDS);
+  startLatch.countDown();
+  endLatch.await(5,TimeUnit.SECONDS);
+  boolean sawNewLockResult=false;
+  for (  Locker locker : lockers) {
+    if (locker.exception != null) {
+      throw (Exception)locker.exception;
+    }
+    LockResult newLockResult=locker.newLock ? LockResult.NEW_LOCK : LockResult.ACQUIRED_FROM_CLUSTER;
+    if (sawNewLockResult) {
+      if (locker.newLock) {
+        assertTrue(locker.result == LockResult.ALREADY_HELD || locker.result == LockResult.NEW_LOCK);
+      }
+ else {
+        assertTrue(locker.result == LockResult.ALREADY_HELD || locker.result == LockResult.ACQUIRED_FROM_CLUSTER);
+      }
+    }
+ else     if (locker.result != LockResult.ALREADY_HELD) {
+      assertEquals(newLockResult,locker.result);
+      sawNewLockResult=true;
+    }
+  }
+  assertTrue("Saw a new lock result",sawNewLockResult);
+}

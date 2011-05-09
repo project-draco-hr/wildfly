@@ -1,0 +1,31 @@
+{
+  GroupView oldMembers=this.groupView;
+  GroupView newGroupView=new GroupView(newView,oldMembers,this.nodeFactory);
+  this.logHistory("New view: " + newGroupView.allMembers + " with viewId: "+ newGroupView.viewId+ " (old view: "+ newGroupView.allMembers+ " )");
+  this.groupView=newGroupView;
+  if (oldMembers.viewId == -1) {
+    this.log.debug("ViewAccepted: initial members set for partition " + this.getGroupName() + ": "+ newGroupView.viewId+ " ("+ this.groupView+ ")");
+    this.log.info("Number of cluster members: " + newGroupView.allMembers.size());
+    for (    ClusterNode node : newGroupView.allMembers) {
+      this.log.debug(node);
+    }
+    this.notifyChannelLock();
+  }
+ else {
+    int difference=newGroupView.allMembers.size() - oldMembers.allMembers.size();
+    boolean merge=newView instanceof MergeView;
+    if (this.isCurrentNodeCoordinator()) {
+      this.clusterLifeCycleLog.info("New cluster view for partition " + this.getGroupName() + " (id: "+ newGroupView.viewId+ ", delta: "+ difference+ ", merge: "+ merge+ ") : "+ newGroupView.allMembers);
+    }
+ else {
+      this.log.info("New cluster view for partition " + this.getGroupName() + ": "+ newGroupView.viewId+ " ("+ this.groupView+ " delta: "+ difference+ ", merge: "+ merge+ ")");
+    }
+    this.log.debug("dead members: " + newGroupView.deadMembers);
+    this.log.debug("membership changed from " + oldMembers.allMembers.size() + " to "+ newGroupView.allMembers.size());
+    this.asynchHandler.queueEvent(newGroupView);
+    if (this.allowSyncListeners) {
+      this.notifyListeners(this.syncMembershipListeners,newGroupView.viewId,newGroupView.allMembers,newGroupView.deadMembers,newGroupView.newMembers,newGroupView.originatingGroups);
+    }
+  }
+  return newGroupView;
+}

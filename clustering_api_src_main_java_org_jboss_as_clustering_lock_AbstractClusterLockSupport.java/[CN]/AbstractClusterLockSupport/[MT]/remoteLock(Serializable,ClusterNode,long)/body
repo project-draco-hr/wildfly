@@ -1,0 +1,35 @@
+{
+  RemoteLockResponse response=null;
+  ClusterLockState lockState=getClusterLockState(lockName);
+  if (lockState == null) {
+    return getRemoteLockResponseForUnknownLock(lockName,caller,timeout);
+  }
+switch (lockState.state.get()) {
+case UNLOCKED:
+    response=getLock(lockName,lockState,caller,timeout);
+  break;
+case REMOTE_LOCKING:
+if (me.equals(caller)) {
+  log.warn("Received remoteLock call from self");
+  response=new RemoteLockResponse(me,RemoteLockResponse.Flag.OK);
+}
+ else if (getSuperiorCompetitor(caller) == null) {
+  response=new RemoteLockResponse(me,RemoteLockResponse.Flag.REJECT,me);
+}
+ else {
+  response=getLock(lockName,lockState,caller,timeout);
+}
+break;
+case LOCAL_LOCKING:
+response=new RemoteLockResponse(me,RemoteLockResponse.Flag.REJECT,me);
+break;
+case LOCKED:
+response=yieldLock(lockState,caller,timeout);
+break;
+case INVALID:
+Thread.yield();
+response=remoteLock(lockName,caller,timeout);
+break;
+}
+return response;
+}

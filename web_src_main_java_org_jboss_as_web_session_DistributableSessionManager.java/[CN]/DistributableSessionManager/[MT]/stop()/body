@@ -1,0 +1,34 @@
+{
+  log.debug("Stopping");
+  if (!this.started)   return;
+  this.started=false;
+synchronized (this) {
+    log.trace("Waiting until backgroundProcess() short-circuits.");
+  }
+  Container container=this.getContainer();
+  if (container instanceof Lifecycle) {
+    ((Lifecycle)container).removeLifecycleListener(this);
+  }
+  if (this.semaphore.tryAcquire()) {
+    try {
+      log.debug("Closing off LockingValve");
+      this.semaphore.acquire(TOTAL_PERMITS - 1);
+    }
+ catch (    InterruptedException e) {
+      Thread.currentThread().interrupt();
+      this.semaphore.release();
+      throw new LifecycleException(e);
+    }
+  }
+  resetStats();
+  clearSessions();
+  this.distributedCacheManager.stop();
+  this.tcl=null;
+  this.snapshotManager.stop();
+  this.snapshotManager=null;
+  this.sessions.clear();
+  this.unloadedSessions.clear();
+  this.passivatedCount.set(0);
+  this.lifecycle.fireLifecycleEvent(STOP_EVENT,this);
+  this.destroy();
+}

@@ -1,0 +1,24 @@
+{
+  TesteeSet<YieldingGloballyExclusiveClusterLockSupport> testeeSet=getTesteeSet(node1,1,3);
+  YieldingGloballyExclusiveClusterLockSupport testee=testeeSet.impl;
+  LocalLockHandler handler=testee.getLocalHandler();
+  RpcTarget target=testeeSet.target;
+  List<ClusterNode> members=testee.getCurrentView();
+  ClusterNode caller1=members.get(0);
+  assertFalse(node1.equals(caller1));
+  ClusterNode caller2=members.get(2);
+  assertFalse(node1.equals(caller2));
+  RemoteLockResponse rsp=target.remoteLock("test",caller1,1000);
+  verify(handler).lockFromCluster("test",caller1,1000);
+  assertEquals(RemoteLockResponse.Flag.OK,rsp.flag);
+  assertNull(rsp.holder);
+  Vector<ClusterNode> dead=new Vector<ClusterNode>();
+  dead.add(caller1);
+  Vector<ClusterNode> all=new Vector<ClusterNode>(members);
+  all.remove(caller1);
+  testee.membershipChanged(dead,new Vector<ClusterNode>(),all);
+  rsp=target.remoteLock("test",caller2,1000);
+  verify(handler).lockFromCluster("test",caller2,1000);
+  assertEquals(RemoteLockResponse.Flag.OK,rsp.flag);
+  assertNull(rsp.holder);
+}

@@ -1,0 +1,30 @@
+{
+  ++testCount;
+  cacheContainer=SessionTestUtil.createCacheContainer(true,null,false,false);
+  cacheContainer.start();
+  JBossWebMetaData webMetaData=SessionTestUtil.createWebMetaData(10,true,1,-1);
+  webMetaData.getReplicationConfig().setMaxUnreplicatedInterval(0);
+  String warName="test" + testCount;
+  manager=SessionTestUtil.createManager(webMetaData,warName,2,cacheContainer,null);
+  manager.start();
+  assertEquals(0,manager.getActiveSessionCount());
+  assertEquals(0,manager.getPassivatedSessionCount());
+  Map<String,Object> attrs=new HashMap<String,Object>();
+  attrs.put("failInvalid",new FailInvalidationAttribute());
+  attrs.put("failDeserialization",new FailDeserializationAttribute());
+  SetAttributesRequestHandler setHandler=new SetAttributesRequestHandler(attrs,false);
+  SessionTestUtil.invokeRequest(manager,setHandler,null);
+  validateNewSession(setHandler);
+  String id=setHandler.getSessionId();
+  assertEquals(1,manager.getActiveSessionCount());
+  assertEquals(0,manager.getPassivatedSessionCount());
+  InvalidateSessionRequestHandler invalHandler=new InvalidateSessionRequestHandler(attrs.keySet(),false);
+  try {
+    SessionTestUtil.invokeRequest(manager,invalHandler,id);
+    fail("Invalidation not rejected");
+  }
+ catch (  RejectedException ok) {
+  }
+  assertEquals(0,manager.getActiveSessionCount());
+  assertEquals(0,manager.getPassivatedSessionCount());
+}

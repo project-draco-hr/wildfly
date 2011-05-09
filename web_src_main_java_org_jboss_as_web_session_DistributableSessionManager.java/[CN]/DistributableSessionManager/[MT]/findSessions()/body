@@ -1,0 +1,26 @@
+{
+  try {
+    boolean inLockingValve=SessionReplicationContext.isLocallyActive();
+    if (inLockingValve || this.valveLock.tryLock(0,TimeUnit.SECONDS)) {
+      try {
+        if (unloadedSessions.size() > 0) {
+          Set<String> ids=new HashSet<String>(unloadedSessions.keySet());
+          log.tracef("findSessions: loading sessions from distributed cache: %s",ids);
+          for (          String id : ids) {
+            loadSession(id);
+          }
+        }
+        return this.sessions.values().toArray(new Session[0]);
+      }
+  finally {
+        if (!inLockingValve) {
+          this.valveLock.unlock();
+        }
+      }
+    }
+  }
+ catch (  InterruptedException e) {
+    Thread.currentThread().interrupt();
+  }
+  return null;
+}

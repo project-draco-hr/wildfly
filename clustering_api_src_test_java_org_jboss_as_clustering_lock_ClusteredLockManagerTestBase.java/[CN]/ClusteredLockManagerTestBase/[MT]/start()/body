@@ -1,0 +1,54 @@
+{
+  GroupRpcDispatcher rpcDispatcher=mock(GroupRpcDispatcher.class);
+  GroupMembershipNotifier notifier=mock(GroupMembershipNotifier.class);
+  LocalLockHandler handler=mock(LocalLockHandler.class);
+  try {
+    createClusteredLockManager(null,rpcDispatcher,notifier,handler);
+    fail("Null serviceHAName should prevent construction");
+  }
+ catch (  IllegalArgumentException good) {
+  }
+  try {
+    createClusteredLockManager("test",null,notifier,handler);
+    fail("Null GroupRpcDispatcher should prevent construction");
+  }
+ catch (  IllegalArgumentException good) {
+  }
+  try {
+    createClusteredLockManager("test",rpcDispatcher,null,handler);
+    fail("Null GroupMembershipNotifier should prevent construction");
+  }
+ catch (  IllegalArgumentException good) {
+  }
+  try {
+    createClusteredLockManager("test",rpcDispatcher,notifier,null);
+    fail("Null LocalLockHandler should prevent construction");
+  }
+ catch (  IllegalArgumentException good) {
+  }
+  when(rpcDispatcher.isConsistentWith(notifier)).thenReturn(Boolean.TRUE);
+  when(rpcDispatcher.getClusterNode()).thenReturn(node1);
+  when(rpcDispatcher.getGroupName()).thenReturn("TestPartition");
+  T testee=createClusteredLockManager("test",rpcDispatcher,notifier,handler);
+  assertEquals("test",testee.getServiceHAName());
+  assertEquals("TestPartition",testee.getGroupName());
+  try {
+    testee.lock("id",1000);
+    fail("Call to lock() should fail if not started");
+  }
+ catch (  IllegalStateException good) {
+  }
+  try {
+    testee.unlock("id");
+    fail("Call to unlock() should fail if not started");
+  }
+ catch (  IllegalStateException good) {
+  }
+  assertEquals("Current view is empty when unstarted",0,testee.getCurrentView().size());
+  when(rpcDispatcher.getClusterNodes()).thenReturn(new ClusterNode[]{node1});
+  testee.start();
+  verify(rpcDispatcher).registerRPCHandler(eq("test"),any(RpcTarget.class));
+  verify(notifier).registerGroupMembershipListener(testee);
+  assertEquals("Current view is correct",1,testee.getCurrentView().size());
+  assertTrue(testee.getCurrentView().contains(node1));
+}

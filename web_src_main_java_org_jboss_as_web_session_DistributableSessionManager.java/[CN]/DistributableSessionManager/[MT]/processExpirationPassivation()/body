@@ -1,0 +1,113 @@
+{
+  boolean expire=maxInactiveInterval >= 0;
+  boolean passivate=isPassivationEnabled();
+  long passivationMax=passivationMaxIdleTime * 1000L;
+  long passivationMin=passivationMinIdleTime * 1000L;
+  log.trace("processExpirationPassivation(): Looking for sessions that have expired ...");
+  log.tracef("processExpirationPassivation(): active sessions = %d",calcActiveSessions());
+  log.tracef("processExpirationPassivation(): expired sessions = %d",expiredCounter.get());
+  if (passivate) {
+    log.tracef("processExpirationPassivation(): passivated count = %d",getPassivatedSessionCount());
+  }
+  TreeSet<PassivationCheck> passivationChecks=new TreeSet<PassivationCheck>();
+  try {
+    SessionInvalidationTracker.suspend();
+    for (    Session s : this.sessions.values()) {
+      if (!this.started)       return;
+      boolean likelyExpired=false;
+      String realId=null;
+      try {
+        ClusteredSession<O> session=cast(s);
+        realId=session.getRealId();
+        likelyExpired=expire;
+        if (expire) {
+          likelyExpired=(session.isValid(false) == false);
+          if (likelyExpired && this.outdatedSessionChecker.isSessionOutdated(session)) {
+            loadSession(session.getRealId());
+          }
+          if (!session.isValid())           continue;
+          likelyExpired=false;
+        }
+        if (passivate) {
+          passivationChecks.add(new PassivationCheck(session));
+        }
+      }
+ catch (      Exception e) {
+        if (likelyExpired) {
+          bruteForceCleanup(realId,e);
+        }
+ else {
+          log.errorf(e,"processExpirationPassivation(): failed handling %s with exception: %s",realId,e);
+        }
+      }
+    }
+    long maxUnrep=maxUnreplicatedInterval < 0 ? 60 : maxUnreplicatedInterval;
+    for (    Map.Entry<String,OwnedSessionUpdate> entry : this.unloadedSessions.entrySet()) {
+      if (!this.started)       return;
+      String realId=entry.getKey();
+      OwnedSessionUpdate osu=entry.getValue();
+      boolean likelyExpired=false;
+      long now=System.currentTimeMillis();
+      long elapsed=(now - osu.getUpdateTime());
+      try {
+        likelyExpired=expire && osu.getMaxInactive() >= 1 && elapsed >= (osu.getMaxInactive() + maxUnrep) * 1000L;
+        if (likelyExpired) {
+          if (osu.isPassivated()) {
+            Session session=findSession(realId);
+            if (session != null) {
+              session.isValid();
+              continue;
+            }
+          }
+          this.distributedCacheManager.removeSessionLocal(realId,osu.getOwner());
+          unloadedSessions.remove(realId);
+          this.getReplicationStatistics().removeStats(realId);
+        }
+ else         if (passivate && !osu.isPassivated()) {
+          passivationChecks.add(new PassivationCheck(realId,osu));
+        }
+      }
+ catch (      Exception e) {
+        if (likelyExpired) {
+          bruteForceCleanup(realId,e);
+        }
+ else {
+          log.errorf(e,"processExpirationPassivation(): failed handling unloaded session %s",realId);
+        }
+      }
+    }
+    if (!this.started)     return;
+    if (passivate) {
+      for (      PassivationCheck passivationCheck : passivationChecks) {
+        try {
+          long timeNow=System.currentTimeMillis();
+          long timeIdle=timeNow - passivationCheck.getLastUpdate();
+          if (passivationMax >= 0 && timeIdle > passivationMax) {
+            passivationCheck.passivate();
+          }
+ else           if ((maxActiveAllowed > 0) && (passivationMin > 0) && (calcActiveSessions() >= maxActiveAllowed)&& (timeIdle > passivationMin)) {
+            passivationCheck.passivate();
+          }
+ else {
+            break;
+          }
+        }
+ catch (        Exception e) {
+          log.errorf(e,"processExpirationPassivation(): failed passivating %ssession %s",passivationCheck.isUnloaded() ? "unloaded " : "",passivationCheck.getRealId());
+        }
+      }
+    }
+  }
+ catch (  Exception ex) {
+    log.error("processExpirationPassivation(): failed with exception: " + ex,ex);
+  }
+ finally {
+    SessionInvalidationTracker.resume();
+  }
+  log.trace("processExpirationPassivation(): Completed ...");
+  log.tracef("processExpirationPassivation(): active sessions = %d",calcActiveSessions());
+  log.tracef("processExpirationPassivation(): expired sessions = %d",expiredCounter.get());
+  if (passivate) {
+    log.tracef("processExpirationPassivation(): passivated count = %d",getPassivatedSessionCount());
+  }
+}

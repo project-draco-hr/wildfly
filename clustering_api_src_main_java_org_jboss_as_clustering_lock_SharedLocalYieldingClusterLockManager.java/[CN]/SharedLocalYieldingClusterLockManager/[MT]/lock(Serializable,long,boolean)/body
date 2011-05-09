@@ -1,0 +1,63 @@
+{
+  LockResult result=null;
+  LocalLock localLock=getLocalLock(lockName,false);
+  if (localLock == null) {
+    localLock=getLocalLock(lockName,true);
+    if (newLock) {
+      LockState lockState=localLock.lockForLocalNode();
+      result=(lockState.localLockCount == 1 ? LockResult.NEW_LOCK : LockResult.ALREADY_HELD);
+    }
+  }
+  if (result == null) {
+    LockState lockState=localLock.registerForLocalLock();
+    try {
+      long remaining=timeout;
+      do {
+        if (this.localNode == lockState.lockHolder) {
+          result=LockResult.ALREADY_HELD;
+          if (localLock.removable && localLock != getLocalLock(lockName,false)) {
+            result=lock(lockName,remaining,newLock);
+          }
+        }
+ else {
+          if (lockState.invalid) {
+            result=lock(lockName,remaining,newLock);
+          }
+ else           if (lockState.localLockCount == 1) {
+            if (this.clusterSupport.lock(lockName,remaining)) {
+              result=LockResult.ACQUIRED_FROM_CLUSTER;
+            }
+ else {
+              throw new TimeoutException("Cannot acquire lock " + lockName + " from cluster");
+            }
+          }
+ else {
+            long start=System.currentTimeMillis();
+synchronized (localLock) {
+              lockState=localLock.lockState.get();
+              if (lockState.lockHolder != this.localNode) {
+                localLock.wait(remaining);
+              }
+            }
+            lockState=localLock.lockState.get();
+            remaining=timeout - (System.currentTimeMillis() - start);
+          }
+        }
+      }
+ while (result == null && remaining > 0);
+      if (result == null) {
+        throwTimeoutException(lockName,lockState);
+      }
+    }
+  finally {
+      boolean decrement=(result != LockResult.ALREADY_HELD);
+      boolean updated=false;
+      while (localLocks.get(lockName) == localLock && !updated) {
+        LockState currentState=localLock.lockState.get();
+        LockState unregistered=currentState.unregister(decrement);
+        updated=localLock.lockState.compareAndSet(currentState,unregistered);
+      }
+    }
+  }
+  return result;
+}

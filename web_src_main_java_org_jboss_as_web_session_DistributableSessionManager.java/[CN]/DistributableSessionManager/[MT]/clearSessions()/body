@@ -1,0 +1,44 @@
+{
+  boolean passivation=isPassivationEnabled();
+  for (  Session session : this.sessions.values()) {
+    ClusteredSession<O> ses=cast(session);
+    log.tracef("clearSessions(): clear session by expiring or passivating: %s",ses);
+    try {
+      if (passivation && ses.isValid()) {
+        processSessionPassivation(ses.getRealId());
+      }
+ else {
+        boolean notify=true;
+        boolean localCall=true;
+        boolean localOnly=true;
+        ses.expire(notify,localCall,localOnly,ClusteredSessionNotificationCause.UNDEPLOY);
+      }
+    }
+ catch (    Throwable t) {
+      log.warnf(t,"clearSessions(): Caught exception expiring or passivating session %s",ses.getIdInternal());
+    }
+ finally {
+      ses.recycle();
+    }
+  }
+  Set<Map.Entry<String,OwnedSessionUpdate>> unloaded=unloadedSessions.entrySet();
+  for (Iterator<Map.Entry<String,OwnedSessionUpdate>> it=unloaded.iterator(); it.hasNext(); ) {
+    Map.Entry<String,OwnedSessionUpdate> entry=it.next();
+    String realId=entry.getKey();
+    try {
+      if (passivation) {
+        OwnedSessionUpdate osu=entry.getValue();
+        if (!osu.isPassivated()) {
+          this.distributedCacheManager.evictSession(realId,osu.getOwner());
+        }
+      }
+ else {
+        this.distributedCacheManager.removeSessionLocal(realId);
+      }
+    }
+ catch (    Exception e) {
+      log.debugf("Problem %s session %s -- %s",passivation ? "evicting" : "removing",realId,e);
+    }
+    it.remove();
+  }
+}

@@ -1,0 +1,24 @@
+{
+  log.info("Activating Infinispan subsystem.");
+  populate(operation,context.getSubModel());
+  RuntimeOperationContext runtime=context.getRuntimeContext();
+  if (runtime != null) {
+    RuntimeTask task=new RuntimeTask(){
+      @Override public void execute(      RuntimeTaskContext context) throws OperationFailedException {
+        ServiceTarget target=context.getServiceTarget();
+        target.addService(EmbeddedCacheManagerDefaultsService.SERVICE_NAME,new EmbeddedCacheManagerDefaultsService()).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+        String defaultContainer=operation.require(ModelKeys.DEFAULT_CACHE_CONTAINER).asString();
+        InjectedValue<EmbeddedCacheManager> container=new InjectedValue<EmbeddedCacheManager>();
+        ValueService<EmbeddedCacheManager> service=new ValueService<EmbeddedCacheManager>(container);
+        target.addService(EmbeddedCacheManagerService.getServiceName(null),service).addDependency(EmbeddedCacheManagerService.getServiceName(defaultContainer),EmbeddedCacheManager.class,container).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+      }
+    }
+;
+    runtime.setRuntimeTask(task);
+  }
+ else {
+  }
+  BasicOperationResult operationResult=new BasicOperationResult(Util.getResourceRemoveOperation(operation.require(ModelDescriptionConstants.OP_ADDR)));
+  resultHandler.handleResultComplete();
+  return operationResult;
+}

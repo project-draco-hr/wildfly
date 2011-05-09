@@ -1,0 +1,95 @@
+{
+  Object body=null;
+  Object retval=null;
+  Object handler=null;
+  boolean trace=this.log.isTraceEnabled();
+  boolean overrideCL=false;
+  ClassLoader previousCL=null;
+  String service=null;
+  byte[] request_bytes=null;
+  if (trace) {
+    this.log.trace("Partition " + CoreGroupCommunicationService.this.getGroupName() + " received msg");
+  }
+  if (req == null || req.getBuffer() == null) {
+    this.log.warn("Partition " + CoreGroupCommunicationService.this.getGroupName() + " message or message buffer is null!");
+    return null;
+  }
+  try {
+    Object wrapper=CoreGroupCommunicationService.this.objectFromByteBufferInternal(req.getBuffer());
+    if (wrapper == null || !(wrapper instanceof Object[])) {
+      this.log.warn("Partition " + CoreGroupCommunicationService.this.getGroupName() + " message wrapper does not contain Object[] object!");
+      return null;
+    }
+    Object[] temp=(Object[])wrapper;
+    service=(String)temp[0];
+    request_bytes=(byte[])temp[1];
+    handler=CoreGroupCommunicationService.this.rpcHandlers.get(service);
+    if (handler == null) {
+      if (trace) {
+        this.log.trace("Partition " + CoreGroupCommunicationService.this.getGroupName() + " no rpc handler registered under service "+ service);
+      }
+      return new NoHandlerForRPC();
+    }
+  }
+ catch (  Exception e) {
+    this.log.warn("Partition " + CoreGroupCommunicationService.this.getGroupName() + " failed unserializing message buffer (msg="+ req+ ")",e);
+    return null;
+  }
+  try {
+    WeakReference<ClassLoader> weak=CoreGroupCommunicationService.this.clmap.get(service);
+    if (weak != null) {
+      if (trace) {
+        this.log.trace("overriding Thread ContextClassLoader for RPC service " + service);
+      }
+      previousCL=Thread.currentThread().getContextClassLoader();
+      ClassLoader loader=weak.get();
+      overrideCL=true;
+      Thread.currentThread().setContextClassLoader(loader);
+    }
+    body=CoreGroupCommunicationService.this.objectFromByteBufferInternal(request_bytes);
+  }
+ catch (  Exception e) {
+    this.log.warn("Partition " + CoreGroupCommunicationService.this.getGroupName() + " failed extracting message body from request bytes",e);
+    return null;
+  }
+ finally {
+    if (overrideCL) {
+      this.log.trace("resetting Thread ContextClassLoader");
+      Thread.currentThread().setContextClassLoader(previousCL);
+    }
+  }
+  if (body == null || !(body instanceof MethodCall)) {
+    this.log.warn("Partition " + CoreGroupCommunicationService.this.getGroupName() + " message does not contain a MethodCall object!");
+    return null;
+  }
+  MethodCall method_call=(MethodCall)body;
+  String methodName=method_call.getName();
+  if (trace) {
+    this.log.trace("full methodName: " + methodName);
+  }
+  int idx=methodName.lastIndexOf('.');
+  String handlerName=methodName.substring(0,idx);
+  String newMethodName=methodName.substring(idx + 1);
+  if (trace) {
+    this.log.trace("handlerName: " + handlerName + " methodName: "+ newMethodName);
+    this.log.trace("Handle: " + methodName);
+  }
+  method_call.setName(newMethodName);
+  try {
+    retval=method_call.invoke(handler);
+    if (overrideCL) {
+      byte[] retbytes=CoreGroupCommunicationService.this.objectToByteBufferResponseInternal(retval);
+      retval=new HAServiceResponse(handlerName,retbytes);
+    }
+    if (trace) {
+      this.log.trace("rpc call return value: " + retval);
+    }
+  }
+ catch (  Throwable t) {
+    if (trace) {
+      this.log.trace("Partition " + CoreGroupCommunicationService.this.getGroupName() + " rpc call threw exception",t);
+    }
+    retval=t;
+  }
+  return retval;
+}

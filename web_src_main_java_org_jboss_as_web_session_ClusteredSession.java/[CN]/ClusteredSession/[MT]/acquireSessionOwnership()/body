@@ -1,0 +1,26 @@
+{
+  SessionOwnershipSupport support=this.distributedCacheManager.getSessionOwnershipSupport();
+  if (support != null) {
+    try {
+      this.ownershipLock.lockInterruptibly();
+      try {
+        if (support.acquireSessionOwnership(this.realId,needNewLock()) == SessionOwnershipSupport.LockResult.ACQUIRED_FROM_CLUSTER) {
+          IncomingDistributableSessionData data=this.distributedCacheManager.getSessionData(this.realId,false);
+          if (data != null) {
+            update(data);
+          }
+        }
+      }
+ catch (      TimeoutException e) {
+        throw new RuntimeException("Caught " + e.getClass().getSimpleName() + " acquiring ownership of "+ this.realId,e);
+      }
+ finally {
+        this.ownershipLock.unlock();
+      }
+    }
+ catch (    InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("Interrupted while acquiring ownership of " + this.realId,e);
+    }
+  }
+}

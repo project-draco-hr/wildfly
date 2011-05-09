@@ -1,0 +1,43 @@
+{
+  String sessionId="abc";
+  IncomingDistributableSessionData data=mock(IncomingDistributableSessionData.class);
+  SessionKey key=mock(SessionKey.class);
+  @SuppressWarnings("rawtypes") ArgumentCaptor<DistributedCacheManager.Operation> capturedOperation=ArgumentCaptor.forClass(DistributedCacheManager.Operation.class);
+  when(this.keyFactory.createKey(sessionId)).thenReturn(key);
+  when(this.invoker.invoke(same(this.sessionCache),capturedOperation.capture())).thenReturn(data);
+  IncomingDistributableSessionData result=this.manager.getSessionData(sessionId,null,includeAttributes);
+  assertSame(data,result);
+  Map<Object,Object> map=mock(Map.class);
+  Map<String,Object> attributes=Collections.emptyMap();
+  Integer version=Integer.valueOf(10);
+  Long timestamp=Long.valueOf(System.currentTimeMillis());
+  DistributableSessionMetadata metadata=new DistributableSessionMetadata();
+  DistributedCacheManager<OutgoingDistributableSessionData,SessionKey>.Operation<IncomingDistributableSessionData> operation=capturedOperation.getValue();
+  when(this.sessionCache.get(key)).thenReturn(map);
+  when(map.get(Byte.valueOf((byte)SessionMapEntry.VERSION.ordinal()))).thenReturn(version);
+  when(map.get(Byte.valueOf((byte)SessionMapEntry.TIMESTAMP.ordinal()))).thenReturn(timestamp);
+  when(map.get(Byte.valueOf((byte)SessionMapEntry.METADATA.ordinal()))).thenReturn(metadata);
+  if (includeAttributes) {
+    when(this.storage.load(map)).thenReturn(attributes);
+  }
+  result=operation.invoke(this.sessionCache);
+  assertNotNull(result);
+  assertEquals(version.intValue(),result.getVersion());
+  assertEquals(timestamp.longValue(),result.getTimestamp());
+  assertSame(metadata,result.getMetadata());
+  if (includeAttributes) {
+    assertSame(attributes,result.getSessionAttributes());
+  }
+ else {
+    IllegalStateException exception=null;
+    Map<String,Object> sessionAttributes=null;
+    try {
+      sessionAttributes=result.getSessionAttributes();
+    }
+ catch (    IllegalStateException e) {
+      exception=e;
+    }
+    assertNull(sessionAttributes);
+    assertNotNull(exception);
+  }
+}

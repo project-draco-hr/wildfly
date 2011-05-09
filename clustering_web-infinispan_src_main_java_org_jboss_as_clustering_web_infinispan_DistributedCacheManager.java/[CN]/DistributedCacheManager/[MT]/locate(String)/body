@@ -1,0 +1,20 @@
+{
+  if (this.jvmRouteHandler != null) {
+    AdvancedCache<?,?> cache=this.sessionCache.getAdvancedCache();
+    DistributionManager manager=cache.getDistributionManager();
+    if ((manager != null) && !manager.isRehashInProgress()) {
+      List<Address> addresses=manager.locate(sessionId);
+      EmbeddedCacheManager container=(EmbeddedCacheManager)this.sessionCache.getCacheManager();
+      if (!addresses.contains(container.getAddress())) {
+        Address address=addresses.get(random.nextInt(addresses.size()));
+        String jvmRoute=this.jvmRouteHandler.getCache().get(address);
+        if (jvmRoute != null) {
+          trace("%s hashes to %s - next request will route to %s (%s)",sessionId,addresses,address,jvmRoute);
+          cache.withFlags(Flag.FORCE_SYNCHRONOUS);
+          return jvmRoute;
+        }
+      }
+    }
+  }
+  return this.manager.getJvmRoute();
+}

@@ -1,0 +1,32 @@
+{
+  SessionReplicationContext.enterWebapp(request,response,true);
+  boolean startedBatch=startBatchTransaction();
+  try {
+    String requestedId=request.getRequestedSessionId();
+    if (requestedId != null) {
+      manager.findSession(requestedId);
+    }
+    if (isEvent) {
+      getNext().event(request,response,event);
+    }
+ else {
+      getNext().invoke(request,response);
+    }
+  }
+  finally {
+    try {
+      SessionReplicationContext ctx=SessionReplicationContext.exitWebapp();
+      if (ctx.getSoleSnapshotManager() != null) {
+        ctx.getSoleSnapshotManager().snapshot(ctx.getSoleSession());
+      }
+ else {
+        handleCrossContextSessions(ctx);
+      }
+    }
+  finally {
+      if (startedBatch) {
+        tm.endBatch();
+      }
+    }
+  }
+}

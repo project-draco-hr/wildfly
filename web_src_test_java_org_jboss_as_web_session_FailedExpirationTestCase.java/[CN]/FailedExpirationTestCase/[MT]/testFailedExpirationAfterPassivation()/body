@@ -1,0 +1,29 @@
+{
+  ++testCount;
+  String passivationDir=SessionTestUtil.getPassivationDir(tempDir,testCount,1);
+  cacheContainer=SessionTestUtil.createCacheContainer(true,passivationDir,false,false);
+  cacheContainer.start();
+  JBossWebMetaData webMetaData=SessionTestUtil.createWebMetaData(10,true,1,-1);
+  webMetaData.getReplicationConfig().setMaxUnreplicatedInterval(0);
+  String warName="test" + testCount;
+  manager=SessionTestUtil.createManager(webMetaData,warName,2,cacheContainer,null);
+  manager.start();
+  assertEquals(0,manager.getActiveSessionCount());
+  assertEquals(0,manager.getPassivatedSessionCount());
+  Map<String,Object> attrs=new HashMap<String,Object>();
+  attrs.put("failInvalid",new FailInvalidationAttribute());
+  attrs.put("failDeserialization",new FailDeserializationAttribute());
+  SetAttributesRequestHandler setHandler=new SetAttributesRequestHandler(attrs,false);
+  SessionTestUtil.invokeRequest(manager,setHandler,null);
+  validateNewSession(setHandler);
+  assertEquals(1,manager.getActiveSessionCount());
+  assertEquals(0,manager.getPassivatedSessionCount());
+  SessionTestUtil.sleepThread(1010);
+  manager.backgroundProcess();
+  assertEquals(0,manager.getActiveSessionCount());
+  assertEquals(1,manager.getPassivatedSessionCount());
+  SessionTestUtil.sleepThread(1010);
+  manager.backgroundProcess();
+  assertEquals(0,manager.getActiveSessionCount());
+  assertEquals(0,manager.getPassivatedSessionCount());
+}

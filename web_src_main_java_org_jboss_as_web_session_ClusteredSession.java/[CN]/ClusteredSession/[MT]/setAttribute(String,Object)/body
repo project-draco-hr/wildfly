@@ -1,0 +1,73 @@
+{
+  if (name == null)   throw new IllegalArgumentException(sm.getString("clusteredSession.setAttribute.namenull"));
+  if (value == null) {
+    removeAttribute(name);
+    return;
+  }
+  if (!isValidInternal()) {
+    throw new IllegalStateException(sm.getString("clusteredSession.setAttribute.ise"));
+  }
+  if (canAttributeBeReplicated(value) == false) {
+    throw new IllegalArgumentException(sm.getString("clusteredSession.setAttribute.iae"));
+  }
+  HttpSessionBindingEvent event=null;
+  if (value instanceof HttpSessionBindingListener && notificationPolicy.isHttpSessionBindingListenerInvocationAllowed(this.clusterStatus,ClusteredSessionNotificationCause.MODIFY,name,true)) {
+    event=new HttpSessionBindingEvent(getSession(),name,value);
+    try {
+      ((HttpSessionBindingListener)value).valueBound(event);
+    }
+ catch (    Throwable t) {
+      manager.getContainer().getLogger().error(sm.getString("clusteredSession.bindingEvent"),t);
+    }
+  }
+  if (value instanceof HttpSessionActivationListener)   hasActivationListener=Boolean.TRUE;
+  Object unbound=setAttributeInternal(name,value);
+  if ((unbound != null) && (unbound != value) && (unbound instanceof HttpSessionBindingListener)&& notificationPolicy.isHttpSessionBindingListenerInvocationAllowed(this.clusterStatus,ClusteredSessionNotificationCause.MODIFY,name,true)) {
+    try {
+      ((HttpSessionBindingListener)unbound).valueUnbound(new HttpSessionBindingEvent(getSession(),name));
+    }
+ catch (    Throwable t) {
+      manager.getContainer().getLogger().error(sm.getString("clusteredSession.bindingEvent"),t);
+    }
+  }
+  if (notificationPolicy.isHttpSessionAttributeListenerInvocationAllowed(this.clusterStatus,ClusteredSessionNotificationCause.MODIFY,name,true)) {
+    Context context=(Context)manager.getContainer();
+    Object[] lifecycleListeners=context.getApplicationEventListeners();
+    if (lifecycleListeners == null)     return;
+    for (int i=0; i < lifecycleListeners.length; i++) {
+      if (!(lifecycleListeners[i] instanceof HttpSessionAttributeListener))       continue;
+      HttpSessionAttributeListener listener=(HttpSessionAttributeListener)lifecycleListeners[i];
+      try {
+        if (unbound != null) {
+          fireContainerEvent(context,"beforeSessionAttributeReplaced",listener);
+          if (event == null) {
+            event=new HttpSessionBindingEvent(getSession(),name,unbound);
+          }
+          listener.attributeReplaced(event);
+          fireContainerEvent(context,"afterSessionAttributeReplaced",listener);
+        }
+ else {
+          fireContainerEvent(context,"beforeSessionAttributeAdded",listener);
+          if (event == null) {
+            event=new HttpSessionBindingEvent(getSession(),name,value);
+          }
+          listener.attributeAdded(event);
+          fireContainerEvent(context,"afterSessionAttributeAdded",listener);
+        }
+      }
+ catch (      Throwable t) {
+        try {
+          if (unbound != null) {
+            fireContainerEvent(context,"afterSessionAttributeReplaced",listener);
+          }
+ else {
+            fireContainerEvent(context,"afterSessionAttributeAdded",listener);
+          }
+        }
+ catch (        Exception e) {
+        }
+        manager.getContainer().getLogger().error(sm.getString("clusteredSession.attributeEvent"),t);
+      }
+    }
+  }
+}

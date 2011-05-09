@@ -1,0 +1,30 @@
+{
+  if (!(targetNode instanceof ClusterNodeImpl)) {
+    throw new IllegalArgumentException("targetNode " + targetNode + " is not an instance of "+ ClusterNodeImpl.class+ " -- only targetNodes provided by this HAPartition should be used");
+  }
+  boolean trace=this.log.isTraceEnabled();
+  MethodCall m=new MethodCall(serviceName + "." + methodName,args,types);
+  if (trace) {
+    this.log.trace("callAsyncMethodOnNode( objName=" + serviceName + ", methodName="+ methodName);
+  }
+  if (this.directlyInvokeLocal && this.me.equals(targetNode)) {
+    new AsynchronousLocalInvocation(serviceName,methodName,args,types).invoke();
+    return;
+  }
+  RequestOptions opt=new RequestOptions(Request.GET_NONE,this.getMethodCallTimeout());
+  if (unordered) {
+    opt.setFlags(Message.OOB);
+  }
+  try {
+    this.dispatcher.callRemoteMethod(((ClusterNodeImpl)targetNode).getOriginalJGAddress(),m,opt);
+  }
+ catch (  Exception e) {
+    throw e;
+  }
+catch (  Error e) {
+    throw e;
+  }
+catch (  Throwable e) {
+    throw new RuntimeException("Caught raw Throwable on remote invocation",e);
+  }
+}

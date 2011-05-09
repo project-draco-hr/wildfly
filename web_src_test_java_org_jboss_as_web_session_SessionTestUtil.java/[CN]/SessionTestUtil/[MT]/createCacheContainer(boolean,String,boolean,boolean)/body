@@ -1,0 +1,117 @@
+{
+  Configuration.CacheMode mode=local ? CacheMode.LOCAL : (totalReplication ? CacheMode.REPL_SYNC : CacheMode.DIST_SYNC);
+  GlobalConfiguration global=defaults.getGlobalConfiguration().clone();
+  FluentGlobalConfiguration.TransportConfig transport=global.fluent().transport();
+  if (mode.isClustered()) {
+    transport.transportClass(JGroupsTransport.class).addProperty("configurationFile","jgroups-udp.xml");
+  }
+ else {
+    transport.transportClass(null);
+  }
+  transport.clusterName("test-session").strictPeerToPeer(false).globalJmxStatistics().jmxDomain("org.infinispan").cacheManagerName("container" + containerIndex++).allowDuplicateDomains(true);
+  Configuration config=defaults.getDefaultConfiguration(mode).clone();
+  FluentConfiguration fluent=config.fluent();
+  fluent.syncCommitPhase(true).syncRollbackPhase(true).invocationBatching().locking().isolationLevel(IsolationLevel.REPEATABLE_READ).transaction().useSynchronization(false);
+  if (passivationDir != null) {
+    fluent.loaders().passivation(true).preload(!purgeCacheLoader).addCacheLoader(new FileCacheStoreConfig().location(passivationDir).fetchPersistentState(mode.isReplicated()).purgeOnStartup(purgeCacheLoader));
+  }
+  final EmbeddedCacheManager sessionContainer=new DefaultCacheManager(global,config,false);
+  if (!mode.isDistributed()) {
+    return sessionContainer;
+  }
+  global=global.clone();
+  global.fluent().transport().clusterName("test-jvmroute").globalJmxStatistics().cacheManagerName("container" + containerIndex++);
+  config=defaults.getDefaultConfiguration(Configuration.CacheMode.REPL_SYNC).clone();
+  config.fluent().syncCommitPhase(true).syncRollbackPhase(true).invocationBatching().locking().isolationLevel(IsolationLevel.REPEATABLE_READ).transaction().useSynchronization(false);
+  final EmbeddedCacheManager jvmRouteContainer=new DefaultCacheManager(global,config,false);
+  return new EmbeddedCacheManager(){
+    @Override public <K,V>Cache<K,V> getCache(){
+      return sessionContainer.getCache();
+    }
+    @Override public <K,V>Cache<K,V> getCache(    String cacheName){
+      return cacheName.equals(JVM_ROUTE_CACHE_NAME) ? jvmRouteContainer.<K,V>getCache() : sessionContainer.<K,V>getCache(cacheName);
+    }
+    @Override public void start(){
+      jvmRouteContainer.start();
+      try {
+        sessionContainer.start();
+      }
+ catch (      RuntimeException e) {
+        jvmRouteContainer.stop();
+        throw e;
+      }
+    }
+    @Override public void stop(){
+      try {
+        sessionContainer.stop();
+      }
+ catch (      Exception e) {
+        log.warn(e.getMessage(),e);
+      }
+      jvmRouteContainer.stop();
+    }
+    @Override public void addListener(    Object listener){
+      sessionContainer.addListener(listener);
+    }
+    @Override public void removeListener(    Object listener){
+      sessionContainer.removeListener(listener);
+    }
+    @Override public Set<Object> getListeners(){
+      return sessionContainer.getListeners();
+    }
+    @Override public Configuration defineConfiguration(    String cacheName,    Configuration configurationOverride){
+      return sessionContainer.defineConfiguration(cacheName,configurationOverride);
+    }
+    @Override public Configuration defineConfiguration(    String cacheName,    String templateCacheName,    Configuration configurationOverride){
+      return sessionContainer.defineConfiguration(cacheName,templateCacheName,configurationOverride);
+    }
+    @Override public String getClusterName(){
+      return sessionContainer.getClusterName();
+    }
+    @Override public List<Address> getMembers(){
+      return sessionContainer.getMembers();
+    }
+    @Override public Address getAddress(){
+      return sessionContainer.getAddress();
+    }
+    @Override public boolean isCoordinator(){
+      return sessionContainer.isCoordinator();
+    }
+    @Override public ComponentStatus getStatus(){
+      return sessionContainer.getStatus();
+    }
+    @Override public GlobalConfiguration getGlobalConfiguration(){
+      return sessionContainer.getGlobalConfiguration();
+    }
+    @Override public Configuration getDefaultConfiguration(){
+      return sessionContainer.getDefaultConfiguration();
+    }
+    @Override public Set<String> getCacheNames(){
+      return sessionContainer.getCacheNames();
+    }
+    @Override public Address getCoordinator(){
+      return sessionContainer.getCoordinator();
+    }
+    @Override public boolean isRunning(    String cacheName){
+      return cacheName.equals(JVM_ROUTE_CACHE_NAME) ? jvmRouteContainer.isDefaultRunning() : sessionContainer.isRunning(cacheName);
+    }
+    @Override public boolean isDefaultRunning(){
+      return sessionContainer.isDefaultRunning();
+    }
+    @Override public boolean cacheExists(    String name){
+      return name.equals(JVM_ROUTE_CACHE_NAME) ? jvmRouteContainer.cacheExists(CacheContainer.DEFAULT_CACHE_NAME) : sessionContainer.cacheExists(name);
+    }
+    @Override public <K,V>Cache<K,V> getCache(    String name,    boolean start){
+      return name.equals(JVM_ROUTE_CACHE_NAME) ? jvmRouteContainer.<K,V>getCache(CacheContainer.DEFAULT_CACHE_NAME,start) : sessionContainer.<K,V>getCache(name,start);
+    }
+    @Override public void removeCache(    String name){
+      if (name.equals(JVM_ROUTE_CACHE_NAME)) {
+        jvmRouteContainer.removeCache(CacheContainer.DEFAULT_CACHE_NAME);
+      }
+ else {
+        sessionContainer.removeCache(name);
+      }
+    }
+  }
+;
+}

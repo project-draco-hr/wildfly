@@ -1,0 +1,60 @@
+{
+  String warname=String.valueOf(++testId);
+  this.startManagers(warname,1800,-1);
+  assertTrue(managers[0].getNotificationPolicy() instanceof MockClusteredSessionNotificationPolicy);
+  MockClusteredSessionNotificationPolicy mcsnp0=(MockClusteredSessionNotificationPolicy)managers[0].getNotificationPolicy();
+  assertNotNull("capability set",mcsnp0.getClusteredSessionNotificationCapability());
+  mcsnp0.setResponse(notify);
+  assertTrue(managers[1].getNotificationPolicy() instanceof MockClusteredSessionNotificationPolicy);
+  MockClusteredSessionNotificationPolicy mcsnp1=(MockClusteredSessionNotificationPolicy)managers[1].getNotificationPolicy();
+  assertNotNull("capability set",mcsnp1.getClusteredSessionNotificationCapability());
+  mcsnp1.setResponse(notify);
+  MockHttpSessionListener hsl0=new MockHttpSessionListener();
+  MockHttpSessionAttributeListener hsal0=new MockHttpSessionAttributeListener();
+  Context ctx=(Context)managers[0].getContainer();
+  ctx.setApplicationSessionLifecycleListeners(new Object[]{hsl0});
+  ctx.setApplicationEventListeners(new Object[]{hsal0});
+  MockHttpSessionListener hsl1=new MockHttpSessionListener();
+  MockHttpSessionAttributeListener hsal1=new MockHttpSessionAttributeListener();
+  ctx=(Context)managers[1].getContainer();
+  ctx.setApplicationSessionLifecycleListeners(new Object[]{hsl1});
+  ctx.setApplicationEventListeners(new Object[]{hsal1});
+  SetAttributesRequestHandler setHandler=new SetAttributesRequestHandler(attributes,false);
+  SessionTestUtil.invokeRequest(managers[0],setHandler,null);
+  validateNewSession(setHandler);
+  if (!notify) {
+    validateNoNotifications(hsl0,hsal0,hsl1,hsal1);
+  }
+ else {
+    assertEquals(1,hsl0.invocations.size());
+    assertEquals(MockHttpSessionListener.Type.CREATED,hsl0.invocations.get(0));
+    assertEquals(1,hsal0.invocations.size());
+    assertEquals(MockHttpSessionAttributeListener.Type.ADDED,hsal0.invocations.get(0));
+    assertEquals(2,SessionSpecListenerAttribute.invocations.size());
+    assertEquals(SessionSpecListenerAttribute.Type.BOUND,SessionSpecListenerAttribute.invocations.get(0));
+    assertEquals(SessionSpecListenerAttribute.Type.PASSIVATED,SessionSpecListenerAttribute.invocations.get(1));
+    validateNoNotifications(null,null,hsl1,hsal1,null);
+    clearNotifications(hsl0,hsal0,null,null,SessionSpecListenerAttribute.invocations);
+  }
+  managers[0].stop();
+  if (!notify) {
+    validateNoNotifications(hsl0,hsal0,hsl1,hsal1);
+  }
+ else {
+    assertEquals(1,hsl0.invocations.size());
+    assertEquals(MockHttpSessionListener.Type.DESTROYED,hsl0.invocations.get(0));
+    assertEquals(1,hsal0.invocations.size());
+    assertEquals(MockHttpSessionAttributeListener.Type.REMOVED,hsal0.invocations.get(0));
+    assertEquals(1,SessionSpecListenerAttribute.invocations.size());
+    assertEquals(SessionSpecListenerAttribute.Type.UNBOUND,SessionSpecListenerAttribute.invocations.get(0));
+    validateNoNotifications(null,null,hsl1,hsal1,null);
+    clearNotifications(hsl0,hsal0,null,null,SessionSpecListenerAttribute.invocations);
+  }
+  managers[1].stop();
+  if (!notify) {
+    validateNoNotifications(hsl0,hsal0,hsl1,hsal1);
+  }
+ else {
+    validateNoNotifications(hsl0,hsal0,hsl1,hsal1);
+  }
+}

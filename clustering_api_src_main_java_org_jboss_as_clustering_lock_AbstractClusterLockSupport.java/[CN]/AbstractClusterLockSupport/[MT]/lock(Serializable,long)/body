@@ -1,0 +1,70 @@
+{
+  if (this.rpcTarget == null) {
+    throw new IllegalStateException("Must call start() before first call to lock()");
+  }
+  ClusterLockState category=getClusterLockState(lockId,true);
+  long left=timeout > 0 ? timeout : Long.MAX_VALUE;
+  long start=System.currentTimeMillis();
+  while (left > 0) {
+    ClusterNode superiorCompetitor=null;
+    if (category.state.compareAndSet(ClusterLockState.State.UNLOCKED,ClusterLockState.State.REMOTE_LOCKING)) {
+      boolean success=false;
+      try {
+        List<RemoteLockResponse> rsps=rpcDispatcher.callMethodOnCluster(getServiceHAName(),"remoteLock",new Object[]{lockId,me,new Long(left)},REMOTE_LOCK_TYPES,RemoteLockResponse.class,true,null,rpcDispatcher.getMethodCallTimeout(),false);
+        boolean remoteLocked=true;
+        if (rsps != null) {
+          for (          RemoteLockResponse rsp : rsps) {
+            if (rsp.flag != RemoteLockResponse.Flag.OK) {
+              remoteLocked=false;
+              if (superiorCompetitor == null) {
+                superiorCompetitor=getSuperiorCompetitor(rsp.holder);
+                log.debug("Received " + rsp.flag + " response from "+ rsp.responder+ " -- reports lock is held by "+ rsp.holder);
+              }
+            }
+          }
+        }
+ else         if ((members.size() == 1 && members.contains(me)) || members.size() == 0) {
+          remoteLocked=true;
+        }
+        if (remoteLocked) {
+          if (category.state.compareAndSet(ClusterLockState.State.REMOTE_LOCKING,ClusterLockState.State.LOCAL_LOCKING)) {
+            long localTimeout=left - (System.currentTimeMillis() - start);
+            if (getLock(lockId,category,me,localTimeout).flag == RemoteLockResponse.Flag.OK) {
+              success=true;
+              return true;
+            }
+          }
+          superiorCompetitor=getSuperiorCompetitor(category.getHolder());
+        }
+      }
+ catch (      RuntimeException e) {
+        throw e;
+      }
+catch (      Exception e) {
+        throw new RuntimeException(e);
+      }
+ finally {
+        if (!success) {
+          cleanup(lockId,category);
+        }
+      }
+    }
+    long backoff=computeBackoff(timeout,start,left,superiorCompetitor == null);
+    if (backoff > 0) {
+      try {
+        Thread.sleep(backoff);
+      }
+ catch (      InterruptedException e) {
+        Thread.currentThread().interrupt();
+        break;
+      }
+    }
+    if (category.state.get() == ClusterLockState.State.INVALID) {
+      category=getClusterLockState(lockId,true);
+    }
+    long now=System.currentTimeMillis();
+    left-=(now - start);
+    start=now;
+  }
+  return false;
+}

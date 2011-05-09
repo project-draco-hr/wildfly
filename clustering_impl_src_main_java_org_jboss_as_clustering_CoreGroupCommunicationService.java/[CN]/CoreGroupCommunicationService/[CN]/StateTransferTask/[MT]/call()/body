@@ -1,0 +1,60 @@
+{
+synchronized (callMutex) {
+    if (result != null) {
+      return result;
+    }
+    boolean intr=false;
+    boolean rc=false;
+    try {
+      long start, stop;
+      this.isStateSet=false;
+      start=System.currentTimeMillis();
+      String state_id=CoreGroupCommunicationService.this.stateIdPrefix + serviceName;
+      rc=CoreGroupCommunicationService.this.getChannel().getState(null,state_id,CoreGroupCommunicationService.this.getStateTransferTimeout());
+      if (rc) {
+synchronized (this) {
+          while (!this.isStateSet) {
+            if (this.setStateException != null) {
+              throw this.setStateException;
+            }
+            try {
+              wait();
+            }
+ catch (            InterruptedException iex) {
+              intr=true;
+            }
+          }
+        }
+        stop=System.currentTimeMillis();
+        CoreGroupCommunicationService.this.log.debug("serviceState was retrieved successfully (in " + (stop - start) + " milliseconds)");
+      }
+ else {
+synchronized (CoreGroupCommunicationService.this.channelLock) {
+          while (CoreGroupCommunicationService.this.getCurrentView().size() == 0) {
+            CoreGroupCommunicationService.this.log.debug("waiting on viewAccepted()");
+            try {
+              CoreGroupCommunicationService.this.channelLock.wait();
+            }
+ catch (            InterruptedException iex) {
+              intr=true;
+            }
+          }
+        }
+        if (CoreGroupCommunicationService.this.isCurrentNodeCoordinator()) {
+          CoreGroupCommunicationService.this.log.debug("State could not be retrieved for service " + serviceName + " (we are the first member in group)");
+        }
+ else {
+          throw new IllegalStateException("Initial serviceState transfer failed: " + "Channel.getState() returned false");
+        }
+      }
+      result=createStateTransferResult(rc,state,null);
+    }
+ catch (    Exception e) {
+      result=createStateTransferResult(rc,null,e);
+    }
+ finally {
+      if (intr)       Thread.currentThread().interrupt();
+    }
+    return result;
+  }
+}

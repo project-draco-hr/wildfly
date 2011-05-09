@@ -1,0 +1,32 @@
+{
+  String newId=null;
+  Map.Entry<String,String> sessionEntry=this.manager.parse(sessionId);
+  String realId=sessionEntry.getKey();
+  String sessionJvmRoute=sessionEntry.getValue();
+  if (sessionJvmRoute == null) {
+    newId=this.manager.createSessionId(realId,jvmRoute);
+  }
+ else   if (!jvmRoute.equals(sessionJvmRoute)) {
+    if (log_.isTraceEnabled()) {
+      log_.tracef("handleJvmRoute(): We have detected a failover with different jvmRoute. old one: %s, new one: %s. Will reset the session id.",sessionJvmRoute,jvmRoute);
+    }
+    newId=this.manager.createSessionId(realId,this.manager.locate(realId));
+  }
+  if (newId != null) {
+    resetSessionId(sessionId,newId);
+  }
+  if (setCookie) {
+    if (newId == null) {
+      String requestedJvmRoute=(requestedId != null) ? this.manager.parse(requestedId).getValue() : null;
+      if (!jvmRoute.equals(requestedJvmRoute)) {
+        if (log_.isTraceEnabled()) {
+          log_.tracef("handleJvmRoute(): We have detected a failover with different jvmRoute. received one: %s, new one: %s. Will reset the session id.",requestedJvmRoute,jvmRoute);
+        }
+        newId=this.manager.createSessionId(realId,this.manager.locate(realId));
+      }
+    }
+    if (newId != null) {
+      manager.setNewSessionCookie(newId,response);
+    }
+  }
+}

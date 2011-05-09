@@ -1,0 +1,21 @@
+{
+  LockState current=lockState.get();
+  if (caller.equals(current.lockHolder)) {
+    LockState newState=null;
+    if (SharedLocalYieldingClusterLockManager.this.localNode == current.lockHolder) {
+      for (; ; ) {
+        newState=current.releaseLock();
+        if (lockState.compareAndSet(current,newState)) {
+          break;
+        }
+        current=lockState.get();
+      }
+    }
+ else {
+      throw new IllegalStateException("Should not receive unlock calls for remote node " + caller);
+    }
+    if (newState.lockHolder == null) {
+      LockSupport.unpark(waiters.peek());
+    }
+  }
+}

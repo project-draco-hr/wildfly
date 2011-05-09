@@ -1,0 +1,28 @@
+{
+  long deadline=System.currentTimeMillis() + timeout;
+  boolean wasInterrupted=false;
+  Thread current=Thread.currentThread();
+  waiters.add(current);
+  try {
+    while (waiters.peek() != current || !locked.compareAndSet(false,true)) {
+      LockSupport.parkUntil(deadline);
+      if (Thread.interrupted())       wasInterrupted=true;
+      if (System.currentTimeMillis() >= deadline) {
+        if (waiters.peek() != current || !locked.compareAndSet(false,true)) {
+          throw new TimeoutException(this.holder);
+        }
+        break;
+      }
+    }
+    if (locked.get()) {
+      holder=caller;
+    }
+ else {
+      throw new TimeoutException(this.holder);
+    }
+  }
+  finally {
+    waiters.remove();
+    if (wasInterrupted)     current.interrupt();
+  }
+}

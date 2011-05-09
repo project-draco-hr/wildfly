@@ -1,0 +1,39 @@
+{
+  if (returnType == null) {
+    @SuppressWarnings("unchecked") Class<T> unchecked=(Class<T>)void.class;
+    returnType=unchecked;
+  }
+  if (!(targetNode instanceof ClusterNodeImpl)) {
+    throw new IllegalArgumentException("targetNode " + targetNode + " is not an instance of "+ ClusterNodeImpl.class+ " -- only targetNodes provided by this HAPartition should be used");
+  }
+  boolean trace=this.log.isTraceEnabled();
+  MethodCall m=new MethodCall(serviceName + "." + methodName,args,types);
+  if (trace) {
+    this.log.trace("callMethodOnNode( objName=" + serviceName + ", methodName="+ methodName);
+  }
+  if (this.directlyInvokeLocal && this.me.equals(targetNode)) {
+    return invokeDirectly(serviceName,methodName,args,types,returnType,null,null);
+  }
+  Object rsp=null;
+  RequestOptions opt=new RequestOptions(Request.GET_FIRST,methodTimeout);
+  if (unordered) {
+    opt.setFlags(Message.OOB);
+  }
+  try {
+    rsp=this.dispatcher.callRemoteMethod(((ClusterNodeImpl)targetNode).getOriginalJGAddress(),m,opt);
+  }
+ catch (  Exception e) {
+    throw e;
+  }
+catch (  Error e) {
+    throw e;
+  }
+catch (  Throwable e) {
+    throw new RuntimeException("Caught raw Throwable on remote invocation",e);
+  }
+  if (rsp instanceof NoHandlerForRPC) {
+    this.log.trace("Ignoring NoHandlerForRPC");
+    rsp=null;
+  }
+  return returnType.cast(rsp);
+}

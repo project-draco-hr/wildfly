@@ -1,0 +1,51 @@
+{
+  TesteeSet<NonGloballyExclusiveClusterLockSupport> testeeSet=getTesteeSet(node1,1,3);
+  NonGloballyExclusiveClusterLockSupport testee=testeeSet.impl;
+  LocalLockHandler handler=testee.getLocalHandler();
+  final RpcTarget target=testeeSet.target;
+  ClusterNode caller1=testee.getCurrentView().get(0);
+  assertFalse(node1.equals(caller1));
+  ClusterNode caller2=testee.getCurrentView().get(2);
+  assertFalse(node1.equals(caller2));
+  CountDownLatch answerStartLatch=new CountDownLatch(1);
+  CountDownLatch answerDoneLatch=new CountDownLatch(1);
+  BlockingAnswer<Boolean> caller1Answer=new BlockingAnswer<Boolean>(Boolean.TRUE,answerStartLatch,null,answerDoneLatch);
+  BlockingAnswer<Boolean> caller2Answer=new BlockingAnswer<Boolean>(new TimeoutException(caller1),answerDoneLatch,0,null,null);
+  doAnswer(caller1Answer).when(handler).lockFromCluster("test",caller1,1000);
+  doAnswer(caller2Answer).when(handler).lockFromCluster("test",caller2,1000);
+  CountDownLatch startLatch1=new CountDownLatch(1);
+  CountDownLatch startLatch2=new CountDownLatch(1);
+  CountDownLatch finishedLatch=new CountDownLatch(2);
+  RemoteLockCaller winner=new RemoteLockCaller(target,caller1,startLatch1,null,finishedLatch);
+  RemoteLockCaller loser=new RemoteLockCaller(target,caller2,startLatch2,null,finishedLatch);
+  Thread t1=new Thread(winner);
+  t1.setDaemon(true);
+  Thread t2=new Thread(loser);
+  t2.setDaemon(true);
+  try {
+    t1.start();
+    assertTrue(startLatch1.await(1,TimeUnit.SECONDS));
+    t2.start();
+    assertTrue(startLatch2.await(1,TimeUnit.SECONDS));
+    answerStartLatch.countDown();
+    assertTrue(finishedLatch.await(1,TimeUnit.SECONDS));
+    rethrow("winner had an exception",winner.getException());
+    rethrow("loser had an exception",loser.getException());
+    RemoteLockResponse rsp=winner.getResult();
+    assertEquals(RemoteLockResponse.Flag.OK,rsp.flag);
+    assertNull(rsp.holder);
+    rsp=loser.getResult();
+    if (rsp.flag != RemoteLockResponse.Flag.REJECT) {
+      assertEquals(RemoteLockResponse.Flag.FAIL,rsp.flag);
+    }
+    assertEquals(caller1,rsp.holder);
+  }
+  finally {
+    if (t1.isAlive()) {
+      t1.interrupt();
+    }
+    if (t2.isAlive()) {
+      t2.interrupt();
+    }
+  }
+}

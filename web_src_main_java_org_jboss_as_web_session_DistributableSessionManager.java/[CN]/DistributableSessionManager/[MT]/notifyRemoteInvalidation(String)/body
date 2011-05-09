@@ -1,0 +1,24 @@
+{
+  ClusteredSession<O> session=cast(this.sessions.remove(realId));
+  if (session == null) {
+    if (unloadedSessions.remove(realId) != null) {
+      log.tracef("Removed entry for session %s from unloaded session map",realId);
+    }
+    this.getReplicationStatistics().removeStats(realId);
+  }
+ else {
+    boolean notify=false;
+    boolean localCall=false;
+    boolean localOnly=true;
+    ContextClassLoaderSwitcher.SwitchContext context=switcher.getSwitchContext(this.tcl);
+    try {
+      SessionInvalidationTracker.suspend();
+      session.expire(notify,localCall,localOnly,ClusteredSessionNotificationCause.INVALIDATE);
+    }
+  finally {
+      SessionInvalidationTracker.resume();
+      this.getReplicationStatistics().removeStats(realId);
+      context.reset();
+    }
+  }
+}

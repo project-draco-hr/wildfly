@@ -1,0 +1,40 @@
+{
+  if (maxActiveAllowed != -1 && calcActiveSessions() >= maxActiveAllowed) {
+    log.tracef("createSession(): active sessions = %d and max allowed sessions = %d",calcActiveSessions(),maxActiveAllowed);
+    processExpires();
+    if (calcActiveSessions() >= maxActiveAllowed) {
+      rejectedCounter.incrementAndGet();
+      String msgEnd=(sessionId == null) ? "" : " id " + sessionId;
+      throw new IllegalStateException("createSession(): number of " + "active sessions exceeds the maximum limit: " + maxActiveAllowed + " when trying to create session"+ msgEnd);
+    }
+  }
+  ClusteredSession<O> session=createEmptyClusteredSession();
+  if (session != null) {
+    session.setNew(true);
+    session.setCreationTime(System.currentTimeMillis());
+    session.setMaxInactiveInterval(this.maxInactiveInterval);
+    session.setValid(true);
+    String clearInvalidated=null;
+    if (sessionId == null) {
+      sessionId=this.generateSessionId(random);
+      String jvmRoute=this.getJvmRoute();
+      if (getUseJK() && jvmRoute != null) {
+        log.tracef("createSession(): useJK is true. Will append JvmRoute: %s",jvmRoute);
+        sessionId+="." + jvmRoute;
+      }
+    }
+ else {
+      clearInvalidated=sessionId;
+    }
+    session.setId(sessionId);
+    getDistributedCacheManager().sessionCreated(session.getRealId());
+    session.tellNew(ClusteredSessionNotificationCause.CREATE);
+    log.tracef("Created a ClusteredSession with id: %s",sessionId);
+    createdCounter.incrementAndGet();
+    SessionReplicationContext.bindSession(session,snapshotManager);
+    if (clearInvalidated != null) {
+      SessionInvalidationTracker.clearInvalidatedSession(clearInvalidated,this);
+    }
+  }
+  return session;
+}

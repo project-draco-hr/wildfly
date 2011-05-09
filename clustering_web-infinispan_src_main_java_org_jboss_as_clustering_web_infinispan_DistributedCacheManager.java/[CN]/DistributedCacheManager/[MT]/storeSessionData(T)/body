@@ -1,0 +1,21 @@
+{
+  final K key=this.keyFactory.createKey(sessionData.getRealId());
+  trace("storeSessionData(%s)",key.getSessionId());
+  Operation<Void> operation=new Operation<Void>(){
+    @Override public Void invoke(    Cache<K,Map<Object,Object>> cache){
+      Map<Object,Object> map=cache.putIfAbsent(key,null);
+      SessionMapEntry.VERSION.put(map,Integer.valueOf(sessionData.getVersion()));
+      SessionMapEntry.METADATA.put(map,sessionData.getMetadata());
+      SessionMapEntry.TIMESTAMP.put(map,sessionData.getTimestamp());
+      try {
+        DistributedCacheManager.this.attributeStorage.store(map,sessionData);
+      }
+ catch (      IOException e) {
+        throw getRuntimeException("Failed to store session attributes for session: " + mask(key.getSessionId()),e);
+      }
+      return null;
+    }
+  }
+;
+  this.batch(operation);
+}

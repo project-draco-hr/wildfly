@@ -1,0 +1,34 @@
+{
+  JGroupsSystemPropertySupport jgSupport=new JGroupsSystemPropertySupport();
+  try {
+    jgSupport.setUpProperties();
+    if (passivationDir != null) {
+      File base=new File(passivationDir);
+      if (!base.exists()) {
+        if (!base.mkdir()) {
+          throw new RuntimeException("Cannot create base passivation dir " + passivationDir);
+        }
+        cleanupPaths.add(base.getAbsolutePath());
+      }
+    }
+    long now=System.currentTimeMillis();
+    boolean totalReplication=(this.totalReplication != null) ? this.totalReplication.booleanValue() : !System.getProperty(SessionTestUtil.CACHE_CONFIG_PROP,"web").endsWith("dist");
+    for (int i=0; i < cacheContainers.length; i++) {
+      String cacheStore=(passivationDir == null ? null : new File(passivationDir,String.valueOf(now + i)).getAbsolutePath());
+      if (cacheStore != null) {
+        cleanupPaths.add(0,cacheStore);
+      }
+      cacheContainers[i]=SessionTestUtil.createCacheContainer(local,cacheStore,totalReplication,true);
+      cacheContainers[i].start();
+    }
+    for (    CacheContainer cacheContainer : cacheContainers) {
+      cacheContainer.getCache();
+    }
+  }
+  finally {
+    jgSupport.restoreProperties();
+  }
+synchronized (this) {
+    wait(2000);
+  }
+}

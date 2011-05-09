@@ -1,0 +1,45 @@
+{
+  TesteeSet<T> testeeSet=getTesteeSet(node1,1,3);
+  T testee=testeeSet.impl;
+  GroupRpcDispatcher rpcDispatcher=testee.getGroupRpcDispatcher();
+  LocalLockHandler handler=testee.getLocalHandler();
+  final RpcTarget target=testeeSet.target;
+  ClusterNode inferiorNode=testee.getCurrentView().get(2);
+  assertFalse(node1.equals(inferiorNode));
+  ClusterNode superiorNode=testee.getCurrentView().get(0);
+  assertFalse(node1.equals(superiorNode));
+  CountDownLatch answerAwaitLatch=new CountDownLatch(1);
+  CountDownLatch answerStartLatch=new CountDownLatch(1);
+  ArrayList<RemoteLockResponse> rspList=new ArrayList<RemoteLockResponse>();
+  rspList.add(new RemoteLockResponse(superiorNode,RemoteLockResponse.Flag.OK));
+  rspList.add(new RemoteLockResponse(inferiorNode,RemoteLockResponse.Flag.REJECT,inferiorNode));
+  BlockingAnswer<List<RemoteLockResponse>> caller1Answer=new BlockingAnswer<List<RemoteLockResponse>>(rspList,answerAwaitLatch,answerStartLatch,null);
+  rspList=new ArrayList<RemoteLockResponse>();
+  rspList.add(new RemoteLockResponse(superiorNode,RemoteLockResponse.Flag.OK));
+  rspList.add(new RemoteLockResponse(inferiorNode,RemoteLockResponse.Flag.OK));
+  when(rpcDispatcher.getMethodCallTimeout()).thenReturn(60000l);
+  when(rpcDispatcher.callMethodOnCluster(eq("test"),eq("remoteLock"),LockParamsMatcher.eqLockParams(node1,200000),AdditionalMatchers.aryEq(AbstractClusterLockSupport.REMOTE_LOCK_TYPES),eq(RemoteLockResponse.class),eq(true),eq(NULL_FILTER),anyInt(),eq(false))).thenAnswer(caller1Answer).thenReturn(rspList);
+  when((List<Object>)rpcDispatcher.callMethodOnCluster(eq("test"),eq("releaseRemoteLock"),AdditionalMatchers.aryEq(new Object[]{"test",node1}),AdditionalMatchers.aryEq(AbstractClusterLockSupport.RELEASE_REMOTE_LOCK_TYPES),eq(true))).thenReturn(new ArrayList<Object>());
+  doNothing().when(handler).lockFromCluster(eq("test"),eq(node1),anyLong());
+  CountDownLatch finishedLatch=new CountDownLatch(1);
+  LocalLockCaller winner=new LocalLockCaller(testee,null,null,finishedLatch);
+  Thread t1=new Thread(winner);
+  t1.setDaemon(true);
+  try {
+    t1.start();
+    assertTrue(answerStartLatch.await(1,TimeUnit.SECONDS));
+    RemoteLockResponse rsp=target.remoteLock("test",inferiorNode,1);
+    assertEquals(RemoteLockResponse.Flag.REJECT,rsp.flag);
+    assertEquals(node1,rsp.holder);
+    answerAwaitLatch.countDown();
+    assertTrue(finishedLatch.await(5,TimeUnit.SECONDS));
+    rethrow("winner had an exception",winner.getException());
+    Boolean locked=winner.getResult();
+    assertEquals(Boolean.TRUE,locked);
+  }
+  finally {
+    if (t1.isAlive()) {
+      t1.interrupt();
+    }
+  }
+}

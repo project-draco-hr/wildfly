@@ -1,0 +1,29 @@
+{
+  if (this.scopeId == null) {
+    throw new IllegalStateException("Must set scopeId before calling start()");
+  }
+  this.stateIdPrefix=getClass().getName() + "." + this.scopeId+ ".";
+  if (this.channel == null || !this.channel.isOpen()) {
+    this.log.debug("Creating Channel for partition " + this.getGroupName() + " using stack "+ this.getChannelStackName());
+    this.channel=this.createChannel();
+  }
+  MembershipListener meml=new MembershipListenerImpl();
+  MessageListener msgl=this.stateIdPrefix == null ? null : new MessageListenerImpl();
+  this.dispatcher=new RpcHandler(this.scopeId.shortValue(),this.channel,msgl,meml,new RequestMarshallerImpl(),new ResponseMarshallerImpl());
+  if (!this.channel.isConnected()) {
+    this.channelSelfConnected=true;
+    this.channel.connect(this.getGroupName());
+    this.log.debug("Get current members");
+    this.waitForView();
+  }
+ else {
+    meml.viewAccepted(this.channel.getView());
+    this.flushBlockGate.open();
+  }
+  Boolean receiveLocal=(Boolean)this.channel.getOpt(Channel.LOCAL);
+  this.directlyInvokeLocal=(receiveLocal != null && !receiveLocal.booleanValue());
+  this.localJGAddress=this.channel.getAddress();
+  this.me=this.nodeFactory.getClusterNode(localJGAddress);
+  this.verifyNodeIsUnique();
+  this.asynchHandler.start();
+}

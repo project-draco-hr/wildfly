@@ -1,0 +1,28 @@
+{
+  LocalLock lock=getLocalLock(lockName,true);
+  if (localNode.equals(caller)) {
+    LockState lockState=lock.lockForLocalNode();
+    if (lockState.latestRegistrant != Thread.currentThread()) {
+synchronized (lock) {
+        lock.notifyAll();
+      }
+    }
+  }
+ else {
+    LockState currentState=lock.lockForRemoteNode(caller,timeout);
+    localLocks.remove(lockName,lock);
+    LockState invalidated=null;
+    for (; ; ) {
+      invalidated=currentState.invalidate();
+      if (lock.lockState.compareAndSet(currentState,invalidated)) {
+        break;
+      }
+      currentState=lock.lockState.get();
+    }
+    if (invalidated.latestRegistrant != null) {
+synchronized (lock) {
+        lock.notifyAll();
+      }
+    }
+  }
+}

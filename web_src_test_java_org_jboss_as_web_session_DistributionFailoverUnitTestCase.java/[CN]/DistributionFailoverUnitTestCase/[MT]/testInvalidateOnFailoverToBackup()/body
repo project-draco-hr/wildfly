@@ -1,0 +1,36 @@
+{
+  this.log.info("++++ Starting testInvalidateOnFailoverToBackup ++++");
+  String warname=String.valueOf(++testId);
+  this.log.info("Starting managers");
+  this.startManagers(warname,1800000,1,-1);
+  this.log.info("Request(1) to manager[3]");
+  SetAttributesRequestHandler setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(0)),false);
+  invokeRequest(managers[3],setHandler,null);
+  this.log.info("Request(2) to manager[3]");
+  String id=setHandler.getSessionId();
+  setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(1)),false);
+  invokeRequest(managers[3],setHandler,id);
+  assertEquals(getAttributeValue(0),setHandler.getCheckedAttributes().get("count"));
+  this.log.info("Sleeping");
+  sleepThread(1100);
+  this.log.info("Run passivation");
+  managers[0].backgroundProcess();
+  managers[1].backgroundProcess();
+  managers[2].backgroundProcess();
+  managers[3].backgroundProcess();
+  this.log.info("Request(3) to manager[3]");
+  setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(2)),false);
+  invokeRequest(managers[3],setHandler,id);
+  assertEquals(getAttributeValue(1),setHandler.getCheckedAttributes().get("count"));
+  this.log.info("Request(4) to manager[3]");
+  setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(3)),false);
+  invokeRequest(managers[3],setHandler,id);
+  assertEquals(getAttributeValue(2),setHandler.getCheckedAttributes().get("count"));
+  this.log.info("Invalidate request to manager[0]");
+  InvalidateSessionRequestHandler invalidationHandler=new InvalidateSessionRequestHandler(Collections.singleton("count"),false);
+  invokeRequest(managers[0],invalidationHandler,id);
+  assertEquals(getAttributeValue(3),invalidationHandler.getCheckedAttributes().get("count"));
+  setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(0)),false);
+  invokeRequest(managers[0],invalidationHandler,id);
+  assertNull(setHandler.getCheckedAttributes().get("count"));
+}

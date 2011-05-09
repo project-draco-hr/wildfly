@@ -1,0 +1,28 @@
+{
+  LockState lockedState=null;
+  long deadline=System.currentTimeMillis() + timeout;
+  boolean wasInterrupted=false;
+  Thread currentThread=Thread.currentThread();
+  waiters.add(currentThread);
+  try {
+    LockState currentState=lockState.get();
+    lockedState=currentState.takeRemote(caller);
+    while (waiters.peek() != currentThread || currentState.lockHolder == SharedLocalYieldingClusterLockManager.this.localNode || !lockState.compareAndSet(currentState,lockedState)) {
+      LockSupport.parkUntil(deadline);
+      if (Thread.interrupted())       wasInterrupted=true;
+      currentState=lockState.get();
+      lockedState=currentState.takeRemote(caller);
+      if (System.currentTimeMillis() >= deadline) {
+        if (waiters.peek() != currentThread || currentState.lockHolder == SharedLocalYieldingClusterLockManager.this.localNode || !lockState.compareAndSet(currentState,lockedState)) {
+          throw new TimeoutException(SharedLocalYieldingClusterLockManager.this.localNode);
+        }
+        break;
+      }
+    }
+  }
+  finally {
+    waiters.remove();
+    if (wasInterrupted)     currentThread.interrupt();
+  }
+  return lockedState;
+}

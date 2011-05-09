@@ -1,0 +1,33 @@
+{
+  final K key=this.keyFactory.createKey(sessionId);
+  Operation<IncomingDistributableSessionData> operation=new Operation<IncomingDistributableSessionData>(){
+    @Override public IncomingDistributableSessionData invoke(    Cache<K,Map<Object,Object>> cache){
+      Map<Object,Object> map=cache.get(key);
+      if (map == null)       return null;
+      Integer version=SessionMapEntry.VERSION.get(map);
+      Long timestamp=SessionMapEntry.TIMESTAMP.get(map);
+      DistributableSessionMetadata metadata=SessionMapEntry.METADATA.get(map);
+      IncomingDistributableSessionDataImpl result=new IncomingDistributableSessionDataImpl(version,timestamp,metadata);
+      if (includeAttributes) {
+        try {
+          result.setSessionAttributes(DistributedCacheManager.this.attributeStorage.load(map));
+        }
+ catch (        Exception e) {
+          throw getRuntimeException("Failed to load session attributes for session: " + mask(key.getSessionId()),e);
+        }
+      }
+      return result;
+    }
+  }
+;
+  try {
+    return this.invoker.invoke(this.sessionCache,operation);
+  }
+ catch (  Exception e) {
+    String message=String.format("Problem accessing session [%s]: %s",mask(sessionId),e.toString());
+    log.warn(message);
+    log.debug(message,e);
+    this.removeSessionLocal(sessionId);
+    return null;
+  }
+}

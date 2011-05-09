@@ -1,0 +1,35 @@
+{
+  log.info("++++ Starting testSessionExpiration ++++");
+  String warname=String.valueOf(++testId);
+  this.startManagers(warname,2,10);
+  SetAttributesRequestHandler setHandler=new SetAttributesRequestHandler(getAttributeMap(),false);
+  log.info("initial request");
+  SessionTestUtil.invokeRequest(managers[0],setHandler,null);
+  assertEquals(1,Attribute.attributeCount());
+  String sessionId=setHandler.getSessionId();
+  WeakReference<Session> session0A=new WeakReference<Session>(managers[0].findSession(sessionId));
+  SessionTestUtil.cleanupPipeline(managers[0]);
+  assertNotNull(session0A.get());
+  assertEquals(1,Attribute.attributeCount());
+  setHandler=new SetAttributesRequestHandler(getAttributeMap(),false);
+  log.info("fail over request");
+  SessionTestUtil.invokeRequest(managers[1],setHandler,sessionId);
+  assertNotNull(setHandler.getCheckedAttributes().get(KEY));
+  assertEquals(Attribute.COUNT.incrementAndGet() - 1,((Attribute)setHandler.getCheckedAttributes().get(KEY)).getCount());
+  WeakReference<Session> session1A=new WeakReference<Session>(managers[1].findSession(sessionId));
+  SessionTestUtil.cleanupPipeline(managers[1]);
+  System.gc();
+  System.runFinalization();
+  assertNotNull(session1A.get());
+  assertEquals(2,Attribute.attributeCount());
+  Thread.sleep(2100);
+  log.info("expire node 0");
+  managers[0].backgroundProcess();
+  log.info("expire node 1");
+  managers[1].backgroundProcess();
+  System.gc();
+  System.runFinalization();
+  assertNull(session0A.get());
+  assertNull(session1A.get());
+  assertEquals(0,Attribute.attributeCount());
+}

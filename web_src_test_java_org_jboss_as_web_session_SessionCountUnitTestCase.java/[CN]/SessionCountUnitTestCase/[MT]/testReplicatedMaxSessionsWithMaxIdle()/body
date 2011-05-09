@@ -1,0 +1,37 @@
+{
+  System.out.println("Enter testReplicatedMaxSessionsWithMaxIdle");
+  String warName="test" + ++managerIndex;
+  JBossWebMetaData webMetaData=SessionTestUtil.createWebMetaData(1,true,1,-1);
+  for (int i=0; i < cacheContainers.length; ++i) {
+    String passDir=getPassivationDir(managerIndex,i + 1);
+    cacheContainers[i]=SessionTestUtil.createCacheContainer(false,passDir,false,false);
+    cacheContainers[i].start();
+    managers[i]=SessionTestUtil.createManager(webMetaData,warName,1,cacheContainers[i],null);
+    managers[i].start();
+    assertTrue("Passivation is enabled",managers[i].isPassivationEnabled());
+    assertEquals("Correct max active count",1,managers[i].getMaxActiveAllowed());
+    assertEquals("Correct max idle time",1,managers[i].getPassivationMaxIdleTime());
+    assertEquals("Correct min idle time",-1,managers[i].getPassivationMinIdleTime());
+  }
+  createAndUseSession(managers[0],"1",true,true);
+  assertEquals("Session count correct",1,managers[0].getActiveSessionCount());
+  assertEquals("Local session count correct",1,managers[0].getLocalActiveSessionCount());
+  assertEquals("Passivated session count correct",0,managers[0].getPassivatedSessionCount());
+  assertEquals("Session count correct",1,managers[1].getActiveSessionCount());
+  assertEquals("Local session count correct",0,managers[1].getLocalActiveSessionCount());
+  assertEquals("Passivated session count correct",0,managers[1].getPassivatedSessionCount());
+  createAndUseSession(managers[1],"2",false,false);
+  SessionTestUtil.sleepThread(1100);
+  assertEquals("Passivated session count correct",0,managers[1].getPassivatedSessionCount());
+  createAndUseSession(managers[1],"2",true,true);
+  assertEquals("Session count correct",2,managers[0].getActiveSessionCount());
+  assertEquals("Local session count correct",1,managers[0].getLocalActiveSessionCount());
+  assertEquals("Created session count correct",1,managers[0].getCreatedSessionCount());
+  assertEquals("Expired session count correct",0,managers[0].getExpiredSessionCount());
+  assertEquals("Passivated session count correct",0,managers[0].getPassivatedSessionCount());
+  assertEquals("Session count correct",1,managers[1].getActiveSessionCount());
+  assertEquals("Local session count correct",1,managers[1].getLocalActiveSessionCount());
+  assertEquals("Created session count correct",1,managers[1].getCreatedSessionCount());
+  assertEquals("Expired session count correct",0,managers[1].getExpiredSessionCount());
+  assertEquals("Passivated session count correct",1,managers[1].getPassivatedSessionCount());
+}

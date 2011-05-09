@@ -1,0 +1,53 @@
+{
+  log.info("++++ Starting testFailoverAndFailBack ++++");
+  String warname=String.valueOf(++testId);
+  this.startManagers(warname,1800000,-1,-1);
+  log.info("managers created");
+  log.info("creating session");
+  SetAttributesRequestHandler setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(0)),false);
+  invokeRequest(managers[0],setHandler,null);
+  String id=setHandler.getSessionId();
+  int localIndex=0;
+  int remoteIndex=0;
+  for (int i=0; i < managers.length; ++i) {
+    if (managers[i].getDistributedCacheManager().isLocal(id)) {
+      localIndex=i;
+    }
+ else {
+      remoteIndex=i;
+    }
+  }
+  System.out.println(String.format("%s is local to node%d and non-local to node%d",id,localIndex,remoteIndex));
+  log.info("modifying session");
+  setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(1)),false);
+  invokeRequest(managers[localIndex],setHandler,id);
+  assertEquals(getAttributeValue(0),setHandler.getCheckedAttributes().get("count"));
+  log.info("failing over");
+  setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(2)),false);
+  invokeRequest(managers[localIndex],setHandler,id);
+  assertEquals(getAttributeValue(1),setHandler.getCheckedAttributes().get("count"));
+  log.info("modifying session");
+  setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(3)),false);
+  invokeRequest(managers[localIndex],setHandler,id);
+  assertEquals(getAttributeValue(2),setHandler.getCheckedAttributes().get("count"));
+  log.info("failing over");
+  setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(4)),false);
+  invokeRequest(managers[remoteIndex],setHandler,id);
+  assertEquals(getAttributeValue(3),setHandler.getCheckedAttributes().get("count"));
+  log.info("modifying session");
+  setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(5)),false);
+  invokeRequest(managers[remoteIndex],setHandler,id);
+  assertEquals(getAttributeValue(4),setHandler.getCheckedAttributes().get("count"));
+  log.info("failing back");
+  setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(6)),false);
+  invokeRequest(managers[localIndex],setHandler,id);
+  assertEquals(getAttributeValue(5),setHandler.getCheckedAttributes().get("count"));
+  log.info("invalidating");
+  InvalidateSessionRequestHandler invalidationHandler=new InvalidateSessionRequestHandler(Collections.singleton("count"),false);
+  invokeRequest(managers[localIndex],invalidationHandler,id);
+  assertEquals(getAttributeValue(6),invalidationHandler.getCheckedAttributes().get("count"));
+  log.info("re-establishing");
+  setHandler=new SetAttributesRequestHandler(Collections.singletonMap("count",getAttributeValue(0)),false);
+  invokeRequest(managers[localIndex],invalidationHandler,id);
+  assertNull(setHandler.getCheckedAttributes().get("count"));
+}

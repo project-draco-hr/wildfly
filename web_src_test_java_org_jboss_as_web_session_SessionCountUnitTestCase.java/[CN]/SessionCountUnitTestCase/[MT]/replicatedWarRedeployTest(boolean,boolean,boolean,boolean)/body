@@ -1,0 +1,88 @@
+{
+  String warName="test" + ++managerIndex;
+  JBossWebMetaData webMetaData=SessionTestUtil.createWebMetaData(2,true,30,1);
+  for (int i=0; i < cacheContainers.length; ++i) {
+    String passDir=getPassivationDir(managerIndex,i + 1);
+    cacheContainers[i]=SessionTestUtil.createCacheContainer(false,passDir,totalReplication,purgeOnStartStop);
+    cacheContainers[i].start();
+    managers[i]=SessionTestUtil.createManager(webMetaData,warName,300,cacheContainers[i],null);
+    managers[i].start();
+    assertTrue("Passivation is enabled",managers[i].isPassivationEnabled());
+    assertEquals("Correct max active count",2,managers[i].getMaxActiveAllowed());
+    assertEquals("Correct max idle time",30,managers[i].getPassivationMaxIdleTime());
+    assertEquals("Correct min idle time",1,managers[i].getPassivationMinIdleTime());
+  }
+  SessionTestUtil.blockUntilViewsReceived(cacheContainers,10000);
+  createAndUseSession(managers[0],"1",true,true);
+  assertEquals("Session count correct",1,managers[0].getActiveSessionCount());
+  assertEquals("Local session count correct",1,managers[0].getLocalActiveSessionCount());
+  assertEquals("Session count correct",1,managers[1].getActiveSessionCount());
+  assertEquals("Local session count correct",0,managers[1].getLocalActiveSessionCount());
+  createAndUseSession(managers[1],"2",true,true);
+  assertEquals("Session count correct",2,managers[0].getActiveSessionCount());
+  assertEquals("Local session count correct",1,managers[0].getLocalActiveSessionCount());
+  assertEquals("Created session count correct",1,managers[0].getCreatedSessionCount());
+  assertEquals("Expired session count correct",0,managers[0].getExpiredSessionCount());
+  assertEquals("Session count correct",2,managers[1].getActiveSessionCount());
+  assertEquals("Local session count correct",1,managers[1].getLocalActiveSessionCount());
+  assertEquals("Created session count correct",1,managers[1].getCreatedSessionCount());
+  assertEquals("Expired session count correct",0,managers[1].getExpiredSessionCount());
+  SessionTestUtil.sleepThread(1100);
+  assertEquals("Passivated session count correct",0,managers[1].getPassivatedSessionCount());
+  createAndUseSession(managers[1],"3",true,true);
+  assertEquals("Session count correct",3,managers[0].getActiveSessionCount());
+  assertEquals("Local session count correct",1,managers[0].getLocalActiveSessionCount());
+  assertEquals("Created session count correct",1,managers[0].getCreatedSessionCount());
+  assertEquals("Expired session count correct",0,managers[0].getExpiredSessionCount());
+  assertEquals("Passivated session count correct",0,managers[0].getPassivatedSessionCount());
+  assertEquals("Session count correct",2,managers[1].getActiveSessionCount());
+  assertEquals("Local session count correct",2,managers[1].getLocalActiveSessionCount());
+  assertEquals("Created session count correct",2,managers[1].getCreatedSessionCount());
+  assertEquals("Expired session count correct",0,managers[1].getExpiredSessionCount());
+  assertEquals("Passivated session count correct",1,managers[1].getPassivatedSessionCount());
+  if (fullRestart) {
+    managers[1].stop();
+    cacheContainers[1].stop();
+  }
+  managers[0].stop();
+  if (restartCache) {
+    cacheContainers[0].stop();
+    String passDir=getPassivationDir(managerIndex,1);
+    cacheContainers[0]=SessionTestUtil.createCacheContainer(false,passDir,totalReplication,purgeOnStartStop);
+    cacheContainers[0].start();
+  }
+  managers[0]=SessionTestUtil.createManager(webMetaData,warName,300,cacheContainers[0],null);
+  managers[0].start();
+  assertTrue("Passivation is enabled",managers[0].isPassivationEnabled());
+  assertEquals("Correct max active count",2,managers[0].getMaxActiveAllowed());
+  assertEquals("Correct max idle time",30,managers[0].getPassivationMaxIdleTime());
+  assertEquals("Correct min idle time",1,managers[0].getPassivationMinIdleTime());
+  boolean expectContent=true;
+  boolean expectPurge=purgeOnStartStop && restartCache;
+  if (expectPurge) {
+    expectContent=!fullRestart && !totalReplication;
+  }
+  if (expectContent) {
+    assertEquals("Session count correct",2,managers[0].getActiveSessionCount());
+    assertEquals("Local session count correct",0,managers[0].getLocalActiveSessionCount());
+    assertEquals("Created session count correct",0,managers[0].getCreatedSessionCount());
+    assertEquals("Expired session count correct",0,managers[0].getExpiredSessionCount());
+    assertEquals("Passivated session count correct",1,managers[0].getPassivatedSessionCount());
+  }
+ else {
+    assertEquals("Session count correct",0,managers[0].getActiveSessionCount());
+    assertEquals("Local session count correct",0,managers[0].getLocalActiveSessionCount());
+    assertEquals("Created session count correct",0,managers[0].getCreatedSessionCount());
+    assertEquals("Expired session count correct",0,managers[0].getExpiredSessionCount());
+    assertEquals("Passivated session count correct",0,managers[0].getPassivatedSessionCount());
+  }
+  if (!fullRestart && totalReplication) {
+    assertEquals("Session count correct",2,managers[1].getActiveSessionCount());
+    assertEquals("Local session count correct",2,managers[1].getLocalActiveSessionCount());
+    assertEquals("Created session count correct",2,managers[1].getCreatedSessionCount());
+    assertEquals("Expired session count correct",0,managers[1].getExpiredSessionCount());
+    assertEquals("Passivated session count correct",1,managers[1].getPassivatedSessionCount());
+  }
+  SessionTestUtil.sleepThread(1100);
+  createAndUseSession(managers[0],"4",true,true);
+}

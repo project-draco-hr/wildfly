@@ -1,0 +1,32 @@
+{
+  MethodCall m=new MethodCall(serviceName + "." + methodName,args,types);
+  RspFilterAdapter rspFilter=filter == null ? null : new RspFilterAdapter(filter,this.nodeFactory);
+  RequestOptions ro=new RequestOptions(Request.GET_ALL,methodTimeout,false,rspFilter);
+  if (excludeSelf) {
+    ro.setExclusionList(this.localJGAddress);
+  }
+  if (this.channel.flushSupported()) {
+    this.flushBlockGate.await(this.getMethodCallTimeout());
+  }
+  boolean trace=this.log.isTraceEnabled();
+  if (trace) {
+    this.log.trace("calling synchronous method on cluster, serviceName=" + serviceName + ", methodName="+ methodName+ ", members="+ this.groupView+ ", excludeSelf="+ excludeSelf);
+  }
+  RspList rsp=this.dispatcher.callRemoteMethods(null,m,ro);
+  ArrayList<T> result=this.processResponseList(rsp,returnType,trace);
+  if (!excludeSelf && this.directlyInvokeLocal && (filter == null || filter.needMoreResponses())) {
+    try {
+      invokeDirectly(serviceName,methodName,args,types,returnType,result,filter);
+    }
+ catch (    RuntimeException e) {
+      throw e;
+    }
+catch (    InterruptedException e) {
+      throw e;
+    }
+catch (    Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+  return result;
+}

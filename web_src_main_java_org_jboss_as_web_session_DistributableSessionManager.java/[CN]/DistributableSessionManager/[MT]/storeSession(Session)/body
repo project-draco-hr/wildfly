@@ -1,0 +1,26 @@
+{
+  boolean stored=false;
+  if (s != null) {
+    ClusteredSession<O> session=cast(s);
+synchronized (session) {
+      log.tracef("check to see if needs to store and replicate session with id %s ",session.getIdInternal());
+      if (session.isValid() && (session.isSessionDirty() || session.getMustReplicateTimestamp())) {
+        String realId=session.getRealId();
+        long begin=System.currentTimeMillis();
+        session.notifyWillPassivate(ClusteredSessionNotificationCause.REPLICATION);
+        long elapsed=System.currentTimeMillis() - begin;
+        ReplicationStatistics stats=this.getReplicationStatistics();
+        stats.updatePassivationStats(realId,elapsed);
+        begin=System.currentTimeMillis();
+        processSessionRepl(session);
+        elapsed=System.currentTimeMillis() - begin;
+        stored=true;
+        stats.updateReplicationStats(realId,elapsed);
+      }
+ else {
+        log.tracef("Session %s did not require replication.",session.getIdInternal());
+      }
+    }
+  }
+  return stored;
+}

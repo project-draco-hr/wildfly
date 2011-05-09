@@ -1,0 +1,26 @@
+{
+  OutgoingDistributableSessionData data=mock(OutgoingDistributableSessionData.class);
+  SessionKey key=mock(SessionKey.class);
+  Map<Object,Object> map=mock(Map.class);
+  @SuppressWarnings("rawtypes") ArgumentCaptor<DistributedCacheManager.Operation> capturedOperation=ArgumentCaptor.forClass(DistributedCacheManager.Operation.class);
+  String sessionId="abc";
+  when(data.getRealId()).thenReturn(sessionId);
+  when(this.keyFactory.createKey(sessionId)).thenReturn(key);
+  when(this.sessionCache.startBatch()).thenReturn(true);
+  when(this.invoker.invoke(same(this.sessionCache),capturedOperation.capture())).thenReturn(null);
+  this.manager.storeSessionData(data);
+  verify(this.sessionCache).endBatch(true);
+  DistributedCacheManager<OutgoingDistributableSessionData,SessionKey>.Operation<Void> operation=capturedOperation.getValue();
+  int version=10;
+  long timestamp=System.currentTimeMillis();
+  DistributableSessionMetadata metadata=new DistributableSessionMetadata();
+  when(data.getVersion()).thenReturn(version);
+  when(map.put(Byte.valueOf((byte)SessionMapEntry.VERSION.ordinal()),version)).thenReturn(null);
+  when(data.getTimestamp()).thenReturn(timestamp);
+  when(map.put(Byte.valueOf((byte)SessionMapEntry.TIMESTAMP.ordinal()),timestamp)).thenReturn(null);
+  when(data.getMetadata()).thenReturn(metadata);
+  when(map.put(Byte.valueOf((byte)SessionMapEntry.METADATA.ordinal()),metadata)).thenReturn(null);
+  when(this.sessionCache.putIfAbsent(same(key),Mockito.<Map<Object,Object>>anyObject())).thenReturn(map);
+  operation.invoke(this.sessionCache);
+  verify(this.storage).store(same(map),same(data));
+}

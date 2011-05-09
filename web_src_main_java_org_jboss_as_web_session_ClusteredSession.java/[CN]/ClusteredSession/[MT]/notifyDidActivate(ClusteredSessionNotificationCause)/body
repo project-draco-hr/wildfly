@@ -1,0 +1,31 @@
+{
+  if (cause == ClusteredSessionNotificationCause.ACTIVATION) {
+    this.needsPostReplicateActivation=true;
+  }
+  fireSessionEvent(Session.SESSION_ACTIVATED_EVENT,null);
+  if (hasActivationListener != Boolean.FALSE) {
+    boolean hasListener=false;
+    HttpSessionEvent event=null;
+    String[] keys=keys();
+    Map<String,Object> attrs=getAttributesInternal();
+    for (int i=0; i < keys.length; i++) {
+      Object attribute=attrs.get(keys[i]);
+      if (attribute instanceof HttpSessionActivationListener) {
+        hasListener=true;
+        if (notificationPolicy.isHttpSessionActivationListenerInvocationAllowed(this.clusterStatus,cause,keys[i])) {
+          if (event == null)           event=new HttpSessionEvent(getSession());
+          try {
+            ((HttpSessionActivationListener)attribute).sessionDidActivate(event);
+          }
+ catch (          Throwable t) {
+            manager.getContainer().getLogger().error(sm.getString("clusteredSession.attributeEvent"),t);
+          }
+        }
+      }
+    }
+    hasActivationListener=hasListener ? Boolean.TRUE : Boolean.FALSE;
+  }
+  if (cause != ClusteredSessionNotificationCause.ACTIVATION) {
+    this.needsPostReplicateActivation=false;
+  }
+}

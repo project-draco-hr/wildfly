@@ -1,0 +1,63 @@
+{
+  log.info("++++ Starting testConcurrentFailoverRequests ++++");
+  ++testCount;
+  log.info("Starting cache containers");
+  String warName="test" + testCount;
+  JBossWebMetaData webMetaData=SessionTestUtil.createWebMetaData(100);
+  for (int i=0; i < cacheContainers.length; ++i) {
+    cacheContainers[i]=SessionTestUtil.createCacheContainer(false,null,false,false);
+    cacheContainers[i].start();
+  }
+  log.info("Starting managers");
+  EmbeddedCacheManager[] containers=new EmbeddedCacheManager[cacheContainers.length];
+  for (int i=0; i < cacheContainers.length; ++i) {
+    managers[i]=SessionTestUtil.createManager(webMetaData,warName,30,cacheContainers[i],null);
+    managers[i].start();
+    containers[i]=(EmbeddedCacheManager)cacheContainers[i].getCache().getCacheManager();
+  }
+  log.info("Blocking until all views are received");
+  SessionTestUtil.blockUntilViewsReceived(containers,10000);
+  log.info("All views received");
+  Object value="0";
+  Map<String,Object> attrs=Collections.unmodifiableMap(Collections.singletonMap("count",value));
+  SetAttributesRequestHandler setHandler=new SetAttributesRequestHandler(attrs,false);
+  SessionTestUtil.invokeRequest(managers[0],setHandler,null);
+  String id1=setHandler.getSessionId();
+  assertNotNull(id1);
+  setHandler=new SetAttributesRequestHandler(attrs,false);
+  SessionTestUtil.invokeRequest(managers[0],setHandler,null);
+  String id2=setHandler.getSessionId();
+  assertNotNull(id1);
+  assertFalse(id1.equals(id2));
+  boolean found=false;
+  for (int i=0; i < 10; i++) {
+    BasicRequestHandler getHandler=new BasicRequestHandler(attrs.keySet(),false);
+    SessionTestUtil.invokeRequest(managers[1],getHandler,id2);
+    if (getHandler.getCheckedAttributes() != null && value.equals(getHandler.getCheckedAttributes().get("count"))) {
+      found=true;
+      break;
+    }
+    Thread.sleep(50);
+  }
+  assertTrue("sessions replicated",found);
+  managers[0].stop();
+  int THREADS=10;
+  threadPool=Executors.newFixedThreadPool(THREADS);
+  CountDownLatch startingGun=new CountDownLatch(THREADS + 1);
+  CountDownLatch finishedSignal=new CountDownLatch(THREADS);
+  ConcurrentRequestHandler concurrentHandler=new ConcurrentRequestHandler();
+  Valve pipelineHead=SessionTestUtil.setupPipeline(managers[1],concurrentHandler);
+  Loader[] loaders=new Loader[THREADS];
+  for (int i=0; i < loaders.length; i++) {
+    loaders[i]=new Loader(pipelineHead,concurrentHandler,managers[1],id1,attrs.keySet(),startingGun,finishedSignal);
+    threadPool.execute(loaders[i]);
+  }
+  startingGun.countDown();
+  assertTrue("loaders completed on time",finishedSignal.await(45,TimeUnit.SECONDS));
+  for (int i=0; i < loaders.length; i++) {
+    assertNotNull("got checked attributes for " + i,loaders[i].checkedAttributes);
+    assertTrue("checked 'count' attribute for " + i,loaders[i].checkedAttributes.containsKey("count"));
+    assertEquals("correct value for " + i,value,loaders[i].checkedAttributes.get("count"));
+  }
+  managers[1].stop();
+}

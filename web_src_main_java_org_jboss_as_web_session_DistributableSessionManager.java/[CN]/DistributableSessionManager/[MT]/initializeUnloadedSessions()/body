@@ -1,0 +1,50 @@
+{
+  Map<String,String> sessions=this.distributedCacheManager.getSessionIds();
+  if (sessions != null) {
+    boolean passivate=isPassivationEnabled();
+    long passivationMax=passivationMaxIdleTime * 1000L;
+    long passivationMin=passivationMinIdleTime * 1000L;
+    for (    Map.Entry<String,String> entry : sessions.entrySet()) {
+      String realId=entry.getKey();
+      String owner=entry.getValue();
+      long ts=-1;
+      DistributableSessionMetadata md=null;
+      try {
+        IncomingDistributableSessionData sessionData=this.distributedCacheManager.getSessionData(realId,owner,false);
+        if (sessionData == null) {
+          log.debug("Metadata unavailable for unloaded session " + realId);
+          continue;
+        }
+        ts=sessionData.getTimestamp();
+        md=sessionData.getMetadata();
+      }
+ catch (      Exception e) {
+        log.debug("Problem reading metadata for session " + realId + " -- "+ e.toString(),e);
+      }
+      long lastMod=ts == -1 ? System.currentTimeMillis() : ts;
+      int maxLife=md == null ? getMaxInactiveInterval() : md.getMaxInactiveInterval();
+      OwnedSessionUpdate osu=new OwnedSessionUpdate(owner,lastMod,maxLife,false);
+      unloadedSessions.put(realId,osu);
+    }
+    if (passivate) {
+      for (      Map.Entry<String,OwnedSessionUpdate> entry : unloadedSessions.entrySet()) {
+        String realId=entry.getKey();
+        OwnedSessionUpdate osu=entry.getValue();
+        try {
+          long elapsed=System.currentTimeMillis() - osu.getUpdateTime();
+          if (passivationMax >= 0 && elapsed > passivationMax) {
+            log.tracef("Elapsed time of %d for session %s exceeds max of %d; passivating",elapsed,realId,passivationMax);
+            processUnloadedSessionPassivation(realId,osu);
+          }
+ else           if ((maxActiveAllowed > 0) && (passivationMin >= 0) && (calcActiveSessions() > maxActiveAllowed)&& (elapsed >= passivationMin)) {
+            log.tracef("Elapsed time of %d for session %s exceeds min of %d; passivating",elapsed,realId,passivationMin);
+            processUnloadedSessionPassivation(realId,osu);
+          }
+        }
+ catch (        Exception e) {
+          log.debugf("Problem passivating session %s -- %s",realId,e);
+        }
+      }
+    }
+  }
+}

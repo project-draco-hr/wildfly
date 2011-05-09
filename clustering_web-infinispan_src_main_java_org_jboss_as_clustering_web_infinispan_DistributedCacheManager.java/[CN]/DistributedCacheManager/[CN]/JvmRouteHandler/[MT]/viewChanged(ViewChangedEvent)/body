@@ -1,0 +1,36 @@
+{
+  final Collection<Address> oldMembers=event.getOldMembers();
+  final Collection<Address> newMembers=event.getNewMembers();
+  final String jvmRoute=this.manager.getJvmRoute();
+  Operation<Void> operation=new Operation<Void>(){
+    @Override public Void invoke(    Cache<Address,String> cache){
+      for (      Address member : oldMembers) {
+        if (!newMembers.contains(member)) {
+          if (cache.remove(member) != null) {
+            log.infof("Removed stale jvm route entry from web session cache on behalf of member %s",member);
+          }
+        }
+      }
+      if (jvmRoute != null) {
+        Address localAddress=event.getLocalAddress();
+        if (!oldMembers.contains(localAddress) && newMembers.contains(localAddress)) {
+          String oldJvmRoute=cache.put(localAddress,jvmRoute);
+          if (oldJvmRoute == null) {
+            log.info("Adding missing jvm route entry to web session cache");
+          }
+ else           if (!oldJvmRoute.equals(jvmRoute)) {
+            log.infof("Updating jvm route entry in web session cache.  old = %s, new = %s",oldJvmRoute,jvmRoute);
+          }
+        }
+      }
+      return null;
+    }
+  }
+;
+  try {
+    this.batch(operation);
+  }
+ catch (  Throwable e) {
+    log.warn(e.getMessage(),e);
+  }
+}

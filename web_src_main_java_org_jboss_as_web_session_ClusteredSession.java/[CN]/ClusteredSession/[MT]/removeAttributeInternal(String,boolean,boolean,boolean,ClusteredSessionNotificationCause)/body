@@ -1,0 +1,48 @@
+{
+  Object value=removeAttributeInternal(name,localCall,localOnly);
+  if (!notify || (value == null)) {
+    return;
+  }
+  HttpSessionBindingEvent event=null;
+  if (value instanceof HttpSessionBindingListener && notificationPolicy.isHttpSessionBindingListenerInvocationAllowed(this.clusterStatus,cause,name,localCall)) {
+    event=new HttpSessionBindingEvent(getSession(),name,value);
+    ((HttpSessionBindingListener)value).valueUnbound(event);
+  }
+  if (notificationPolicy.isHttpSessionAttributeListenerInvocationAllowed(this.clusterStatus,cause,name,localCall)) {
+    Context context=(Context)manager.getContainer();
+    Object[] lifecycleListeners=context.getApplicationEventListeners();
+    if (lifecycleListeners != null) {
+      RuntimeException listenerException=null;
+      for (int i=0; i < lifecycleListeners.length; i++) {
+        if (!(lifecycleListeners[i] instanceof HttpSessionAttributeListener))         continue;
+        HttpSessionAttributeListener listener=(HttpSessionAttributeListener)lifecycleListeners[i];
+        try {
+          fireContainerEvent(context,"beforeSessionAttributeRemoved",listener);
+          if (event == null) {
+            event=new HttpSessionBindingEvent(getSession(),name,value);
+          }
+          try {
+            listener.attributeRemoved(event);
+          }
+ catch (          RuntimeException e) {
+            if (listenerException == null) {
+              listenerException=e;
+            }
+          }
+          fireContainerEvent(context,"afterSessionAttributeRemoved",listener);
+        }
+ catch (        Throwable t) {
+          try {
+            fireContainerEvent(context,"afterSessionAttributeRemoved",listener);
+          }
+ catch (          Exception e) {
+          }
+          manager.getContainer().getLogger().error(sm.getString("clusteredSession.attributeEvent"),t);
+        }
+      }
+      if (listenerException != null) {
+        throw listenerException;
+      }
+    }
+  }
+}

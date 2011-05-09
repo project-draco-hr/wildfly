@@ -1,0 +1,16 @@
+{
+  TesteeSet<T> testeeSet=getTesteeSet(node1,1,2);
+  AbstractClusterLockSupport testee=testeeSet.impl;
+  GroupRpcDispatcher rpcDispatcher=testee.getGroupRpcDispatcher();
+  LocalLockHandler handler=testee.getLocalHandler();
+  ClusterNode other=testee.getCurrentView().get(0);
+  ArrayList<RemoteLockResponse> rspList=new ArrayList<RemoteLockResponse>();
+  rspList.add(new RemoteLockResponse(null,RemoteLockResponse.Flag.OK));
+  when(rpcDispatcher.getMethodCallTimeout()).thenReturn(60000l);
+  when(rpcDispatcher.callMethodOnCluster(eq("test"),eq("remoteLock"),LockParamsMatcher.eqLockParams(node1,200000),AdditionalMatchers.aryEq(AbstractClusterLockSupport.REMOTE_LOCK_TYPES),eq(RemoteLockResponse.class),eq(true),eq(NULL_FILTER),anyInt(),eq(false))).thenReturn(rspList);
+  when(handler.getLockHolder("test")).thenReturn(node1);
+  assertTrue(testee.lock("test",200000));
+  verify(handler).lockFromCluster(eq("test"),eq(node1),anyLong());
+  testeeSet.target.releaseRemoteLock("test",other);
+  verify(handler,never()).unlockFromCluster("test",other);
+}

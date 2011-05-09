@@ -1,0 +1,33 @@
+{
+  String serviceName=extractServiceName(state_id);
+  CoreGroupCommunicationService.this.log.debug("getState called for service " + serviceName);
+  StateTransferProvider provider=stateProviders.get(serviceName);
+  if (provider != null) {
+    OutputStream toClose=ostream;
+    Object state=provider.getCurrentState();
+    try {
+      if (provider instanceof StateTransferStreamProvider) {
+        ((StateTransferStreamProvider)provider).getCurrentState(ostream);
+      }
+ else {
+        MarshalledValueOutputStream mvos=new MarshalledValueOutputStream(ostream);
+        toClose=mvos;
+        mvos.writeObject(state);
+      }
+    }
+ catch (    Exception ex) {
+      CoreGroupCommunicationService.this.log.error("getState failed for service " + serviceName,ex);
+    }
+ finally {
+      if (toClose != null) {
+        try {
+          toClose.flush();
+          toClose.close();
+        }
+ catch (        IOException ignored) {
+          log.debug("Caught exception closing stream used for marshalling state",ignored);
+        }
+      }
+    }
+  }
+}

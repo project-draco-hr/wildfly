@@ -1,0 +1,39 @@
+{
+  log.info("Enter testMaxInactiveIntervalReplication");
+  ++testCount;
+  JBossWebMetaData webMetaData=SessionTestUtil.createWebMetaData(2);
+  for (int i=0; i < cacheContainers.length; ++i) {
+    cacheContainers[i]=SessionTestUtil.createCacheContainer(false,null,true,false);
+    cacheContainers[i].start();
+    managers[i]=SessionTestUtil.createManager(webMetaData,"test" + testCount,5,cacheContainers[i],null);
+    managers[i].start();
+  }
+  String id="1";
+  Session sess=managers[0].findSession(id);
+  assertNull("session does not exist",sess);
+  sess=managers[0].createSession(id,new Random());
+  sess.access();
+  sess.getSession().setAttribute("test","test");
+  managers[0].storeSession(sess);
+  sess.endAccess();
+  assertEquals("Session count correct",1,managers[0].getActiveSessionCount());
+  assertEquals("Local session count correct",1,managers[0].getLocalActiveSessionCount());
+  assertEquals("Session count correct",1,managers[1].getActiveSessionCount());
+  assertEquals("Local session count correct",0,managers[1].getLocalActiveSessionCount());
+  sess=managers[0].findSession(id);
+  sess.access();
+  sess.setMaxInactiveInterval(1);
+  managers[0].storeSession(sess);
+  sess.endAccess();
+  SessionTestUtil.sleepThread(1005);
+  managers[1].backgroundProcess();
+  assertEquals("Session count correct",1,managers[0].getActiveSessionCount());
+  assertEquals("Local session count correct",1,managers[0].getLocalActiveSessionCount());
+  assertEquals("Session count correct",0,managers[1].getActiveSessionCount());
+  assertEquals("Local session count correct",0,managers[1].getLocalActiveSessionCount());
+  managers[0].backgroundProcess();
+  assertEquals("Session count correct",0,managers[0].getActiveSessionCount());
+  assertEquals("Local session count correct",0,managers[0].getLocalActiveSessionCount());
+  assertEquals("Session count correct",0,managers[1].getActiveSessionCount());
+  assertEquals("Local session count correct",0,managers[1].getLocalActiveSessionCount());
+}

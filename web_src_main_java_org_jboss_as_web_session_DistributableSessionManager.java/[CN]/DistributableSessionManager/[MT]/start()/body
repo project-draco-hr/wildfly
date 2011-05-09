@@ -1,0 +1,37 @@
+{
+  this.log=Logger.getLogger(getClass().getName() + "." + getContainer().getName().replaceAll("/",""));
+  super.start();
+  this.notificationPolicy=this.createClusteredSessionNotificationPolicy();
+  this.tcl=super.getContainer().getLoader().getClassLoader();
+  try {
+    this.distributedCacheManager.start();
+    initializeUnloadedSessions();
+    this.snapshotManager=createSnapshotManager();
+    this.snapshotManager.start();
+    installValves();
+    log.debug("start(): DistributedCacheManager started");
+  }
+ catch (  Exception e) {
+    log.error("Unable to start manager.",e);
+    throw new LifecycleException(e);
+  }
+  Container container=this.getContainer();
+  if (container instanceof Lifecycle) {
+    Lifecycle lifecycle=(Lifecycle)container;
+    LifecycleListener[] listeners=lifecycle.findLifecycleListeners();
+    for (    LifecycleListener listener : listeners) {
+      lifecycle.removeLifecycleListener(listener);
+    }
+    lifecycle.addLifecycleListener(this);
+    for (    LifecycleListener listener : listeners) {
+      lifecycle.addLifecycleListener(listener);
+    }
+  }
+  if (!this.semaphore.tryAcquire()) {
+    log.debug("Opening up LockingValve");
+    this.semaphore.release(TOTAL_PERMITS);
+  }
+ else {
+    this.semaphore.release();
+  }
+}

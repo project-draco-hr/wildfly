@@ -1,0 +1,22 @@
+{
+  RunnableFuture<SerializableStateTransferResult> future=null;
+  StateTransferTask<?,?> task=stateTransferTasks.get(serviceName);
+  if (task == null || (task.result != null && !task.result.stateReceived())) {
+    SerializableStateTransferTask newTask=new SerializableStateTransferTask(serviceName,classloader);
+    stateTransferTasks.put(serviceName,newTask);
+    future=new FutureTask<SerializableStateTransferResult>(newTask);
+  }
+ else   if (task instanceof SerializableStateTransferTask) {
+    log.warn("Received concurrent requests to get service state for " + serviceName);
+    future=new FutureTask<SerializableStateTransferResult>((SerializableStateTransferTask)task);
+  }
+ else {
+    throw new IllegalStateException("State transfer task for " + serviceName + " that will return an input stream is already pending");
+  }
+  Executor e=getThreadPool();
+  if (e == null) {
+    e=Executors.newSingleThreadExecutor();
+  }
+  e.execute(future);
+  return future;
+}
