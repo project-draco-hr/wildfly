@@ -1,0 +1,28 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (!WeldDeploymentMarker.isPartOfWeldDeployment(deploymentUnit)) {
+    return;
+  }
+  final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+  final ServiceName beanManagerServiceName=BeanManagerService.serviceName(deploymentUnit);
+  final ServiceName serviceName=deploymentUnit.getServiceName().append("WeldComponentInstantiatorService");
+  final InjectedValue<BeanManagerImpl> beanManager=new InjectedValue<BeanManagerImpl>();
+  phaseContext.getServiceTarget().addService(serviceName,Service.NULL).addDependency(beanManagerServiceName,BeanManagerImpl.class,beanManager).install();
+  for (  ComponentDescription component : eeModuleDescription.getComponentDescriptions()) {
+    final String beanName;
+    if (component instanceof SessionBeanComponentDescription) {
+      beanName=component.getComponentName();
+    }
+ else {
+      beanName=null;
+    }
+    component.getConfigurators().addFirst(new ComponentConfigurator(){
+      @Override public void configure(      final DeploymentPhaseContext context,      final ComponentDescription description,      final ComponentConfiguration configuration) throws DeploymentUnitProcessingException {
+        final Class<?> componentClass=configuration.getModuleClassConfiguration().getModuleClass();
+        addWeldInstantiator(configuration,componentClass,beanName,serviceName,beanManager);
+        configuration.getPostConstructInterceptors().addLast(new WeldInjectionInterceptor.Factory(configuration));
+      }
+    }
+);
+  }
+}

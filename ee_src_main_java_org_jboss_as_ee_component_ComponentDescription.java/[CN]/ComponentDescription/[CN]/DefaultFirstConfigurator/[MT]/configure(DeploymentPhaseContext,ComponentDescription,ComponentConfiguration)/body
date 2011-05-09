@@ -2,6 +2,7 @@
   final DeploymentUnit deploymentUnit=context.getDeploymentUnit();
   final DeploymentReflectionIndex index=deploymentUnit.getAttachment(REFLECTION_INDEX);
   final Object instanceKey=BasicComponentInstance.INSTANCE_KEY;
+  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
   final EEModuleClassDescription componentClassDescription=description.getClassDescription();
   final EEModuleClassConfiguration componentClassConfiguration=configuration.getModuleClassConfiguration();
   final EEModuleConfiguration moduleConfiguration=componentClassConfiguration.getModuleConfiguration();
@@ -14,7 +15,14 @@
   final ClassReflectionIndex<?> componentClassIndex=index.getClassIndex(componentClassConfiguration.getModuleClass());
   final List<InterceptorFactory> componentUserAroundInvoke=new ArrayList<InterceptorFactory>();
   final Map<String,List<InterceptorFactory>> userAroundInvokesByInterceptorClass=new HashMap<String,List<InterceptorFactory>>();
-  instantiators.addFirst(new ManagedReferenceInterceptorFactory(configuration.getInstanceFactory(),instanceKey));
+  final ManagedReferenceFactory instanceFactory=configuration.getInstanceFactory();
+  if (instanceFactory != null) {
+    instantiators.addFirst(new ManagedReferenceInterceptorFactory(instanceFactory,instanceKey));
+  }
+ else {
+    ValueManagedReferenceFactory factory=new ValueManagedReferenceFactory(new ConstructedValue<Object>((Constructor<Object>)componentClassIndex.getConstructor(EMPTY_CLASS_ARRAY),Collections.<Value<?>>emptyList()));
+    instantiators.addFirst(new ManagedReferenceInterceptorFactory(factory,instanceKey));
+  }
   destructors.addLast(new ManagedReferenceReleaseInterceptorFactory(instanceKey));
   new ClassDescriptionTraversal(componentClassConfiguration,moduleConfiguration){
     @Override public void handle(    EEModuleClassConfiguration classConfiguration,    EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
@@ -28,11 +36,12 @@
     }
   }
 .run();
-  final Map<String,InterceptorDescription> interceptors=description.getAllInterceptors();
-  for (  InterceptorDescription interceptorDescription : interceptors.values()) {
+  final List<InterceptorDescription> interceptors=new ArrayList<InterceptorDescription>();
+  interceptors.addAll(description.getClassInterceptors());
+  for (  InterceptorDescription interceptorDescription : interceptors) {
     final String interceptorClassName=interceptorDescription.getInterceptorClassName();
     final EEModuleClassConfiguration interceptorConfiguration=moduleConfiguration.getClassConfiguration(interceptorClassName);
-    final Object contextKey=new Object();
+    final Object contextKey=interceptorConfiguration.getModuleClass();
     instantiators.addFirst(new ManagedReferenceInterceptorFactory(interceptorConfiguration.getInstantiator(),contextKey));
     destructors.addLast(new ManagedReferenceReleaseInterceptorFactory(contextKey));
     new ClassDescriptionTraversal(interceptorConfiguration,moduleConfiguration){
@@ -92,6 +101,7 @@
     }
   }
 .run();
+  final InterceptorFactory tcclInterceptor=new ImmediateInterceptorFactory(new TCCLInterceptor(module.getClassLoader()));
   final Deque<InterceptorFactory> postConstructInterceptors=configuration.getPostConstructInterceptors();
   final Iterator<InterceptorFactory> injectorIterator=injectors.descendingIterator();
   while (injectorIterator.hasNext()) {
@@ -103,6 +113,7 @@
   }
   postConstructInterceptors.addAll(userPostConstruct);
   postConstructInterceptors.add(Interceptors.getTerminalInterceptorFactory());
+  postConstructInterceptors.addFirst(tcclInterceptor);
   final Deque<InterceptorFactory> preDestroyInterceptors=configuration.getPreDestroyInterceptors();
   final Iterator<InterceptorFactory> uninjectorsIterator=uninjectors.descendingIterator();
   while (uninjectorsIterator.hasNext()) {
@@ -114,6 +125,7 @@
   }
   preDestroyInterceptors.addAll(userPreDestroy);
   preDestroyInterceptors.add(Interceptors.getTerminalInterceptorFactory());
+  preDestroyInterceptors.addFirst(tcclInterceptor);
   final List<InterceptorDescription> classInterceptors=description.getClassInterceptors();
   Class clazz=componentClassConfiguration.getModuleClass();
   while (clazz != null) {
@@ -154,8 +166,8 @@
   for (  Method method : configuration.getDefinedComponentMethods()) {
     configuration.getComponentInterceptorDeque(method).addFirst(Interceptors.getInitialInterceptorFactory());
     configuration.getComponentInterceptorDeque(method).addLast(new ManagedReferenceMethodInterceptorFactory(instanceKey,method));
+    configuration.getComponentInterceptorDeque(method).addFirst(tcclInterceptor);
   }
-  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
   for (  ViewDescription view : description.getViews()) {
     Class<?> viewClass;
     try {
