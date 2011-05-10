@@ -5,12 +5,17 @@
   Util.copyParamsToModel(operation,context.getSubModel());
   final ApplicationPolicy applicationPolicy=createApplicationPolicy(securityDomain,operation);
   final JSSESecurityDomain jsseSecurityDomain=createJSSESecurityDomain(securityDomain,operation);
+  final String cacheType=getAuthenticationCacheType(operation);
   if (context.getRuntimeContext() != null) {
     context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
       @Override public void execute(      RuntimeTaskContext context) throws OperationFailedException {
-        final SecurityDomainService securityDomainService=new SecurityDomainService(securityDomain,applicationPolicy,jsseSecurityDomain);
+        final SecurityDomainService securityDomainService=new SecurityDomainService(securityDomain,applicationPolicy,jsseSecurityDomain,cacheType);
         final ServiceTarget target=context.getServiceTarget();
-        target.addService(SecurityDomainService.SERVICE_NAME.append(securityDomain),securityDomainService).addDependency(SecurityManagementService.SERVICE_NAME,ISecurityManagement.class,securityDomainService.getSecurityManagementInjector()).addDependency(JaasConfigurationService.SERVICE_NAME,Configuration.class,securityDomainService.getConfigurationInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+        ServiceBuilder<SecurityDomainContext> builder=target.addService(SecurityDomainService.SERVICE_NAME.append(securityDomain),securityDomainService).addDependency(SecurityManagementService.SERVICE_NAME,ISecurityManagement.class,securityDomainService.getSecurityManagementInjector()).addDependency(JaasConfigurationService.SERVICE_NAME,Configuration.class,securityDomainService.getConfigurationInjector());
+        if ("infinispan".equals(cacheType)) {
+          builder.addDependency(EmbeddedCacheManagerService.getServiceName(CACHE_CONTAINER_NAME),EmbeddedCacheManager.class,securityDomainService.getCacheManagerInjector());
+        }
+        builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
         resultHandler.handleResultComplete();
       }
     }
