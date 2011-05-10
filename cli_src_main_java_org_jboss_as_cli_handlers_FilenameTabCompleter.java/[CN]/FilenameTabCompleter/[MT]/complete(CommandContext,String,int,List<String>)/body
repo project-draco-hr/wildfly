@@ -2,6 +2,43 @@
   if (cursor > 0 && cursor <= buffer.length()) {
     buffer=buffer.substring(cursor);
   }
-  int result=fnCompleter.complete(buffer,cursor,candidates);
-  return result < 0 ? result : cursor + result;
+  final String translated;
+  if (buffer.startsWith("~" + File.separator)) {
+    translated=System.getProperty("user.home") + buffer.substring(1);
+  }
+ else   if (buffer.startsWith("~")) {
+    translated=new File(System.getProperty("user.home")).getParentFile().getAbsolutePath();
+  }
+ else   if (!(buffer.startsWith(File.separator))) {
+    translated=new File("").getAbsolutePath() + File.separator + buffer;
+  }
+ else {
+    translated=buffer;
+  }
+  final File f=new File(translated);
+  final File dir;
+  if (translated.endsWith(File.separator)) {
+    dir=f;
+  }
+ else {
+    dir=f.getParentFile();
+  }
+  final File[] entries=(dir == null) ? new File[0] : dir.listFiles();
+  int result=matchFiles(buffer,translated,entries,candidates);
+  int correction=0;
+  if (buffer.length() > 0) {
+    final int lastSeparator=buffer.lastIndexOf(File.separatorChar);
+    if (lastSeparator > 0) {
+      final String path=buffer.substring(0,lastSeparator);
+      final String escaped=escapeName(path);
+      correction=escaped.length() - path.length();
+    }
+  }
+  if (candidates.size() == 1) {
+    candidates.set(0,escapeName(candidates.get(0)));
+  }
+ else {
+    Collections.sort(candidates);
+  }
+  return cursor + result + correction;
 }
