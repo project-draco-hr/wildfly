@@ -14,7 +14,8 @@
         URL url=bundleFile.toURI().toURL();
         BundleInfo info=BundleInfo.createBundleInfo(url);
         Deployment dep=DeploymentFactory.createDeployment(info);
-        dep.setAutoStart(moduleMetaData.isStart());
+        Integer startLevel=moduleMetaData.getStartLevel();
+        if (startLevel != null)         dep.setStartLevel(startLevel.intValue());
         serviceName=bundleManager.installBundle(serviceTarget,dep);
       }
  else {
@@ -38,14 +39,16 @@
       public void start(      StartContext context) throws StartException {
         for (        ServiceName serviceName : pendingServices.keySet()) {
           OSGiModule moduleMetaData=pendingServices.get(serviceName);
-          if (moduleMetaData.isStart()) {
+          if (moduleMetaData.getStartLevel() != null) {
             @SuppressWarnings("unchecked") ServiceController<Bundle> controller=(ServiceController<Bundle>)serviceContainer.getRequiredService(serviceName);
             Bundle bundle=controller.getValue();
+            StartLevel startLevel=injectedStartLevel.getValue();
+            startLevel.setBundleStartLevel(bundle,moduleMetaData.getStartLevel());
             try {
               bundle.start();
             }
  catch (            BundleException ex) {
-              log.errorf(ex,"Cannot start persistent bundle: %s",bundle);
+              log.errorf(ex,"Cannot start bundle: %s",bundle);
             }
           }
         }
