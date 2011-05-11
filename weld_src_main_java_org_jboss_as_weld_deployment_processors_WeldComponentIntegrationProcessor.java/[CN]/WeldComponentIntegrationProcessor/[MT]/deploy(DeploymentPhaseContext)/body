@@ -19,8 +19,16 @@
     component.getConfigurators().addFirst(new ComponentConfigurator(){
       @Override public void configure(      final DeploymentPhaseContext context,      final ComponentDescription description,      final ComponentConfiguration configuration) throws DeploymentUnitProcessingException {
         final Class<?> componentClass=configuration.getModuleClassConfiguration().getModuleClass();
-        addWeldInstantiator(configuration,componentClass,beanName,serviceName,beanManager);
-        configuration.getPostConstructInterceptors().addLast(new WeldInjectionInterceptor.Factory(configuration));
+        final EEModuleConfiguration module=configuration.getModuleClassConfiguration().getModuleConfiguration();
+        final Set<Class<?>> interceptorClasses=new HashSet<Class<?>>();
+        for (        InterceptorDescription interceptorDescription : description.getAllInterceptors().values()) {
+          EEModuleClassConfiguration clazz=module.getClassConfiguration(interceptorDescription.getInterceptorClassName());
+          if (clazz != null) {
+            interceptorClasses.add(clazz.getModuleClass());
+          }
+        }
+        addWeldInstantiator(configuration,componentClass,beanName,serviceName,beanManager,interceptorClasses);
+        configuration.getPostConstructInterceptors().addLast(new WeldInjectionInterceptor.Factory(configuration,interceptorClasses));
       }
     }
 );
