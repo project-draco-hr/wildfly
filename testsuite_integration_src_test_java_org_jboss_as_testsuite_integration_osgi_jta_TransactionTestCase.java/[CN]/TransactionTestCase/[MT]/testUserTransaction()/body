@@ -1,0 +1,27 @@
+{
+  bundle.start();
+  BundleContext context=bundle.getBundleContext();
+  Transactional txObj=new Transactional();
+  ServiceReference userTxRef=context.getServiceReference(UserTransaction.class.getName());
+  assertNotNull("UserTransaction service not null",userTxRef);
+  UserTransaction userTx=(UserTransaction)context.getService(userTxRef);
+  assertNotNull("UserTransaction not null",userTx);
+  userTx.begin();
+  try {
+    ServiceReference tmRef=context.getServiceReference(TransactionManager.class.getName());
+    assertNotNull("TransactionManager service not null",tmRef);
+    TransactionManager tm=(TransactionManager)context.getService(tmRef);
+    assertNotNull("TransactionManager not null",tm);
+    Transaction tx=tm.getTransaction();
+    assertNotNull("Transaction not null",tx);
+    tx.registerSynchronization(txObj);
+    txObj.setMessage("Donate $1.000.000");
+    assertNull("Uncommited message null",txObj.getMessage());
+    userTx.commit();
+  }
+ catch (  Exception ex) {
+    userTx.setRollbackOnly();
+    throw ex;
+  }
+  assertEquals("Donate $1.000.000",txObj.getMessage());
+}
