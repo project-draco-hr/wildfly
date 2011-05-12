@@ -32,7 +32,7 @@
  else {
     contextServiceName=ContextNames.contextServiceNameOfModule(configuration.getApplicationName(),configuration.getModuleName());
   }
-  InjectionSource.ResolutionContext resolutionContext=new InjectionSource.ResolutionContext(configuration.getComponentDescription().getNamingMode() == ComponentNamingMode.USE_MODULE,configuration.getComponentName(),configuration.getModuleName(),configuration.getApplicationName());
+  final InjectionSource.ResolutionContext resolutionContext=new InjectionSource.ResolutionContext(configuration.getComponentDescription().getNamingMode() == ComponentNamingMode.USE_MODULE,configuration.getComponentName(),configuration.getModuleName(),configuration.getApplicationName());
   for (  ViewConfiguration viewConfiguration : configuration.getViews()) {
     final ServiceName serviceName=viewConfiguration.getViewServiceName();
     final ViewService viewService=new ViewService(viewConfiguration);
@@ -46,12 +46,24 @@
       serviceBuilder.install();
     }
   }
-  processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,configuration.getBindingConfigurations());
-  processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,configuration.getModuleClassConfiguration().getBindingConfigurations());
-  for (  InterceptorDescription interceptor : configuration.getComponentDescription().getClassInterceptors()) {
-    final EEModuleClassConfiguration interceptorClass=moduleConfiguration.getClassConfiguration(interceptor.getInterceptorClassName());
-    if (interceptorClass != null) {
-      processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,interceptorClass.getBindingConfigurations());
+  if (configuration.getComponentDescription().getNamingMode() == ComponentNamingMode.CREATE) {
+    processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,configuration.getBindingConfigurations());
+    new ClassDescriptionTraversal(configuration.getModuleClassConfiguration(),moduleConfiguration){
+      @Override protected void handle(      final EEModuleClassConfiguration classConfiguration,      final EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
+        processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,classConfiguration.getBindingConfigurations());
+      }
+    }
+.run();
+    for (    InterceptorDescription interceptor : configuration.getComponentDescription().getClassInterceptors()) {
+      final EEModuleClassConfiguration interceptorClass=moduleConfiguration.getClassConfiguration(interceptor.getInterceptorClassName());
+      if (interceptorClass != null) {
+        new ClassDescriptionTraversal(interceptorClass,moduleConfiguration){
+          @Override protected void handle(          final EEModuleClassConfiguration classConfiguration,          final EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
+            processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,classConfiguration.getBindingConfigurations());
+          }
+        }
+.run();
+      }
     }
   }
   createBuilder.install();

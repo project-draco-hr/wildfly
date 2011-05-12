@@ -4,8 +4,73 @@
   if (moduleConfiguration == null) {
     return;
   }
+  final Map<ServiceName,BindingConfiguration> existingBindings=new HashMap<ServiceName,BindingConfiguration>();
+  final Map<ServiceName,BindingConfiguration> deploymentDescriptorBindings=new HashMap<ServiceName,BindingConfiguration>();
   final Set<BindingConfiguration> bindingConfigurations=new HashSet<BindingConfiguration>(moduleConfiguration.getBindingConfigurations());
   for (  BindingConfiguration binding : bindingConfigurations) {
-    addJndiBinding(moduleConfiguration,binding,phaseContext);
+    final ServiceName serviceName=ContextNames.serviceNameOfEnvEntry(moduleConfiguration.getApplicationName(),moduleConfiguration.getModuleName(),null,false,binding.getName());
+    final BindingConfiguration existingConfiguration=existingBindings.get(serviceName);
+    if (existingConfiguration != null && !existingConfiguration.equals(binding)) {
+      throw new DeploymentUnitProcessingException("Multiple module level bindings with the same name at " + binding.getName() + " "+ binding+ " and "+ existingConfiguration);
+    }
+    existingBindings.put(serviceName,binding);
+    deploymentDescriptorBindings.put(serviceName,binding);
+    addJndiBinding(moduleConfiguration,binding,phaseContext,serviceName);
+  }
+  for (  final ComponentConfiguration componentConfiguration : moduleConfiguration.getComponentConfigurations()) {
+    for (    BindingConfiguration binding : componentConfiguration.getBindingConfigurations()) {
+      final String bindingName=binding.getName();
+      final boolean compBinding=bindingName.startsWith("java:comp") || !bindingName.startsWith("java:");
+      if (componentConfiguration.getComponentDescription().getNamingMode() == ComponentNamingMode.CREATE && compBinding) {
+        continue;
+      }
+      final ServiceName serviceName=ContextNames.serviceNameOfEnvEntry(moduleConfiguration.getApplicationName(),moduleConfiguration.getModuleName(),null,false,binding.getName());
+      final BindingConfiguration existingConfiguration=existingBindings.get(serviceName);
+      if (existingConfiguration != null && !existingConfiguration.equals(binding)) {
+        throw new DeploymentUnitProcessingException("Multiple module level bindings with the same name at " + binding.getName() + " "+ binding+ " and "+ existingConfiguration);
+      }
+      existingBindings.put(serviceName,binding);
+      deploymentDescriptorBindings.put(serviceName,binding);
+      addJndiBinding(moduleConfiguration,binding,phaseContext,serviceName);
+    }
+  }
+  final Set<String> handledClasses=new HashSet<String>();
+  for (  final ComponentConfiguration componentConfiguration : moduleConfiguration.getComponentConfigurations()) {
+    final Set<EEModuleClassConfiguration> classConfigurations=new HashSet<EEModuleClassConfiguration>();
+    classConfigurations.add(componentConfiguration.getModuleClassConfiguration());
+    for (    final InterceptorDescription interceptor : componentConfiguration.getComponentDescription().getAllInterceptors().values()) {
+      final EEModuleClassConfiguration interceptorClass=moduleConfiguration.getClassConfiguration(interceptor.getInterceptorClassName());
+      if (interceptorClass != null) {
+        classConfigurations.add(interceptorClass);
+      }
+    }
+    for (    final EEModuleClassConfiguration classConfiguration : classConfigurations) {
+      new ClassDescriptionTraversal(classConfiguration,moduleConfiguration){
+        @Override protected void handle(        final EEModuleClassConfiguration configuration,        final EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
+          if (handledClasses.contains(classDescription.getClassName())) {
+            return;
+          }
+          handledClasses.add(classDescription.getClassName());
+          for (          BindingConfiguration binding : configuration.getBindingConfigurations()) {
+            final String bindingName=binding.getName();
+            final boolean compBinding=bindingName.startsWith("java:comp") || !bindingName.startsWith("java:");
+            if (componentConfiguration.getComponentDescription().getNamingMode() == ComponentNamingMode.CREATE && compBinding) {
+              continue;
+            }
+            final ServiceName serviceName=ContextNames.serviceNameOfEnvEntry(moduleConfiguration.getApplicationName(),moduleConfiguration.getModuleName(),null,false,binding.getName());
+            if (deploymentDescriptorBindings.containsKey(serviceName)) {
+              continue;
+            }
+            final BindingConfiguration existingConfiguration=existingBindings.get(serviceName);
+            if (existingConfiguration != null && !existingConfiguration.equals(binding)) {
+              throw new DeploymentUnitProcessingException("Bindings with the same name at " + binding.getName() + " "+ binding+ " and "+ existingConfiguration);
+            }
+            existingBindings.put(serviceName,binding);
+            addJndiBinding(moduleConfiguration,binding,phaseContext,serviceName);
+          }
+        }
+      }
+.run();
+    }
   }
 }
