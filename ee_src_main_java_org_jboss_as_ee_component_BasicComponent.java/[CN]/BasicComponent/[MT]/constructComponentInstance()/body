@@ -1,5 +1,23 @@
 {
-  BasicComponentInstance basicComponentInstance=this.instantiateComponentInstance();
-  basicComponentInstance.initialize();
+  final SimpleInterceptorFactoryContext context=new SimpleInterceptorFactoryContext();
+  context.getContextData().put(Component.class,this);
+  final Interceptor componentInstancePostConstructInterceptor=this.getPostConstruct().create(context);
+  final Interceptor componentInstancePreDestroyInterceptor=this.getPreDestroy().create(context);
+  final AtomicReference<ManagedReference> instanceReference=(AtomicReference<ManagedReference>)context.getContextData().get(BasicComponentInstance.INSTANCE_KEY);
+  final Map<Method,InterceptorFactory> interceptorFactoryMap=this.getInterceptorFactoryMap();
+  final IdentityHashMap<Method,Interceptor> interceptorMap=new IdentityHashMap<Method,Interceptor>();
+  for (  Method method : interceptorFactoryMap.keySet()) {
+    interceptorMap.put(method,interceptorFactoryMap.get(method).create(context));
+  }
+  BasicComponentInstance basicComponentInstance=this.instantiateComponentInstance(instanceReference,componentInstancePreDestroyInterceptor,interceptorMap);
+  final InterceptorContext interceptorContext=new InterceptorContext();
+  interceptorContext.putPrivateData(Component.class,this);
+  interceptorContext.putPrivateData(ComponentInstance.class,basicComponentInstance);
+  try {
+    componentInstancePostConstructInterceptor.processInvocation(interceptorContext);
+  }
+ catch (  Exception e) {
+    throw new IllegalStateException("Failed to construct component instance",e);
+  }
   return basicComponentInstance;
 }
