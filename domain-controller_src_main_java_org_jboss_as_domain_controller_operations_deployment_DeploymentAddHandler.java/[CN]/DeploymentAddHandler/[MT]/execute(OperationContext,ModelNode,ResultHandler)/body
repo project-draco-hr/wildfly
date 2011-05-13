@@ -4,10 +4,11 @@
   PathAddress address=PathAddress.pathAddress(opAddr);
   String name=address.getLastElement().getValue();
   String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : name;
-  byte[] hash;
+  byte[] hash=null;
   final ModelNode content=operation.require(CONTENT).clone();
   final ModelNode contentItemNode=content.require(0);
   if (contentItemNode.hasDefined(HASH)) {
+    managedContentValidator.validate(contentItemNode);
     hash=contentItemNode.require(HASH).asBytes();
     if (!contentRepository.hasContent(hash))     throw createFailureException("No deployment content with hash %s is available in the deployment content repository.",HashUtil.bytesToHexString(hash));
   }
@@ -30,17 +31,12 @@
     contentItemNode.get(HASH).set(hash);
   }
  else {
-    throw createFailureException("A domain controller cannot accept unmanaged content");
+    unmanagedContentValidator.validate(contentItemNode);
   }
-  if (!isMaster || contentRepository.hasContent(hash)) {
-    ModelNode subModel=context.getSubModel();
-    subModel.get(NAME).set(name);
-    subModel.get(RUNTIME_NAME).set(runtimeName);
-    subModel.get(CONTENT).set(content);
-  }
- else {
-    throw createFailureException("No deployment content with hash %s is available in the deployment content repository.",HashUtil.bytesToHexString(hash));
-  }
+  ModelNode subModel=context.getSubModel();
+  subModel.get(NAME).set(name);
+  subModel.get(RUNTIME_NAME).set(runtimeName);
+  subModel.get(CONTENT).set(content);
   resultHandler.handleResultComplete();
   return new BasicOperationResult(Util.getResourceRemoveOperation(operation.get(OP_ADDR)));
 }
