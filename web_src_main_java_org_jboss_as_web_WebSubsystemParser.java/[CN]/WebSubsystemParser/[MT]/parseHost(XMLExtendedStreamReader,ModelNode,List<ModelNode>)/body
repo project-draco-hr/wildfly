@@ -1,6 +1,7 @@
 {
   String name=null;
   String defaultWebModule=null;
+  boolean welcome=false;
   final int count=reader.getAttributeCount();
   for (int i=0; i < count; i++) {
     requireNoNamespaceAttribute(reader,i);
@@ -11,10 +12,15 @@ case NAME:
       name=value;
     break;
 case DEFAULT_WEB_MODULE:
-  defaultWebModule=value;
+  if (welcome)   throw new XMLStreamException("A default web module can not be specified when the welcome root has been enabled",reader.getLocation());
+defaultWebModule=value;
+break;
+case ENABLE_WELCOME_ROOT:
+welcome=Boolean.parseBoolean(value);
+if (welcome && defaultWebModule != null) throw new XMLStreamException("The welcome root can not be enabled on a host that has a default web module",reader.getLocation());
 break;
 default :
-unexpectedAttribute(reader,i);
+throw unexpectedAttribute(reader,i);
 }
 }
 if (name == null) {
@@ -26,6 +32,7 @@ host.get(OP_ADDR).set(address).add(VIRTUAL_SERVER,name);
 if (defaultWebModule != null) {
 host.get(DEFAULT_WEB_MODULE).set(defaultWebModule);
 }
+host.get(ENABLE_WELCOME_ROOT).set(welcome);
 list.add(host);
 while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
