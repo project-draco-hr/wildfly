@@ -2,7 +2,7 @@
   if (username == null && credentials == null)   return null;
   if (authenticationManager == null)   throw new IllegalStateException("Authentication Manager has not been set");
   if (authorizationManager == null)   throw new IllegalStateException("Authorization Manager has not been set");
-  Principal userPrincipal=new SimplePrincipal(username);
+  Principal userPrincipal=getPrincipal(username);
   Subject subject=new Subject();
   boolean isValid=authenticationManager.isValid(userPrincipal,credentials,subject);
   if (isValid) {
@@ -10,6 +10,7 @@
       log.trace("User: " + userPrincipal + " is authenticated");
     }
     SecurityContext sc=SecurityActions.createSecurityContext(authenticationManager.getSecurityDomain());
+    userPrincipal=getPrincipal(subject);
     sc.getUtil().createSubjectInfo(userPrincipal,credentials,subject);
     SecurityActions.setSecurityContextOnAssociation(sc);
     SecurityContextCallbackHandler scb=new SecurityContextCallbackHandler(sc);
@@ -32,7 +33,11 @@
       }
     }
  else     rolesAsStringList=mapUserRoles(rolesAsStringList);
-    return new GenericPrincipal(this,username,credentials,rolesAsStringList);
+    if (authenticationManager instanceof CacheableManager) {
+      @SuppressWarnings("unchecked") CacheableManager<ConcurrentMap<Principal,DomainInfo>,Principal> cm=(CacheableManager<ConcurrentMap<Principal,DomainInfo>,Principal>)authenticationManager;
+      return new JBossGenericPrincipal(this,userPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,cm);
+    }
+ else     return new JBossGenericPrincipal(this,userPrincipal.getName(),null,rolesAsStringList,userPrincipal,null);
   }
   return super.authenticate(username,credentials);
 }
