@@ -1,20 +1,23 @@
 {
   try {
-    String jbossHomeKey="jboss.home";
-    String jbossHomeDir=System.getProperty(jbossHomeKey);
-    if (jbossHomeDir == null)     throw new IllegalStateException("Cannot find system property: " + jbossHomeKey);
+    configuration.validate();
+    String jbossHomeDir=configuration.getJbossHome();
     final String additionalJavaOpts=System.getProperty("jboss.options");
     File modulesJar=new File(jbossHomeDir + "/jboss-modules.jar");
     if (modulesJar.exists() == false)     throw new IllegalStateException("Cannot find: " + modulesJar);
+    String javaHome=configuration.getJavaHome();
+    String java=(javaHome != null) ? javaHome + "/bin/java" : "java";
+    File domainDir=configuration.getDomainDirectory() != null ? new File(configuration.getDomainDirectory()) : new File(new File(jbossHomeDir),"domain");
+    String domainPath=domainDir.getAbsolutePath();
     List<String> cmd=new ArrayList<String>();
-    cmd.add("java");
+    cmd.add(java);
     if (additionalJavaOpts != null) {
       for (      String opt : additionalJavaOpts.split("\\s+")) {
         cmd.add(opt);
       }
     }
     cmd.add("-Djboss.home.dir=" + jbossHomeDir);
-    cmd.add("-Dorg.jboss.boot.log.file=" + jbossHomeDir + "/domain/log/process-controller/boot.log");
+    cmd.add("-Dorg.jboss.boot.log.file=" + domainPath + "/log/process-controller.log");
     cmd.add("-Dlogging.configuration=file:" + jbossHomeDir + "/domain/configuration/logging.properties");
     cmd.add("-jar");
     cmd.add(modulesJar.getAbsolutePath());
@@ -26,9 +29,9 @@
     cmd.add("-jboss-home");
     cmd.add(jbossHomeDir);
     cmd.add("-jvm");
-    cmd.add("java");
+    cmd.add(java);
     cmd.add("--");
-    cmd.add("-Dorg.jboss.boot.log.file=" + jbossHomeDir + "/domain/log/host-controller/boot.log");
+    cmd.add("-Dorg.jboss.boot.log.file=" + domainPath + "/log/host-controller.log");
     cmd.add("-Dlogging.configuration=file:" + jbossHomeDir + "/domain/configuration/logging.properties");
     if (additionalJavaOpts != null) {
       for (      String opt : additionalJavaOpts.split("\\s+")) {
@@ -37,16 +40,27 @@
     }
     cmd.add("--");
     cmd.add("-default-jvm");
-    cmd.add("java");
-    if (domainConfigFile != null) {
-      cmd.add("-domain-config " + domainConfigFile);
+    cmd.add(java);
+    if (configuration.getDomainConfigFile() != null) {
+      cmd.add("-domain-config");
+      cmd.add(configuration.getDomainConfigFile());
     }
-    if (hostConfigFile != null) {
-      cmd.add("-host-config " + hostConfigFile);
+    if (configuration.getHostConfigFile() != null) {
+      cmd.add("-host-config");
+      cmd.add(configuration.getHostConfigFile());
+    }
+    if (configuration.getHostCommandLineProperties() != null) {
+      for (      String opt : configuration.getHostCommandLineProperties().split("\\s+")) {
+        cmd.add(opt);
+      }
+    }
+    if (configuration.getDomainDirectory() != null) {
+      cmd.add("-Djboss.domain.base.dir=" + configuration.getDomainDirectory());
     }
     log.info("Starting container with: " + cmd.toString());
     ProcessBuilder processBuilder=new ProcessBuilder(cmd);
     processBuilder.redirectErrorStream(true);
+    long start=System.currentTimeMillis();
     process=processBuilder.start();
     new Thread(new ConsoleConsumer()).start();
     final Process proc=process;
@@ -65,8 +79,7 @@
     }
 );
     Runtime.getRuntime().addShutdownHook(shutdownThread);
-    domainClient=DomainClient.Factory.create(managementAddress,managementPort);
-    long timeout=this.timeout;
+    long timeout=configuration.getStartupTimeoutInSeconds() * 1000;
     boolean serversAvailable=false;
     while (timeout > 0 && serversAvailable == false) {
       serversAvailable=areServersStarted();
@@ -76,8 +89,9 @@
       }
     }
     if (!serversAvailable) {
-      throw new TimeoutException(String.format("Managed servers were not started within [%d] ms",timeout));
+      throw new TimeoutException(String.format("Managed servers were not started within [%d] seconds",configuration.getStartupTimeoutInSeconds()));
     }
+    log.info("All servers started in " + (System.currentTimeMillis() - start) + " ms");
     Map<ServerIdentity,MBeanServerConnection> connections=new HashMap<ServerIdentity,MBeanServerConnection>();
     for (    Map.Entry<ServerIdentity,ServerStatus> entry : serverStatuses.entrySet()) {
 switch (entry.getValue()) {
@@ -85,6 +99,7 @@ case STARTED:
         connections.put(entry.getKey(),null);
     }
   }
+  log.info("Awaiting mbeanServer connections for " + connections.keySet());
   int available=0;
   int enabledCount=connections.size();
   while (timeout > 0 && available < enabledCount) {
@@ -96,6 +111,7 @@ case STARTED:
           boolean isAvailable=mbeanServer != null && mbeanServer.isRegistered(OBJECT_NAME);
           if (isAvailable) {
             connections.put(entry.getKey(),mbeanServer);
+            available++;
           }
         }
  catch (        Exception ignore) {
@@ -115,9 +131,9 @@ case STARTED:
         notStartedServers.add(entry.getKey());
       }
     }
-    throw new TimeoutException(String.format("Could not connect to the managed server's MBeanServer for servers with port offsets %s within [%d] ms",notStartedServers.toString(),this.timeout));
+    throw new TimeoutException(String.format("Could not connect to the managed server's MBeanServer for servers with port offsets %s within [%d] seconds",notStartedServers.toString(),configuration.getStartupTimeoutInSeconds()));
   }
-  log.info("All containers started");
+  log.info("All containers available");
 }
  catch (Exception e) {
   throw new RuntimeException("Could not start container",e);
