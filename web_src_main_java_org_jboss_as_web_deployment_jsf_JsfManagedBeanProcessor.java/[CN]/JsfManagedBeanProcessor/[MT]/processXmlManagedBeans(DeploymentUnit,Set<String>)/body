@@ -1,0 +1,63 @@
+{
+  final List<ResourceRoot> resourceRoots=DeploymentUtils.allResourceRoots(deploymentUnit);
+  for (  final ResourceRoot resourceRoot : resourceRoots) {
+    for (    final String file : FACES_CONFIG) {
+      final VirtualFile root=resourceRoot.getRoot();
+      final VirtualFile facesConfig=root.getChild(file);
+      if (facesConfig.exists()) {
+        InputStream is=null;
+        try {
+          is=facesConfig.openStream();
+          final XMLInputFactory inputFactory=XMLInputFactory.newInstance();
+          inputFactory.setXMLResolver(NoopXmlResolver.create());
+          XMLStreamReader parser=inputFactory.createXMLStreamReader(is);
+          int indent=0;
+          boolean managedBean=false;
+          boolean managedBeanClass=false;
+          while (true) {
+            int event=parser.next();
+            if (event == XMLStreamConstants.END_DOCUMENT) {
+              parser.close();
+              break;
+            }
+            if (event == XMLStreamConstants.START_ELEMENT) {
+              indent++;
+              if (indent == 2) {
+                if (parser.getLocalName().equals(MANAGED_BEAN)) {
+                  managedBean=true;
+                }
+              }
+ else               if (indent == 3 && managedBean) {
+                if (parser.getLocalName().equals(MANAGED_BEAN_CLASS)) {
+                  managedBeanClass=true;
+                }
+              }
+            }
+ else             if (event == XMLStreamConstants.END_ELEMENT) {
+              indent--;
+              managedBeanClass=false;
+              if (indent == 1) {
+                managedBean=false;
+              }
+            }
+ else             if (managedBeanClass && event == XMLStreamConstants.CHARACTERS) {
+              managedBeanClasses.add(parser.getText());
+            }
+          }
+        }
+ catch (        Exception e) {
+          log.error("Failed to parse " + facesConfig + " injection into manage beans defined in this file will not be available");
+        }
+ finally {
+          try {
+            if (is != null) {
+              is.close();
+            }
+          }
+ catch (          IOException e) {
+          }
+        }
+      }
+    }
+  }
+}
