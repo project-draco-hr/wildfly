@@ -2,8 +2,8 @@
   ModelNode operationAddress=operation.require(OP_ADDR);
   PathAddress address=PathAddress.pathAddress(operationAddress);
   final String securityRealm=address.getLastElement().getValue();
-  final ModelNode authentication=operation.get(AUTHENTICATION);
-  final ModelNode serverIdentities=operation.get(SERVER_IDENTITIES);
+  final ModelNode authentication=operation.has(AUTHENTICATION) ? operation.get(AUTHENTICATION) : null;
+  final ModelNode serverIdentities=operation.has(SERVER_IDENTITIES) ? operation.get(SERVER_IDENTITIES) : null;
   final ModelNode subModel=context.getSubModel();
   if (serverIdentities != null) {
     subModel.get(SERVER_IDENTITIES).set(serverIdentities);
@@ -16,13 +16,25 @@
     context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
       public void execute(      RuntimeTaskContext context) throws OperationFailedException {
         final ServiceTarget serviceTarget=context.getServiceTarget();
-        final SecurityRealmService securityRealmService=new SecurityRealmService(securityRealm,authentication,serverIdentities);
-        ServiceBuilder builder=serviceTarget.addService(SecurityRealmService.BASE_SERVICE_NAME.append(securityRealm),securityRealmService);
+        final SecurityRealmService securityRealmService=new SecurityRealmService(securityRealm,authentication);
+        ServiceName realmServiceName=SecurityRealmService.BASE_SERVICE_NAME.append(securityRealm);
+        ServiceBuilder realmBuilder=serviceTarget.addService(realmServiceName,securityRealmService);
         String connectionManager=requiredConnectionManager(authentication);
         if (connectionManager != null) {
-          builder.addDependency(LdapConnectionManagerService.BASE_SERVICE_NAME.append(connectionManager),ConnectionManager.class,securityRealmService.getConnectionManagerInjector());
+          realmBuilder.addDependency(LdapConnectionManagerService.BASE_SERVICE_NAME.append(connectionManager),ConnectionManager.class,securityRealmService.getConnectionManagerInjector());
         }
-        builder.setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+        if (serverIdentities != null && serverIdentities.has(SSL)) {
+          ModelNode ssl=serverIdentities.require(SSL);
+          ServiceName sslServiceName=realmServiceName.append("ssl");
+          SSLIdentityService sslIdentityService=new SSLIdentityService(ssl);
+          ServiceBuilder sslBuilder=serviceTarget.addService(sslServiceName,sslIdentityService);
+          if (ssl.has(KEYSTORE) && ssl.get(KEYSTORE).has(RELATIVE_TO)) {
+            sslBuilder.addDependency(pathName(ssl.get(KEYSTORE,RELATIVE_TO).asString()),String.class,sslIdentityService.getRelativeToInjector());
+          }
+          sslBuilder.setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+          realmBuilder.addDependency(sslServiceName,SSLIdentityService.class,securityRealmService.getSSLIdentityInjector());
+        }
+        realmBuilder.setInitialMode(ServiceController.Mode.ON_DEMAND).install();
       }
     }
 );
