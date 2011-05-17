@@ -1,3 +1,44 @@
 {
-  throw new RuntimeException("NYI: org.jboss.as.ejb3.component.EJBComponent.lookup");
+  if (name == null) {
+    throw new IllegalArgumentException("jndi name cannot be null during lookup");
+  }
+  final NamespaceContextSelector namespaceContextSelector=NamespaceContextSelector.getCurrentSelector();
+  if (namespaceContextSelector == null) {
+    throw new IllegalStateException("No NamespaceContextSelector available, cannot lookup " + name);
+  }
+  Context jndiContext=null;
+  String namespaceStrippedJndiName=name;
+  if (name.startsWith("java:app/")) {
+    jndiContext=namespaceContextSelector.getContext("app");
+    namespaceStrippedJndiName=name.substring("java:app/".length());
+  }
+ else   if (name.startsWith("java:module/")) {
+    jndiContext=namespaceContextSelector.getContext("module");
+    namespaceStrippedJndiName=name.substring("java:module/".length());
+  }
+ else   if (name.startsWith("java:comp/") || !name.startsWith("java:")) {
+    jndiContext=namespaceContextSelector.getContext("comp");
+    namespaceStrippedJndiName=name.substring("java:comp/".length());
+  }
+ else   if (!name.startsWith("java:")) {
+    jndiContext=namespaceContextSelector.getContext("comp");
+  }
+ else   if (name.startsWith("java:global/")) {
+    try {
+      jndiContext=new InitialContext();
+    }
+ catch (    NamingException ne) {
+      throw new RuntimeException("Could not lookup jndi name: " + name,ne);
+    }
+  }
+ else {
+    throw new IllegalArgumentException("Cannot lookup jndi name: " + name + " since it"+ " doesn't belong to java:app, java:module, java:comp or java:global namespace");
+  }
+  log.debug("Looking up " + namespaceStrippedJndiName + " in jndi context: "+ jndiContext);
+  try {
+    return jndiContext.lookup(namespaceStrippedJndiName);
+  }
+ catch (  NamingException ne) {
+    throw new RuntimeException("Could not lookup jndi name: " + namespaceStrippedJndiName + " in context: "+ jndiContext,ne);
+  }
 }
