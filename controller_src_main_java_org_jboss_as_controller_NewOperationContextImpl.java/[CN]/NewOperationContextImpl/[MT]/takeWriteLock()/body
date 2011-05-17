@@ -1,19 +1,33 @@
 {
   if (flags.add(Flag.WRITE_LOCK_TAKEN)) {
     try {
-      modelController.acquireLock();
+      modelController.acquireLock(respectInterruption);
     }
  catch (    InterruptedException e) {
       flags.remove(Flag.WRITE_LOCK_TAKEN);
       Thread.currentThread().interrupt();
       throw new CancellationException("Operation cancelled asynchronously");
     }
+    boolean intr=false;
     try {
-      modelController.awaitContainerMonitor();
+      for (; ; )       try {
+        modelController.awaitContainerMonitor();
+        break;
+      }
+ catch (      InterruptedException e) {
+        if (respectInterruption) {
+          Thread.currentThread().interrupt();
+          throw new CancellationException("Operation cancelled asynchronously");
+        }
+ else {
+          intr=true;
+        }
+      }
     }
- catch (    InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new CancellationException("Operation cancelled asynchronously");
+  finally {
+      if (intr) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 }
