@@ -12,25 +12,32 @@
     ManagedReferenceFactory factory=(ManagedReferenceFactory)controller.getValue();
     return factory.getReference().getInstance();
   }
- else   if (ejbLookup != null) {
-    final ServiceName viewService;
+ else   if (applicationDescription != null) {
+    final Set<ViewDescription> viewService;
     if (ejb.beanName().isEmpty()) {
       if (ejb.beanInterface() != Object.class) {
-        viewService=ejbLookup.getViewService(ejb.beanInterface());
+        viewService=applicationDescription.getComponentsForViewName(ejb.beanInterface().getName());
       }
  else {
-        viewService=ejbLookup.getViewService(getType(injectionPoint.getType()));
+        viewService=applicationDescription.getComponentsForViewName(getType(injectionPoint.getType()).getName());
       }
     }
  else {
       if (ejb.beanInterface() != Object.class) {
-        viewService=ejbLookup.getViewService(ejb.beanName(),ejb.beanInterface());
+        viewService=applicationDescription.getComponents(ejb.beanName(),ejb.beanInterface().getName(),deploymentRoot);
       }
  else {
-        viewService=ejbLookup.getViewService(ejb.beanName(),getType(injectionPoint.getType()));
+        viewService=applicationDescription.getComponents(ejb.beanName(),getType(injectionPoint.getType()).getName(),deploymentRoot);
       }
     }
-    final ServiceController<?> controller=serviceRegistry.getRequiredService(viewService);
+    if (viewService.isEmpty()) {
+      throw new RuntimeException("Could not resolve @Ejb reference " + ejb);
+    }
+ else     if (viewService.size() > 1) {
+      throw new RuntimeException("More than 1 ejb found for @Ejb reference " + ejb);
+    }
+    final ViewDescription viewDescription=viewService.iterator().next();
+    final ServiceController<?> controller=serviceRegistry.getRequiredService(viewDescription.getServiceName());
     final ComponentView view=(ComponentView)controller.getValue();
     return view.createInstance().createProxy();
   }
