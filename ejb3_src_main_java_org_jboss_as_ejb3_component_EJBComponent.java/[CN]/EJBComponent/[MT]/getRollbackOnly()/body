@@ -1,4 +1,40 @@
 {
-  if (isBeanManagedTransaction())   throw new IllegalStateException("EJB 3.1 FR 4.3.3 & 5.4.5 Only beans with container-managed transaction demarcation can use this method.");
-  throw new RuntimeException("NYI: org.jboss.as.ejb3.component.EJBComponent.getRollbackOnly");
+  if (isBeanManagedTransaction()) {
+    throw new IllegalStateException("EJB 3.1 FR 4.3.3 & 5.4.5 Only beans with container-managed transaction demarcation " + "can use this method.");
+  }
+  final InvocationContext currentInvocationContext=CurrentInvocationContext.get();
+  if (currentInvocationContext == null) {
+    throw new IllegalStateException("getRollbackOnly() not allowed during construction and injection");
+  }
+  final Method invokedMethod=currentInvocationContext.getMethod();
+  if (invokedMethod == null) {
+    throw new IllegalStateException("getRollbackOnly() not allowed during lifecycle callbacks (EJB3 4.4.1 & 4.5.2)");
+  }
+  final TransactionAttributeType txAttr=this.getTransactionAttributeType(invokedMethod);
+  if (!this.isGetRollbackOnlyAllowed(txAttr)) {
+    throw new IllegalStateException("getRollbackOnly() not allowed for method: " + invokedMethod + " with transaction "+ "attribute: "+ txAttr);
+  }
+  try {
+    TransactionManager tm=this.getTransactionManager();
+    if (tm.getTransaction() == null) {
+      throw new IllegalStateException("getRollbackOnly() not allowed without a transaction.");
+    }
+    int status=tm.getStatus();
+    if (log.isTraceEnabled()) {
+      log.trace("Current transaction status is " + status);
+    }
+switch (status) {
+case Status.STATUS_COMMITTED:
+case Status.STATUS_ROLLEDBACK:
+      throw new IllegalStateException("getRollbackOnly() not allowed after transaction is completed (EJBTHREE-1445)");
+case Status.STATUS_MARKED_ROLLBACK:
+case Status.STATUS_ROLLING_BACK:
+    return true;
+}
+return false;
+}
+ catch (SystemException se) {
+log.warn("failed to get tx manager status; ignoring",se);
+return true;
+}
 }

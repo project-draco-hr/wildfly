@@ -1,4 +1,27 @@
 {
-  if (isBeanManagedTransaction())   throw new IllegalStateException("EJB 3.1 FR 4.3.3 & 5.4.5 Only beans with container-managed transaction demarcation can use this method.");
-  throw new RuntimeException("NYI: org.jboss.as.ejb3.component.EJBComponent.setRollbackOnly");
+  if (isBeanManagedTransaction()) {
+    throw new IllegalStateException("EJB 3.1 FR 4.3.3 & 5.4.5 Only beans with container-managed transaction demarcation " + "can use this method.");
+  }
+  final InvocationContext currentInvocationContext=CurrentInvocationContext.get();
+  if (currentInvocationContext == null) {
+    throw new IllegalStateException("setRollbackOnly() not allowed during construction and injection");
+  }
+  final Method invokedMethod=currentInvocationContext.getMethod();
+  if (invokedMethod == null) {
+    throw new IllegalStateException("setRollbackOnly() not allowed during lifecycle callbacks (EJB3 4.4.1 & 4.5.2)");
+  }
+  final TransactionAttributeType txAttr=this.getTransactionAttributeType(invokedMethod);
+  if (!this.isSetRollbackOnlyAllowed(txAttr)) {
+    throw new IllegalStateException("setRollbackOnly() not allowed for method: " + invokedMethod + " with transaction attribute: "+ txAttr);
+  }
+  try {
+    TransactionManager tm=getTransactionManager();
+    if (tm.getTransaction() == null) {
+      throw new IllegalStateException("setRollbackOnly() not allowed without a transaction.");
+    }
+    tm.setRollbackOnly();
+  }
+ catch (  SystemException se) {
+    log.warn("failed to set rollback only; ignoring",se);
+  }
 }
