@@ -7,6 +7,17 @@
   String identityTrustManagerClassName="default";
   String mappingManagerClassName="default";
   final ModelNode subModel=context.getSubModel();
+  Properties securityProperties=null;
+  final List<ModelNode> securityPropertiesList;
+  if (operation.hasDefined(SECURITY_PROPERTIES)) {
+    securityPropertiesList=operation.get(SECURITY_PROPERTIES).asList();
+    subModel.get(SECURITY_PROPERTIES).set(securityPropertiesList);
+    securityProperties=new Properties();
+    for (    ModelNode node : securityPropertiesList) {
+      Property prop=node.asProperty();
+      securityProperties.setProperty(prop.getName(),prop.getValue().asString());
+    }
+  }
   if (operation.hasDefined(AUTHENTICATION_MANAGER_CLASS_NAME)) {
     authenticationManagerClassName=operation.get(AUTHENTICATION_MANAGER_CLASS_NAME).asString();
     subModel.get(AUTHENTICATION_MANAGER_CLASS_NAME).set(authenticationManagerClassName);
@@ -93,6 +104,7 @@
  else {
     resolvedSubjectFactoryClassName=subjectFactoryClassName;
   }
+  final Properties securityPropertiesStr=securityProperties;
   if (context instanceof BootOperationContext) {
     final BootOperationContext updateContext=(BootOperationContext)context;
     context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
@@ -101,6 +113,7 @@
         log.info("Activating Security Subsystem");
         final ServiceTarget target=context.getServiceTarget();
         final SecurityBootstrapService bootstrapService=new SecurityBootstrapService();
+        if (securityPropertiesStr != null && !securityPropertiesStr.isEmpty())         bootstrapService.setSecurityProperties(securityPropertiesStr);
         target.addService(SecurityBootstrapService.SERVICE_NAME,bootstrapService).setInitialMode(ServiceController.Mode.ACTIVE).install();
         final SecurityDomainJndiInjectable securityDomainJndiInjectable=new SecurityDomainJndiInjectable();
         final BinderService binderService=new BinderService("jaas");
