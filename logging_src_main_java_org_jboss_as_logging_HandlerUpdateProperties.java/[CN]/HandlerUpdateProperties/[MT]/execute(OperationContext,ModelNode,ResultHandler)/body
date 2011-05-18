@@ -1,0 +1,54 @@
+{
+  final ModelNode opAddr=operation.require(OP_ADDR);
+  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  final String name=address.getLastElement().getValue();
+  final ModelNode model=context.getSubModel();
+  final ModelNode compensatingOperation=new ModelNode();
+  compensatingOperation.get(OP).set(OPERATION_NAME);
+  compensatingOperation.get(OP_ADDR).set(opAddr);
+  if (operation.hasDefined(LEVEL)) {
+    apply(model,compensatingOperation,LEVEL);
+    apply(operation,model,LEVEL);
+  }
+  if (operation.hasDefined(FORMATTER)) {
+    apply(model,compensatingOperation,FORMATTER);
+    apply(operation,model,FORMATTER);
+  }
+  if (operation.hasDefined(ENCODING)) {
+    apply(model,compensatingOperation,ENCODING);
+    apply(operation,model,ENCODING);
+  }
+  updateModel(operation,compensatingOperation,model);
+  if (context.getRuntimeContext() != null) {
+    context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
+      public void execute(      RuntimeTaskContext context) throws OperationFailedException {
+        final ServiceRegistry serviceRegistry=context.getServiceRegistry();
+        final ServiceController<Handler> controller=(ServiceController<Handler>)serviceRegistry.getService(LogServices.handlerName(name));
+        if (controller != null) {
+          final Handler handler=controller.getValue();
+          if (operation.hasDefined(LEVEL)) {
+            handler.setLevel(Level.parse(operation.get(LEVEL).asString()));
+          }
+          if (operation.hasDefined(FORMATTER)) {
+            new PatternFormatterSpec(operation.get(FORMATTER).asString()).apply(handler);
+          }
+          if (operation.hasDefined(ENCODING)) {
+            try {
+              handler.setEncoding(operation.get(ENCODING).asString());
+            }
+ catch (            UnsupportedEncodingException e) {
+              throw new OperationFailedException(e,new ModelNode().set("Failed to set handler encoding."));
+            }
+          }
+          updateRuntime(operation,handler);
+        }
+        resultHandler.handleResultComplete();
+      }
+    }
+);
+  }
+ else {
+    resultHandler.handleResultComplete();
+  }
+  return new BasicOperationResult(compensatingOperation);
+}
