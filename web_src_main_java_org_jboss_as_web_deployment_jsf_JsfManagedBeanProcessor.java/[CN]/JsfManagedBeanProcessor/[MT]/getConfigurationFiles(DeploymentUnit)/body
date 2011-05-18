@@ -1,0 +1,47 @@
+{
+  final Set<VirtualFile> ret=new HashSet<VirtualFile>();
+  final List<ResourceRoot> resourceRoots=DeploymentUtils.allResourceRoots(deploymentUnit);
+  for (  final ResourceRoot resourceRoot : resourceRoots) {
+    final VirtualFile webInfFacesConfig=resourceRoot.getRoot().getChild(WEB_INF_FACES_CONFIG);
+    if (webInfFacesConfig.exists()) {
+      ret.add(webInfFacesConfig);
+    }
+    final VirtualFile metaInf=resourceRoot.getRoot().getChild("META-INF");
+    if (metaInf.exists() && metaInf.isDirectory()) {
+      for (      final VirtualFile file : metaInf.getChildren()) {
+        if (file.getName().equals("faces-config.xml") || file.getName().endsWith(".faces-config.xml")) {
+          ret.add(file);
+        }
+      }
+    }
+  }
+  String configFiles=null;
+  final WarMetaData warMetaData=deploymentUnit.getAttachment(WarMetaData.ATTACHMENT_KEY);
+  if (warMetaData != null) {
+    final WebMetaData webMetaData=warMetaData.getWebMetaData();
+    if (webMetaData != null) {
+      final List<ParamValueMetaData> contextParams=webMetaData.getContextParams();
+      if (contextParams != null) {
+        for (        final ParamValueMetaData param : contextParams) {
+          if (param.getParamName().equals(CONFIG_FILES)) {
+            configFiles=param.getParamValue();
+            break;
+          }
+        }
+      }
+    }
+  }
+  if (configFiles != null) {
+    final String[] files=configFiles.split(",");
+    final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+    if (deploymentRoot != null) {
+      for (      final String file : files) {
+        final VirtualFile configFile=deploymentRoot.getRoot().getChild(file);
+        if (configFile.exists()) {
+          ret.add(configFile);
+        }
+      }
+    }
+  }
+  return ret;
+}
