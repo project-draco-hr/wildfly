@@ -18,16 +18,20 @@
         final ServiceTarget serviceTarget=context.getServiceTarget();
         boolean enabled=!operation.hasDefined(ENABLED) || operation.get(ENABLED).asBoolean();
         final ServiceName dataSourceServiceName=AbstractDataSourceService.SERVICE_NAME_BASE.append(jndiName);
-        final ServiceBuilder<?> dataSourceServiceBuilder=serviceTarget.addService(dataSourceServiceName,dataSourceService).addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,dataSourceService.getTransactionIntegrationInjector()).addDependency(ConnectorServices.MANAGEMENT_REPOSISTORY_SERVICE,ManagementRepository.class,dataSourceService.getmanagementRepositoryInjector()).addDependency(SubjectFactoryService.SERVICE_NAME,SubjectFactory.class,dataSourceService.getSubjectFactoryInjector()).addDependency(NamingService.SERVICE_NAME);
-        final String driverName=operation.require(DRIVER).asString();
-        final ServiceName driverServiceName=getDriverDependency(driverName);
+        final ServiceBuilder<?> dataSourceServiceBuilder=serviceTarget.addService(dataSourceServiceName,dataSourceService).addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,dataSourceService.getTransactionIntegrationInjector()).addDependency(ConnectorServices.MANAGEMENT_REPOSISTORY_SERVICE,ManagementRepository.class,dataSourceService.getmanagementRepositoryInjector()).addDependency(SubjectFactoryService.SERVICE_NAME,SubjectFactory.class,dataSourceService.getSubjectFactoryInjector()).addDependency(ConnectorServices.JDBC_DRIVER_REGISTRY_SERVICE,DriverRegistry.class,dataSourceService.getDriverRegistryInjector()).addDependency(NamingService.SERVICE_NAME);
+        final String driverName=operation.require(DATASOURCE_DRIVER).asString();
+        final ServiceName driverServiceName=ServiceName.JBOSS.append("jdbc-driver",driverName);
         if (driverServiceName != null) {
           dataSourceServiceBuilder.addDependency(driverServiceName,Driver.class,dataSourceService.getDriverInjector());
         }
         final DataSourceReferenceFactoryService referenceFactoryService=new DataSourceReferenceFactoryService();
         final ServiceName referenceFactoryServiceName=DataSourceReferenceFactoryService.SERVICE_NAME_BASE.append(jndiName);
         final ServiceBuilder<?> referenceBuilder=serviceTarget.addService(referenceFactoryServiceName,referenceFactoryService).addDependency(dataSourceServiceName,DataSource.class,referenceFactoryService.getDataSourceInjector());
-        final BinderService binderService=new BinderService(jndiName.substring(6));
+        String bindName=jndiName;
+        if (jndiName.startsWith("java:/")) {
+          bindName=jndiName.substring(6);
+        }
+        final BinderService binderService=new BinderService(bindName);
         final ServiceName binderServiceName=ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jndiName);
         final ServiceBuilder<?> binderBuilder=serviceTarget.addService(binderServiceName,binderService).addDependency(referenceFactoryServiceName,ManagedReferenceFactory.class,binderService.getManagedObjectInjector()).addDependency(ContextNames.JAVA_CONTEXT_SERVICE_NAME,NamingStore.class,binderService.getNamingStoreInjector()).addListener(new AbstractServiceListener<Object>(){
           @Override public void serviceStarted(          ServiceController<?> controller){

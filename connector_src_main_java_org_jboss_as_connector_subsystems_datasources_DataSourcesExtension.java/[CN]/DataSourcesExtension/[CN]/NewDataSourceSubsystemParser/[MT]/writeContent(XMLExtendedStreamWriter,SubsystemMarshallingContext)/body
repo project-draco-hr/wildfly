@@ -2,8 +2,12 @@
   context.startSubsystemElement(Namespace.CURRENT.getUriString(),false);
   ModelNode node=context.getModelNode();
   writer.writeStartElement(DATASOURCES);
-  if (node.hasDefined(DATA_SOURCE)) {
-    for (    Property property : node.get(DATA_SOURCE).asPropertyList()) {
+  if (node.hasDefined(DATA_SOURCE) || node.hasDefined(XA_DATA_SOURCE)) {
+    List<Property> propertyList=node.hasDefined(DATA_SOURCE) ? node.get(DATA_SOURCE).asPropertyList() : new LinkedList<Property>();
+    if (node.hasDefined(XA_DATA_SOURCE)) {
+      propertyList.addAll(node.get(XA_DATA_SOURCE).asPropertyList());
+    }
+    for (    Property property : propertyList) {
       final ModelNode dataSourceNode=property.getValue();
       boolean isXADataSource=hasAnyOf(dataSourceNode,XA_RESOURCE_TIMEOUT,XADATASOURCECLASS,XADATASOURCEPROPERTIES);
       writer.writeStartElement(isXADataSource ? DataSources.Tag.XA_DATASOURCE.getLocalName() : DataSources.Tag.DATASOURCE.getLocalName());
@@ -22,7 +26,7 @@
       writeAttributeIfHas(writer,dataSourceNode,DataSource.Attribute.SPY,SPY);
       if (!isXADataSource) {
         writeElementIfHas(writer,dataSourceNode,DataSource.Tag.CONNECTIONURL,CONNECTION_URL);
-        writeElementIfHas(writer,dataSourceNode,DataSource.Tag.DRIVERCLASS,DRIVER_CLASS);
+        writeElementIfHas(writer,dataSourceNode,DataSource.Tag.DRIVERCLASS,DATASOURCE_DRIVER_CLASS);
         if (dataSourceNode.hasDefined(CONNECTION_PROPERTIES)) {
           for (          Property connectionProperty : dataSourceNode.get(CONNECTION_PROPERTIES).asPropertyList()) {
             writeConnectionProperty(writer,dataSourceNode,connectionProperty.getName(),connectionProperty.getValue().asString());
@@ -30,11 +34,17 @@
         }
       }
       if (isXADataSource) {
+        if (dataSourceNode.hasDefined(XADATASOURCEPROPERTIES)) {
+          for (          Property prop : dataSourceNode.get(XADATASOURCEPROPERTIES).asPropertyList()) {
+            writer.writeStartElement(XaDataSource.Tag.XADATASOURCEPROPERTY.getLocalName());
+            writer.writeAttribute("name",prop.getName());
+            writer.writeCharacters(prop.getValue().asString());
+            writer.writeEndElement();
+          }
+        }
         writeElementIfHas(writer,dataSourceNode,XaDataSource.Tag.XADATASOURCECLASS,XADATASOURCECLASS);
       }
-      writeElementIfHas(writer,dataSourceNode,DataSource.Tag.DRIVER,DRIVER);
-      if (!isXADataSource) {
-      }
+      writeElementIfHas(writer,dataSourceNode,DataSource.Tag.DRIVER,DATASOURCE_DRIVER);
       if (isXADataSource) {
         writeElementIfHas(writer,dataSourceNode,XaDataSource.Tag.URLDELIMITER,URL_DELIMITER);
         writeElementIfHas(writer,dataSourceNode,XaDataSource.Tag.URLSELECTORSTRATEGYCLASSNAME,URL_SELECTOR_STRATEGY_CLASS_NAME);
@@ -108,15 +118,20 @@
       writer.writeEndElement();
     }
   }
-  writer.writeEndElement();
   if (node.hasDefined(JDBC_DRIVER)) {
-    writer.writeStartElement(Element.DRIVERS.getLocalName());
+    writer.writeStartElement(DataSources.Tag.DRIVERS.getLocalName());
     for (    Property driverProperty : node.get(JDBC_DRIVER).asPropertyList()) {
-      writer.writeStartElement(Element.DRIVER.getLocalName());
-      writer.writeAttribute(Attribute.MODULE.getLocalName(),driverProperty.getValue().require(DRIVER).asString());
+      writer.writeStartElement(DataSources.Tag.DRIVER.getLocalName());
+      writer.writeAttribute(Driver.Attribute.NAME.getLocalName(),driverProperty.getValue().require(DRIVER_NAME).asString());
+      writeAttributeIfHas(writer,driverProperty.getValue(),Driver.Attribute.MODULE,DRIVER_MODULE_NAME);
+      writeAttributeIfHas(writer,driverProperty.getValue(),Driver.Attribute.MAJOR_VERSION,DRIVER_MAJOR_VERSION);
+      writeAttributeIfHas(writer,driverProperty.getValue(),Driver.Attribute.MINOR_VERSION,DRIVER_MINOR_VERSION);
+      writeElementIfHas(writer,driverProperty.getValue(),Driver.Tag.DRIVERCLASS.getLocalName(),DRIVER_CLASS_NAME);
+      writeElementIfHas(writer,driverProperty.getValue(),Driver.Tag.XADATASOURCECLASS.getLocalName(),DRIVER_XA_DATASOURCE_CLASS_NAME);
       writer.writeEndElement();
     }
     writer.writeEndElement();
   }
+  writer.writeEndElement();
   writer.writeEndElement();
 }
