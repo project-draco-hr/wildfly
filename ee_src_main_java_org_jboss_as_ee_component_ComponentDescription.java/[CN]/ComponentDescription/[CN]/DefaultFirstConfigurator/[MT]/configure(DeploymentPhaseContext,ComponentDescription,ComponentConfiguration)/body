@@ -35,9 +35,16 @@
     }
   }
 .run();
-  final List<InterceptorDescription> interceptors=new ArrayList<InterceptorDescription>();
+  final Set<InterceptorDescription> interceptors=new HashSet<InterceptorDescription>();
+  final Set<InterceptorDescription> interceptorWithLifecycleCallbacks=new HashSet<InterceptorDescription>();
+  final List<InterceptorDescription> defaultInterceptors=description.getModuleDescription().getDefaultInterceptors();
+  if (!description.isExcludeDefaultInterceptors()) {
+    interceptors.addAll(defaultInterceptors);
+    interceptorWithLifecycleCallbacks.addAll(defaultInterceptors);
+  }
+  interceptorWithLifecycleCallbacks.addAll(description.getClassInterceptors());
   interceptors.addAll(description.getAllInterceptors().values());
-  for (  InterceptorDescription interceptorDescription : interceptors) {
+  for (  final InterceptorDescription interceptorDescription : interceptors) {
     final String interceptorClassName=interceptorDescription.getInterceptorClassName();
     final EEModuleClassConfiguration interceptorConfiguration=moduleConfiguration.getClassConfiguration(interceptorClassName);
     final Object contextKey=interceptorConfiguration.getModuleClass();
@@ -46,7 +53,7 @@
     }
     instantiators.addFirst(new ManagedReferenceInterceptorFactory(interceptorConfiguration.getInstantiator(),contextKey));
     destructors.addLast(new ManagedReferenceReleaseInterceptorFactory(contextKey));
-    final boolean isClassLevelInterceptor=description.getClassInterceptors().contains(interceptorDescription);
+    final boolean interceptorHasLifecycleCallbacks=interceptorWithLifecycleCallbacks.contains(interceptorDescription);
     new ClassDescriptionTraversal(interceptorConfiguration,moduleConfiguration){
       @Override public void handle(      EEModuleClassConfiguration interceptorClassConfiguration,      EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
         final ClassReflectionIndex<?> interceptorClassIndex=deploymentReflectionIndex.getClassIndex(interceptorClassConfiguration.getModuleClass());
@@ -57,7 +64,7 @@
           injectors.addFirst(injectionConfiguration.getTarget().createInjectionInterceptorFactory(contextKey,valueContextKey,managedReferenceFactoryValue,deploymentUnit));
           uninjectors.addLast(new ManagedReferenceReleaseInterceptorFactory(valueContextKey));
         }
-        if (isClassLevelInterceptor) {
+        if (interceptorHasLifecycleCallbacks) {
           final MethodIdentifier postConstructMethodIdentifier=classDescription.getPostConstructMethod();
           if (postConstructMethodIdentifier != null) {
             final Method method=ClassReflectionIndexUtil.findRequiredMethod(deploymentReflectionIndex,interceptorClassIndex,postConstructMethodIdentifier);
@@ -94,7 +101,12 @@
   }
   final Deque<InterceptorFactory> userPostConstruct=new ArrayDeque<InterceptorFactory>();
   final Deque<InterceptorFactory> userPreDestroy=new ArrayDeque<InterceptorFactory>();
-  for (  final InterceptorDescription interceptorClass : description.getClassInterceptors()) {
+  final ArrayList<InterceptorDescription> interceptorOrder=new ArrayList<InterceptorDescription>();
+  if (!description.isExcludeDefaultInterceptors()) {
+    interceptorOrder.addAll(defaultInterceptors);
+  }
+  interceptorOrder.addAll(description.getClassInterceptors());
+  for (  final InterceptorDescription interceptorClass : interceptorOrder) {
     if (userPostConstructByInterceptorClass.containsKey(interceptorClass.getInterceptorClassName())) {
       userPostConstruct.addAll(userPostConstructByInterceptorClass.get(interceptorClass.getInterceptorClassName()));
     }
@@ -158,6 +170,13 @@
       MethodIdentifier identifier=MethodIdentifier.getIdentifier(method.getReturnType(),method.getName(),method.getParameterTypes());
       Deque<InterceptorFactory> interceptorDeque=configuration.getComponentInterceptorDeque(method);
       if (!description.isExcludeDefaultInterceptors() && !description.isExcludeDefaultInterceptors(identifier)) {
+        for (        InterceptorDescription interceptorDescription : defaultInterceptors) {
+          String interceptorClassName=interceptorDescription.getInterceptorClassName();
+          List<InterceptorFactory> aroundInvokes=userAroundInvokesByInterceptorClass.get(interceptorClassName);
+          if (aroundInvokes != null) {
+            interceptorDeque.addAll(aroundInvokes);
+          }
+        }
       }
       if (!description.isExcludeClassInterceptors(identifier)) {
         for (        InterceptorDescription interceptorDescription : classInterceptors) {

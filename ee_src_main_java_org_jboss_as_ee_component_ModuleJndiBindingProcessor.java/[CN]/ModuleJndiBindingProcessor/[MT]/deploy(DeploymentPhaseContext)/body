@@ -1,6 +1,7 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   final EEModuleConfiguration moduleConfiguration=deploymentUnit.getAttachment(Attachments.EE_MODULE_CONFIGURATION);
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
   if (moduleConfiguration == null) {
     return;
   }
@@ -17,6 +18,7 @@
     deploymentDescriptorBindings.put(serviceName,binding);
     addJndiBinding(moduleConfiguration,binding,phaseContext,serviceName);
   }
+  boolean bindDefaultInterceptorsToModuleContext=false;
   for (  final ComponentConfiguration componentConfiguration : moduleConfiguration.getComponentConfigurations()) {
     final Set<BindingConfiguration> componentLevelBindings=new HashSet(componentConfiguration.getBindingConfigurations());
     for (    BindingConfiguration binding : componentLevelBindings) {
@@ -24,6 +26,9 @@
       final boolean compBinding=bindingName.startsWith("java:comp") || !bindingName.startsWith("java:");
       if (componentConfiguration.getComponentDescription().getNamingMode() == ComponentNamingMode.CREATE && compBinding) {
         continue;
+      }
+      if (!componentConfiguration.getComponentDescription().isExcludeDefaultInterceptors()) {
+        bindDefaultInterceptorsToModuleContext=true;
       }
       final ServiceName serviceName=ContextNames.serviceNameOfEnvEntry(moduleConfiguration.getApplicationName(),moduleConfiguration.getModuleName(),null,false,binding.getName());
       final BindingConfiguration existingConfiguration=existingBindings.get(serviceName);
@@ -36,6 +41,12 @@
     }
   }
   final Set<String> handledClasses=new HashSet<String>();
+  if (bindDefaultInterceptorsToModuleContext) {
+    for (    final InterceptorDescription defaultInterceptor : moduleDescription.getDefaultInterceptors()) {
+      final EEModuleClassConfiguration classConfig=moduleConfiguration.getClassConfiguration(defaultInterceptor.getInterceptorClassName());
+      processClassConfigurations(phaseContext,moduleConfiguration,existingBindings,deploymentDescriptorBindings,handledClasses,ComponentNamingMode.USE_MODULE,Collections.singleton(classConfig));
+    }
+  }
   for (  final ComponentConfiguration componentConfiguration : moduleConfiguration.getComponentConfigurations()) {
     final Set<EEModuleClassConfiguration> classConfigurations=new HashSet<EEModuleClassConfiguration>();
     classConfigurations.add(componentConfiguration.getModuleClassConfiguration());
@@ -45,34 +56,6 @@
         classConfigurations.add(interceptorClass);
       }
     }
-    for (    final EEModuleClassConfiguration classConfiguration : classConfigurations) {
-      new ClassDescriptionTraversal(classConfiguration,moduleConfiguration){
-        @Override protected void handle(        final EEModuleClassConfiguration configuration,        final EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
-          if (handledClasses.contains(classDescription.getClassName())) {
-            return;
-          }
-          handledClasses.add(classDescription.getClassName());
-          final Set<BindingConfiguration> classLevelBindings=new HashSet(configuration.getBindingConfigurations());
-          for (          BindingConfiguration binding : classLevelBindings) {
-            final String bindingName=binding.getName();
-            final boolean compBinding=bindingName.startsWith("java:comp") || !bindingName.startsWith("java:");
-            if (componentConfiguration.getComponentDescription().getNamingMode() == ComponentNamingMode.CREATE && compBinding) {
-              continue;
-            }
-            final ServiceName serviceName=ContextNames.serviceNameOfEnvEntry(moduleConfiguration.getApplicationName(),moduleConfiguration.getModuleName(),null,false,binding.getName());
-            if (deploymentDescriptorBindings.containsKey(serviceName)) {
-              continue;
-            }
-            final BindingConfiguration existingConfiguration=existingBindings.get(serviceName);
-            if (existingConfiguration != null && !existingConfiguration.equals(binding)) {
-              throw new DeploymentUnitProcessingException("Bindings with the same name at " + binding.getName() + " "+ binding+ " and "+ existingConfiguration);
-            }
-            existingBindings.put(serviceName,binding);
-            addJndiBinding(moduleConfiguration,binding,phaseContext,serviceName);
-          }
-        }
-      }
-.run();
-    }
+    processClassConfigurations(phaseContext,moduleConfiguration,existingBindings,deploymentDescriptorBindings,handledClasses,componentConfiguration.getComponentDescription().getNamingMode(),classConfigurations);
   }
 }

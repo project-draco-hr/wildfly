@@ -1,5 +1,6 @@
 {
   DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
   EjbJarMetaData ejbJarMetaData=deploymentUnit.getAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_METADATA);
   if (ejbJarMetaData == null) {
     return;
@@ -14,6 +15,25 @@
         boolean rollback=applicationException.isRollback();
         boolean inherited=applicationException.isInherited() == null ? true : applicationException.isInherited();
         ejbJarDescription.addApplicationException(exceptionClassName,rollback,inherited);
+      }
+    }
+    if (assemblyDescriptor.getInterceptorBindings() != null) {
+      final Set<String> interceptors=new HashSet<String>();
+      for (      final InterceptorMetaData interceptor : ejbJarMetaData.getInterceptors()) {
+        interceptors.add(interceptor.getInterceptorClass());
+      }
+      for (      final InterceptorBindingMetaData binding : assemblyDescriptor.getInterceptorBindings()) {
+        if (binding.getEjbName().equals("*")) {
+          if (binding.getMethod() != null) {
+            throw new DeploymentUnitProcessingException("Default interceptors cannot specify a method to bind to in ejb-jar.xml");
+          }
+          for (          final String interceptorClassName : binding.getInterceptorClasses()) {
+            if (interceptors.contains(interceptorClassName)) {
+              final InterceptorDescription interceptorDescription=new InterceptorDescription(interceptorClassName);
+              eeModuleDescription.getDefaultInterceptors().add(interceptorDescription);
+            }
+          }
+        }
       }
     }
   }
