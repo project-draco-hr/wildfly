@@ -1,0 +1,43 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final EjbJarMetaData ejbJarMetaData=deploymentUnit.getAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_METADATA);
+  final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
+  if (ejbJarMetaData == null) {
+    return;
+  }
+  if (!(ejbJarMetaData instanceof EjbJar3xMetaData)) {
+    return;
+  }
+  final EjbJar3xMetaData metaData=(EjbJar3xMetaData)ejbJarMetaData;
+  if (metaData.getInterceptors() == null) {
+    return;
+  }
+  for (  InterceptorMetaData interceptor : metaData.getInterceptors()) {
+    String interceptorClassName=interceptor.getInterceptorClass();
+    EEModuleClassDescription interceptorModuleClassDescription=eeModuleDescription.getOrAddClassByName(interceptorClassName);
+    AroundInvokesMetaData aroundInvokes=interceptor.getAroundInvokes();
+    if (aroundInvokes != null) {
+      for (      AroundInvokeMetaData aroundInvoke : aroundInvokes) {
+        String methodName=aroundInvoke.getMethodName();
+        MethodIdentifier methodIdentifier=MethodIdentifier.getIdentifier(Object.class,methodName,new Class<?>[]{InvocationContext.class});
+        interceptorModuleClassDescription.setAroundInvokeMethod(methodIdentifier);
+      }
+    }
+    LifecycleCallbacksMetaData postConstructs=interceptor.getPostConstructs();
+    if (postConstructs != null) {
+      for (      LifecycleCallbackMetaData postConstruct : postConstructs) {
+        String methodName=postConstruct.getMethodName();
+        MethodIdentifier methodIdentifier=MethodIdentifier.getIdentifier(Void.TYPE,methodName,new Class<?>[]{InvocationContext.class});
+        interceptorModuleClassDescription.setPostConstructMethod(methodIdentifier);
+      }
+    }
+    LifecycleCallbacksMetaData preDestroys=interceptor.getPreDestroys();
+    if (preDestroys != null) {
+      for (      LifecycleCallbackMetaData preDestroy : preDestroys) {
+        String methodName=preDestroy.getMethodName();
+        MethodIdentifier methodIdentifier=MethodIdentifier.getIdentifier(Void.TYPE,methodName,new Class<?>[]{InvocationContext.class});
+        interceptorModuleClassDescription.setPreDestroyMethod(methodIdentifier);
+      }
+    }
+  }
+}
