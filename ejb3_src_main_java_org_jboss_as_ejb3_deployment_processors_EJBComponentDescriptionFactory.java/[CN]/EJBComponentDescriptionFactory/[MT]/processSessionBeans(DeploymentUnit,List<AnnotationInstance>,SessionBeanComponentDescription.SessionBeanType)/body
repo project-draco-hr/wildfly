@@ -1,0 +1,43 @@
+{
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+  final EjbJarDescription ejbJarDescription=getEjbJarDescription(deploymentUnit);
+  final ServiceName deploymentUnitServiceName=deploymentUnit.getServiceName();
+  for (  final AnnotationInstance sessionBeanAnnotation : sessionBeanAnnotations) {
+    final AnnotationTarget target=sessionBeanAnnotation.target();
+    if (!(target instanceof ClassInfo)) {
+      logger.warn(sessionBeanAnnotation.name() + " annotation is expected to be only on classes. " + target+ " is not a class");
+      continue;
+    }
+    final ClassInfo sessionBeanClassInfo=(ClassInfo)target;
+    final String ejbName=sessionBeanClassInfo.name().local();
+    final AnnotationValue nameValue=sessionBeanAnnotation.value("name");
+    final String beanName=nameValue == null || nameValue.asString().isEmpty() ? ejbName : nameValue.asString();
+    final SessionBeanMetaData beanMetaData=getEnterpriseBeanMetaData(deploymentUnit,beanName,SessionBeanMetaData.class);
+    final SessionBeanComponentDescription.SessionBeanType sessionBeanType;
+    final String beanClassName;
+    if (beanMetaData != null) {
+      sessionBeanType=override(annotatedSessionBeanType,descriptionOf(beanMetaData.getSessionType()));
+      beanClassName=override(sessionBeanClassInfo.name().toString(),beanMetaData.getEjbClass());
+    }
+ else {
+      sessionBeanType=annotatedSessionBeanType;
+      beanClassName=sessionBeanClassInfo.name().toString();
+    }
+    final SessionBeanComponentDescription sessionBeanDescription;
+switch (sessionBeanType) {
+case STATELESS:
+      sessionBeanDescription=new StatelessComponentDescription(beanName,beanClassName,ejbJarDescription,deploymentUnitServiceName);
+    break;
+case STATEFUL:
+  sessionBeanDescription=new StatefulComponentDescription(beanName,beanClassName,ejbJarDescription,deploymentUnitServiceName);
+break;
+case SINGLETON:
+sessionBeanDescription=new SingletonComponentDescription(beanName,beanClassName,ejbJarDescription,deploymentUnitServiceName);
+break;
+default :
+throw new IllegalArgumentException("Unknown session bean type: " + sessionBeanType);
+}
+ejbJarDescription.getEEModuleDescription().addComponent(sessionBeanDescription);
+}
+EjbDeploymentMarker.mark(deploymentUnit);
+}

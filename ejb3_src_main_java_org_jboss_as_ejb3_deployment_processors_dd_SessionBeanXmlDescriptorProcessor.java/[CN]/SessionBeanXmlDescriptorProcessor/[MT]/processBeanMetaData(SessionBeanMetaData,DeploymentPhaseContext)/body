@@ -3,61 +3,42 @@
   final EjbJarDescription ejbJarDescription=deploymentUnit.getAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_DESCRIPTION);
   final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
   final String applicationName=moduleDescription.getApplicationName();
-  SessionType sessionType=sessionBean.getSessionType();
-  if (sessionType == null) {
-    throw new DeploymentUnitProcessingException("Unknown session-type for session bean: " + sessionBean.getName() + " in deployment unit: "+ deploymentUnit);
+  final String beanName=sessionBean.getName();
+  final SessionBeanComponentDescription sessionBeanDescription=(SessionBeanComponentDescription)moduleDescription.getComponentByName(beanName);
+  sessionBeanDescription.setMappedName(sessionBean.getMappedName());
+  BusinessLocalsMetaData businessLocals=sessionBean.getBusinessLocals();
+  if (businessLocals != null && !businessLocals.isEmpty()) {
+    sessionBeanDescription.addLocalBusinessInterfaceViews(businessLocals);
   }
-  String beanName=sessionBean.getName();
-  String beanClassName=sessionBean.getEjbClass();
-  SessionBeanComponentDescription sessionBeanDescription=null;
-switch (sessionType) {
-case Stateless:
-    sessionBeanDescription=new StatelessComponentDescription(beanName,beanClassName,ejbJarDescription,deploymentUnit.getServiceName());
-  break;
-case Stateful:
-sessionBeanDescription=new StatefulComponentDescription(beanName,beanClassName,ejbJarDescription,deploymentUnit.getServiceName());
-break;
-case Singleton:
-sessionBeanDescription=new SingletonComponentDescription(beanName,beanClassName,ejbJarDescription,deploymentUnit.getServiceName());
-break;
-default :
-throw new IllegalArgumentException("Unknown session bean type: " + sessionType);
-}
-sessionBeanDescription.setMappedName(sessionBean.getMappedName());
-BusinessLocalsMetaData businessLocals=sessionBean.getBusinessLocals();
-if (businessLocals != null && !businessLocals.isEmpty()) {
-sessionBeanDescription.addLocalBusinessInterfaceViews(businessLocals);
-}
-BusinessRemotesMetaData businessRemotes=sessionBean.getBusinessRemotes();
-if (businessRemotes != null && !businessRemotes.isEmpty()) {
-sessionBeanDescription.addRemoteBusinessInterfaceViews(businessRemotes);
-}
-if (sessionBean.getTransactionType() != null) {
-sessionBeanDescription.setTransactionManagementType(sessionBean.getTransactionType());
-}
-if (sessionBean.getTransactionType() != TransactionManagementType.BEAN) {
-ContainerTransactionsMetaData containerTransactions=sessionBean.getContainerTransactions();
-if (containerTransactions != null && !containerTransactions.isEmpty()) {
-for (ContainerTransactionMetaData containerTx : containerTransactions) {
-TransactionAttributeType txAttr=containerTx.getTransAttribute();
-MethodsMetaData methods=containerTx.getMethods();
-for (MethodMetaData method : methods) {
-String methodName=method.getMethodName();
-MethodIntf methodIntf=this.getMethodIntf(method.getMethodIntf());
-if (methodName.equals("*")) {
-sessionBeanDescription.setTransactionAttribute(methodIntf,txAttr);
-}
+  BusinessRemotesMetaData businessRemotes=sessionBean.getBusinessRemotes();
+  if (businessRemotes != null && !businessRemotes.isEmpty()) {
+    sessionBeanDescription.addRemoteBusinessInterfaceViews(businessRemotes);
+  }
+  if (sessionBean.getTransactionType() != null) {
+    sessionBeanDescription.setTransactionManagementType(sessionBean.getTransactionType());
+  }
+  if (sessionBean.getTransactionType() != TransactionManagementType.BEAN) {
+    ContainerTransactionsMetaData containerTransactions=sessionBean.getContainerTransactions();
+    if (containerTransactions != null && !containerTransactions.isEmpty()) {
+      for (      ContainerTransactionMetaData containerTx : containerTransactions) {
+        TransactionAttributeType txAttr=containerTx.getTransAttribute();
+        MethodsMetaData methods=containerTx.getMethods();
+        for (        MethodMetaData method : methods) {
+          String methodName=method.getMethodName();
+          MethodIntf methodIntf=this.getMethodIntf(method.getMethodIntf());
+          if (methodName.equals("*")) {
+            sessionBeanDescription.setTransactionAttribute(methodIntf,txAttr);
+          }
  else {
-MethodParametersMetaData methodParams=method.getMethodParams();
-sessionBeanDescription.setTransactionAttribute(methodIntf,txAttr,methodName,this.getMethodParams(methodParams));
-}
-}
-}
-}
-}
-this.processInterceptors(sessionBean,sessionBeanDescription);
-if (sessionBean instanceof SessionBean31MetaData) {
-this.processSessionBean31((SessionBean31MetaData)sessionBean,sessionBeanDescription);
-}
-ejbJarDescription.getEEModuleDescription().addComponent(sessionBeanDescription);
+            MethodParametersMetaData methodParams=method.getMethodParams();
+            sessionBeanDescription.setTransactionAttribute(methodIntf,txAttr,methodName,this.getMethodParams(methodParams));
+          }
+        }
+      }
+    }
+  }
+  this.processInterceptors(sessionBean,sessionBeanDescription);
+  if (sessionBean instanceof SessionBean31MetaData) {
+    this.processSessionBean31((SessionBean31MetaData)sessionBean,sessionBeanDescription);
+  }
 }
