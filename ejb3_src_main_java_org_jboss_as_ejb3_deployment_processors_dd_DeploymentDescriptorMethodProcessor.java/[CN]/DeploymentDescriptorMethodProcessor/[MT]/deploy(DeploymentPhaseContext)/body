@@ -1,0 +1,34 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final DeploymentReflectionIndex index=deploymentUnit.getAttachment(Attachments.REFLECTION_INDEX);
+  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+  final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+  for (  final ComponentDescription component : eeModuleDescription.getComponentDescriptions()) {
+    if (component instanceof EJBComponentDescription) {
+      final EJBComponentDescription ejb=(EJBComponentDescription)component;
+      if (!ejb.getAroundInvokeDDMethods().isEmpty() || !ejb.getPostConstructDDMethods().isEmpty() || !ejb.getPreDestroyDDMethods().isEmpty()) {
+        try {
+          final Class<?> clazz=module.getClassLoader().loadClass(ejb.getComponentClassName());
+          for (          String aroundInvoke : ejb.getAroundInvokeDDMethods()) {
+            final MethodIdentifier aroundInvokeIdentifier=MethodIdentifier.getIdentifier(Object.class,aroundInvoke,InvocationContext.class);
+            Method method=ClassReflectionIndexUtil.findRequiredMethod(index,index.getClassIndex(clazz),aroundInvokeIdentifier);
+            eeModuleDescription.getOrAddClassByName(method.getDeclaringClass().getName()).setAroundInvokeMethod(aroundInvokeIdentifier);
+          }
+          for (          String preDestroy : ejb.getPreDestroyDDMethods()) {
+            final MethodIdentifier preDestroyIdentifier=MethodIdentifier.getIdentifier(void.class,preDestroy);
+            final Method method=ClassReflectionIndexUtil.findRequiredMethod(index,index.getClassIndex(clazz),preDestroyIdentifier);
+            eeModuleDescription.getOrAddClassByName(method.getDeclaringClass().getName()).setPreDestroyMethod(preDestroyIdentifier);
+          }
+          for (          String postConstruct : ejb.getPostConstructDDMethods()) {
+            final MethodIdentifier postConstructIdentifier=MethodIdentifier.getIdentifier(void.class,postConstruct);
+            final Method method=ClassReflectionIndexUtil.findRequiredMethod(index,index.getClassIndex(clazz),postConstructIdentifier);
+            eeModuleDescription.getOrAddClassByName(method.getDeclaringClass().getName()).setPostConstructMethod(postConstructIdentifier);
+          }
+        }
+ catch (        ClassNotFoundException e) {
+          throw new DeploymentUnitProcessingException("Could not load component class " + ejb.getComponentClassName());
+        }
+      }
+    }
+  }
+}
