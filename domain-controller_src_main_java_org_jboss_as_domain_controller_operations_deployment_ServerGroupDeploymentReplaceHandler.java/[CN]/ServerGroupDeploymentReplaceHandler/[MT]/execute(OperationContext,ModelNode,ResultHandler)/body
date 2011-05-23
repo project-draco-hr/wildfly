@@ -12,20 +12,26 @@
  catch (  IllegalArgumentException iae) {
     throw operationFailed(String.format("No deployment with name %s found",name));
   }
-  byte[] hash=deployment.require(HASH).asBytes();
-  fileRepository.getDeploymentFiles(hash);
+  for (  ModelNode content : deployment.require(CONTENT).asList()) {
+    if ((content.hasDefined(HASH))) {
+      byte[] hash=content.require(HASH).asBytes();
+      fileRepository.getDeploymentFiles(hash);
+    }
+  }
   ModelNode deployments=context.getSubModel().get(DEPLOYMENT);
-  ModelNode deployNode=deployments.hasDefined(name) ? deployments.get(name) : null;
   ModelNode replaceNode=deployments.hasDefined(toReplace) ? deployments.get(toReplace) : null;
+  if (replaceNode == null) {
+    throw operationFailed(String.format("No deployment with name %s found",toReplace));
+  }
+  ModelNode deployNode=deployments.hasDefined(name) ? deployments.get(name) : null;
   if (deployNode == null) {
+    deployNode=new ModelNode();
     deployNode=deployment.clone();
+    deployNode.remove("content");
     deployments.get(name).set(deployNode);
   }
  else   if (deployNode.get(ENABLED).asBoolean()) {
     throw operationFailed(String.format("Deployment %s is already started",toReplace));
-  }
- else   if (replaceNode == null) {
-    throw operationFailed(String.format("No deployment with name %s found",toReplace));
   }
   deployNode.get(ENABLED).set(true);
   replaceNode.get(ENABLED).set(false);

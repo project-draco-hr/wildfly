@@ -1,7 +1,14 @@
 {
   validator.validate(operation);
   String name=operation.require(NAME).asString();
-  String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : name;
+  ModelNode rootModel=context.getSubModel();
+  ModelNode deployments=rootModel.get(DEPLOYMENT);
+  ModelNode replaceNode=deployments.hasDefined(name) ? deployments.get(name) : null;
+  if (replaceNode == null) {
+    throw createFailureException("No deployment with name %s found",name);
+  }
+  String replacedRuntimeName=replaceNode.require(RUNTIME_NAME).asString();
+  String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : replaceNode.require(RUNTIME_NAME).asString();
   final byte[] hash;
   final ModelNode content=operation.require(CONTENT).clone();
   final DeploymentHandlerUtil.ContentItem contentItem;
@@ -35,12 +42,6 @@
     final boolean archive=contentItemNode.require(ARCHIVE).asBoolean();
     contentItem=new DeploymentHandlerUtil.ContentItem(path,relativeTo,archive);
   }
-  ModelNode rootModel=context.getSubModel();
-  ModelNode deployments=rootModel.get(DEPLOYMENT);
-  ModelNode replaceNode=deployments.hasDefined(name) ? deployments.get(name) : null;
-  if (replaceNode == null) {
-    throw createFailureException("No deployment with name %s found",name);
-  }
   boolean start=replaceNode.get(ENABLED).asBoolean();
   ModelNode deployNode=new ModelNode();
   deployNode.get(NAME).set(name);
@@ -49,11 +50,11 @@
   deployNode.get(ENABLED).set(start);
   deployments.get(name).set(deployNode);
   ModelNode compensatingOp=operation.clone();
-  compensatingOp.get(RUNTIME_NAME).set(replaceNode.get(RUNTIME_NAME).asString());
+  compensatingOp.get(RUNTIME_NAME).set(replacedRuntimeName);
   compensatingOp.get(CONTENT).set(replaceNode.require(CONTENT).clone());
   removeContentAdditions(compensatingOp.require(CONTENT));
   if (start) {
-    DeploymentHandlerUtil.replace(context,name,runtimeName,resultHandler,contentItem);
+    DeploymentHandlerUtil.replace(context,runtimeName,name,replacedRuntimeName,resultHandler,contentItem);
   }
  else {
     resultHandler.handleResultComplete();
