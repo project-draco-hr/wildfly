@@ -36,35 +36,44 @@
         final BinderService binderService=new BinderService(bindName);
         final ServiceName binderServiceName=ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jndiName);
         final ServiceBuilder<?> binderBuilder=serviceTarget.addService(binderServiceName,binderService).addDependency(referenceFactoryServiceName,ManagedReferenceFactory.class,binderService.getManagedObjectInjector()).addDependency(ContextNames.JAVA_CONTEXT_SERVICE_NAME,NamingStore.class,binderService.getNamingStoreInjector()).addListener(new AbstractServiceListener<Object>(){
-          @Override public void serviceStarted(          ServiceController<?> controller){
-            log.infof("Bound data source [%s]",jndiName);
-          }
-          @Override public void serviceStopped(          ServiceController<?> serviceController){
-            log.infof("Unbound data source [%s]",jndiName);
-          }
-          @Override public void serviceRemoved(          ServiceController<?> serviceController){
+          public void transition(          final ServiceController<? extends Object> controller,          final ServiceController.Transition transition){
+switch (transition) {
+case STARTING_to_UP:
+{
+                log.infof("Bound data source [%s]",jndiName);
+                break;
+              }
+case START_REQUESTED_to_DOWN:
+{
+              log.infof("Unbound data source [%s]",jndiName);
+              break;
+            }
+case REMOVING_to_REMOVED:
+{
             log.debugf("Removed JDBC Data-source [%s]",jndiName);
-            serviceController.removeListener(this);
+            break;
           }
-        }
-);
-        if (enabled) {
-          dataSourceServiceBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
-          referenceBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
-          binderBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
-        }
- else {
-          dataSourceServiceBuilder.setInitialMode(ServiceController.Mode.NEVER).install();
-          referenceBuilder.setInitialMode(ServiceController.Mode.NEVER).install();
-          binderBuilder.setInitialMode(ServiceController.Mode.NEVER).install();
-        }
-        resultHandler.handleResultComplete();
       }
     }
+  }
 );
+  if (enabled) {
+    dataSourceServiceBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+    referenceBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+    binderBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
   }
  else {
-    resultHandler.handleResultComplete();
+    dataSourceServiceBuilder.setInitialMode(ServiceController.Mode.NEVER).install();
+    referenceBuilder.setInitialMode(ServiceController.Mode.NEVER).install();
+    binderBuilder.setInitialMode(ServiceController.Mode.NEVER).install();
   }
-  return new BasicOperationResult(compensating);
+  resultHandler.handleResultComplete();
+}
+}
+);
+}
+ else {
+resultHandler.handleResultComplete();
+}
+return new BasicOperationResult(compensating);
 }

@@ -6,45 +6,48 @@
       State state=controller.getState();
       if (state == State.UP || state == State.START_FAILED)       processService(controller);
     }
-    @Override public void serviceStarted(    ServiceController<? extends Bundle> controller){
-      ServiceName key=controller.getName();
-      Tuple value=pendingServices.get(key);
+    @Override public void transition(    final ServiceController<? extends Bundle> controller,    final ServiceController.Transition transition){
+      if (transition.getBefore() == ServiceController.Substate.STARTING) {
+switch (transition.getAfter()) {
+case UP:
+          ServiceName key=controller.getName();
+        Tuple value=pendingServices.get(key);
       startedServices.put(key,value);
-      processService(controller);
-    }
-    @Override public void serviceFailed(    ServiceController<? extends Bundle> controller,    StartException reason){
-      processService(controller);
-    }
-    private void processService(    ServiceController<? extends Bundle> controller){
-      controller.removeListener(this);
-      Map<ServiceName,Tuple> bundlesToStart=null;
+case START_FAILED:
+    processService(controller);
+}
+}
+}
+private void processService(ServiceController<? extends Bundle> controller){
+controller.removeListener(this);
+Map<ServiceName,Tuple> bundlesToStart=null;
 synchronized (this) {
-        ServiceName key=controller.getName();
-        pendingServices.remove(key);
-        if (pendingServices.isEmpty()) {
-          bundlesToStart=new HashMap<ServiceName,Tuple>(startedServices);
-          startedServices.clear();
-        }
+ServiceName key=controller.getName();
+pendingServices.remove(key);
+if (pendingServices.isEmpty()) {
+  bundlesToStart=new HashMap<ServiceName,Tuple>(startedServices);
+  startedServices.clear();
+}
+}
+if (bundlesToStart != null) {
+PackageAdmin packageAdmin=injectedPackageAdmin.getValue();
+for (Tuple tuple : bundlesToStart.values()) {
+  Bundle bundle=tuple.controller.getValue();
+  Deployment dep=tuple.deployment;
+  if (dep.isAutoStart()) {
+    try {
+      int bundleType=packageAdmin.getBundleType(bundle);
+      if (bundleType != BUNDLE_TYPE_FRAGMENT) {
+        bundle.start(Bundle.START_TRANSIENT);
       }
-      if (bundlesToStart != null) {
-        PackageAdmin packageAdmin=injectedPackageAdmin.getValue();
-        for (        Tuple tuple : bundlesToStart.values()) {
-          Bundle bundle=tuple.controller.getValue();
-          Deployment dep=tuple.deployment;
-          if (dep.isAutoStart()) {
-            try {
-              int bundleType=packageAdmin.getBundleType(bundle);
-              if (bundleType != BUNDLE_TYPE_FRAGMENT) {
-                bundle.start(Bundle.START_TRANSIENT);
-              }
-            }
- catch (            BundleException ex) {
-              log.errorf(ex,"Cannot start bundle: %s",bundle);
-            }
-          }
-        }
-      }
+    }
+ catch (    BundleException ex) {
+      log.errorf(ex,"Cannot start bundle: %s",bundle);
     }
   }
+}
+}
+}
+}
 );
 }

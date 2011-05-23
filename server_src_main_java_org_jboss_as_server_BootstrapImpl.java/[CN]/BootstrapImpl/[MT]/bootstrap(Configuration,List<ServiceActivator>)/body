@@ -30,34 +30,54 @@
   tracker.addService(Services.JBOSS_AS,applicationServerService).install();
   final ServiceController<?> rootService=container.getRequiredService(Services.JBOSS_AS);
   rootService.addListener(new AbstractServiceListener<Object>(){
-    @Override public void serviceStarted(    final ServiceController<?> controller){
-      controller.removeListener(this);
-      final ServiceController<?> controllerServiceController=controller.getServiceContainer().getRequiredService(Services.JBOSS_SERVER_CONTROLLER);
-      controllerServiceController.addListener(new AbstractServiceListener<Object>(){
-        @Override public void serviceStarted(        final ServiceController<?> controller){
-          future.done((ServerController)controller.getValue());
+    @Override public void transition(    final ServiceController<? extends Object> controller,    final ServiceController.Transition transition){
+switch (transition) {
+case STARTING_to_UP:
+{
           controller.removeListener(this);
-        }
-        @Override public void serviceFailed(        final ServiceController<?> controller,        final StartException reason){
-          future.failed(reason);
-          controller.removeListener(this);
-        }
-        @Override public void serviceRemoved(        final ServiceController<?> controller){
-          future.failed(new ServiceNotFoundException("Server controller service was removed"));
-          controller.removeListener(this);
+          final ServiceController<?> controllerServiceController=controller.getServiceContainer().getRequiredService(Services.JBOSS_SERVER_CONTROLLER);
+          controllerServiceController.addListener(new AbstractServiceListener<Object>(){
+            public void transition(            final ServiceController<? extends Object> controller,            final ServiceController.Transition transition){
+switch (transition) {
+case STARTING_to_UP:
+{
+                  future.done();
+                  controller.removeListener(this);
+                  break;
+                }
+case STARTING_to_START_FAILED:
+{
+                future.failed(controller.getStartException());
+                controller.removeListener(this);
+                break;
+              }
+case REMOVING_to_REMOVED:
+{
+              future.failed(new ServiceNotFoundException("Server controller service was removed"));
+              controller.removeListener(this);
+              break;
+            }
         }
       }
+    }
 );
-    }
-    @Override public void serviceFailed(    final ServiceController<?> controller,    final StartException reason){
-      controller.removeListener(this);
-      future.failed(reason);
-    }
-    @Override public void serviceRemoved(    final ServiceController<?> controller){
-      controller.removeListener(this);
-      future.failed(new ServiceNotFoundException("Root service was removed"));
-    }
+    break;
   }
+case STARTING_to_START_FAILED:
+{
+  controller.removeListener(this);
+  future.failed(controller.getStartException());
+  break;
+}
+case REMOVING_to_REMOVED:
+{
+controller.removeListener(this);
+future.failed(new ServiceNotFoundException("Root service was removed"));
+break;
+}
+}
+}
+}
 );
-  return future;
+return future;
 }
