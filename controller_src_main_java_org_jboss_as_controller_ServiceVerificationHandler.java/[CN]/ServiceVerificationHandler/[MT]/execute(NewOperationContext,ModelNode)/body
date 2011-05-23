@@ -1,2 +1,28 @@
 {
+  while (outstanding > 0) {
+    try {
+      wait();
+    }
+ catch (    InterruptedException e) {
+      Thread.currentThread().interrupt();
+      context.getFailureDescription().set("Operation cancelled");
+      context.completeStep();
+      return;
+    }
+  }
+  if (!failed.isEmpty() || !problem.isEmpty()) {
+    final ModelNode failureDescription=context.getFailureDescription();
+    final ModelNode failedList=failureDescription.get("failed");
+    for (    ServiceController<?> controller : failed) {
+      failedList.get(controller.getName().getCanonicalName()).set(controller.getStartException().toString());
+    }
+    final ModelNode problemList=failureDescription.get("transitive-problem");
+    for (    ServiceController<?> controller : problem) {
+      problemList.add(controller.getName().getCanonicalName());
+    }
+  }
+  for (  ServiceController<?> controller : set) {
+    controller.removeListener(this);
+  }
+  context.completeStep();
 }
