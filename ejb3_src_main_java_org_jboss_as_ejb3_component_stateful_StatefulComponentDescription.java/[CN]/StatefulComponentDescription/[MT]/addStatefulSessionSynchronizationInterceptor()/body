@@ -1,0 +1,24 @@
+{
+  getConfigurators().addFirst(new ComponentConfigurator(){
+    @Override public void configure(    DeploymentPhaseContext context,    ComponentDescription description,    ComponentConfiguration configuration) throws DeploymentUnitProcessingException {
+      final InterceptorFactory interceptorFactory=new ComponentInstanceInterceptorFactory(){
+        @Override protected Interceptor create(        ComponentInstance instance,        InterceptorFactoryContext context){
+          return new StatefulSessionSynchronizationInterceptor();
+        }
+      }
+;
+      final EEModuleClassConfiguration componentClassConfiguration=configuration.getModuleClassConfiguration();
+      final DeploymentUnit deploymentUnit=context.getDeploymentUnit();
+      final DeploymentReflectionIndex deploymentReflectionIndex=deploymentUnit.getAttachment(REFLECTION_INDEX);
+      Class clazz=componentClassConfiguration.getModuleClass();
+      while (clazz != null) {
+        final ClassReflectionIndex classIndex=deploymentReflectionIndex.getClassIndex(clazz);
+        for (        final Method method : (Collection<Method>)classIndex.getMethods()) {
+          configuration.getComponentInterceptorDeque(method).add(interceptorFactory);
+        }
+        clazz=clazz.getSuperclass();
+      }
+    }
+  }
+);
+}
