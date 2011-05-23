@@ -4,24 +4,30 @@
   if (isEmpty(lookup) && FIXED_LOCATIONS.containsKey(injectionType)) {
     lookup=FIXED_LOCATIONS.get(injectionType);
   }
-  final InjectionSource valueSource;
-  if (isEmpty(lookup)) {
-    if (SIMPLE_ENTRIES.contains(injectionType)) {
-      eeModuleDescription.addLazyResourceInjection(new LazyResourceInjection(targetDescription,localContextName,classDescription));
-      return;
-    }
- else {
-      valueSource=new ComponentTypeInjectionSource(injectionType);
-    }
-  }
- else {
+  InjectionSource valueSource=null;
+  final boolean isEnvEntryType=this.isEnvEntryType(injectionType);
+  if (!isEmpty(lookup)) {
     valueSource=new LookupInjectionSource(lookup);
   }
-  final ResourceInjectionConfiguration injectionConfiguration=targetDescription != null ? new ResourceInjectionConfiguration(targetDescription,new LookupInjectionSource(localContextName)) : null;
-  final BindingConfiguration bindingConfiguration=new BindingConfiguration(localContextName,valueSource);
+ else   if (isEnvEntryType) {
+  }
+ else {
+    valueSource=new ComponentTypeInjectionSource(injectionType);
+  }
+  final InjectionSource injectionSource=new LookupInjectionSource(localContextName,isEnvEntryType);
+  final ResourceInjectionConfiguration injectionConfiguration=targetDescription != null ? new ResourceInjectionConfiguration(targetDescription,injectionSource) : null;
+  final BindingConfiguration bindingConfiguration;
+  if (isEnvEntryType) {
+    bindingConfiguration=null;
+  }
+ else {
+    bindingConfiguration=new BindingConfiguration(localContextName,valueSource);
+  }
   classDescription.getConfigurators().add(new ClassConfigurator(){
     public void configure(    final DeploymentPhaseContext context,    final EEModuleClassDescription description,    final EEModuleClassConfiguration configuration) throws DeploymentUnitProcessingException {
-      configuration.getBindingConfigurations().add(bindingConfiguration);
+      if (bindingConfiguration != null) {
+        configuration.getBindingConfigurations().add(bindingConfiguration);
+      }
       if (injectionConfiguration != null) {
         configuration.getInjectionConfigurations().add(injectionConfiguration);
       }
