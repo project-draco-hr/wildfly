@@ -1,0 +1,34 @@
+{
+  final ModelNode existingFile=context.readModelForUpdate(PathAddress.EMPTY_ADDRESS).get(CommonAttributes.FILE);
+  existingFile.get(CommonAttributes.PATH).set(operation.get(CommonAttributes.PATH));
+  if (existingFile.hasDefined(CommonAttributes.RELATIVE_TO)) {
+    existingFile.get(CommonAttributes.RELATIVE_TO).set(operation.get(CommonAttributes.RELATIVE_TO));
+  }
+  final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+  final String name=address.getLastElement().getValue();
+  if (context.getType() == NewOperationContext.Type.SERVER) {
+    context.addStep(new NewStepHandler(){
+      public void execute(      final NewOperationContext context,      final ModelNode operation){
+        final ServiceRegistry serviceRegistry=context.getServiceRegistry(false);
+        final ServiceTarget serviceTarget=context.getServiceTarget();
+        final ServiceController<?> controller=serviceRegistry.getService(LogServices.handlerFileName(name));
+        if (controller != null) {
+          controller.addListener(new AbstractServiceListener<Object>(){
+            public void listenerAdded(            ServiceController<?> controller){
+              controller.setMode(ServiceController.Mode.REMOVE);
+            }
+            public void serviceRemoved(            ServiceController<?> controller){
+              installService(context,operation,serviceTarget,name);
+            }
+          }
+);
+        }
+ else {
+          installService(context,operation,serviceTarget,name);
+        }
+      }
+    }
+,NewOperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}

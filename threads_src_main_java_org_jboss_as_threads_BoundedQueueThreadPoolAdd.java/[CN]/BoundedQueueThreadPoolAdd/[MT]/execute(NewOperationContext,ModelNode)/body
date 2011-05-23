@@ -1,0 +1,50 @@
+{
+  final BoundedOperationParameters params=ThreadsSubsystemThreadPoolOperationUtils.parseBoundedThreadPoolOperationParameters(operation);
+  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  final String name=address.getLastElement().getValue();
+  final ModelNode model=context.readModelForUpdate(PathAddress.EMPTY_ADDRESS);
+  model.get(NAME).set(name);
+  if (params.getThreadFactory() != null) {
+    model.get(THREAD_FACTORY).set(params.getThreadFactory());
+  }
+  if (params.getProperties() != null && params.getProperties().asList().size() > 0) {
+    model.get(PROPERTIES).set(params.getProperties());
+  }
+  if (params.getMaxThreads() != null) {
+    model.get(MAX_THREADS).set(operation.get(MAX_THREADS));
+  }
+  if (params.getKeepAliveTime() != null) {
+    model.get(KEEPALIVE_TIME).set(operation.get(KEEPALIVE_TIME));
+  }
+  model.get(BLOCKING).set(params.isBlocking());
+  if (params.getHandoffExecutor() != null) {
+    model.get(HANDOFF_EXECUTOR).set(params.getHandoffExecutor());
+  }
+  model.get(ALLOW_CORE_TIMEOUT).set(params.isAllowCoreTimeout());
+  if (params.getQueueLength() != null) {
+    model.get(QUEUE_LENGTH).set(operation.get(QUEUE_LENGTH));
+  }
+  if (params.getCoreThreads() != null) {
+    model.get(CORE_THREADS).set(operation.get(CORE_THREADS));
+  }
+  if (context.getType() == NewOperationContext.Type.SERVER) {
+    context.addStep(new NewStepHandler(){
+      public void execute(      NewOperationContext context,      ModelNode operation){
+        final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+        ServiceTarget target=context.getServiceTarget();
+        final ServiceName serviceName=ThreadsServices.executorName(params.getName());
+        final BoundedQueueThreadPoolService service=new BoundedQueueThreadPoolService(params.getCoreThreads().getScaledCount(),params.getMaxThreads().getScaledCount(),params.getQueueLength().getScaledCount(),params.isBlocking(),params.getKeepAliveTime(),params.isAllowCoreTimeout());
+        final ServiceBuilder<Executor> serviceBuilder=target.addService(serviceName,service);
+        ThreadsSubsystemThreadPoolOperationUtils.addThreadFactoryDependency(params.getThreadFactory(),serviceName,serviceBuilder,service.getThreadFactoryInjector(),target,params.getName() + "-threads");
+        serviceBuilder.addListener(verificationHandler);
+        final ServiceController<?> controller=serviceBuilder.install();
+        context.addStep(verificationHandler,NewOperationContext.Stage.VERIFY);
+        if (context.completeStep() == NewOperationContext.ResultAction.ROLLBACK) {
+          context.removeService(controller);
+        }
+      }
+    }
+,NewOperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}

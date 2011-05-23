@@ -1,0 +1,23 @@
+{
+  final ModelNode opAddr=operation.require(OP_ADDR);
+  final String archive=PathAddress.pathAddress(opAddr).getLastElement().getValue();
+  operation.get(ARCHIVE).set(archive);
+  final ModelNode model=context.readModel(PathAddress.EMPTY_ADDRESS);
+  final ModelNode compensating=Util.getEmptyOperation(ADD,opAddr);
+  if (model.hasDefined(RESOURCEADAPTERS)) {
+    for (    ModelNode raNode : model.get(RESOURCEADAPTERS).asList()) {
+      ModelNode raCompensatingNode=raNode.clone();
+      compensating.get(RESOURCEADAPTERS).add(raCompensatingNode);
+    }
+  }
+  context.removeModel(PathAddress.EMPTY_ADDRESS);
+  context.addStep(new NewStepHandler(){
+    public void execute(    NewOperationContext context,    ModelNode operation){
+      context.removeService(ConnectorServices.RESOURCEADAPTERS_SERVICE);
+      if (context.completeStep() == NewOperationContext.ResultAction.ROLLBACK) {
+      }
+    }
+  }
+,NewOperationContext.Stage.RUNTIME);
+  context.completeStep();
+}

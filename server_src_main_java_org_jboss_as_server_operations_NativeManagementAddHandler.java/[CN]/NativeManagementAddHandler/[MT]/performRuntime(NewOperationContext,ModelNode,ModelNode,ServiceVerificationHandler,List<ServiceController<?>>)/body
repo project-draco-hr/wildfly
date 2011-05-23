@@ -1,0 +1,12 @@
+{
+  final String interfaceName=operation.require(ModelDescriptionConstants.INTERFACE).asString();
+  final int port=operation.require(ModelDescriptionConstants.PORT).asInt();
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  Logger.getLogger("org.jboss.as").infof("creating native management service using network interface (%s) port (%s)",interfaceName,port);
+  final ThreadGroup threadGroup=new ThreadGroup("ManagementCommunication-threads");
+  final ThreadFactory threadFactory=new JBossThreadFactory(threadGroup,Boolean.FALSE,null,"%G - %t",null,null,AccessController.getContext());
+  final ManagementCommunicationService managementCommunicationService=new ManagementCommunicationService();
+  newControllers.add(serviceTarget.addService(ManagementCommunicationService.SERVICE_NAME,managementCommunicationService).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(interfaceName),NetworkInterfaceBinding.class,managementCommunicationService.getInterfaceInjector()).addInjection(managementCommunicationService.getPortInjector(),port).addInjection(managementCommunicationService.getExecutorServiceInjector(),Executors.newCachedThreadPool(threadFactory)).addInjection(managementCommunicationService.getThreadFactoryInjector(),threadFactory).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+  ServerControllerOperationHandlerService operationHandlerService=new ServerControllerOperationHandlerService();
+  newControllers.add(serviceTarget.addService(ServerControllerOperationHandlerService.SERVICE_NAME,operationHandlerService).addDependency(ManagementCommunicationService.SERVICE_NAME,ManagementCommunicationService.class,operationHandlerService.getManagementCommunicationServiceValue()).addDependency(Services.JBOSS_SERVER_CONTROLLER,ModelController.class,operationHandlerService.getModelControllerValue()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+}

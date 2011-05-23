@@ -1,0 +1,30 @@
+{
+  final ServiceName deploymentUnitServiceName=Services.deploymentUnitName(deploymentUnitName);
+  final ServiceRegistry serviceRegistry=context.getServiceRegistry(false);
+  final ServiceController<?> controller=serviceRegistry.getService(deploymentUnitServiceName);
+  if (controller != null) {
+    controller.setMode(ServiceController.Mode.ACTIVE);
+  }
+ else {
+    final ServiceTarget serviceTarget=context.getServiceTarget();
+    final ServiceController<?> contentService;
+    final ServiceName contentsServiceName=deploymentUnitServiceName.append("contents");
+    if (contents[0].hash != null)     contentService=ContentServitor.addService(serviceTarget,contentsServiceName,contents[0].hash);
+ else {
+      final String path=contents[0].path;
+      final String relativeTo=contents[0].relativeTo;
+      final ServiceName relativeToPathServiceName=relativeTo != null ? RelativePathService.pathNameOf(relativeTo) : null;
+      contentService=PathContentServitor.addService(serviceTarget,contentsServiceName,path,relativeToPathServiceName);
+    }
+    final RootDeploymentUnitService service=new RootDeploymentUnitService(deploymentUnitName,managementName,null);
+    final ServiceController<DeploymentUnit> deploymentUnitController=serviceTarget.addService(deploymentUnitServiceName,service).addDependency(Services.JBOSS_DEPLOYMENT_CHAINS,DeployerChains.class,service.getDeployerChainsInjector()).addDependency(ServerDeploymentRepository.SERVICE_NAME,ServerDeploymentRepository.class,service.getServerDeploymentRepositoryInjector()).addDependency(contentsServiceName,VirtualFile.class,service.contentsInjector).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    contentService.addListener(new AbstractServiceListener<Object>(){
+      @Override public void transition(      final ServiceController<? extends Object> controller,      final ServiceController.Transition transition){
+        if (transition == ServiceController.Transition.REMOVING_to_REMOVED) {
+          deploymentUnitController.setMode(REMOVE);
+        }
+      }
+    }
+);
+  }
+}

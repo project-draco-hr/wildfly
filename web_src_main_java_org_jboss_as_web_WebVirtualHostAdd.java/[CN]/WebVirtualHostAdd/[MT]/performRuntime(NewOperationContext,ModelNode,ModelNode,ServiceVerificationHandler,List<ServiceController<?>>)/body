@@ -1,0 +1,27 @@
+{
+  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  final String name=address.getLastElement().getValue();
+  boolean welcome=operation.hasDefined(Constants.ENABLE_WELCOME_ROOT) && operation.get(Constants.ENABLE_WELCOME_ROOT).asBoolean();
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  final WebVirtualHostService service=new WebVirtualHostService(name,aliases(operation),welcome);
+  final ServiceBuilder<?> serviceBuilder=serviceTarget.addService(WebSubsystemServices.JBOSS_WEB_HOST.append(name),service).addDependency(AbstractPathService.pathNameOf(TEMP_DIR),String.class,service.getTempPathInjector()).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,service.getWebServer());
+  if (operation.hasDefined(Constants.ACCESS_LOG)) {
+    final ModelNode accessLog=operation.get(Constants.ACCESS_LOG);
+    service.setAccessLog(accessLog.clone());
+    accessLogService(name,accessLog,serviceTarget);
+    serviceBuilder.addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(name,Constants.ACCESS_LOG),String.class,service.getAccessLogPathInjector());
+  }
+  if (operation.hasDefined(Constants.REWRITE)) {
+    service.setRewrite(operation.get(Constants.REWRITE).clone());
+  }
+  if (operation.hasDefined(Constants.DEFAULT_WEB_MODULE)) {
+    if (welcome)     throw new OperationFailedException(new ModelNode().set("A default module can not be specified when the welcome root is enabled."));
+    service.setDefaultWebModule(operation.get(Constants.DEFAULT_WEB_MODULE).asString());
+  }
+  serviceBuilder.addListener(verificationHandler);
+  newControllers.add(serviceBuilder.install());
+  if (welcome) {
+    final WelcomeContextService welcomeService=new WelcomeContextService();
+    newControllers.add(context.getServiceTarget().addService(WebSubsystemServices.JBOSS_WEB.append(name).append("welcome"),welcomeService).addDependency(AbstractPathService.pathNameOf(HOME_DIR),String.class,welcomeService.getPathInjector()).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(name),VirtualHost.class,welcomeService.getHostInjector()).addDependency(ServiceBuilder.DependencyType.OPTIONAL,HttpManagementService.SERVICE_NAME,HttpManagementService.class,welcomeService.getHttpMSInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+  }
+}

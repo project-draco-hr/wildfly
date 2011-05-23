@@ -1,0 +1,36 @@
+{
+  final String driverName=operation.require(DRIVER_NAME).asString();
+  final String moduleName=operation.require(DRIVER_MODULE_NAME).asString();
+  final Integer majorVersion=operation.hasDefined(DRIVER_MAJOR_VERSION) ? operation.get(DRIVER_MAJOR_VERSION).asInt() : null;
+  final Integer minorVersion=operation.hasDefined(DRIVER_MINOR_VERSION) ? operation.get(DRIVER_MINOR_VERSION).asInt() : null;
+  final String driverClassName=operation.hasDefined(DRIVER_CLASS_NAME) ? operation.get(DRIVER_CLASS_NAME).asString() : null;
+  final String xaDataSourceClassName=operation.hasDefined(DRIVER_XA_DATASOURCE_CLASS_NAME) ? operation.get(DRIVER_XA_DATASOURCE_CLASS_NAME).asString() : null;
+  final ServiceTarget target=context.getServiceTarget();
+  final ModuleIdentifier moduleId;
+  final Module module;
+  try {
+    moduleId=ModuleIdentifier.create(moduleName);
+    module=Module.getCallerModuleLoader().loadModule(moduleId);
+  }
+ catch (  ModuleLoadException e) {
+    context.getFailureDescription().set("Failed to load module for driver [" + moduleName + "]");
+    return;
+  }
+  if (driverClassName == null) {
+    final ServiceLoader<Driver> serviceLoader=module.loadService(Driver.class);
+    if (serviceLoader != null)     for (    Driver driver : serviceLoader) {
+      startDriverServices(target,moduleId,driver,driverName,majorVersion,minorVersion,xaDataSourceClassName);
+    }
+  }
+ else {
+    try {
+      final Class<? extends Driver> driverClass=module.getClassLoader().loadClass(driverClassName).asSubclass(Driver.class);
+      final Constructor<? extends Driver> constructor=driverClass.getConstructor();
+      final Driver driver=constructor.newInstance();
+      startDriverServices(target,moduleId,driver,driverName,majorVersion,minorVersion,xaDataSourceClassName);
+    }
+ catch (    Exception e) {
+      log.warnf("Unable to instantiate driver class \"%s\": %s",driverClassName,e);
+    }
+  }
+}

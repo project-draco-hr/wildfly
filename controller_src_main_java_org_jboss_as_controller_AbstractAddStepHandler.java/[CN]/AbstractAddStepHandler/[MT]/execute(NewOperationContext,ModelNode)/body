@@ -1,0 +1,25 @@
+{
+  final ModelNode model=context.readModelForUpdate(PathAddress.EMPTY_ADDRESS);
+  populateModel(operation,model);
+  if (requiresRuntime()) {
+    if (context.getType() == NewOperationContext.Type.SERVER) {
+      context.addStep(new NewStepHandler(){
+        public void execute(        NewOperationContext context,        ModelNode operation) throws OperationFailedException {
+          final List<ServiceController<?>> controllers=new ArrayList<ServiceController<?>>();
+          final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+          performRuntime(context,operation,model,verificationHandler,controllers);
+          if (requiresRuntimeVerification()) {
+            context.addStep(verificationHandler,NewOperationContext.Stage.VERIFY);
+          }
+          if (context.completeStep() == NewOperationContext.ResultAction.ROLLBACK) {
+            for (            ServiceController<?> controller : controllers) {
+              context.removeService(controller);
+            }
+          }
+        }
+      }
+,NewOperationContext.Stage.RUNTIME);
+    }
+  }
+  context.completeStep();
+}
