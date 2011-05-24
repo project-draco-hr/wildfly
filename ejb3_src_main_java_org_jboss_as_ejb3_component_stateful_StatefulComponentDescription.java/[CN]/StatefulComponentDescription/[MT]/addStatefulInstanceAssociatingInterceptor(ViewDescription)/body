@@ -3,15 +3,19 @@
   view.getConfigurators().add(new ViewConfigurator(){
     @Override public void configure(    DeploymentPhaseContext context,    ComponentConfiguration componentConfiguration,    ViewDescription description,    ViewConfiguration viewConfiguration) throws DeploymentUnitProcessingException {
       InterceptorFactory sessionIdGeneratingInterceptorFactory=new StatefulComponentSessionIdGeneratingInterceptorFactory(sessionIdContextKey);
-      viewConfiguration.getViewPostConstructInterceptors().addFirst(sessionIdGeneratingInterceptorFactory);
-      viewConfiguration.getViewPreDestroyInterceptors().addFirst(new StatefulComponentInstanceDestroyInterceptorFactory(sessionIdContextKey));
-      viewConfiguration.addViewInterceptorToFront(new StatefulIdentityInterceptorFactory(sessionIdContextKey));
+      viewConfiguration.addViewPostConstructInterceptor(sessionIdGeneratingInterceptorFactory,InterceptorOrder.ViewPostConstruct.INSTANCE_CREATE);
+      viewConfiguration.addViewPreDestroyInterceptor(new StatefulComponentInstanceDestroyInterceptorFactory(sessionIdContextKey),InterceptorOrder.ViewPreDestroy.INSTANCE_DESTROY);
+      for (      Method method : viewConfiguration.getProxyFactory().getCachedMethods()) {
+        if ((method.getName().equals("hashCode") && method.getParameterTypes().length == 0) || method.getName().equals("equals") && method.getParameterTypes().length == 1 && method.getParameterTypes()[0] == Object.class) {
+          viewConfiguration.addViewInterceptor(new StatefulIdentityInterceptorFactory(sessionIdContextKey),InterceptorOrder.View.SESSION_BEAN_EQUALS_HASHCODE);
+        }
+      }
     }
   }
 );
   view.getConfigurators().add(new ViewConfigurator(){
     @Override public void configure(    DeploymentPhaseContext context,    ComponentConfiguration componentConfiguration,    ViewDescription description,    ViewConfiguration configuration) throws DeploymentUnitProcessingException {
-      configuration.addViewInterceptorToFront(new StatefulComponentInstanceInterceptorFactory(sessionIdContextKey));
+      configuration.addViewInterceptor(new StatefulComponentInstanceInterceptorFactory(sessionIdContextKey),InterceptorOrder.View.ASSOCIATING_INTERCEPTOR);
     }
   }
 );
