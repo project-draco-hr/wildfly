@@ -1,0 +1,52 @@
+{
+  final EnumMap<Phase,Set<RegisteredProcessor>> deployers=new EnumMap<Phase,Set<RegisteredProcessor>>(Phase.class);
+  for (  Phase phase : Phase.values()) {
+    deployers.put(phase,new TreeSet<RegisteredProcessor>());
+  }
+  final ThreadLocal<DeploymentProcessorTarget> local=AbstractDeploymentChainStep.PROCESSOR_TARGET_THREAD_LOCAL;
+  local.set(new DeploymentProcessorTarget(){
+    public void addDeploymentProcessor(    final Phase phase,    final int priority,    final DeploymentUnitProcessor processor){
+      deployers.get(phase).add(new RegisteredProcessor(priority,processor));
+    }
+  }
+);
+  deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_MOUNT,new DeploymentRootMountProcessor()));
+  deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_MANIFEST,new ManifestAttachmentProcessor()));
+  deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_ADDITIONAL_MANIFEST,new ManifestAttachmentProcessor()));
+  deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_SUB_DEPLOYMENT,new SubDeploymentProcessor()));
+  deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_MODULE_IDENTIFIERS,new ModuleIdentifierProcessor()));
+  deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_ANNOTATION_INDEX,new AnnotationIndexProcessor()));
+  deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_STRUCTURE_DESCRIPTOR,new DeploymentStructureDescriptorParser()));
+  deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_COMPOSITE_ANNOTATION_INDEX,new CompositeIndexProcessor()));
+  deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_ADDITIONAL_MODULES,new AdditionalModuleProcessor()));
+  deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_CLASS_PATH,new ManifestClassPathProcessor()));
+  deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_EXTENSION_LIST,new ManifestExtensionListProcessor()));
+  deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_EXTENSION_NAME,new ManifestExtensionNameProcessor()));
+  deployers.get(Phase.PARSE).add(new RegisteredProcessor(Phase.PARSE_SERVICE_LOADER_DEPLOYMENT,new ServiceLoaderProcessor()));
+  deployers.get(Phase.DEPENDENCIES).add(new RegisteredProcessor(Phase.DEPENDENCIES_MODULE,new ModuleDependencyProcessor()));
+  deployers.get(Phase.DEPENDENCIES).add(new RegisteredProcessor(Phase.DEPENDENCIES_SAR_MODULE,new ServiceActivatorDependencyProcessor()));
+  deployers.get(Phase.DEPENDENCIES).add(new RegisteredProcessor(Phase.DEPENDENCIES_CLASS_PATH,new ModuleClassPathProcessor()));
+  deployers.get(Phase.DEPENDENCIES).add(new RegisteredProcessor(Phase.DEPENDENCIES_EXTENSION_LIST,new ModuleExtensionListProcessor()));
+  deployers.get(Phase.DEPENDENCIES).add(new RegisteredProcessor(Phase.DEPENDENCIES_SUB_DEPLOYMENTS,new SubDeploymentDependencyProcessor()));
+  deployers.get(Phase.CONFIGURE_MODULE).add(new RegisteredProcessor(Phase.CONFIGURE_MODULE_SPEC,new ModuleSpecProcessor()));
+  deployers.get(Phase.POST_MODULE).add(new RegisteredProcessor(Phase.POST_MODULE_INSTALL_EXTENSION,new ModuleExtensionNameProcessor()));
+  deployers.get(Phase.INSTALL).add(new RegisteredProcessor(Phase.INSTALL_REFLECTION_INDEX,new InstallReflectionIndexProcessor()));
+  deployers.get(Phase.INSTALL).add(new RegisteredProcessor(Phase.INSTALL_SERVICE_ACTIVATOR,new ServiceActivatorProcessor()));
+  try {
+    super.boot(context);
+  }
+  finally {
+    local.set(null);
+  }
+  final EnumMap<Phase,List<DeploymentUnitProcessor>> finalDeployers=new EnumMap<Phase,List<DeploymentUnitProcessor>>(Phase.class);
+  final List<DeploymentUnitProcessor> processorList=new ArrayList<DeploymentUnitProcessor>(256);
+  for (  Phase phase : Phase.values()) {
+    processorList.clear();
+    final Set<RegisteredProcessor> processorSet=deployers.get(phase);
+    for (    RegisteredProcessor processor : processorSet) {
+      processorList.add(processor.getProcessor());
+    }
+    finalDeployers.put(phase,Arrays.asList(processorList.toArray(new DeploymentUnitProcessor[processorList.size()])));
+  }
+  DeployerChainsService.addService(context.getChildTarget(),finalDeployers);
+}
