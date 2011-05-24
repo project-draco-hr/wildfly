@@ -13,31 +13,7 @@
   }
   final ModelNode compensatingOperation=new ModelNode();
   if (context.getRuntimeContext() != null) {
-    context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
-      public void execute(      RuntimeTaskContext context) throws OperationFailedException {
-        final ServiceTarget serviceTarget=context.getServiceTarget();
-        final SecurityRealmService securityRealmService=new SecurityRealmService(securityRealm,authentication);
-        ServiceName realmServiceName=SecurityRealmService.BASE_SERVICE_NAME.append(securityRealm);
-        ServiceBuilder realmBuilder=serviceTarget.addService(realmServiceName,securityRealmService);
-        String connectionManager=requiredConnectionManager(authentication);
-        if (connectionManager != null) {
-          realmBuilder.addDependency(LdapConnectionManagerService.BASE_SERVICE_NAME.append(connectionManager),ConnectionManager.class,securityRealmService.getConnectionManagerInjector());
-        }
-        if (serverIdentities != null && serverIdentities.has(SSL)) {
-          ModelNode ssl=serverIdentities.require(SSL);
-          ServiceName sslServiceName=realmServiceName.append("ssl");
-          SSLIdentityService sslIdentityService=new SSLIdentityService(ssl);
-          ServiceBuilder sslBuilder=serviceTarget.addService(sslServiceName,sslIdentityService);
-          if (ssl.hasDefined(KEYSTORE) && ssl.get(KEYSTORE).hasDefined(RELATIVE_TO)) {
-            sslBuilder.addDependency(pathName(ssl.get(KEYSTORE,RELATIVE_TO).asString()),String.class,sslIdentityService.getRelativeToInjector());
-          }
-          sslBuilder.setInitialMode(ServiceController.Mode.ON_DEMAND).install();
-          realmBuilder.addDependency(sslServiceName,SSLIdentityService.class,securityRealmService.getSSLIdentityInjector());
-        }
-        realmBuilder.setInitialMode(ServiceController.Mode.ON_DEMAND).install();
-      }
-    }
-);
+    context.getRuntimeContext().setRuntimeTask(new SecurityRealmAddTask(securityRealm,serverIdentities,authentication));
   }
  else {
     resultHandler.handleResultComplete();

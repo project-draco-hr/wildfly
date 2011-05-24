@@ -1,0 +1,24 @@
+{
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  final SecurityRealmService securityRealmService=new SecurityRealmService(realmName);
+  final ServiceName realmServiceName=SecurityRealmService.BASE_SERVICE_NAME.append(realmName);
+  ServiceBuilder realmBuilder=serviceTarget.addService(realmServiceName,securityRealmService);
+  ServiceName authenticationName=null;
+  if (authentication.hasDefined(LDAP)) {
+    authenticationName=addLdapService(authentication.require(LDAP),realmServiceName,serviceTarget);
+  }
+ else   if (authentication.hasDefined(PROPERTIES)) {
+    authenticationName=addPropertiesService(authentication.require(PROPERTIES),realmServiceName,realmName,serviceTarget);
+  }
+ else   if (authentication.hasDefined(USERS)) {
+    authenticationName=addUsersService(authentication.require(USERS),realmServiceName,realmName,serviceTarget);
+  }
+  if (authenticationName != null) {
+    realmBuilder.addDependency(authenticationName,DomainCallbackHandler.class,securityRealmService.getCallbackHandlerInjector());
+  }
+  if (serverIdentities != null && serverIdentities.hasDefined(SSL)) {
+    ServiceName sslServiceName=addSSLService(serverIdentities.require(SSL),realmServiceName,serviceTarget);
+    realmBuilder.addDependency(sslServiceName,SSLIdentityService.class,securityRealmService.getSSLIdentityInjector());
+  }
+  realmBuilder.setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+}
