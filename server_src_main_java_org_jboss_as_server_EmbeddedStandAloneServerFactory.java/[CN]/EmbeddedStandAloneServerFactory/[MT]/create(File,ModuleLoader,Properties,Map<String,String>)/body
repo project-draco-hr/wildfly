@@ -4,6 +4,7 @@
     private ServiceContainer serviceContainer;
     private ServerDeploymentManager serverDeploymentManager;
     private Context context;
+    private ModelControllerClient modelControllerClient;
     @Override public void deploy(    File file) throws IOException, ExecutionException, InterruptedException {
       execute(serverDeploymentManager.newDeploymentPlan().add(file.getName(),VFSUtils.createJarFileInputStream(VFS.getChild(file.toURI()))).andDeploy().build());
     }
@@ -13,17 +14,25 @@
     @Override public Context getContext(){
       return ifSet(context,"Server has not been started");
     }
+    @Override public ModelControllerClient getModelControllerClient(){
+      return modelControllerClient;
+    }
     @Override public void start() throws ServerStartException {
       try {
         ServerEnvironment serverEnviromment=Main.determineEnvironment(new String[0],systemProps,systemEnv);
         Bootstrap bootstrap=Bootstrap.Factory.newInstance();
         Bootstrap.Configuration configuration=new Bootstrap.Configuration();
+        final QName rootElement=new QName(Namespace.CURRENT.getUriString(),"server");
+        final StandaloneXml parser=new StandaloneXml(Module.getBootModuleLoader());
+        configuration.setConfigurationPersister(new TransientConfigurationPersister(serverEnviromment.getServerConfigurationFile(),rootElement,parser,parser));
         configuration.setServerEnvironment(serverEnviromment);
         configuration.setModuleLoader(moduleLoader);
         Future<ServiceContainer> future=bootstrap.startup(configuration,Collections.<ServiceActivator>emptyList());
         serviceContainer=future.get();
-        Value<ServerController> serverControllerService=(Value<ServerController>)serviceContainer.getRequiredService(Services.JBOSS_SERVER_CONTROLLER);
-        serverDeploymentManager=new ModelControllerServerDeploymentManager(serverControllerService.getValue());
+        final Value<ServerController> serverControllerService=(Value<ServerController>)serviceContainer.getRequiredService(Services.JBOSS_SERVER_CONTROLLER);
+        final ServerController controller=serverControllerService.getValue();
+        serverDeploymentManager=new ModelControllerServerDeploymentManager(controller);
+        modelControllerClient=new ModelControllerToModelControllerClientAdapter(controller);
         context=new InitialContext();
       }
  catch (      RuntimeException rte) {
