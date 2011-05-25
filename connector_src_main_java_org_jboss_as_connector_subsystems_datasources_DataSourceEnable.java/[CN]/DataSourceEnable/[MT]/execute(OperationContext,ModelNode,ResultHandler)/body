@@ -4,11 +4,26 @@
   compensatingOperation.get(OP).set(DISABLE);
   compensatingOperation.get(OP_ADDR).set(opAddr);
   final String jndiName=PathAddress.pathAddress(opAddr).getLastElement().getValue();
-  context.getSubModel().get(ENABLED).set(true);
+  final ModelNode dataSourceNode=context.getSubModel();
+  dataSourceNode.get(ENABLED).set(true);
   if (context.getRuntimeContext() != null) {
     context.getRuntimeContext().setRuntimeTask(new RuntimeTask(){
       public void execute(      final RuntimeTaskContext context) throws OperationFailedException {
         final ServiceRegistry registry=context.getServiceRegistry();
+        if (isXa()) {
+          final ServiceName dataSourceConfigServiceName=XADataSourceConfigService.SERVICE_NAME_BASE.append(jndiName);
+          final ServiceController<?> dataSourceConfigController=registry.getService(dataSourceConfigServiceName);
+          if (dataSourceConfigController != null) {
+            ((XaDataSource)dataSourceConfigController.getValue()).setEnabled(true);
+          }
+        }
+ else {
+          final ServiceName dataSourceConfigServiceName=DataSourceConfigService.SERVICE_NAME_BASE.append(jndiName);
+          final ServiceController<?> dataSourceConfigController=registry.getService(dataSourceConfigServiceName);
+          if (dataSourceConfigController != null) {
+            ((DataSource)dataSourceConfigController.getValue()).setEnabled(true);
+          }
+        }
         final ServiceName dataSourceServiceName=AbstractDataSourceService.SERVICE_NAME_BASE.append(jndiName);
         final ServiceController<?> dataSourceController=registry.getService(dataSourceServiceName);
         if (dataSourceController != null) {
