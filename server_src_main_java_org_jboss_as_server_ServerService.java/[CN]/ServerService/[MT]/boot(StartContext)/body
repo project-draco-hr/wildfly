@@ -10,6 +10,22 @@
     }
   }
 );
+  final ServerEnvironment serverEnvironment=configuration.getServerEnvironment();
+  final ServiceTarget serviceTarget=context.getChildTarget();
+  final File[] extDirs=serverEnvironment.getJavaExtDirs();
+  final File[] newExtDirs=Arrays.copyOf(extDirs,extDirs.length + 1);
+  newExtDirs[extDirs.length]=new File(serverEnvironment.getServerBaseDir(),"lib/ext");
+  serviceTarget.addService(org.jboss.as.server.deployment.Services.JBOSS_DEPLOYMENT_EXTENSION_INDEX,new ExtensionIndexService(newExtDirs)).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_SERVICE_MODULE_LOADER,new DeploymentUnitProcessor(){
+    @Override public void deploy(    DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
+      phaseContext.getDeploymentUnit().putAttachment(Attachments.SERVICE_MODULE_LOADER,injectedModuleLoader.getValue());
+      phaseContext.getDeploymentUnit().putAttachment(Attachments.EXTERNAL_MODULE_SERVICE,injectedExternalModuleService.getValue());
+    }
+    @Override public void undeploy(    DeploymentUnit context){
+      context.removeAttachment(Attachments.SERVICE_MODULE_LOADER);
+    }
+  }
+));
   deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_MOUNT,new DeploymentRootMountProcessor()));
   deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_MANIFEST,new ManifestAttachmentProcessor()));
   deployers.get(Phase.STRUCTURE).add(new RegisteredProcessor(Phase.STRUCTURE_ADDITIONAL_MANIFEST,new ManifestAttachmentProcessor()));
@@ -30,6 +46,7 @@
   deployers.get(Phase.DEPENDENCIES).add(new RegisteredProcessor(Phase.DEPENDENCIES_SUB_DEPLOYMENTS,new SubDeploymentDependencyProcessor()));
   deployers.get(Phase.CONFIGURE_MODULE).add(new RegisteredProcessor(Phase.CONFIGURE_MODULE_SPEC,new ModuleSpecProcessor()));
   deployers.get(Phase.POST_MODULE).add(new RegisteredProcessor(Phase.POST_MODULE_INSTALL_EXTENSION,new ModuleExtensionNameProcessor()));
+  deployers.get(Phase.POST_MODULE).add(new RegisteredProcessor(Phase.POST_MODULE_REFLECTION_INDEX,new InstallReflectionIndexProcessor()));
   deployers.get(Phase.INSTALL).add(new RegisteredProcessor(Phase.INSTALL_SERVICE_ACTIVATOR,new ServiceActivatorProcessor()));
   try {
     super.boot(context);
@@ -47,5 +64,5 @@
     }
     finalDeployers.put(phase,Arrays.asList(processorList.toArray(new DeploymentUnitProcessor[processorList.size()])));
   }
-  DeployerChainsService.addService(context.getChildTarget(),finalDeployers);
+  DeployerChainsService.addService(serviceTarget,finalDeployers);
 }
