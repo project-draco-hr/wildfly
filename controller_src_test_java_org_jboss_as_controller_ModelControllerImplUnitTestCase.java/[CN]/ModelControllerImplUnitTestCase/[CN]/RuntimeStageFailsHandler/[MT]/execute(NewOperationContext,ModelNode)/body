@@ -1,0 +1,20 @@
+{
+  String name=operation.require("name").asString();
+  ModelNode attr=context.readModelForUpdate(PathAddress.EMPTY_ADDRESS).get(name);
+  int current=attr.asInt();
+  attr.set(operation.require("value"));
+  context.getResult().set(current);
+  context.addStep(new NewStepHandler(){
+    @Override public void execute(    NewOperationContext context,    ModelNode operation){
+      toggleRuntimeState(state);
+      context.getFailureDescription().set("handleFailed");
+      if (context.completeStep() == NewOperationContext.ResultAction.ROLLBACK) {
+        toggleRuntimeState(state);
+      }
+    }
+  }
+,NewOperationContext.Stage.RUNTIME);
+  ModelNode compOp=getOperation(operation.get("rollbackName").asString(),name,current);
+  context.getCompensatingOperation().set(compOp);
+  context.completeStep();
+}
