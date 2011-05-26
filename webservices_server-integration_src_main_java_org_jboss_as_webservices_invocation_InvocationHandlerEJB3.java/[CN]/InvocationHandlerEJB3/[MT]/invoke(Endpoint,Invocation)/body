@@ -1,14 +1,21 @@
 {
   try {
     this.onBeforeInvocation(wsInvocation);
-    final SessionBeanComponent ejbContainer=this.getEjb3Container();
+    final ComponentView ejbContainer=this.getEjb3Container();
     final Method seiMethod=wsInvocation.getJavaMethod();
     final Serializable sessionId=null;
     final Map<String,Object> contextData=getWebServiceContext(wsInvocation).getMessageContext();
-    final Class<?> invokedBusinessInterface=null;
     final Method implMethod=seiMethod;
     final Object[] args=wsInvocation.getArgs();
-    final Object retObj=ejbContainer.invoke(sessionId,contextData,invokedBusinessInterface,implMethod,args);
+    final ComponentViewInstance ejbInstance=ejbContainer.createInstance();
+    final InterceptorContext interceptorContext=new InterceptorContext();
+    final Method method=lookupProperMethod(implMethod,ejbInstance.allowedMethods());
+    interceptorContext.setMethod(method);
+    interceptorContext.setContextData(contextData);
+    interceptorContext.setParameters(args);
+    interceptorContext.setTarget(ejbInstance.createProxy());
+    interceptorContext.putPrivateData(Component.class,ejbInstance.getComponent());
+    final Object retObj=ejbInstance.getEntryPoint(method).processInvocation(interceptorContext);
     wsInvocation.setReturnValue(retObj);
   }
  catch (  Throwable t) {
