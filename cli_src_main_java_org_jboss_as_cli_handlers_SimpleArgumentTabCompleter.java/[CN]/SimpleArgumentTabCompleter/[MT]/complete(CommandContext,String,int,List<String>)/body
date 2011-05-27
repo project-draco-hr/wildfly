@@ -8,10 +8,10 @@
   }
   results.reset();
   final DefaultParsedArguments parsedArguments=(DefaultParsedArguments)ctx.getParsedArguments();
-  parsedArguments.reset(null);
+  parsedArguments.reset(null,null);
   try {
     CommandLineParser.parse(buffer,new CommandLineParser.CallbackHandler(){
-      @Override public void argument(      String name,      int nameStart,      String value,      int valueStart,      int end){
+      @Override public void argument(      String name,      int nameStart,      String value,      int valueStart,      int end) throws CommandFormatException {
         if (end > 0 && end < buffer.length()) {
           parsedArguments.argument(name,nameStart,value,valueStart,end);
         }
@@ -45,9 +45,14 @@
         }
  else {
           for (          CommandArgument arg : allArgs) {
-            if (arg.getIndex() >= 0 && arg.canAppearNext(ctx)) {
-              valueCompleter=arg.getValueCompleter();
-              break;
+            try {
+              if (arg.getIndex() >= 0 && arg.canAppearNext(ctx)) {
+                valueCompleter=arg.getValueCompleter();
+                break;
+              }
+            }
+ catch (            CommandFormatException e) {
+              return -1;
             }
           }
         }
@@ -72,9 +77,14 @@
           }
  else {
             for (            CommandArgument arg : allArgs) {
-              if (arg.getIndex() >= 0 && arg.canAppearNext(ctx)) {
-                valueCompleter=arg.getValueCompleter();
-                break;
+              try {
+                if (arg.getIndex() >= 0 && arg.canAppearNext(ctx)) {
+                  valueCompleter=arg.getValueCompleter();
+                  break;
+                }
+              }
+ catch (              CommandFormatException e) {
+                return -1;
               }
             }
           }
@@ -106,28 +116,33 @@
     }
   }
   for (  CommandArgument arg : allArgs) {
-    if (arg.canAppearNext(ctx)) {
-      if (arg.getIndex() >= 0) {
-        CommandLineCompleter valCompl=arg.getValueCompleter();
-        if (valCompl != null) {
-          valCompl.complete(ctx,chunk == null ? "" : chunk,cursor,candidates);
+    try {
+      if (arg.canAppearNext(ctx)) {
+        if (arg.getIndex() >= 0) {
+          CommandLineCompleter valCompl=arg.getValueCompleter();
+          if (valCompl != null) {
+            valCompl.complete(ctx,chunk == null ? "" : chunk,cursor,candidates);
+          }
         }
-      }
  else {
-        String argName=arg.getFullName();
-        if (chunk == null) {
-          if (arg.isValueRequired()) {
-            argName+='=';
+          String argName=arg.getFullName();
+          if (chunk == null) {
+            if (arg.isValueRequired()) {
+              argName+='=';
+            }
+            candidates.add(argName);
           }
-          candidates.add(argName);
-        }
- else         if (argName.startsWith(chunk)) {
-          if (arg.isValueRequired()) {
-            argName+='=';
+ else           if (argName.startsWith(chunk)) {
+            if (arg.isValueRequired()) {
+              argName+='=';
+            }
+            candidates.add(argName);
           }
-          candidates.add(argName);
         }
       }
+    }
+ catch (    CommandFormatException e) {
+      return -1;
     }
   }
   Collections.sort(candidates);

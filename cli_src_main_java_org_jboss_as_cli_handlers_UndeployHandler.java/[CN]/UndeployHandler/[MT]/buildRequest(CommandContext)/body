@@ -10,25 +10,36 @@
   }
   ModelControllerClient client=ctx.getModelControllerClient();
   DefaultOperationRequestBuilder builder;
-  boolean keepContent=this.keepContent.isPresent(args);
+  boolean keepContent;
+  try {
+    keepContent=this.keepContent.isPresent(args);
+  }
+ catch (  CommandFormatException e) {
+    throw new OperationFormatException(e.getLocalizedMessage());
+  }
   if (ctx.isDomainMode()) {
     final List<String> serverGroups;
-    if (allRelevantServerGroups.isPresent(args)) {
-      if (keepContent) {
-        serverGroups=Util.getAllEnabledServerGroups(name,client);
+    try {
+      if (allRelevantServerGroups.isPresent(args)) {
+        if (keepContent) {
+          serverGroups=Util.getAllEnabledServerGroups(name,client);
+        }
+ else {
+          serverGroups=Util.getAllReferencingServerGroups(name,client);
+        }
       }
  else {
-        serverGroups=Util.getAllReferencingServerGroups(name,client);
+        final String serverGroupsStr=this.serverGroups.getValue(args);
+        if (serverGroupsStr == null) {
+          serverGroups=Collections.emptyList();
+        }
+ else {
+          serverGroups=Arrays.asList(serverGroupsStr.split(","));
+        }
       }
     }
- else {
-      final String serverGroupsStr=this.serverGroups.getValue(args);
-      if (serverGroupsStr == null) {
-        serverGroups=Collections.emptyList();
-      }
- else {
-        serverGroups=Arrays.asList(serverGroupsStr.split(","));
-      }
+ catch (    CommandFormatException e) {
+      throw new OperationFormatException(e.getLocalizedMessage());
     }
     if (serverGroups.isEmpty()) {
       if (keepContent) {

@@ -3,23 +3,26 @@
   if (!args.hasArguments()) {
     throw new OperationFormatException("Required arguments are missing.");
   }
-  final String filePath;
-  try {
-    filePath=path.getValue(args);
-  }
- catch (  IllegalArgumentException e) {
-    throw new OperationFormatException("Missing required path argument.");
-  }
+  final String filePath=path.getValue(args);
   String name=this.name.getValue(args);
   String runtimeName=rtName.getValue(args);
-  File f=new File(filePath);
-  if (!f.exists()) {
-    throw new OperationFormatException(f.getAbsolutePath() + " doesn't exist.");
+  final File f;
+  if (filePath != null) {
+    f=new File(filePath);
+    if (!f.exists()) {
+      throw new OperationFormatException(f.getAbsolutePath() + " doesn't exist.");
+    }
+    if (name == null) {
+      name=f.getName();
+    }
   }
-  if (name == null) {
-    name=f.getName();
+ else {
+    f=null;
+    if (name == null) {
+      throw new CommandFormatException("Either file path or --name has to be specified.");
+    }
   }
-  if (Util.isDeploymentInRepository(name,ctx.getModelControllerClient())) {
+  if (Util.isDeploymentInRepository(name,ctx.getModelControllerClient()) && f != null) {
     if (force.isPresent(args)) {
       DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
       builder=new DefaultOperationRequestBuilder();
@@ -29,7 +32,7 @@
         builder.addProperty("runtime-name",runtimeName);
       }
       byte[] bytes=readBytes(f);
-      builder.getModelNode().get("bytes").set(bytes);
+      builder.getModelNode().get("content").get(0).get("bytes").set(bytes);
       return builder.buildRequest();
     }
  else {
@@ -44,11 +47,11 @@
  else {
       String serverGroupsStr=this.serverGroups.getValue(args);
       if (serverGroupsStr == null) {
-        new OperationFormatException("Either --all-server-groups or --server-groups must be specified.");
+        throw new OperationFormatException("Either --all-server-groups or --server-groups must be specified.");
       }
       serverGroups=Arrays.asList(serverGroupsStr.split(","));
     }
-    if (serverGroups.isEmpty()) {
+    if (serverGroups.isEmpty() && !disabled.isPresent(args)) {
       new OperationFormatException("No server group is available.");
     }
   }
@@ -60,15 +63,17 @@
   composite.get("address").setEmptyList();
   ModelNode steps=composite.get("steps");
   DefaultOperationRequestBuilder builder;
-  builder=new DefaultOperationRequestBuilder();
-  builder.setOperationName("add");
-  builder.addNode("deployment",name);
-  if (runtimeName != null) {
-    builder.addProperty("runtime-name",runtimeName);
+  if (f != null) {
+    builder=new DefaultOperationRequestBuilder();
+    builder.setOperationName("add");
+    builder.addNode("deployment",name);
+    if (runtimeName != null) {
+      builder.addProperty("runtime-name",runtimeName);
+    }
+    byte[] bytes=readBytes(f);
+    builder.getModelNode().get("content").get(0).get("bytes").set(bytes);
+    steps.add(builder.buildRequest());
   }
-  byte[] bytes=readBytes(f);
-  builder.getModelNode().get("bytes").set(bytes);
-  steps.add(builder.buildRequest());
   if (!disabled.isPresent(args)) {
     if (ctx.isDomainMode()) {
       for (      String serverGroup : serverGroups) {
