@@ -1,16 +1,13 @@
 {
-  final ModelNodeRegistration registry=context.getRegistry();
-  final ModelNode model=context.getSubModel(address);
+  final ModelNodeRegistration registry=context.getModelNodeRegistration();
+  final ModelNode model=context.readModel(address);
   final ModelNode result;
   if (readOperation.get(RECURSIVE).asBoolean(false)) {
     result=model.clone();
-    if (readOperation.get(PROXIES).asBoolean(true)) {
-      addProxyNodes(context,address,readOperation,result,registry);
-    }
   }
  else {
     result=new ModelNode();
-    final Set<String> childNames=registry.getChildNames(address);
+    final Set<String> childNames=registry != null ? registry.getChildNames(address) : Collections.<String>emptySet();
     final ModelNode subModel=model.clone();
     for (    final String key : subModel.keys()) {
       final ModelNode child=subModel.get(key);
@@ -27,7 +24,7 @@
       }
     }
     final boolean queryRuntime=readOperation.get(INCLUDE_RUNTIME).asBoolean(false);
-    final Set<String> attributeNames=registry.getAttributeNames(address);
+    final Set<String> attributeNames=registry != null ? registry.getAttributeNames(address) : Collections.<String>emptySet();
     for (    final String attributeName : attributeNames) {
       final AttributeAccess access=registry.getAttributeAccess(address,attributeName);
       if (access == null) {
@@ -39,30 +36,14 @@
           continue;
         }
         final AccessType type=access.getAccessType();
-        final OperationHandler handler=(OperationHandler)access.getReadHandler();
+        final NewStepHandler handler=access.getReadHandler();
         if (handler != null) {
           final ModelNode attributeOperation=readOperation.clone();
           attributeOperation.get(NAME).set(attributeName);
-          handler.execute(context,attributeOperation,new ResultHandler(){
-            @Override public void handleResultFragment(            final String[] location,            final ModelNode attributeResult){
-              result.get(attributeName).set(attributeResult);
-            }
-            @Override public void handleResultComplete(){
-            }
-            @Override public void handleFailed(            ModelNode failureDescription){
-              if (type != AccessType.METRIC) {
-                resultHandler.handleFailed(failureDescription);
-              }
-            }
-            @Override public void handleCancellation(){
-              resultHandler.handleCancellation();
-            }
-          }
-);
+          context.addStep(result.get(attributeName),attributeOperation,handler,NewOperationContext.Stage.MODEL);
         }
       }
     }
-    handleNonRecursiveProxyEntries(context,address,readOperation,result,registry);
   }
   return result;
 }

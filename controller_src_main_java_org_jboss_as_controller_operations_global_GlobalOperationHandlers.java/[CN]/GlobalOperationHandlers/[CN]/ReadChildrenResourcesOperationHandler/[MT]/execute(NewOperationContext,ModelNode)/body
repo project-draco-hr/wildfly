@@ -1,0 +1,37 @@
+{
+  final String childName=operation.require(CHILD_TYPE).asString();
+  ModelNode subModel=context.readModel(PathAddress.EMPTY_ADDRESS);
+  if (!subModel.isDefined()) {
+    context.getResult().setEmptyList();
+  }
+ else {
+    final Set<String> childNames=context.getModelNodeRegistration().getChildNames(PathAddress.EMPTY_ADDRESS);
+    if (!childNames.contains(childName)) {
+      throw new OperationFailedException(new ModelNode().set("No known child called " + childName));
+    }
+ else {
+      final ModelNode result=context.getResult();
+      subModel=subModel.get(childName);
+      if (!subModel.isDefined()) {
+        result.setEmptyList();
+      }
+ else {
+        for (        final String key : subModel.keys()) {
+          final PathAddress childAddress=PathAddress.EMPTY_ADDRESS.append(PathElement.pathElement(childName,key));
+          final ModelNode readOp=new ModelNode();
+          readOp.get(OP).set(READ_RESOURCE_OPERATION);
+          readOp.get(OP_ADDR).set(childAddress.toModelNode());
+          if (operation.hasDefined(INCLUDE_RUNTIME)) {
+            readOp.get(INCLUDE_RUNTIME).set(operation.get(INCLUDE_RUNTIME).asBoolean());
+          }
+          final NewStepHandler handler=context.getModelNodeRegistration().getOperationHandler(childAddress,READ_RESOURCE_OPERATION);
+          if (handler == null) {
+            throw new OperationFailedException(new ModelNode().set("no operation handler"));
+          }
+          context.addStep(result.get(key),readOp,handler,NewOperationContext.Stage.MODEL);
+        }
+      }
+    }
+  }
+  context.completeStep();
+}

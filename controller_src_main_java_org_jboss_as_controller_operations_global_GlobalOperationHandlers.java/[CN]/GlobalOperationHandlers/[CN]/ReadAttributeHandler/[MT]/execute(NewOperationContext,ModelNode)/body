@@ -1,0 +1,27 @@
+{
+  final String attributeName=operation.require(NAME).asString();
+  final ModelNode subModel=context.readModel(PathAddress.EMPTY_ADDRESS);
+  final AttributeAccess attributeAccess=context.getModelNodeRegistration().getAttributeAccess(PathAddress.EMPTY_ADDRESS,attributeName);
+  if (attributeAccess == null) {
+    final Set<String> children=context.getModelNodeRegistration().getChildNames(PathAddress.EMPTY_ADDRESS);
+    if (children.contains(attributeName)) {
+      throw new OperationFailedException(new ModelNode().set(String.format("'%s' is a registered child of resource (%s)",attributeName,operation.get(OP_ADDR))));
+    }
+ else     if (subModel.has(attributeName)) {
+      final ModelNode result=subModel.get(attributeName);
+      context.getResult().set(result);
+      context.completeStep();
+    }
+ else {
+      throw new OperationFailedException(new ModelNode().set("No known attribute called " + attributeName));
+    }
+  }
+ else   if (attributeAccess.getReadHandler() == null) {
+    final ModelNode result=subModel.get(attributeName);
+    context.getResult().set(result);
+    context.completeStep();
+  }
+ else {
+    attributeAccess.getReadHandler().execute(context,operation);
+  }
+}
