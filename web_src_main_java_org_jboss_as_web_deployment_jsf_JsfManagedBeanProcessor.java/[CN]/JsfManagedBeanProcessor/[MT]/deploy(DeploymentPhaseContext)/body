@@ -2,7 +2,11 @@
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   final CompositeIndex index=deploymentUnit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
   final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
   if (index == null) {
+    return;
+  }
+  if (module == null) {
     return;
   }
   if (!DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit)) {
@@ -12,6 +16,18 @@
   handleAnnotations(index,managedBeanClasses);
   processXmlManagedBeans(deploymentUnit,managedBeanClasses);
   for (  String managedBean : managedBeanClasses) {
+    try {
+      final Class<?> componentClass=module.getClassLoader().loadClass(managedBean);
+      componentClass.getConstructor();
+    }
+ catch (    ClassNotFoundException e) {
+      log.error("Could not load JSF managed bean class " + managedBean);
+      continue;
+    }
+catch (    NoSuchMethodException e) {
+      log.error("JSF managed bean class " + managedBean + " has no default constructor");
+      continue;
+    }
     installManagedBeanComponent(managedBean,moduleDescription,deploymentUnit);
   }
 }
