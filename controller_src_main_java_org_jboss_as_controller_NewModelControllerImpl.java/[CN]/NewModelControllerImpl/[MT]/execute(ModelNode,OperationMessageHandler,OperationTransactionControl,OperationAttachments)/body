@@ -2,7 +2,7 @@
   final ModelNode headers=operation.get(OPERATION_HEADERS);
   final boolean rollbackOnFailure=headers == null || headers.get(ROLLBACK_ON_RUNTIME_FAILURE).asBoolean(true);
   final EnumSet<NewOperationContextImpl.ContextFlag> contextFlags=rollbackOnFailure ? EnumSet.of(NewOperationContextImpl.ContextFlag.ROLLBACK_ON_FAIL) : EnumSet.noneOf(NewOperationContextImpl.ContextFlag.class);
-  NewOperationContextImpl context=new NewOperationContextImpl(this,controllerType,contextFlags,handler,attachments,modelReference.get(),control,bootingFlag.getAndSet(false));
+  NewOperationContextImpl context=new NewOperationContextImpl(this,controllerType,contextFlags,handler,attachments,modelReference.get(),control,processState,bootingFlag.getAndSet(false));
   ModelNode response=new ModelNode();
   if (prepareStep != null) {
     context.addStep(response,operation,prepareStep,NewOperationContext.Stage.MODEL);
@@ -14,7 +14,7 @@
     }
   }
 ,NewOperationContext.Stage.VERIFY);
-  NewStepHandler stepHandler=(NewStepHandler)rootRegistration.getOperationHandler(PathAddress.pathAddress(operation.require(ADDRESS)),operation.require(OP).asString());
+  NewStepHandler stepHandler=rootRegistration.getOperationHandler(PathAddress.pathAddress(operation.require(ADDRESS)),operation.require(OP).asString());
   context.addStep(response,operation,stepHandler,NewOperationContext.Stage.MODEL);
   RB_ON_RT_FAILURE.set(Boolean.valueOf(rollbackOnFailure));
   try {
@@ -23,5 +23,14 @@
   finally {
     RB_ON_RT_FAILURE.set(null);
   }
-  return response;
+  ControlledProcessState.State state=processState.getState();
+switch (state) {
+case RELOAD_REQUIRED:
+case RESTART_REQUIRED:
+    response.get(RESPONSE_HEADERS,PROCESS_STATE).set(state.toString());
+  break;
+default :
+break;
+}
+return response;
 }
