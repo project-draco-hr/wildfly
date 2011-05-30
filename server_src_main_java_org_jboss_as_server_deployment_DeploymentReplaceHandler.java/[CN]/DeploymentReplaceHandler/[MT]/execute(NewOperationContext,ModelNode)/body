@@ -1,18 +1,21 @@
 {
   validator.validate(operation);
-  ModelNode deployments=context.readModelForUpdate(PathAddress.EMPTY_ADDRESS).get(DEPLOYMENT);
+  final Resource root=context.readResource(PathAddress.EMPTY_ADDRESS);
   String name=operation.require(NAME).asString();
   String toReplace=operation.require(TO_REPLACE).asString();
   if (name.equals(toReplace)) {
     throw operationFailed(String.format("Cannot use %s with the same value for parameters %s and %s. " + "Use %s to redeploy the same content or %s to replace content with a new version with the same name.",OPERATION_NAME,NAME,TO_REPLACE,DeploymentRedeployHandler.OPERATION_NAME,DeploymentFullReplaceHandler.OPERATION_NAME));
   }
-  ModelNode replaceNode=deployments.hasDefined(toReplace) ? deployments.get(toReplace) : null;
-  if (replaceNode == null) {
+  final PathElement deployPath=PathElement.pathElement(DEPLOYMENT,name);
+  final PathElement replacePath=PathElement.pathElement(DEPLOYMENT,toReplace);
+  if (!root.hasChild(replacePath)) {
     throw operationFailed(String.format("No deployment with name %s found",toReplace));
   }
+  final Resource resource=context.readResource(PathAddress.pathAddress(replacePath));
+  final ModelNode replaceNode=resource.getModel();
   final String replacedName=replaceNode.require(RUNTIME_NAME).asString();
-  ModelNode deployNode=deployments.hasDefined(name) ? deployments.get(name) : null;
-  if (deployNode == null) {
+  Resource deployResource=root.getChild(deployPath);
+  if (deployResource == null) {
     if (!operation.hasDefined(CONTENT)) {
       throw operationFailed(String.format("No deployment with name %s found",name));
     }
@@ -27,18 +30,16 @@
       unmanagedContentValidator.validate(contentItemNode);
     }
     final String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : replacedName;
-    deployNode=new ModelNode();
+    deployResource=context.createResource(PathAddress.pathAddress(deployPath));
+    final ModelNode deployNode=deployResource.getModel();
     deployNode.get(RUNTIME_NAME).set(runtimeName);
     deployNode.get(CONTENT).set(content);
-    deployments.get(name).set(deployNode);
+    final DeploymentHandlerUtil.ContentItem[] contents=getContents(deployNode.require(CONTENT));
+    DeploymentHandlerUtil.replace(context,replaceNode,runtimeName,name,replacedName,contents);
   }
- else   if (deployNode.get(ENABLED).asBoolean()) {
+ else   if (deployResource.getModel().get(ENABLED).asBoolean()) {
     throw operationFailed(String.format("Deployment %s is already started",toReplace));
   }
-  deployNode.get(ENABLED).set(true);
   replaceNode.get(ENABLED).set(false);
-  final String runtimeName=deployNode.require(RUNTIME_NAME).asString();
-  final DeploymentHandlerUtil.ContentItem[] contents=getContents(deployNode.require(CONTENT));
-  DeploymentHandlerUtil.replace(context,replaceNode,runtimeName,name,replacedName,contents);
   context.completeStep();
 }

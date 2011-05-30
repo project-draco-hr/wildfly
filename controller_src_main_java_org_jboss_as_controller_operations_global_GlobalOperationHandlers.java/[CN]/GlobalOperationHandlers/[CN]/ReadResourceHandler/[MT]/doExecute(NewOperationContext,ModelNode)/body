@@ -14,11 +14,14 @@
   final ReadResourceAssemblyHandler assemblyHandler=new ReadResourceAssemblyHandler(directAttributes,metrics,otherAttributes,directChildren,childResources);
   context.addStep(assemblyHandler,NewOperationContext.Stage.IMMEDIATE);
   final ImmutableModelNodeRegistration registry=context.getModelNodeRegistration();
-  final ModelNode model=safeReadModel(context);
-  final Map<String,Set<String>> childrenByType=registry != null ? getChildAddresses(registry,model,null) : Collections.<String,Set<String>>emptyMap();
-  for (  String key : model.keys()) {
-    if (!childrenByType.containsKey(key)) {
-      directAttributes.put(key,model.get(key));
+  final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
+  final ModelNode model=resource.getModel();
+  final Map<String,Set<String>> childrenByType=registry != null ? getChildAddresses(registry,resource,null) : Collections.<String,Set<String>>emptyMap();
+  if (model.isDefined()) {
+    for (    String key : model.keys()) {
+      if (!childrenByType.containsKey(key)) {
+        directAttributes.put(key,model.get(key));
+      }
     }
   }
   for (  Map.Entry<String,Set<String>> entry : childrenByType.entrySet()) {
@@ -34,6 +37,9 @@
           PathElement childPE=PathElement.pathElement(childType,child);
           PathAddress relativeAddr=PathAddress.pathAddress(childPE);
           ImmutableModelNodeRegistration childReg=registry.getSubModel(relativeAddr);
+          if (childReg == null) {
+            throw new OperationFailedException(new ModelNode().set(String.format("no child registry for (%s, %s)",childType,child)));
+          }
           if (childReg.isRuntimeOnly() && (!proxies || !childReg.isRemote())) {
             storeDirect=true;
           }

@@ -1,0 +1,34 @@
+{
+  final NewModelControllerClient client=NewModelControllerClient.Factory.create("localhost",9999);
+  try {
+    final ModelNode address=new ModelNode();
+    address.add(ModelDescriptionConstants.DEPLOYMENT,"ws-example.war");
+    address.add(ModelDescriptionConstants.SUBSYSTEM,WSExtension.SUBSYSTEM_NAME);
+    address.add("endpoint","*");
+    final ModelNode operation=new ModelNode();
+    operation.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.READ_RESOURCE_OPERATION);
+    operation.get(ModelDescriptionConstants.OP_ADDR).set(address);
+    operation.get(ModelDescriptionConstants.RECURSIVE).set(true);
+    final ModelNode result=client.execute(operation);
+    Assert.assertEquals(ModelDescriptionConstants.SUCCESS,result.get(ModelDescriptionConstants.OUTCOME).asString());
+    for (    final ModelNode endpointResult : result.get("result").asList()) {
+      final ModelNode endpoint=endpointResult.get("result");
+      Assert.assertTrue(endpoint.hasDefined("class"));
+      Assert.assertTrue(endpoint.hasDefined("name"));
+      Assert.assertTrue(endpoint.hasDefined("wsdl-url"));
+      final URL url=new URL(endpoint.get("wsdl-url").asString());
+      UrlConnectionTask task=new UrlConnectionTask(url,null);
+      PollingUtils.retryWithTimeout(10000,task);
+      final ModelNode readAttribute=new ModelNode();
+      readAttribute.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.READ_ATTRIBUTE_OPERATION);
+      readAttribute.get(ModelDescriptionConstants.OP_ADDR).set(endpointResult.get(ModelDescriptionConstants.OP_ADDR));
+      readAttribute.get(ModelDescriptionConstants.NAME).set("request-count");
+      final ModelNode attribute=client.execute(operation);
+      Assert.assertEquals(ModelDescriptionConstants.SUCCESS,attribute.get(ModelDescriptionConstants.OUTCOME).asString());
+      Assert.assertTrue(attribute.get("result").asInt() > 0);
+    }
+  }
+  finally {
+    client.close();
+  }
+}

@@ -1,14 +1,15 @@
 {
   validator.validate(operation);
-  String name=operation.require(NAME).asString();
-  ModelNode rootModel=context.readModelForUpdate(PathAddress.EMPTY_ADDRESS);
-  ModelNode deployments=rootModel.get(DEPLOYMENT);
-  ModelNode replaceNode=deployments.hasDefined(name) ? deployments.get(name) : null;
-  if (replaceNode == null) {
+  final String name=operation.require(NAME).asString();
+  final PathAddress address=PathAddress.EMPTY_ADDRESS.append(PathElement.pathElement(DEPLOYMENT,name));
+  final Resource root=context.readResource(PathAddress.EMPTY_ADDRESS);
+  boolean exists=root.hasChild(PathElement.pathElement(DEPLOYMENT,name));
+  if (!exists) {
     throw createFailureException("No deployment with name %s found",name);
   }
-  String replacedRuntimeName=replaceNode.require(RUNTIME_NAME).asString();
-  String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : replaceNode.require(RUNTIME_NAME).asString();
+  final ModelNode replaceNode=context.readModelForUpdate(address);
+  final String replacedRuntimeName=replaceNode.require(RUNTIME_NAME).asString();
+  final String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : replaceNode.require(RUNTIME_NAME).asString();
   final byte[] hash;
   final ModelNode content=operation.require(CONTENT).clone();
   final DeploymentHandlerUtil.ContentItem contentItem;
@@ -43,13 +44,11 @@
     contentItem=new DeploymentHandlerUtil.ContentItem(path,relativeTo,archive);
   }
   boolean start=replaceNode.get(ENABLED).asBoolean();
-  final PathAddress address=PathAddress.EMPTY_ADDRESS.append(PathElement.pathElement(DEPLOYMENT,name));
   final ModelNode deployNode=context.readModelForUpdate(address);
   deployNode.get(NAME).set(name);
   deployNode.get(RUNTIME_NAME).set(runtimeName);
   deployNode.get(CONTENT).set(content);
   deployNode.get(ENABLED).set(start);
-  deployments.get(name).set(deployNode);
   removeContentAdditions(deployNode.require(CONTENT));
   if (start) {
     DeploymentHandlerUtil.replace(context,replaceNode,runtimeName,name,replacedRuntimeName,contentItem);
