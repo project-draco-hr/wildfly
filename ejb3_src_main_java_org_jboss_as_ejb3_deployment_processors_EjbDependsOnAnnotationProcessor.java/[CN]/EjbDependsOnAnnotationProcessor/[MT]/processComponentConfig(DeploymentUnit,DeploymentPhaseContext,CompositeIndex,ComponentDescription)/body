@@ -3,7 +3,7 @@
   if (beanClass == null) {
     return;
   }
-  Class<SessionBeanComponentDescription> componentDescriptionType=SessionBeanComponentDescription.class;
+  final Class<SingletonComponentDescription> componentDescriptionType=SingletonComponentDescription.class;
   if (!EjbDeploymentMarker.isEjbDeployment(deploymentUnit) || !(componentDescriptionType.isAssignableFrom(componentDescription.getClass()))) {
     return;
   }
@@ -11,16 +11,28 @@
   if (annotationsOnBean == null || annotationsOnBean.isEmpty()) {
     return;
   }
-  final SessionBeanComponentDescription singletonComponentDescription=componentDescriptionType.cast(componentDescription);
+  final EEApplicationDescription applicationDescription=deploymentUnit.getAttachment(Attachments.EE_APPLICATION_DESCRIPTION);
+  final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.DEPLOYMENT_ROOT);
+  final SingletonComponentDescription singletonComponentDescription=componentDescriptionType.cast(componentDescription);
   final List<AnnotationInstance> dependsOnAnnotations=annotationsOnBean.get(DotName.createSimple(DependsOn.class.getName()));
   if (dependsOnAnnotations == null || dependsOnAnnotations.isEmpty()) {
     return;
   }
   validate(annotationsOnBean,dependsOnAnnotations,singletonComponentDescription.getEJBName());
   final AnnotationInstance dependsOnAnnotation=dependsOnAnnotations.get(0);
-  final List<AnnotationValue> annotationValues=dependsOnAnnotation.values();
-  for (  AnnotationValue annotationValue : annotationValues) {
-    componentDescription.addDependency(createServiceName(deploymentUnit,annotationValue.asString(),null),DependencyType.REQUIRED);
+  final String[] annotationValues=dependsOnAnnotation.value().asStringArray();
+  for (  String annotationValue : annotationValues) {
+    final Set<ComponentDescription> components=applicationDescription.getComponents(annotationValue,deploymentRoot.getRoot());
+    if (components.isEmpty()) {
+      throw new DeploymentUnitProcessingException("Could not find EJB " + annotationValue + " referenced by @DependsOn annotation in "+ componentDescription.getComponentClassName());
+    }
+ else     if (components.size() != 1) {
+      throw new DeploymentUnitProcessingException("More than one EJB called" + annotationValue + " referenced by @DependsOn annotation in "+ componentDescription.getComponentClassName()+ " Components: "+ components);
+    }
+    final ComponentDescription component=components.iterator().next();
+    final ServiceName serviceName=createServiceName(component);
+    singletonComponentDescription.getDependsOn().add(serviceName);
+    componentDescription.addDependency(createServiceName(component),DependencyType.REQUIRED);
   }
   logger.info(singletonComponentDescription.getEJBName() + " bean has @DependsOn");
 }
