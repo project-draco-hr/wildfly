@@ -1,10 +1,10 @@
 {
-  final RuntimeOperationContext runtimeContext=context.getRuntimeContext();
+  validator.validate(operation);
   final String name=operation.require(DRIVER_NAME).asString();
-  if (runtimeContext != null) {
-    runtimeContext.setRuntimeTask(new RuntimeTask(){
-      @Override public void execute(      RuntimeTaskContext context) throws OperationFailedException {
-        ServiceController<?> sc=context.getServiceRegistry().getRequiredService(ConnectorServices.JDBC_DRIVER_REGISTRY_SERVICE);
+  if (context.getType() == NewOperationContext.Type.SERVER) {
+    context.addStep(new NewStepHandler(){
+      @Override public void execute(      final NewOperationContext context,      final ModelNode operation) throws OperationFailedException {
+        ServiceController<?> sc=context.getServiceRegistry(false).getRequiredService(ConnectorServices.JDBC_DRIVER_REGISTRY_SERVICE);
         DriverRegistry driverRegistry=DriverRegistry.class.cast(sc.getValue());
         ModelNode result=new ModelNode();
         InstalledDriver driver=driverRegistry.getInstalledDriver(name);
@@ -27,11 +27,11 @@
         driverNode.get(DRIVER_MINOR_VERSION).set(driver.getMinorVersion());
         driverNode.get(JDBC_COMPLIANT).set(driver.isJdbcCompliant());
         result.add(driverNode);
-        resultHandler.handleResultFragment(ResultHandler.EMPTY_LOCATION,result);
+        context.getResult().set(result);
+        context.completeStep();
       }
     }
-);
+,NewOperationContext.Stage.RUNTIME);
   }
-  resultHandler.handleResultComplete();
-  return new BasicOperationResult();
+  context.completeStep();
 }
