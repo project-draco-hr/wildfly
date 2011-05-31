@@ -1,12 +1,13 @@
 {
+  final ExecutorService singleThreadExecutor=Executors.newSingleThreadExecutor();
+  final Future<?> firstInvocationResult=singleThreadExecutor.submit(new LongWritesSingletonBeanInvoker(this.longWritesSingletonBean));
   final int NUM_THREADS=10;
-  ExecutorService executor=Executors.newFixedThreadPool(NUM_THREADS);
+  final ExecutorService nextTenInvocations=Executors.newFixedThreadPool(NUM_THREADS);
   Future<?>[] results=new Future[NUM_THREADS];
   for (int i=0; i < NUM_THREADS; i++) {
-    results[i]=executor.submit(new LongWritesSingletonBeanInvoker(longWritesSingletonBean));
+    results[i]=nextTenInvocations.submit(new LongWritesSingletonBeanInvoker(longWritesSingletonBean));
   }
-  results[0].get(10,TimeUnit.SECONDS);
-  for (int i=1; i < NUM_THREADS; i++) {
+  for (int i=0; i < NUM_THREADS; i++) {
     try {
       results[i].get(10,TimeUnit.SECONDS);
       Assert.fail("Invocation on a singleton bean with WRITE lock was expected to fail for thread numbered: " + i);
@@ -15,4 +16,6 @@
       Assert.assertTrue("Unexpected exception during invocation on a singleton bean with WRITE lock",ee.getCause() instanceof ConcurrentAccessTimeoutException);
     }
   }
+  firstInvocationResult.get(10,TimeUnit.SECONDS);
+  Assert.assertEquals("Unexpected count on singleton bean after invocation on method with WRITE lock semantic: ",1,this.longWritesSingletonBean.getCount());
 }
