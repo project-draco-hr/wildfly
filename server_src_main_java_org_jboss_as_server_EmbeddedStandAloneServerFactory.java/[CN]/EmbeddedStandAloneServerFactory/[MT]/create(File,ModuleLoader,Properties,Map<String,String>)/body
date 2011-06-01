@@ -4,7 +4,7 @@
     private ServiceContainer serviceContainer;
     private ServerDeploymentManager serverDeploymentManager;
     private Context context;
-    private ModelControllerClient modelControllerClient;
+    private NewModelControllerClient modelControllerClient;
     @Override public void deploy(    File file) throws IOException, ExecutionException, InterruptedException {
       execute(serverDeploymentManager.newDeploymentPlan().add(file.getName(),VFSUtils.createJarFileInputStream(VFS.getChild(file.toURI()))).andDeploy().build());
     }
@@ -14,7 +14,7 @@
     @Override public Context getContext(){
       return ifSet(context,"Server has not been started");
     }
-    @Override public ModelControllerClient getModelControllerClient(){
+    @Override public NewModelControllerClient getModelControllerClient(){
       return modelControllerClient;
     }
     @Override public void start() throws ServerStartException {
@@ -29,10 +29,10 @@
         configuration.setModuleLoader(moduleLoader);
         Future<ServiceContainer> future=bootstrap.startup(configuration,Collections.<ServiceActivator>emptyList());
         serviceContainer=future.get();
-        final Value<ServerController> serverControllerService=(Value<ServerController>)serviceContainer.getRequiredService(Services.JBOSS_SERVER_CONTROLLER);
-        final ServerController controller=serverControllerService.getValue();
+        final Value<NewModelController> controllerService=(Value<NewModelController>)serviceContainer.getRequiredService(Services.JBOSS_SERVER_CONTROLLER);
+        final NewModelController controller=controllerService.getValue();
         serverDeploymentManager=new ModelControllerServerDeploymentManager(controller);
-        modelControllerClient=new ModelControllerToModelControllerClientAdapter(controller);
+        modelControllerClient=controller.createClient(Executors.newCachedThreadPool());
         context=new InitialContext();
       }
  catch (      RuntimeException rte) {
