@@ -1,0 +1,27 @@
+{
+  final CountDownLatch done=new CountDownLatch(1);
+  final CountDownLatch latch=new CountDownLatch(1);
+  final SingletonComponent component=mock(SingletonComponent.class);
+  when(component.getComponentInstance()).thenCallRealMethod();
+  when(component.instantiateComponentInstance(Matchers.<AtomicReference<ManagedReference>>any(),Matchers.<Interceptor>any(),Matchers.<Map<Method,Interceptor>>any())).thenCallRealMethod();
+  when(component.createInstance()).thenAnswer(new Answer<Object>(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      ComponentInstance instance=component.instantiateComponentInstance(null,null,new HashMap<Method,Interceptor>());
+      done.countDown();
+      latch.await(10,SECONDS);
+      return instance;
+    }
+  }
+);
+  final ExecutorService service=Executors.newSingleThreadScheduledExecutor();
+  Future<ComponentInstance> future=service.submit(new Callable<ComponentInstance>(){
+    @Override public ComponentInstance call() throws Exception {
+      return component.getComponentInstance();
+    }
+  }
+);
+  done.await(10,SECONDS);
+  assertNull(get(component,SingletonComponent.class,"singletonComponentInstance"));
+  latch.countDown();
+  assertNotNull(future.get(10,SECONDS));
+}
