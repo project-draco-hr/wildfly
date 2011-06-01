@@ -1,0 +1,84 @@
+{
+  final String opName=operation.require(OP).asString();
+  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  final ModelNode result=new ModelNode();
+  final ModelNode profile=context.readModel(PathAddress.EMPTY_ADDRESS);
+  result.setEmptyList();
+  final ModelNodeRegistration registry=context.getModelNodeRegistration();
+  final AtomicReference<ModelNode> failureRef=new AtomicReference<ModelNode>();
+  final ModelNode subsystemResults=new ModelNode().setEmptyList();
+  if (profile.hasDefined(SUBSYSTEM)) {
+    for (    final String subsystemName : profile.get(SUBSYSTEM).keys()) {
+      final ModelNode subsystemRsp=new ModelNode();
+      final ModelNode subsystemAddress=address.append(PathElement.pathElement(SUBSYSTEM,subsystemName)).toModelNode();
+      final ModelNode newOp=operation.clone();
+      newOp.get(OP_ADDR).set(subsystemAddress);
+      PathAddress pa=PathAddress.pathAddress(subsystemAddress);
+      NewStepHandler subsysHandler=registry.getOperationHandler(pa,opName);
+      if (subsysHandler == null) {
+        throw new OperationFailedException(new ModelNode().set(String.format("No handler for operation %s at address %s",opName,pa)));
+      }
+      context.addStep(new NewStepHandler(){
+        @Override public void execute(        NewOperationContext context,        ModelNode operation) throws OperationFailedException {
+          if (failureRef.get() != null) {
+            if (subsystemRsp.hasDefined(FAILURE_DESCRIPTION)) {
+              failureRef.set(subsystemRsp.get(FAILURE_DESCRIPTION));
+            }
+ else             if (subsystemRsp.hasDefined(RESULT)) {
+              for (              ModelNode op : subsystemRsp.require(RESULT).asList()) {
+                subsystemResults.add(op);
+              }
+            }
+          }
+          context.completeStep();
+        }
+      }
+,NewOperationContext.Stage.IMMEDIATE);
+      context.addStep(subsystemRsp,newOp,subsysHandler,NewOperationContext.Stage.IMMEDIATE);
+    }
+  }
+  if (failureRef.get() != null) {
+    context.getFailureDescription().set(failureRef.get());
+  }
+ else {
+    final Map<String,ModelNode> includeResults=new HashMap<String,ModelNode>();
+    if (profile.hasDefined(INCLUDES)) {
+      for (      ModelNode include : profile.get(INCLUDES).asList()) {
+        final String includeName=include.asString();
+        final ModelNode includeRsp=new ModelNode();
+        includeResults.put(includeName,includeRsp);
+        final ModelNode includeAddress=address.subAddress(0,address.size() - 1).append(PathElement.pathElement(PROFILE,includeName)).toModelNode();
+        final ModelNode newOp=operation.clone();
+        newOp.get(OP_ADDR).set(includeAddress);
+        context.addStep(includeRsp,newOp,INSTANCE,NewOperationContext.Stage.IMMEDIATE);
+      }
+    }
+    context.addStep(new NewStepHandler(){
+      @Override public void execute(      NewOperationContext context,      ModelNode operation) throws OperationFailedException {
+        boolean failed=false;
+        for (        ModelNode includeRsp : includeResults.values()) {
+          if (includeRsp.hasDefined(FAILURE_DESCRIPTION)) {
+            context.getFailureDescription().set(includeRsp.get(FAILURE_DESCRIPTION));
+            failed=true;
+            break;
+          }
+          ModelNode includeResult=includeRsp.get(RESULT);
+          if (includeResult.isDefined()) {
+            for (            ModelNode op : includeResult.asList()) {
+              result.add(op);
+            }
+          }
+        }
+        if (!failed) {
+          for (          ModelNode subsysRsp : subsystemResults.asList()) {
+            result.add(subsysRsp);
+          }
+          context.getResult().set(result);
+        }
+        context.completeStep();
+      }
+    }
+,NewOperationContext.Stage.MODEL);
+  }
+  context.completeStep();
+}
