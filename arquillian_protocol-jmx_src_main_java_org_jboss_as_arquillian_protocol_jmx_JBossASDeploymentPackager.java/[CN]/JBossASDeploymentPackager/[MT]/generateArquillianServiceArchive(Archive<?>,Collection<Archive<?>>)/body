@@ -1,0 +1,57 @@
+{
+  JavaArchive archive=ShrinkWrap.create(JavaArchive.class,"arquillian-service");
+  archive.addPackage(ArquillianService.class.getPackage());
+  archive.addPackage(JMXProtocol.class.getPackage());
+  final Set<String> loadableExtensions=new HashSet<String>();
+  final String loadableExtentionsPath="META-INF/services/" + LoadableExtension.class.getName();
+  for (  Archive<?> aux : auxArchives) {
+    Node node=aux.get(loadableExtentionsPath);
+    if (node != null) {
+      BufferedReader br=new BufferedReader(new InputStreamReader(node.getAsset().openStream()));
+      try {
+        String line=br.readLine();
+        while (line != null) {
+          loadableExtensions.add(line);
+          line=br.readLine();
+        }
+      }
+ catch (      IOException ex) {
+      }
+    }
+    archive.merge(aux);
+  }
+  archive.setManifest(new Asset(){
+    public InputStream openStream(){
+      ManifestBuilder builder=ManifestBuilder.newInstance();
+      StringBuffer dependencies=new StringBuffer();
+      dependencies.append("org.jboss.as.jmx,");
+      dependencies.append("org.jboss.as.server,");
+      dependencies.append("org.jboss.as.osgi,");
+      dependencies.append("org.jboss.jandex,");
+      dependencies.append("org.jboss.logging,");
+      dependencies.append("org.jboss.modules,");
+      dependencies.append("org.jboss.msc,");
+      dependencies.append("org.jboss.osgi.framework,");
+      dependencies.append("org.osgi.core");
+      builder.addManifestHeader("Dependencies",dependencies.toString());
+      return builder.openStream();
+    }
+  }
+);
+  String serviceActivatorPath="META-INF/services/" + ServiceActivator.class.getName();
+  archive.addAsResource("arquillian-service/" + serviceActivatorPath,serviceActivatorPath);
+  archive.delete(ArchivePaths.create(loadableExtentionsPath));
+  archive.addAsResource(new Asset(){
+    @Override public InputStream openStream(){
+      ByteArrayOutputStream baos=new ByteArrayOutputStream();
+      PrintWriter pw=new PrintWriter(new OutputStreamWriter(baos));
+      for (      String line : loadableExtensions) {
+        pw.println(line);
+      }
+      pw.close();
+      return new ByteArrayInputStream(baos.toByteArray());
+    }
+  }
+,loadableExtentionsPath);
+  serviceArchive.setArchive(archive);
+}
