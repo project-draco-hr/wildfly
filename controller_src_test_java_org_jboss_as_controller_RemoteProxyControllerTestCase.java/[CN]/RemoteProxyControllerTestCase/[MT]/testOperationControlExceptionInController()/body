@@ -1,0 +1,37 @@
+{
+  ProtocolChannel serverChannel=channels.getServerChannel();
+  ProtocolChannel clientChannel=channels.getClientChannel();
+  clientChannel.startReceiving();
+  MockModelController controller=new MockModelController(){
+    @Override public ModelNode execute(    ModelNode operation,    OperationMessageHandler handler,    OperationTransactionControl control,    OperationAttachments attachments){
+      throw new RuntimeException("Crap");
+    }
+  }
+;
+  NewTransactionalModelControllerOperationHandler operationHandler=new NewTransactionalModelControllerOperationHandler(serverChannel,channels.getExecutorService(),controller);
+  serverChannel.getReceiver(ManagementChannelReceiver.class).setOperationHandler(operationHandler);
+  NewRemoteProxyController proxyController=NewRemoteProxyController.create(channels.getExecutorService(),PathAddress.pathAddress(),channels.getClientChannel());
+  clientChannel.getReceiver(ManagementChannelReceiver.class).setOperationHandler(proxyController);
+  ModelNode operation=new ModelNode();
+  operation.get("test").set("123");
+  final AtomicBoolean prepared=new AtomicBoolean();
+  final AtomicBoolean completed=new AtomicBoolean();
+  final TestFuture<ModelNode> failure=new TestFuture<ModelNode>();
+  proxyController.execute(operation,null,new ProxyOperationControl(){
+    @Override public void operationPrepared(    OperationTransaction transaction,    ModelNode result){
+      prepared.set(true);
+    }
+    @Override public void operationFailed(    ModelNode response){
+      failure.done(response);
+    }
+    @Override public void operationCompleted(    ModelNode response){
+      completed.set(true);
+    }
+  }
+,null);
+  ModelNode result=failure.get();
+  assertEquals(FAILED,result.get(OUTCOME).asString());
+  assertEquals("java.lang.RuntimeException:Crap",result.get(FAILURE_DESCRIPTION).asString());
+  assertFalse(prepared.get());
+  assertFalse(completed.get());
+}

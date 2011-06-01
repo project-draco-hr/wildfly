@@ -1,0 +1,27 @@
+{
+  executorService.execute(new Runnable(){
+    @Override public void run(){
+      ProxyOperationControlProxy control=new ProxyOperationControlProxy(executionId);
+      final ModelNode result;
+      try {
+        result=controller.execute(operation,new OperationMessageHandlerProxy(executionId),control,new OperationAttachmentsProxy(executionId,attachmentsLength));
+      }
+ catch (      Exception e) {
+        activeTransactions.remove(executionId);
+        final ModelNode failure=new ModelNode();
+        failure.get(OUTCOME).set(FAILED);
+        failure.get(FAILURE_DESCRIPTION).set(e.getClass().getName() + ":" + e.getMessage());
+        control.operationFailed(failure);
+        return;
+      }
+      if (result.hasDefined(OUTCOME) && result.get(OUTCOME).asString().equals(FAILED)) {
+        activeTransactions.remove(executionId);
+        control.operationFailed(result);
+      }
+ else {
+        control.operationCompleted(result);
+      }
+    }
+  }
+);
+}

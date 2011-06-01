@@ -1,0 +1,71 @@
+{
+  final byte[] firstBytes=new byte[]{1,2,3,4,5,6,7,8,9,10};
+  final byte[] secondBytes=new byte[]{10,9,8,7,6,5,4,3,2,1};
+  ProtocolChannel serverChannel=channels.getServerChannel();
+  ProtocolChannel clientChannel=channels.getClientChannel();
+  clientChannel.startReceiving();
+  final CountDownLatch executeLatch=new CountDownLatch(1);
+  final AtomicInteger size=new AtomicInteger();
+  final AtomicReference<byte[]> firstResult=new AtomicReference<byte[]>();
+  final AtomicReference<byte[]> secondResult=new AtomicReference<byte[]>();
+  final AtomicReference<byte[]> thirdResult=new AtomicReference<byte[]>();
+  MockModelController controller=new MockModelController(){
+    @Override public ModelNode execute(    ModelNode operation,    OperationMessageHandler handler,    OperationTransactionControl control,    OperationAttachments attachments){
+      int streamIndex=0;
+      for (      InputStream in : attachments.getInputStreams()) {
+        try {
+          ArrayList<Integer> readBytes=new ArrayList<Integer>();
+          int b=in.read();
+          while (b != -1) {
+            readBytes.add(b);
+            b=in.read();
+          }
+          byte[] bytes=new byte[readBytes.size()];
+          for (int i=0; i < bytes.length; i++) {
+            bytes[i]=(byte)readBytes.get(i).intValue();
+          }
+          if (streamIndex == 0) {
+            firstResult.set(bytes);
+          }
+ else           if (streamIndex == 1) {
+            secondResult.set(bytes);
+          }
+ else           if (streamIndex == 2) {
+            thirdResult.set(bytes);
+          }
+          streamIndex++;
+        }
+ catch (        IOException e) {
+          e.printStackTrace();
+        }
+      }
+      size.set(streamIndex);
+      executeLatch.countDown();
+      return new ModelNode();
+    }
+  }
+;
+  NewTransactionalModelControllerOperationHandler operationHandler=new NewTransactionalModelControllerOperationHandler(serverChannel,channels.getExecutorService(),controller);
+  serverChannel.getReceiver(ManagementChannelReceiver.class).setOperationHandler(operationHandler);
+  NewRemoteProxyController proxyController=NewRemoteProxyController.create(channels.getExecutorService(),PathAddress.pathAddress(),channels.getClientChannel());
+  clientChannel.getReceiver(ManagementChannelReceiver.class).setOperationHandler(proxyController);
+  ModelNode operation=new ModelNode();
+  operation.get("test").set("123");
+  OperationAttachments attachments=new OperationAttachments(){
+    @Override public List<InputStream> getInputStreams(){
+      ArrayList<InputStream> streams=new ArrayList<InputStream>();
+      streams.add(new ByteArrayInputStream(firstBytes));
+      streams.add(new ByteArrayInputStream(secondBytes));
+      streams.add(null);
+      return streams;
+    }
+  }
+;
+  proxyController.execute(operation,null,NoopProxyOperationControl.INSTANCE,attachments);
+  executeLatch.await();
+  assertEquals(3,size.get());
+  assertArrays(firstBytes,firstResult.get());
+  assertArrays(secondBytes,secondResult.get());
+  assertArrays(new byte[0],thirdResult.get());
+  System.out.println("--------- done");
+}

@@ -1,6 +1,15 @@
 {
   try {
-    endpoint=Remoting.createEndpoint("name",executor.getValue(),optionMap);
+    endpoint=Remoting.createEndpoint("endpoint",executor.getValue(),optionMap);
+    Xnio xnio=XnioUtil.getXnio();
+    final ReadChannelThread readChannelThread=xnio.createReadChannelThread(Executors.defaultThreadFactory());
+    final WriteChannelThread writeChannelThread=xnio.createWriteChannelThread(Executors.defaultThreadFactory());
+    final ConnectionChannelThread connectionChannelThread=xnio.createReadChannelThread(Executors.defaultThreadFactory());
+    final ChannelThreadPool<ReadChannelThread> readPool=ChannelThreadPools.singleton(readChannelThread);
+    final ChannelThreadPool<WriteChannelThread> writePool=ChannelThreadPools.singleton(writeChannelThread);
+    final ChannelThreadPool<ConnectionChannelThread> connectionPool=ChannelThreadPools.singleton(connectionChannelThread);
+    final Pool<ByteBuffer> bufferPool=Buffers.allocatedBufferPool(BufferAllocator.BYTE_BUFFER_ALLOCATOR,8192);
+    endpoint.addConnectionProvider("remote",new RemoteConnectionProviderFactory(xnio,bufferPool,readPool,writePool,connectionPool));
   }
  catch (  Exception e) {
     throw new StartException("Failed to start service",e);

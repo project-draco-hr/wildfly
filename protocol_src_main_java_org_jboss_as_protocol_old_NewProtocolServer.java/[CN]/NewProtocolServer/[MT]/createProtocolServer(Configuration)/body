@@ -1,0 +1,39 @@
+{
+  if (configuration == null) {
+    throw new IllegalArgumentException("Null configuration");
+  }
+  configuration.validate();
+  final Endpoint endpoint=Remoting.createEndpoint(configuration.getEndpointName(),configuration.getExecutor(),configuration.getOptionMap());
+  final Xnio xnio=Xnio.getInstance();
+  final ReadChannelThread readChannelThread=xnio.createReadChannelThread(Executors.defaultThreadFactory());
+  final WriteChannelThread writeChannelThread=xnio.createWriteChannelThread(Executors.defaultThreadFactory());
+  final ConnectionChannelThread connectionChannelThread=xnio.createReadChannelThread(Executors.defaultThreadFactory());
+  final ChannelThreadPool<ReadChannelThread> readPool=ChannelThreadPools.singleton(readChannelThread);
+  final ChannelThreadPool<WriteChannelThread> writePool=ChannelThreadPools.singleton(writeChannelThread);
+  final ChannelThreadPool<ConnectionChannelThread> connectionPool=ChannelThreadPools.singleton(connectionChannelThread);
+  final Pool<ByteBuffer> bufferPool=Buffers.allocatedBufferPool(BufferAllocator.BYTE_BUFFER_ALLOCATOR,8192);
+  endpoint.addConnectionProvider(configuration.getUriScheme(),new RemoteConnectionProviderFactory(xnio,bufferPool,readPool,writePool,connectionPool));
+  final NetworkServerProvider networkServerProvider=endpoint.getConnectionProviderInterface("remote",NetworkServerProvider.class);
+  final ServerAuthenticationProvider provider=new ServerAuthenticationProvider(){
+    @Override public CallbackHandler getCallbackHandler(    String mechanismName){
+      return new CallbackHandler(){
+        @Override public void handle(        Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+        }
+      }
+;
+    }
+  }
+;
+  final ChannelListener<AcceptingChannel<ConnectedStreamChannel>> serverListener=networkServerProvider.getServerListener(OptionMap.EMPTY,provider);
+  AcceptingChannel<? extends ConnectedStreamChannel> streamServer=xnio.createStreamServer(configuration.getBindAddress(),connectionChannelThread,serverListener,OptionMap.EMPTY);
+  final AtomicReference<Channel> passer=new AtomicReference<Channel>();
+  endpoint.registerService("org.jboss.test",new OpenListener(){
+    public void channelOpened(    final Channel channel){
+      passer.set(channel);
+    }
+    public void registrationTerminated(){
+    }
+  }
+,OptionMap.EMPTY);
+  return new NewProtocolServer(endpoint,streamServer,readChannelThread,writeChannelThread,connectionChannelThread,passer);
+}

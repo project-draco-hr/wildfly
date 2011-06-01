@@ -1,0 +1,64 @@
+{
+  ProtocolChannel serverChannel=channels.getServerChannel();
+  ProtocolChannel clientChannel=channels.getClientChannel();
+  clientChannel.startReceiving();
+  final CountDownLatch commitLatch=new CountDownLatch(1);
+  final OperationTransaction tx=new OperationTransaction(){
+    @Override public void rollback(){
+    }
+    @Override public void commit(){
+      commitLatch.countDown();
+    }
+  }
+;
+  MockModelController controller=new MockModelController(){
+    @Override public ModelNode execute(    ModelNode operation,    OperationMessageHandler handler,    OperationTransactionControl control,    OperationAttachments attachments){
+      ModelNode node=new ModelNode();
+      node=new ModelNode();
+      node.get(OUTCOME).set(SUCCESS);
+      node.get(RESULT).set("prepared");
+      control.operationPrepared(tx,node);
+      try {
+        commitLatch.await();
+      }
+ catch (      InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+      node.get(RESULT).set("final");
+      return node;
+    }
+  }
+;
+  NewTransactionalModelControllerOperationHandler operationHandler=new NewTransactionalModelControllerOperationHandler(serverChannel,channels.getExecutorService(),controller);
+  serverChannel.getReceiver(ManagementChannelReceiver.class).setOperationHandler(operationHandler);
+  NewRemoteProxyController proxyController=NewRemoteProxyController.create(channels.getExecutorService(),PathAddress.pathAddress(),channels.getClientChannel());
+  clientChannel.getReceiver(ManagementChannelReceiver.class).setOperationHandler(proxyController);
+  ModelNode operation=new ModelNode();
+  operation.get("test").set("123");
+  final AtomicBoolean failed=new AtomicBoolean();
+  final TestFuture<ModelNode> prepared=new TestFuture<ModelNode>();
+  final TestFuture<OperationTransaction> preparedTx=new TestFuture<OperationTransaction>();
+  final TestFuture<ModelNode> result=new TestFuture<ModelNode>();
+  proxyController.execute(operation,null,new ProxyOperationControl(){
+    @Override public void operationPrepared(    OperationTransaction transaction,    ModelNode result){
+      prepared.done(result);
+      preparedTx.done(transaction);
+    }
+    @Override public void operationFailed(    ModelNode response){
+      failed.set(true);
+    }
+    @Override public void operationCompleted(    ModelNode response){
+      result.done(response);
+    }
+  }
+,null);
+  ModelNode preparedResult=prepared.get();
+  assertEquals(SUCCESS,preparedResult.get(OUTCOME).asString());
+  assertEquals("prepared",preparedResult.get(RESULT).asString());
+  assertFalse(failed.get());
+  assertFalse(result.isDone());
+  preparedTx.get().commit();
+  ModelNode finalResult=result.get();
+  assertEquals(SUCCESS,finalResult.get(OUTCOME).asString());
+  assertEquals("final",finalResult.get(RESULT).asString());
+}

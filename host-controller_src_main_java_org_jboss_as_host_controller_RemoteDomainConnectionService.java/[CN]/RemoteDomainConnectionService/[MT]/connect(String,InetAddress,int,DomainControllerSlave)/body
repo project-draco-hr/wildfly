@@ -1,30 +1,36 @@
 {
-  final ThreadFactory threadFactory=new JBossThreadFactory(new ThreadGroup("RemoteDomainConnection-threads"),Boolean.FALSE,null,"%G - %t",null,null,AccessController.getContext());
-  final ProtocolClient.Configuration config=new ProtocolClient.Configuration();
-  config.setMessageHandler(initialMessageHandler);
-  config.setConnectTimeout(CONNECTION_TIMEOUT);
-  config.setReadExecutor(Executors.newCachedThreadPool(threadFactory));
-  config.setSocketFactory(SocketFactory.getDefault());
-  config.setServerAddress(new InetSocketAddress(host,port));
-  config.setThreadFactory(threadFactory);
-  config.setClosedCallback(this);
-  final InetAddress callbackAddress=getCallbackAddress(ourAddress,host);
-  final ProtocolClient protocolClient=new ProtocolClient(config);
+  txOperationHandler=new SlaveDomainControllerOperationHandler(slave);
+  ProtocolChannelClient client;
   try {
-    connection=protocolClient.connect();
+    ProtocolChannelClient.Configuration configuration=new ProtocolChannelClient.Configuration();
+    configuration.setEndpointName("endpoint");
+    configuration.setUriScheme("remote");
+    configuration.setUri(new URI("remote://" + host.getHostAddress() + ":"+ port));
+    configuration.setExecutor(executor);
+    configuration.setChannelReceiverFactory(new ManagementChannelReceiverFactory(txOperationHandler));
+    client=ProtocolChannelClient.create(configuration);
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(e);
+  }
+  try {
+    client.connect();
+    this.channelClient=client;
     if (reconnectInfo != null) {
       unregister();
     }
-    masterProxy=new ModelControllerClientToModelControllerAdapter(connection);
-    txOperationHandler=new SlaveDomainControllerOperationHandler(slave);
-    managementCommunicationService.getValue().addHandler(txOperationHandler);
+    ProtocolChannel channel=client.openChannel("domain");
+    this.channel=channel;
+    channel.startReceiving();
+    masterProxy=new ModelControllerClientToModelControllerAdapter(channel,executor);
   }
  catch (  IOException e) {
     log.warnf("Could not connect to remote domain controller %s:%d",host.getHostAddress(),port);
+    e.printStackTrace();
     throw new IllegalStateException(e);
   }
   try {
-    ModelNode node=new RegisterModelControllerRequest(callbackAddress,ourPort).executeForResult(new ManagementRequestConnectionStrategy.ExistingConnectionStrategy(connection));
+    ModelNode node=new RegisterModelControllerRequest().executeForResult(executor,ManagementClientChannelStrategy.create(channel));
     if (reconnectInfo == null) {
       slave.setInitialDomainModel(node);
     }

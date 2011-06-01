@@ -1,0 +1,48 @@
+{
+  ExecutorService executorService=Executors.newCachedThreadPool();
+  ProtocolChannelClient.Configuration configuration=new ProtocolChannelClient.Configuration();
+  configuration.setEndpointName("endpoint");
+  configuration.setUriScheme("remote");
+  configuration.setUri(new URI("remote://localhost:9999"));
+  configuration.setExecutor(executorService);
+  ProtocolChannelClient client=ProtocolChannelClient.create(configuration);
+  while (true) {
+    try {
+      System.out.println("Attempting connection...");
+      client.connect();
+      break;
+    }
+ catch (    ConnectException e) {
+    }
+  }
+  ProtocolChannel channel=client.openChannel("management");
+  ModelControllerClient modelControllerClient=ModelControllerClient.Factory.create(channel);
+  ModelNode op=new ModelNode();
+  op.get("operation").set("read-resource");
+  ModelNode addr=op.get("address");
+  addr.add("management-interfaces","native-interface");
+  System.out.println(op);
+  System.out.println(modelControllerClient.execute(op));
+  final CountDownLatch latch=new CountDownLatch(1);
+  ResultHandler handler=new ResultHandler(){
+    @Override public void handleResultFragment(    String[] location,    ModelNode result){
+      System.out.println("Result" + result);
+    }
+    @Override public void handleResultComplete(){
+      System.out.println("Complete");
+      latch.countDown();
+    }
+    @Override public void handleFailed(    ModelNode failureDescription){
+      System.out.println("Failed");
+      latch.countDown();
+    }
+    @Override public void handleCancellation(){
+      System.out.println("Cancelled");
+      latch.countDown();
+    }
+  }
+;
+  OperationResult operationResult=modelControllerClient.execute(op,handler);
+  latch.await();
+  System.out.println("--- Done");
+}
