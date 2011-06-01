@@ -2,22 +2,25 @@
   if (!(entityManager instanceof AbstractEntityManager)) {
     throw new RuntimeException("internal error, XPC needs to be a AbstractEntityManager so that we can get metadata");
   }
-  List<WeakReference<EntityManager>> xpcList=contextToXPCMap.get(beanContextHandle);
+  List<EntityManager> xpcList=contextToXPCMap.get(beanContextHandle);
   if (xpcList == null) {
-    xpcList=new ArrayList<WeakReference<EntityManager>>();
-    xpcList.add(new WeakReference(entityManager));
+    xpcList=new ArrayList<EntityManager>();
+    xpcList.add(entityManager);
     Object existingList=contextToXPCMap.put(beanContextHandle,xpcList);
     if (existingList != null) {
       throw new RuntimeException("More than one thread is invoking stateful session bean '" + beanContextHandle.getBeanContextHandle() + "' at the same time.");
     }
   }
  else {
-    xpcList.add(new WeakReference(entityManager));
+    xpcList.add(entityManager);
   }
-  List<SFSBContextHandle> sfsbList=Collections.synchronizedList(new ArrayList<SFSBContextHandle>());
+  List<SFSBContextHandle> sfsbList=XPCToContextMap.get(entityManager);
+  if (sfsbList == null) {
+    sfsbList=new ArrayList<SFSBContextHandle>();
+    Object existingList=XPCToContextMap.put(entityManager,sfsbList);
+    if (existingList != null) {
+      throw new RuntimeException("More than one thread is using EntityManager instance '" + entityManager + "' at the same time.");
+    }
+  }
   sfsbList.add(beanContextHandle);
-  sfsbList=XPCToContextMap.putIfAbsent(entityManager,sfsbList);
-  if (null != sfsbList) {
-    sfsbList.add(beanContextHandle);
-  }
 }
