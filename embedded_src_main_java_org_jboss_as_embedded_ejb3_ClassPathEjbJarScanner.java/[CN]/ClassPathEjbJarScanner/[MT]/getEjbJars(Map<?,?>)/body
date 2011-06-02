@@ -1,0 +1,59 @@
+{
+  final Collection<String> returnValue=new ArrayList<String>();
+  String classPath=getSystemProperty("surefire.test.class.path");
+  if (classPath == null || classPath.isEmpty())   classPath=getSystemProperty(SYS_PROP_KEY_CLASS_PATH);
+  if (log.isTraceEnabled()) {
+    log.tracef("Class Path: %s",classPath);
+  }
+  final String[] classPathEntries=classPath.split(File.pathSeparator);
+  final Object modules=properties.get(EJBContainer.MODULES);
+  if (modules != null) {
+    if (modules instanceof File[]) {
+      for (      File file : (File[])modules) {
+        returnValue.add(file.getAbsolutePath());
+      }
+    }
+ else     if (modules instanceof File) {
+      returnValue.add(((File)modules).getAbsolutePath());
+    }
+ else     if (modules instanceof String[]) {
+      final Set<String> cpSet=new HashSet<String>();
+      cpSet.addAll(Arrays.asList(classPathEntries));
+      for (      final String file : (String[])modules) {
+        if (cpSet.contains(file)) {
+          returnValue.add(file);
+        }
+ else {
+          log.warn("Entry " + file + " specified in "+ EJBContainer.MODULES+ " was not on the class path, ignoring");
+        }
+      }
+    }
+ else     if (modules instanceof String) {
+      boolean found=false;
+      for (      String classPathEntry : classPathEntries) {
+        if (classPathEntry.equals(modules)) {
+          found=true;
+          returnValue.add(classPathEntry);
+          break;
+        }
+      }
+      if (!found) {
+        throw new RuntimeException(modules + " entry specified in " + EJBContainer.MODULES+ " was not found on the class path");
+      }
+    }
+ else {
+      throw new RuntimeException(EJBContainer.MODULES + " was not of type File[], File, String[] or String, but of type " + modules.getClass());
+    }
+  }
+ else {
+    for (    final String classPathEntry : classPathEntries) {
+      if (isEjbJar(classPathEntry)) {
+        returnValue.add(classPathEntry);
+      }
+    }
+  }
+  if (log.isDebugEnabled()) {
+    log.debug("EJB Modules discovered on ClassPath: " + returnValue);
+  }
+  return returnValue.toArray(DUMMY);
+}
