@@ -1,2 +1,36 @@
 {
+  log.debugf("Starting Arquillian Test Runner");
+  final MBeanServer mbeanServer=injectedMBeanServer.getValue();
+  final ServiceContainer serviceContainer=context.getController().getServiceContainer();
+  try {
+    jmxTestRunner=new ExtendedJMXTestRunner();
+    jmxTestRunner.registerMBean(mbeanServer);
+  }
+ catch (  Throwable t) {
+    throw new StartException("Failed to start Arquillian Test Runner",t);
+  }
+  serviceContainer.addListener(new AbstractServiceListener<Object>(){
+    @Override public void serviceStarted(    ServiceController<? extends Object> controller){
+      ServiceName serviceName=controller.getName();
+      String simpleName=serviceName.getSimpleName();
+      if (JBOSS_DEPLOYMENT.isParentOf(serviceName) && simpleName.equals(Phase.INSTALL.toString())) {
+        ServiceName parentName=serviceName.getParent();
+        ServiceController<?> parentController=serviceContainer.getService(parentName);
+        DeploymentUnit deploymentUnit=(DeploymentUnit)parentController.getValue();
+        ArquillianRunWithProcessor processor=new ArquillianRunWithProcessor(serviceName,deploymentUnit);
+        ArquillianConfig arqConfig=processor.getArquillianConfig();
+        if (arqConfig != null) {
+          registerConfig(arqConfig);
+        }
+      }
+    }
+    @Override public void serviceStopped(    ServiceController<? extends Object> controller){
+      ServiceName serviceName=controller.getName();
+      ArquillianConfig arqConfig=deployedTests.get(serviceName);
+      if (arqConfig != null) {
+        unregisterConfig(arqConfig);
+      }
+    }
+  }
+);
 }
