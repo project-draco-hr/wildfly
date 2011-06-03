@@ -1,0 +1,28 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final EjbJarMetaData ejbJarMetaData=deploymentUnit.getAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_METADATA);
+  final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
+  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
+  final DeploymentReflectionIndex index=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
+  if (eeModuleDescription == null) {
+    return;
+  }
+  for (  ComponentDescription description : eeModuleDescription.getComponentDescriptions()) {
+    if (description instanceof SingletonComponentDescription) {
+      try {
+        Class<?> componentClass=module.getClassLoader().loadClass(description.getComponentClassName());
+        final SingletonComponentDescription singletonComponentDescription=(SingletonComponentDescription)description;
+        checkMethodOverrides(componentClass,singletonComponentDescription,index);
+        if (ejbJarMetaData != null) {
+          EnterpriseBeanMetaData bean=ejbJarMetaData.getEnterpriseBean(singletonComponentDescription.getEJBName());
+          if (bean instanceof SessionBean31MetaData) {
+            processSingletonBean((SessionBean31MetaData)bean,singletonComponentDescription,index,componentClass);
+          }
+        }
+      }
+ catch (      ClassNotFoundException e) {
+        throw new DeploymentUnitProcessingException("Could not load EJB class " + description.getComponentClassName(),e);
+      }
+    }
+  }
+}

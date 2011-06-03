@@ -1,0 +1,26 @@
+{
+  final SingletonBaseBean singleton=lookup(SingletonChildBean.class.getSimpleName(),SingletonChildBean.class);
+  ExecutorService pool=Executors.newSingleThreadExecutor();
+  final CountDownLatch latch=new CountDownLatch(2);
+  final CountDownLatch entered=new CountDownLatch(1);
+  Future<?> future=pool.submit(new Runnable(){
+    @Override public void run(){
+      try {
+        singleton.writeLock(latch,entered);
+      }
+ catch (      InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+);
+  entered.await();
+  try {
+    singleton.writeLock(latch,entered);
+    throw new RuntimeException("Expecting a concurrency access exception");
+  }
+ catch (  ConcurrentAccessTimeoutException e) {
+  }
+  latch.countDown();
+  future.get();
+}
