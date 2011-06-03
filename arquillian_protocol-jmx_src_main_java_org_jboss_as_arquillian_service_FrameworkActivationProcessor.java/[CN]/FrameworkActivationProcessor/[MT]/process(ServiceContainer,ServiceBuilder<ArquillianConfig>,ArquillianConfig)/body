@@ -1,0 +1,26 @@
+{
+  final DeploymentUnit depUnit=arqConfig.getDeploymentUnit();
+  final CompositeIndex compositeIndex=depUnit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
+  if (compositeIndex == null) {
+    log.warnf("Cannot find composite annotation index in: %s",depUnit);
+    return;
+  }
+  final DotName dotName=DotName.createSimple(Inject.class.getName());
+  final List<AnnotationInstance> annotationList=compositeIndex.getAnnotations(dotName);
+  if (annotationList.isEmpty()) {
+    return;
+  }
+  for (  AnnotationInstance instance : annotationList) {
+    final AnnotationTarget target=instance.target();
+    if (target instanceof FieldInfo) {
+      final FieldInfo fieldInfo=(FieldInfo)target;
+      String typeName=fieldInfo.type().toString();
+      if (typeName.startsWith("org.osgi.framework")) {
+        log.debugf("OSGi injection point of type '%s' detected: %s",typeName,fieldInfo.declaringClass());
+        serviceContainer.getRequiredService(FRAMEWORK_ACTIVE).setMode(Mode.ACTIVE);
+        arqConfig.addFrameworkDependency(builder);
+        break;
+      }
+    }
+  }
+}
