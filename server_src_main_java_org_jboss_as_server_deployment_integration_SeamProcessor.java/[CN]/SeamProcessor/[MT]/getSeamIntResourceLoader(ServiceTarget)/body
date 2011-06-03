@@ -1,0 +1,32 @@
+{
+  try {
+    if (seamIntResourceLoader == null) {
+      final ModuleLoader moduleLoader=Module.getBootModuleLoader();
+      Module extModule=moduleLoader.loadModule(EXT_CONTENT_MODULE);
+      URL url=extModule.getExportedResource(SEAM_INT_JAR);
+      if (url == null)       throw new DeploymentUnitProcessingException("No Seam Integration jar present: " + extModule);
+      File file=new File(url.toURI());
+      VirtualFile vf=VFS.getChild(file.toURI());
+      final Closeable mountHandle=VFS.mountZip(vf,vf,TempFileProviderService.provider());
+      Service<Closeable> mountHandleService=new Service<Closeable>(){
+        public void start(        StartContext startContext) throws StartException {
+        }
+        public void stop(        StopContext stopContext){
+          VFSUtils.safeClose(mountHandle);
+        }
+        public Closeable getValue() throws IllegalStateException, IllegalArgumentException {
+          return mountHandle;
+        }
+      }
+;
+      ServiceBuilder<Closeable> builder=serviceTarget.addService(ServiceName.JBOSS.append(SEAM_INT_JAR),mountHandleService);
+      builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+      ResourceLoader resourceLoader=new VFSResourceLoader(SEAM_INT_JAR,vf);
+      seamIntResourceLoader=ResourceLoaderSpec.createResourceLoaderSpec(resourceLoader);
+    }
+    return seamIntResourceLoader;
+  }
+ catch (  Exception e) {
+    throw new DeploymentUnitProcessingException(e);
+  }
+}
