@@ -1,0 +1,32 @@
+{
+  while (running) {
+    final List<Entry> queue=new ArrayList<Entry>();
+    final long time=System.currentTimeMillis();
+synchronized (cache) {
+      Iterator<Map.Entry<Object,Entry>> iterator=cache.entrySet().iterator();
+      while (iterator.hasNext()) {
+        final Map.Entry<Object,Entry> entry=iterator.next();
+        if (entry.getValue().isExpired(time)) {
+          queue.add(entry.getValue());
+          iterator.remove();
+        }
+      }
+    }
+    for (    Entry value : queue) {
+      try {
+        logger.debugf("Removing stateful bean %s - %s as it has been inactive for %d milliseconds",beanName,value.getKey(),millisecondTimeout);
+        factory.destroyInstance(value.getValue());
+      }
+ catch (      Exception e) {
+        logger.error("Exception removing stateful bean " + value.getKey(),e);
+      }
+    }
+    try {
+      sleep(SLEEP_TIME);
+    }
+ catch (    InterruptedException e) {
+      running=false;
+      return;
+    }
+  }
+}
