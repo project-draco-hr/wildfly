@@ -1,0 +1,30 @@
+{
+  final DeploymentUnit depUnit=phaseContext.getDeploymentUnit();
+  final String contextName=depUnit.getName();
+  Deployment deployment=OSGiDeploymentAttachment.getDeployment(depUnit);
+  if (deployment != null)   return;
+  if (deployment == null) {
+    ServiceRegistry serviceRegistry=phaseContext.getServiceRegistry();
+    ServiceController<Deployment> controller=DeploymentHolderService.getDeployment(serviceRegistry,contextName);
+    if (controller != null) {
+      deployment=controller.getValue();
+      deployment.setAutoStart(false);
+      controller.setMode(Mode.REMOVE);
+    }
+  }
+  BundleInfo info=BundleInfoAttachment.getBundleInfo(depUnit);
+  if (deployment == null && info != null) {
+    deployment=DeploymentFactory.createDeployment(info);
+    deployment.addAttachment(BundleInfo.class,info);
+    deployment.setAutoStart(true);
+  }
+  if (deployment != null) {
+    final DotName runWithName=DotName.createSimple("org.junit.runner.RunWith");
+    final CompositeIndex compositeIndex=depUnit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
+    final List<AnnotationInstance> runWithList=compositeIndex.getAnnotations(runWithName);
+    if (runWithList.isEmpty() == false) {
+      deployment.setAutoStart(false);
+    }
+    OSGiDeploymentAttachment.attachDeployment(depUnit,deployment);
+  }
+}
