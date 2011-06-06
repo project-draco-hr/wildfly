@@ -3,8 +3,8 @@
   final DeploymentReflectionIndex deploymentReflectionIndex=deploymentUnit.getAttachment(REFLECTION_INDEX);
   final Object instanceKey=BasicComponentInstance.INSTANCE_KEY;
   final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
+  final EEApplicationDescription applicationDescription=deploymentUnit.getAttachment(Attachments.EE_APPLICATION_DESCRIPTION);
   final EEModuleClassConfiguration componentClassConfiguration=configuration.getModuleClassConfiguration();
-  final EEModuleConfiguration moduleConfiguration=componentClassConfiguration.getModuleConfiguration();
   final Deque<InterceptorFactory> instantiators=new ArrayDeque<InterceptorFactory>();
   final Deque<InterceptorFactory> injectors=new ArrayDeque<InterceptorFactory>();
   final Deque<InterceptorFactory> uninjectors=new ArrayDeque<InterceptorFactory>();
@@ -27,7 +27,7 @@
     instantiators.addFirst(new ManagedReferenceInterceptorFactory(factory,instanceKey));
   }
   destructors.addLast(new ManagedReferenceReleaseInterceptorFactory(instanceKey));
-  new ClassDescriptionTraversal(componentClassConfiguration,moduleConfiguration){
+  new ClassDescriptionTraversal(componentClassConfiguration,applicationDescription){
     @Override public void handle(    EEModuleClassConfiguration classConfiguration,    EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
       for (      final ResourceInjectionConfiguration injectionConfiguration : classConfiguration.getInjectionConfigurations()) {
         final Object valueContextKey=new Object();
@@ -46,7 +46,7 @@
   interceptorWithLifecycleCallbacks.addAll(description.getClassInterceptors());
   for (  final InterceptorDescription interceptorDescription : description.getAllInterceptors()) {
     final String interceptorClassName=interceptorDescription.getInterceptorClassName();
-    final EEModuleClassConfiguration interceptorConfiguration=moduleConfiguration.getClassConfiguration(interceptorClassName);
+    final EEModuleClassConfiguration interceptorConfiguration=applicationDescription.getClassConfiguration(interceptorClassName);
     final Object contextKey=interceptorConfiguration.getModuleClass();
     if (interceptorConfiguration.getInstantiator() == null) {
       throw new DeploymentUnitProcessingException("No default constructor for interceptor class " + interceptorClassName + " on component "+ componentClassConfiguration.getModuleClass());
@@ -55,7 +55,7 @@
     destructors.addLast(new ManagedReferenceReleaseInterceptorFactory(contextKey));
     final boolean interceptorHasLifecycleCallbacks=interceptorWithLifecycleCallbacks.contains(interceptorDescription);
     final ClassReflectionIndex<?> interceptorIndex=deploymentReflectionIndex.getClassIndex(interceptorConfiguration.getModuleClass());
-    new ClassDescriptionTraversal(interceptorConfiguration,moduleConfiguration){
+    new ClassDescriptionTraversal(interceptorConfiguration,applicationDescription){
       @Override public void handle(      EEModuleClassConfiguration interceptorClassConfiguration,      EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
         final ClassReflectionIndex<?> interceptorClassIndex=deploymentReflectionIndex.getClassIndex(interceptorClassConfiguration.getModuleClass());
         for (        final ResourceInjectionConfiguration injectionConfiguration : interceptorClassConfiguration.getInjectionConfigurations()) {
@@ -116,7 +116,7 @@
       userPreDestroy.addAll(userPreDestroyByInterceptorClass.get(interceptorClass.getInterceptorClassName()));
     }
   }
-  new ClassDescriptionTraversal(componentClassConfiguration,moduleConfiguration){
+  new ClassDescriptionTraversal(componentClassConfiguration,applicationDescription){
     @Override public void handle(    EEModuleClassConfiguration configuration,    EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
       final ClassReflectionIndex classReflectionIndex=deploymentReflectionIndex.getClassIndex(configuration.getModuleClass());
       final MethodIdentifier componentPostConstructMethodIdentifier=classDescription.getPostConstructMethod();
