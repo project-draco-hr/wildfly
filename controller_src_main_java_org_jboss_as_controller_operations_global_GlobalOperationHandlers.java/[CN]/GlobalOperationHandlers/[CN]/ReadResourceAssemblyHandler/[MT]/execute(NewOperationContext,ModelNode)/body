@@ -1,0 +1,57 @@
+{
+  Map<String,ModelNode> sortedAttributes=new TreeMap<String,ModelNode>();
+  Map<String,ModelNode> sortedChildren=new TreeMap<String,ModelNode>();
+  boolean failed=false;
+  for (  Map.Entry<String,ModelNode> entry : otherAttributes.entrySet()) {
+    ModelNode value=entry.getValue();
+    if (!value.has(FAILURE_DESCRIPTION)) {
+      sortedAttributes.put(entry.getKey(),value.get(RESULT));
+    }
+ else     if (!failed && value.hasDefined(FAILURE_DESCRIPTION)) {
+      context.getFailureDescription().set(value.get(FAILURE_DESCRIPTION));
+      failed=true;
+      break;
+    }
+  }
+  if (!failed) {
+    for (    Map.Entry<PathElement,ModelNode> entry : childResources.entrySet()) {
+      PathElement path=entry.getKey();
+      ModelNode value=entry.getValue();
+      if (!value.has(FAILURE_DESCRIPTION)) {
+        ModelNode childTypeNode=sortedChildren.get(path.getKey());
+        if (childTypeNode == null) {
+          childTypeNode=new ModelNode();
+          sortedChildren.put(path.getKey(),childTypeNode);
+        }
+        childTypeNode.get(path.getValue()).set(value.get(RESULT));
+      }
+ else       if (!failed && value.hasDefined(FAILURE_DESCRIPTION)) {
+        context.getFailureDescription().set(value.get(FAILURE_DESCRIPTION));
+        failed=true;
+      }
+    }
+  }
+  if (!failed) {
+    for (    Map.Entry<String,ModelNode> simpleAttribute : directAttributes.entrySet()) {
+      sortedAttributes.put(simpleAttribute.getKey(),simpleAttribute.getValue());
+    }
+    for (    Map.Entry<String,ModelNode> directChild : directChildren.entrySet()) {
+      sortedChildren.put(directChild.getKey(),directChild.getValue());
+    }
+    for (    Map.Entry<String,ModelNode> metric : metrics.entrySet()) {
+      ModelNode value=metric.getValue();
+      if (!value.has(FAILURE_DESCRIPTION)) {
+        sortedAttributes.put(metric.getKey(),value.get(RESULT));
+      }
+    }
+    final ModelNode result=context.getResult();
+    result.setEmptyObject();
+    for (    Map.Entry<String,ModelNode> entry : sortedAttributes.entrySet()) {
+      result.get(entry.getKey()).set(entry.getValue());
+    }
+    for (    Map.Entry<String,ModelNode> entry : sortedChildren.entrySet()) {
+      result.get(entry.getKey()).set(entry.getValue());
+    }
+  }
+  context.completeStep();
+}

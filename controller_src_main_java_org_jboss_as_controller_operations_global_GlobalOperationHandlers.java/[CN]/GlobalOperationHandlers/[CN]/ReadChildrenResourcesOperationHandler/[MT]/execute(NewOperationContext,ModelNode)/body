@@ -1,36 +1,41 @@
 {
-  final String childName=operation.require(CHILD_TYPE).asString();
-  ModelNode subModel=context.readModel(PathAddress.EMPTY_ADDRESS);
-  if (!subModel.isDefined()) {
-    context.getResult().setEmptyList();
+  validator.validate(operation);
+  final String childType=operation.require(CHILD_TYPE).asString();
+  final Set<String> childNames=context.getModelNodeRegistration().getChildNames(PathAddress.EMPTY_ADDRESS);
+  if (!childNames.contains(childType)) {
+    throw new OperationFailedException(new ModelNode().set(String.format("No known child type named %s",childType)));
+  }
+  final Map<PathElement,ModelNode> resources=new HashMap<PathElement,ModelNode>();
+  ModelNode subModel=safeReadModel(context);
+  if (!subModel.hasDefined(childType)) {
+    context.getResult().setEmptyObject();
   }
  else {
-    final Set<String> childNames=context.getModelNodeRegistration().getChildNames(PathAddress.EMPTY_ADDRESS);
-    if (!childNames.contains(childName)) {
-      throw new OperationFailedException(new ModelNode().set("No known child called " + childName));
-    }
- else {
-      final ModelNode result=context.getResult();
-      subModel=subModel.get(childName);
-      if (!subModel.isDefined()) {
-        result.setEmptyList();
+    final ReadChildrenResourcesAssemblyHandler assemblyHandler=new ReadChildrenResourcesAssemblyHandler(resources);
+    context.addStep(assemblyHandler,NewOperationContext.Stage.IMMEDIATE);
+    final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+    for (    final String key : subModel.get(childType).keys()) {
+      final PathElement childPath=PathElement.pathElement(childType,key);
+      final PathAddress childAddress=PathAddress.EMPTY_ADDRESS.append(PathElement.pathElement(childType,key));
+      final ModelNode readOp=new ModelNode();
+      readOp.get(OP).set(READ_RESOURCE_OPERATION);
+      readOp.get(OP_ADDR).set(PathAddress.pathAddress(address,childPath).toModelNode());
+      if (operation.hasDefined(INCLUDE_RUNTIME)) {
+        readOp.get(INCLUDE_RUNTIME).set(operation.get(INCLUDE_RUNTIME));
       }
- else {
-        for (        final String key : subModel.keys()) {
-          final PathAddress childAddress=PathAddress.EMPTY_ADDRESS.append(PathElement.pathElement(childName,key));
-          final ModelNode readOp=new ModelNode();
-          readOp.get(OP).set(READ_RESOURCE_OPERATION);
-          readOp.get(OP_ADDR).set(childAddress.toModelNode());
-          if (operation.hasDefined(INCLUDE_RUNTIME)) {
-            readOp.get(INCLUDE_RUNTIME).set(operation.get(INCLUDE_RUNTIME).asBoolean());
-          }
-          final NewStepHandler handler=context.getModelNodeRegistration().getOperationHandler(childAddress,READ_RESOURCE_OPERATION);
-          if (handler == null) {
-            throw new OperationFailedException(new ModelNode().set("no operation handler"));
-          }
-          context.addStep(result.get(key),readOp,handler,NewOperationContext.Stage.MODEL);
-        }
+      if (operation.hasDefined(RECURSIVE)) {
+        readOp.get(RECURSIVE).set(operation.get(RECURSIVE));
       }
+      if (operation.hasDefined(PROXIES)) {
+        readOp.get(PROXIES).set(operation.get(PROXIES));
+      }
+      final NewStepHandler handler=context.getModelNodeRegistration().getOperationHandler(childAddress,READ_RESOURCE_OPERATION);
+      if (handler == null) {
+        throw new OperationFailedException(new ModelNode().set("no operation handler"));
+      }
+      ModelNode rrRsp=new ModelNode();
+      resources.put(childPath,rrRsp);
+      context.addStep(rrRsp,readOp,handler,NewOperationContext.Stage.IMMEDIATE);
     }
   }
   context.completeStep();

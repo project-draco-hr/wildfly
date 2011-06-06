@@ -1,31 +1,17 @@
 {
-  final String childName=operation.require(CHILD_TYPE).asString();
-  ModelNode subModel=context.readModel(PathAddress.EMPTY_ADDRESS);
-  if (!subModel.isDefined()) {
-    final ModelNode result=new ModelNode();
-    context.getResult().setEmptyList();
+  validator.validate(operation);
+  final String childType=operation.require(CHILD_TYPE).asString();
+  ModelNode subModel=safeReadModel(context);
+  ModelNodeRegistration registry=context.getModelNodeRegistration();
+  Map<String,Set<String>> childAddresses=getChildAddresses(registry,subModel,childType);
+  Set<String> childNames=childAddresses.get(childType);
+  if (childNames == null) {
+    throw new OperationFailedException(new ModelNode().set(String.format("No known child type named %s",childType)));
   }
- else {
-    final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
-    final Set<String> childNames=context.getModelNodeRegistration().getChildNames(PathAddress.EMPTY_ADDRESS);
-    if (!childNames.contains(childName)) {
-      throw new OperationFailedException(new ModelNode().set("No known child called " + childName));
-    }
- else {
-      final ModelNode result=new ModelNode();
-      subModel=subModel.get(childName);
-      if (!subModel.isDefined()) {
-        result.setEmptyList();
-      }
- else {
-        for (        final String key : subModel.keys()) {
-          final ModelNode node=new ModelNode();
-          node.set(key);
-          result.add(node);
-        }
-      }
-      context.getResult().set(result);
-    }
+  ModelNode result=context.getResult();
+  result.setEmptyList();
+  for (  String childName : childNames) {
+    result.add(childName);
   }
   context.completeStep();
 }
