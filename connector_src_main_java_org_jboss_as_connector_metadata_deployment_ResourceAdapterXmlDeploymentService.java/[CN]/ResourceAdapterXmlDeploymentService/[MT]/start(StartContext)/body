@@ -1,16 +1,34 @@
 {
-  log.debugf("Starting sevice %s",ConnectorServices.RESOURCE_ADAPTER_XML_SERVICE_PREFIX.append(this.value.getDeployment().getDeploymentName()));
-  final ServiceContainer container=context.getController().getServiceContainer();
-  final AS7RaXmlDeployer raDeployer=new AS7RaXmlDeployer(container,connectorXmlDescriptor.getUrl(),deploymentName,root,module.getClassLoader(),cmd,raxml);
-  raDeployer.setConfiguration(config.getValue());
-  CommonDeployment raxmlDeployment=null;
   try {
-    raxmlDeployment=raDeployer.doDeploy();
+    log.debugf("Starting sevice %s",ConnectorServices.RESOURCE_ADAPTER_XML_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName()));
+    String archive=raxml.getArchive();
+    String deployment=null;
+    Set<String> deployments=mdr.getValue().getResourceAdapters();
+    for (    String s : deployments) {
+      if (s.endsWith(archive) || s.endsWith(archive.substring(0,archive.indexOf(".rar"))))       deployment=s;
+    }
+    if (deployment != null) {
+      Connector cmd=mdr.getValue().getResourceAdapter(deployment);
+      IronJacamar ijmd=mdr.getValue().getIronJacamar(deployment);
+      File root=mdr.getValue().getRoot(deployment);
+      cmd=(new Merger()).mergeConnectorWithCommonIronJacamar(raxml,cmd);
+      String deploymentName=archive.substring(0,archive.indexOf(".rar"));
+      final ServiceContainer container=context.getController().getServiceContainer();
+      final AS7RaXmlDeployer raDeployer=new AS7RaXmlDeployer(container,connectorXmlDescriptor.getUrl(),deploymentName,root,module.getClassLoader(),cmd,raxml,ijmd);
+      raDeployer.setConfiguration(config.getValue());
+      CommonDeployment raxmlDeployment=null;
+      try {
+        raxmlDeployment=raDeployer.doDeploy();
+      }
+ catch (      Throwable t) {
+        throw new StartException("Failed to start RA deployment [" + deploymentName + "]",t);
+      }
+      value=new ResourceAdapterDeployment(raxmlDeployment);
+      registry.getValue().registerResourceAdapterDeployment(value);
+      managementRepository.getValue().getConnectors().add(value.getDeployment().getConnector());
+    }
   }
- catch (  Throwable t) {
-    throw new StartException("Failed to start RA deployment [" + deploymentName + "]",t);
+ catch (  Exception e) {
+    throw new StartException(e);
   }
-  value=new ResourceAdapterDeployment(raxmlDeployment);
-  registry.getValue().registerResourceAdapterDeployment(value);
-  managementRepository.getValue().getConnectors().add(value.getDeployment().getConnector());
 }
