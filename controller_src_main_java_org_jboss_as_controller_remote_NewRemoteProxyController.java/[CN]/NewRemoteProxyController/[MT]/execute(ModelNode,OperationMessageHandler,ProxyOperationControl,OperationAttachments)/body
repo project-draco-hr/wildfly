@@ -1,3 +1,23 @@
 {
-  new ExecuteRequest(operation,handler,control,attachments).execute(executorService,getChannelStrategy());
+  final CountDownLatch completedLatch=new CountDownLatch(1);
+  new ExecuteRequest(operation,handler,new ProxyOperationControl(){
+    @Override public void operationPrepared(    OperationTransaction transaction,    ModelNode result){
+      control.operationPrepared(transaction,result);
+      completedLatch.countDown();
+    }
+    @Override public void operationFailed(    ModelNode response){
+      control.operationFailed(response);
+      completedLatch.countDown();
+    }
+    @Override public void operationCompleted(    ModelNode response){
+      control.operationCompleted(response);
+    }
+  }
+,attachments).execute(executorService,getChannelStrategy());
+  try {
+    completedLatch.await();
+  }
+ catch (  InterruptedException e) {
+    throw new RuntimeException("Thread was interrupted");
+  }
 }

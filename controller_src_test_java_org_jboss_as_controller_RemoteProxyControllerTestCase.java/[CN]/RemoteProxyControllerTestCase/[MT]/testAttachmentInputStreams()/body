@@ -1,9 +1,6 @@
 {
   final byte[] firstBytes=new byte[]{1,2,3,4,5,6,7,8,9,10};
   final byte[] secondBytes=new byte[]{10,9,8,7,6,5,4,3,2,1};
-  ProtocolChannel serverChannel=channels.getServerChannel();
-  ProtocolChannel clientChannel=channels.getClientChannel();
-  clientChannel.startReceiving();
   final CountDownLatch executeLatch=new CountDownLatch(1);
   final AtomicInteger size=new AtomicInteger();
   final AtomicReference<byte[]> firstResult=new AtomicReference<byte[]>();
@@ -40,15 +37,19 @@
         }
       }
       size.set(streamIndex);
+      control.operationPrepared(new OperationTransaction(){
+        @Override public void rollback(){
+        }
+        @Override public void commit(){
+        }
+      }
+,new ModelNode());
       executeLatch.countDown();
       return new ModelNode();
     }
   }
 ;
-  NewTransactionalModelControllerOperationHandler operationHandler=new NewTransactionalModelControllerOperationHandler(channels.getExecutorService(),controller);
-  serverChannel.getReceiver(ManagementChannelReceiver.class).setOperationHandler(operationHandler);
-  NewRemoteProxyController proxyController=NewRemoteProxyController.create(channels.getExecutorService(),PathAddress.pathAddress(),channels.getClientChannel());
-  clientChannel.getReceiver(ManagementChannelReceiver.class).setOperationHandler(proxyController);
+  final NewRemoteProxyController proxyController=setupProxyHandlers(controller);
   ModelNode operation=new ModelNode();
   operation.get("test").set("123");
   OperationAttachments attachments=new OperationAttachments(){
