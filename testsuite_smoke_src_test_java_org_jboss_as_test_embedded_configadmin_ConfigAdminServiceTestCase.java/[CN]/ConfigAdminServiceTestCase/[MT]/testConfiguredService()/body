@@ -4,8 +4,18 @@
   ConfigAdminService configAdmin=getConfigAdminService();
   configAdmin.putConfiguration(ConfiguredService.SERVICE_PID,config);
   try {
-    ConfiguredService.addService(serviceContainer);
-    ConfiguredService service=ConfiguredService.await(serviceContainer,5,TimeUnit.SECONDS);
+    ConfiguredService.addService(serviceTarget);
+    final CountDownLatch latch=new CountDownLatch(1);
+    final ServiceController<ConfiguredService> controller=(ServiceController<ConfiguredService>)serviceContainer.getService(ConfiguredService.SERVICE_NAME);
+    controller.addListener(new AbstractServiceListener<ConfiguredService>(){
+      public void serviceStarted(      ServiceController<? extends ConfiguredService> controller){
+        controller.removeListener(this);
+        latch.countDown();
+      }
+    }
+);
+    latch.await(3,TimeUnit.SECONDS);
+    ConfiguredService service=controller.getValue();
     assertEquals("bar",service.getConfigValue("foo"));
   }
   finally {
