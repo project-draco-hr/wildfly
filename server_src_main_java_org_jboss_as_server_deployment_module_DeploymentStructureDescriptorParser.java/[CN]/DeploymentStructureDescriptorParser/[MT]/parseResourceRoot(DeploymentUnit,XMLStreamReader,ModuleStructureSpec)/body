@@ -1,0 +1,70 @@
+{
+  String name=null;
+  String path=null;
+  final Set<Attribute> required=EnumSet.of(Attribute.PATH);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final Attribute attribute=Attribute.of(reader.getAttributeName(i));
+    required.remove(attribute);
+switch (attribute) {
+case NAME:
+      name=reader.getAttributeValue(i);
+    break;
+case PATH:
+  path=reader.getAttributeValue(i);
+break;
+default :
+throw unexpectedContent(reader);
+}
+}
+if (!required.isEmpty()) {
+throw missingAttributes(reader.getLocation(),required);
+}
+if (name == null) name=path;
+List<FilterSpecification> resourceFilters=new ArrayList<FilterSpecification>();
+final Set<Element> encountered=EnumSet.noneOf(Element.class);
+while (reader.hasNext()) {
+switch (reader.nextTag()) {
+case XMLStreamConstants.END_ELEMENT:
+{
+if (path.startsWith("/")) {
+throw new XMLStreamException("External resource roots not supported, resource roots may not start with a '/' :" + path);
+}
+ else {
+try {
+  final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  final VirtualFile deploymentRootFile=deploymentRoot.getRoot();
+  VirtualFile child=deploymentRootFile.getChild(path);
+  final Closeable closable=child.isFile() ? VFS.mountZip(child,child,TempFileProviderService.provider()) : null;
+  final MountHandle mountHandle=new MountHandle(closable);
+  ResourceRoot resourceRoot=new ResourceRoot(name,child,mountHandle);
+  for (  FilterSpecification filter : resourceFilters) {
+    resourceRoot.getExportFilters().add(filter);
+  }
+  specBuilder.addResourceRoot(resourceRoot);
+}
+ catch (IOException e) {
+  throw new XMLStreamException(e);
+}
+}
+return;
+}
+case XMLStreamConstants.START_ELEMENT:
+{
+final Element element=Element.of(reader.getName());
+if (!encountered.add(element)) throw unexpectedContent(reader);
+switch (element) {
+case FILTER:
+parseFilterList(reader,resourceFilters);
+break;
+default :
+throw unexpectedContent(reader);
+}
+}
+default :
+{
+throw unexpectedContent(reader);
+}
+}
+}
+}
