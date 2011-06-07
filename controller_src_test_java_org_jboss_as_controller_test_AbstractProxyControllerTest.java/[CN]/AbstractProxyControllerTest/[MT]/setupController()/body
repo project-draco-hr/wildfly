@@ -1,0 +1,17 @@
+{
+  executor=Executors.newCachedThreadPool();
+  container=ServiceContainer.Factory.create("test");
+  ServiceTarget target=container.subTarget();
+  ControlledProcessState processState=new ControlledProcessState(true);
+  ProxyModelControllerService proxyService=new ProxyModelControllerService(container,processState);
+  ServiceBuilder<NewModelController> proxyBuilder=target.addService(ServiceName.of("ProxyModelController"),proxyService);
+  proxyBuilder.install();
+  MainModelControllerService mainService=new MainModelControllerService(container,processState);
+  ServiceBuilder<NewModelController> mainBuilder=target.addService(ServiceName.of("MainModelController"),mainService);
+  mainBuilder.addDependency(ServiceName.of("ProxyModelController"),NewModelController.class,mainService.proxy);
+  mainBuilder.install();
+  mainService.latch.await();
+  mainController=mainService.getValue().createClient(executor);
+  proxiedController=proxyService.getValue().createClient(executor);
+  processState.setRunning();
+}

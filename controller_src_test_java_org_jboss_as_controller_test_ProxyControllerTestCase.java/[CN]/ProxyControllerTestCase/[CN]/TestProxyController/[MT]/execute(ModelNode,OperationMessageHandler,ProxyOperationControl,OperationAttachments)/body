@@ -1,0 +1,57 @@
+{
+  final CountDownLatch latch=new CountDownLatch(1);
+  fakeProtocolExecutor.execute(new Runnable(){
+    @Override public void run(){
+      ModelNode node=targetController.execute(operation,handler,new ProxyOperationControl(){
+        @Override public void operationPrepared(        final OperationTransaction transaction,        final ModelNode result){
+          final CountDownLatch completedTx=new CountDownLatch(1);
+          control.operationPrepared(new OperationTransaction(){
+            @Override public void rollback(){
+              fakeProtocolExecutor.execute(new Runnable(){
+                @Override public void run(){
+                  transaction.rollback();
+                  completedTx.countDown();
+                }
+              }
+);
+            }
+            @Override public void commit(){
+              fakeProtocolExecutor.execute(new Runnable(){
+                @Override public void run(){
+                  transaction.commit();
+                  completedTx.countDown();
+                  latch.countDown();
+                }
+              }
+);
+            }
+          }
+,result);
+          latch.countDown();
+          try {
+            completedTx.await();
+          }
+ catch (          InterruptedException e) {
+            e.printStackTrace();
+          }
+        }
+        @Override public void operationFailed(        ModelNode response){
+          control.operationFailed(response);
+          latch.countDown();
+        }
+        @Override public void operationCompleted(        ModelNode response){
+          control.operationCompleted(response);
+          latch.countDown();
+        }
+      }
+,attachments);
+    }
+  }
+);
+  try {
+    latch.await();
+  }
+ catch (  InterruptedException e) {
+    throw new RuntimeException(e);
+  }
+}
