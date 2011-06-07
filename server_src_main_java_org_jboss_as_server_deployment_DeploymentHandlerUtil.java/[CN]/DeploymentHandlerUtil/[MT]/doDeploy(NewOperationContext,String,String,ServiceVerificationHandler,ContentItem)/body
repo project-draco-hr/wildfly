@@ -1,36 +1,27 @@
 {
   final ServiceName deploymentUnitServiceName=Services.deploymentUnitName(deploymentUnitName);
-  final ServiceRegistry serviceRegistry=context.getServiceRegistry(false);
-  final ServiceController<?> controller=serviceRegistry.getService(deploymentUnitServiceName);
-  if (controller != null) {
-    controller.addListener(verificationHandler);
-    controller.setMode(ServiceController.Mode.ACTIVE);
-    return Collections.emptySet();
+  final List<ServiceController<?>> controllers=new ArrayList<ServiceController<?>>();
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  final ServiceController<?> contentService;
+  final ServiceName contentsServiceName=deploymentUnitServiceName.append("contents");
+  if (contents[0].hash != null)   contentService=ContentServitor.addService(serviceTarget,contentsServiceName,contents[0].hash,verificationHandler);
+ else {
+    final String path=contents[0].path;
+    final String relativeTo=contents[0].relativeTo;
+    final ServiceName relativeToPathServiceName=relativeTo != null ? RelativePathService.pathNameOf(relativeTo) : null;
+    contentService=PathContentServitor.addService(serviceTarget,contentsServiceName,path,relativeToPathServiceName,verificationHandler);
   }
- else {
-    final List<ServiceController<?>> controllers=new ArrayList<ServiceController<?>>();
-    final ServiceTarget serviceTarget=context.getServiceTarget();
-    final ServiceController<?> contentService;
-    final ServiceName contentsServiceName=deploymentUnitServiceName.append("contents");
-    if (contents[0].hash != null)     contentService=ContentServitor.addService(serviceTarget,contentsServiceName,contents[0].hash,verificationHandler);
- else {
-      final String path=contents[0].path;
-      final String relativeTo=contents[0].relativeTo;
-      final ServiceName relativeToPathServiceName=relativeTo != null ? RelativePathService.pathNameOf(relativeTo) : null;
-      contentService=PathContentServitor.addService(serviceTarget,contentsServiceName,path,relativeToPathServiceName);
-    }
-    controllers.add(contentService);
-    final RootDeploymentUnitService service=new RootDeploymentUnitService(deploymentUnitName,managementName,null);
-    final ServiceController<DeploymentUnit> deploymentUnitController=serviceTarget.addService(deploymentUnitServiceName,service).addDependency(Services.JBOSS_DEPLOYMENT_CHAINS,DeployerChains.class,service.getDeployerChainsInjector()).addDependency(ServerDeploymentRepository.SERVICE_NAME,ServerDeploymentRepository.class,service.getServerDeploymentRepositoryInjector()).addDependency(contentsServiceName,VirtualFile.class,service.contentsInjector).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install();
-    controllers.add(deploymentUnitController);
-    contentService.addListener(new AbstractServiceListener<Object>(){
-      @Override public void transition(      final ServiceController<? extends Object> controller,      final ServiceController.Transition transition){
-        if (transition == ServiceController.Transition.REMOVING_to_REMOVED) {
-          deploymentUnitController.setMode(REMOVE);
-        }
+  controllers.add(contentService);
+  final RootDeploymentUnitService service=new RootDeploymentUnitService(deploymentUnitName,managementName,null);
+  final ServiceController<DeploymentUnit> deploymentUnitController=serviceTarget.addService(deploymentUnitServiceName,service).addDependency(Services.JBOSS_DEPLOYMENT_CHAINS,DeployerChains.class,service.getDeployerChainsInjector()).addDependency(ServerDeploymentRepository.SERVICE_NAME,ServerDeploymentRepository.class,service.getServerDeploymentRepositoryInjector()).addDependency(contentsServiceName,VirtualFile.class,service.contentsInjector).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  controllers.add(deploymentUnitController);
+  contentService.addListener(new AbstractServiceListener<Object>(){
+    @Override public void transition(    final ServiceController<? extends Object> controller,    final ServiceController.Transition transition){
+      if (transition == ServiceController.Transition.REMOVING_to_REMOVED) {
+        deploymentUnitController.setMode(REMOVE);
       }
     }
-);
-    return controllers;
   }
+);
+  return controllers;
 }
