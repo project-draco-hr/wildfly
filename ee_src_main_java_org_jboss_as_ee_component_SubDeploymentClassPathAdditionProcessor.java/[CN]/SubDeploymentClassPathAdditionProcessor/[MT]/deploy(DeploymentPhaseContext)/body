@@ -7,26 +7,21 @@
   if (parentEar == null) {
     return;
   }
-  final List<ResourceRoot> allResourceRootsOfEar=DeploymentUtils.allResourceRoots(parentEar);
-  if (allResourceRootsOfEar == null || allResourceRootsOfEar.isEmpty()) {
+  final List<DeploymentUnit> subDeployments=parentEar.getAttachmentList(Attachments.SUB_DEPLOYMENTS);
+  if (subDeployments == null || subDeployments.isEmpty()) {
     return;
   }
   final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
-  final ResourceRoot parentEarResourceRoot=parentEar.getAttachment(Attachments.DEPLOYMENT_ROOT);
-  for (  ResourceRoot resourceRoot : allResourceRootsOfEar) {
-    if (!SubDeploymentMarker.isSubDeployment(resourceRoot)) {
+  for (  DeploymentUnit subDeployment : subDeployments) {
+    final ResourceRoot subDeploymentRoot=subDeployment.getAttachment(Attachments.DEPLOYMENT_ROOT);
+    if (subDeploymentRoot.equals(deploymentRoot)) {
       continue;
     }
-    if (resourceRoot.equals(deploymentRoot)) {
+    if (DeploymentTypeMarker.isType(DeploymentType.WAR,subDeployment)) {
       continue;
     }
-    if (DeploymentTypeMarker.isType(DeploymentType.WAR,resourceRoot)) {
-      continue;
-    }
-    final VirtualFile subDeploymentResourceRoot=resourceRoot.getRoot();
-    final String relativePath=subDeploymentResourceRoot.getPathNameRelativeTo(parentEarResourceRoot.getRoot());
-    final ModuleIdentifier moduleIdentifier=ModuleIdentifier.create(ServiceModuleLoader.MODULE_PREFIX + parentEar.getName() + '.'+ relativePath.replace('/','.'));
-    logger.debug("Subdeployment " + subDeploymentResourceRoot + " with module identifier "+ moduleIdentifier+ " will be added to the classpath entries of deployment unit "+ deploymentUnit);
-    deploymentUnit.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES,moduleIdentifier);
+    final ModuleIdentifier subDeploymentModuleIdentifier=subDeployment.getAttachment(Attachments.MODULE_IDENTIFIER);
+    logger.debug("Subdeployment " + subDeployment + " with module identifier "+ subDeploymentModuleIdentifier+ " will be added to the classpath entries of deployment unit "+ deploymentUnit);
+    deploymentUnit.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES,subDeploymentModuleIdentifier);
   }
 }
