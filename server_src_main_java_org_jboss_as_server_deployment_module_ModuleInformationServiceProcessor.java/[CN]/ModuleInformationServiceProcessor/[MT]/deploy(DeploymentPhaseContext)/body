@@ -1,0 +1,21 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (deploymentUnit.hasAttachment(Attachments.OSGI_MANIFEST)) {
+    return;
+  }
+  final ModuleSpecification moduleSpec=deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
+  final ModuleIdentifier moduleIdentifier=deploymentUnit.getAttachment(Attachments.MODULE_IDENTIFIER);
+  final List<AdditionalModuleSpecification> additionalModules=deploymentUnit.getAttachmentList(Attachments.ADDITIONAL_MODULES);
+  if (moduleIdentifier == null || moduleSpec == null) {
+    return;
+  }
+  phaseContext.getServiceTarget().addService(ServiceModuleLoader.moduleInformationServiceName(moduleIdentifier),new ValueService<Object>(new ImmediateValue<Object>(moduleSpec))).install();
+  for (  ModuleDependency dependency : moduleSpec.getDependencies()) {
+    if (dependency.getIdentifier().getName().startsWith(ServiceModuleLoader.MODULE_PREFIX)) {
+      phaseContext.addDependency(ServiceModuleLoader.moduleInformationServiceName(dependency.getIdentifier()),Attachments.MODULE_DEPENDENCY_INFORMATION);
+    }
+  }
+  for (  AdditionalModuleSpecification module : additionalModules) {
+    phaseContext.getServiceTarget().addService(ServiceModuleLoader.moduleInformationServiceName(module.getModuleIdentifier()),new ValueService<Object>(new ImmediateValue<Object>(module))).install();
+  }
+}
