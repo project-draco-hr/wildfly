@@ -1,5 +1,4 @@
 {
-  final CountDownLatch executeLatch=new CountDownLatch(1);
   final MockModelController controller=new MockModelController(){
     @Override public ModelNode execute(    ModelNode operation,    OperationMessageHandler handler,    OperationTransactionControl control,    OperationAttachments attachments){
       this.operation=operation;
@@ -12,7 +11,6 @@
         }
       }
 ,new ModelNode());
-      executeLatch.countDown();
       return new ModelNode();
     }
   }
@@ -21,6 +19,7 @@
   ModelNode operation=new ModelNode();
   operation.get("test").set("123");
   final BlockingQueue<String> messages=new LinkedBlockingQueue<String>();
+  CommitProxyOperationControl commitControl=new CommitProxyOperationControl();
   proxyController.execute(operation,new OperationMessageHandler(){
     @Override public void handleReport(    MessageSeverity severity,    String message){
       if (severity == MessageSeverity.INFO && message.startsWith("Test")) {
@@ -28,9 +27,9 @@
       }
     }
   }
-,NoopProxyOperationControl.INSTANCE,null);
-  executeLatch.await();
+,commitControl,null);
   assertEquals("123",controller.getOperation().get("test").asString());
   assertEquals("Test1",messages.take());
   assertEquals("Test2",messages.take());
+  commitControl.latch.await();
 }
