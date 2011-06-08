@@ -1,0 +1,32 @@
+{
+  assertNotNull("StartLevel injected",startLevel);
+  int initialStartLevel=startLevel.getInitialBundleStartLevel();
+  assertEquals("Initial bundle start level",1,initialStartLevel);
+  assertEquals("Bundle RESOLVED",Bundle.RESOLVED,bundle.getState());
+  assertEquals("arq465-bundle",bundle.getSymbolicName());
+  int bundleStartLevel=startLevel.getBundleStartLevel(bundle);
+  assertEquals("Bundle start level",3,bundleStartLevel);
+  try {
+    bundle.start(Bundle.START_TRANSIENT);
+    fail("Bundle cannot be started due to the Framework's current start level");
+  }
+ catch (  BundleException ex) {
+  }
+  assertEquals("Bundle RESOLVED",Bundle.RESOLVED,bundle.getState());
+  bundle.start();
+  assertEquals("Bundle RESOLVED",Bundle.RESOLVED,bundle.getState());
+  final CountDownLatch latch=new CountDownLatch(1);
+  context.addFrameworkListener(new FrameworkListener(){
+    public void frameworkEvent(    FrameworkEvent event){
+      if (event.getType() == FrameworkEvent.STARTLEVEL_CHANGED)       latch.countDown();
+    }
+  }
+);
+  startLevel.setStartLevel(3);
+  latch.await(3,TimeUnit.SECONDS);
+  assertEquals("Bundle ACTIVE",Bundle.ACTIVE,bundle.getState());
+  bundle.stop();
+  assertEquals("Bundle RESOLVED",Bundle.RESOLVED,bundle.getState());
+  bundle.uninstall();
+  assertEquals("Bundle UNINSTALLED",Bundle.UNINSTALLED,bundle.getState());
+}
