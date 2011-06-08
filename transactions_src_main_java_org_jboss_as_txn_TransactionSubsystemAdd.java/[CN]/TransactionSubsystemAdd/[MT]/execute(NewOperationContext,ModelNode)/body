@@ -34,6 +34,14 @@
   subModel.get(OBJECT_STORE,RELATIVE_TO).set(operation.get(OBJECT_STORE,RELATIVE_TO));
   subModel.get(OBJECT_STORE,PATH).set(operation.get(OBJECT_STORE,PATH));
   if (context.getType() == NewOperationContext.Type.SERVER) {
+    if (context.isBooting()) {
+      context.addStep(new AbstractDeploymentChainStep(){
+        protected void execute(        DeploymentProcessorTarget processorTarget){
+          processorTarget.addDeploymentProcessor(Phase.INSTALL,Phase.INSTALL_TRANSACTION_BINDINGS,new TransactionJndiBindingProcessor());
+        }
+      }
+,NewOperationContext.Stage.RUNTIME);
+    }
     context.addStep(new NewStepHandler(){
       public void execute(      NewOperationContext context,      ModelNode operation){
         final List<ServiceController<?>> controllers=new ArrayList<ServiceController<?>>();
@@ -64,20 +72,22 @@
           coreEnvBuilder.addDependency(bindingName,SocketBinding.class,coreEnvironmentService.getSocketProcessBindingInjector());
         }
         ServiceController<String> varDirRPS=RelativePathService.addService(INTERNAL_CORE_ENV_VAR_PATH,varDirPath,varDirPathRef,target);
-        coreEnvBuilder.addDependency(varDirRPS.getName(),String.class,coreEnvironmentService.getPathInjector()).setInitialMode(Mode.ACTIVE).install();
+        controllers.add(varDirRPS);
+        controllers.add(coreEnvBuilder.addDependency(varDirRPS.getName(),String.class,coreEnvironmentService.getPathInjector()).addListener(verificationHandler).setInitialMode(Mode.ACTIVE).install());
         final XATerminatorService xaTerminatorService=new XATerminatorService();
-        target.addService(TxnServices.JBOSS_TXN_XA_TERMINATOR,xaTerminatorService).setInitialMode(Mode.ACTIVE).install();
+        controllers.add(target.addService(TxnServices.JBOSS_TXN_XA_TERMINATOR,xaTerminatorService).setInitialMode(Mode.ACTIVE).install());
         ServiceController<String> objectStoreRPS=RelativePathService.addService(INTERNAL_OBJECTSTORE_PATH,objectStorePath,objectStorePathRef,target);
+        controllers.add(objectStoreRPS);
         final ArjunaObjectStoreEnvironmentService objStoreEnvironmentService=new ArjunaObjectStoreEnvironmentService();
         controllers.add(target.addService(TxnServices.JBOSS_TXN_ARJUNA_OBJECTSTORE_ENVIRONMENT,objStoreEnvironmentService).addDependency(objectStoreRPS.getName(),String.class,objStoreEnvironmentService.getPathInjector()).addDependency(TxnServices.JBOSS_TXN_CORE_ENVIRONMENT).addListener(verificationHandler).setInitialMode(Mode.ACTIVE).install());
         final ArjunaRecoveryManagerService recoveryManagerService=new ArjunaRecoveryManagerService(recoveryListener);
         controllers.add(target.addService(TxnServices.JBOSS_TXN_ARJUNA_RECOVERY_MANAGER,recoveryManagerService).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("iiop","orb"),ORB.class,recoveryManagerService.getOrbInjector()).addDependency(SocketBinding.JBOSS_BINDING_NAME.append(recoveryBindingName),SocketBinding.class,recoveryManagerService.getRecoveryBindingInjector()).addDependency(SocketBinding.JBOSS_BINDING_NAME.append(recoveryStatusBindingName),SocketBinding.class,recoveryManagerService.getStatusBindingInjector()).addDependency(TxnServices.JBOSS_TXN_CORE_ENVIRONMENT).addDependency(TxnServices.JBOSS_TXN_ARJUNA_OBJECTSTORE_ENVIRONMENT).addListener(verificationHandler).setInitialMode(Mode.ACTIVE).install());
         final ArjunaTransactionManagerService transactionManagerService=new ArjunaTransactionManagerService(coordinatorEnableStatistics,coordinatorDefaultTimeout,transactionStatusManagerEnable);
         controllers.add(target.addService(TxnServices.JBOSS_TXN_ARJUNA_TRANSACTION_MANAGER,transactionManagerService).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("iiop","orb"),ORB.class,transactionManagerService.getOrbInjector()).addDependency(TxnServices.JBOSS_TXN_XA_TERMINATOR,JBossXATerminator.class,transactionManagerService.getXaTerminatorInjector()).addDependency(TxnServices.JBOSS_TXN_CORE_ENVIRONMENT).addDependency(TxnServices.JBOSS_TXN_ARJUNA_OBJECTSTORE_ENVIRONMENT).addDependency(TxnServices.JBOSS_TXN_ARJUNA_RECOVERY_MANAGER).addListener(verificationHandler).setInitialMode(Mode.ACTIVE).install());
-        TransactionManagerService.addService(target);
-        UserTransactionService.addService(target);
+        controllers.add(TransactionManagerService.addService(target,verificationHandler));
+        controllers.add(UserTransactionService.addService(target,verificationHandler));
         controllers.add(target.addService(TxnServices.JBOSS_TXN_USER_TRANSACTION_REGISTRY,new UserTransactionRegistryService()).addListener(verificationHandler).setInitialMode(Mode.ACTIVE).install());
-        TransactionSynchronizationRegistryService.addService(target);
+        controllers.add(TransactionSynchronizationRegistryService.addService(target,verificationHandler));
         try {
           Class.forName("com.arjuna.ats.internal.jta.transaction.arjunacore.TransactionImple",true,getClass().getClassLoader());
         }
