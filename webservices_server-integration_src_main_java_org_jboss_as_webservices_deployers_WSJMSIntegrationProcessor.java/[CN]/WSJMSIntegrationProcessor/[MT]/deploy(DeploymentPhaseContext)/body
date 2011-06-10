@@ -1,0 +1,68 @@
+{
+  final DeploymentUnit unit=phaseContext.getDeploymentUnit();
+  final List<AnnotationInstance> webServiceAnnotations=ASHelper.getAnnotations(unit,ASHelper.WEB_SERVICE_ANNOTATION);
+  Map<String,List<AnnotationInstance>> map=new HashMap<String,List<AnnotationInstance>>();
+  for (  AnnotationInstance webServiceAnnotation : webServiceAnnotations) {
+    final AnnotationValue wsdlLocation=webServiceAnnotation.value(WSDL_LOCATION);
+    final AnnotationValue port=webServiceAnnotation.value(PORT_NAME);
+    final AnnotationValue service=webServiceAnnotation.value(SERVICE_NAME);
+    if (wsdlLocation != null && port != null && service != null) {
+      String key=wsdlLocation.asString();
+      List<AnnotationInstance> annotations=map.get(key);
+      if (annotations == null) {
+        annotations=new LinkedList<AnnotationInstance>();
+        map.put(key,annotations);
+      }
+      annotations.add(webServiceAnnotation);
+    }
+  }
+  if (!map.isEmpty()) {
+    final JMSEndpointsMetaData endpointsMetaData=new JMSEndpointsMetaData();
+    final ResourceRoot deploymentRoot=unit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+    final UnifiedVirtualFile uvf=new VirtualFileAdaptor(deploymentRoot.getRoot());
+    final boolean trace=LOG.isTraceEnabled();
+    for (    String wsdlLocation : map.keySet()) {
+      if (trace) {
+        LOG.tracef("Scanning wsdlLocation: %s",wsdlLocation);
+      }
+      try {
+        URL url=uvf.findChild(wsdlLocation).toURL();
+        SOAPAddressWSDLParser parser=new SOAPAddressWSDLParser(url);
+        for (        AnnotationInstance ai : map.get(wsdlLocation)) {
+          String port=ai.value(PORT_NAME).asString();
+          String service=ai.value(SERVICE_NAME).asString();
+          AnnotationValue targetNS=ai.value(TARGET_NAMESPACE);
+          String tns=targetNS != null ? targetNS.asString() : null;
+          QName serviceName=new QName(tns,service);
+          QName portName=new QName(tns,port);
+          if (trace) {
+            LOG.tracef("  serviceName: %s",serviceName);
+            LOG.tracef("  portName: %s",portName);
+          }
+          String soapAddress=parser.filterSoapAddress(serviceName,portName,SOAPAddressWSDLParser.SOAP_OVER_JMS_NS);
+          if (soapAddress != null) {
+            ClassInfo webServiceClassInfo=(ClassInfo)ai.target();
+            String beanClassName=webServiceClassInfo.name().toString();
+            JMSEndpointMetaData endpointMetaData=new JMSEndpointMetaData(endpointsMetaData);
+            endpointMetaData.setEndpointName(port);
+            endpointMetaData.setImplementor(beanClassName);
+            endpointMetaData.setSoapAddress(soapAddress);
+            endpointMetaData.setWsdlLocation(wsdlLocation);
+            endpointsMetaData.addEndpointMetaData(endpointMetaData);
+          }
+        }
+      }
+ catch (      Exception e) {
+        if (trace) {
+          LOG.warnf("Could not read WSDL at '%s'",wsdlLocation,e);
+        }
+ else {
+          LOG.warnf("Could not read WSDL at '%s'",wsdlLocation);
+        }
+      }
+    }
+    if (!endpointsMetaData.getEndpointsMetaData().isEmpty()) {
+      unit.putAttachment(JMS_ENDPOINT_METADATA_KEY,endpointsMetaData);
+    }
+  }
+}
