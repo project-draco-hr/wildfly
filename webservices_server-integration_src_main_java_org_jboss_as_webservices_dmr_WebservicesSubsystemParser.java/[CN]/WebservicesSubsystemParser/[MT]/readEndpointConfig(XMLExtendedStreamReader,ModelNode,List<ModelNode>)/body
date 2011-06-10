@@ -2,45 +2,48 @@
   String configName=null;
   ModelNode preHandlers=null;
   ModelNode postHandlers=null;
+  final ModelNode node=new ModelNode();
+  node.get(OP).set(ADD);
   final EnumSet<Element> encountered=EnumSet.noneOf(Element.class);
   while (reader.nextTag() != END_ELEMENT) {
     final Element element=Element.forName(reader.getLocalName());
-    if (!encountered.add(element)) {
+    if (element != Element.FEATURE && element != Element.PROPERTY && !encountered.add(element)) {
       throw unexpectedElement(reader);
     }
 switch (element) {
 case CONFIG_NAME:
 {
         configName=parseElementNoAttributes(reader);
+        node.get(OP_ADDR).set(address).add(ENDPOINT_CONFIG,configName);
         break;
       }
 case PRE_HANDLER_CHAINS:
 {
       preHandlers=parseHandlerChains(reader);
+      node.get(PRE_HANDLER_CHAINS).set(preHandlers);
       break;
     }
 case POST_HANDLER_CHAINS:
 {
     postHandlers=parseHandlerChains(reader);
+    node.get(POST_HANDLER_CHAINS).set(postHandlers);
     break;
   }
+case PROPERTY:
+{
+  parseProperty(reader,node);
+  break;
+}
+case FEATURE:
+{
+parseFeature(reader,node);
+break;
+}
 default :
 {
-  throw unexpectedElement(reader);
+throw unexpectedElement(reader);
 }
 }
 }
-final ModelNode endpointConfig=new ModelNode();
-if (preHandlers != null) {
-endpointConfig.get(Constants.PRE_HANDLER_CHAINS).set(preHandlers);
-}
-if (postHandlers != null) {
-endpointConfig.get(Constants.POST_HANDLER_CHAINS).set(postHandlers);
-}
-final ModelNode node=new ModelNode();
-node.get(OP).set(ADD);
-node.get(OP_ADDR).set(address).add(ENDPOINT_CONFIG,configName);
-node.get(PRE_HANDLER_CHAINS).set(preHandlers);
-node.get(POST_HANDLER_CHAINS).set(postHandlers);
 operationList.add(node);
 }
