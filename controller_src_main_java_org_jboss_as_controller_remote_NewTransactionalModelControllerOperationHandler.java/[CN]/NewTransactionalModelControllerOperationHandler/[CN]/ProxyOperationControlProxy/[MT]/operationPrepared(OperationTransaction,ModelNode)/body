@@ -1,28 +1,31 @@
 {
-  final CountDownLatch completedLatch=new CountDownLatch(1);
-  final OperationTransaction blockingTransaction=new OperationTransaction(){
-    @Override public void rollback(){
-      transaction.rollback();
-      completedLatch.countDown();
-    }
-    @Override public void commit(){
-      transaction.commit();
-      completedLatch.countDown();
-    }
-  }
-;
-  activeTransactions.put(executionId,blockingTransaction);
-  new OperationStatusRequest(executionId,result){
-    @Override protected byte getRequestCode(){
-      return NewModelControllerProtocol.OPERATION_PREPARED_REQUEST;
-    }
-  }
-.execute(executorService,getChannelStrategy(context.getChannel()));
   try {
-    completedLatch.await();
+    new OperationStatusRequest(executionId,result){
+      @Override protected byte getRequestCode(){
+        return NewModelControllerProtocol.OPERATION_PREPARED_REQUEST;
+      }
+      @Override protected void writeRequest(      final int protocolVersion,      final FlushableDataOutput output) throws IOException {
+        super.writeRequest(protocolVersion,output);
+      }
+      @Override protected Void readResponse(      DataInput input) throws IOException {
+        ProtocolUtils.expectHeader(input,NewModelControllerProtocol.PARAM_PREPARED);
+        preparedOrFailedLatch.countDown();
+        byte status=input.readByte();
+        if (status == NewModelControllerProtocol.PARAM_COMMIT) {
+          transaction.commit();
+        }
+ else         if (status == NewModelControllerProtocol.PARAM_ROLLBACK) {
+          transaction.rollback();
+        }
+ else {
+          throw new IllegalArgumentException("Invalid status code " + status);
+        }
+        return null;
+      }
+    }
+.executeForResult(executorService,getChannelStrategy(context.getChannel()));
   }
- catch (  InterruptedException e) {
-    Thread.currentThread().interrupt();
-    throw new RuntimeException("Interrupted while waiting for Tx commit/rollback");
+ catch (  Exception e) {
+    throw new RuntimeException(e);
   }
 }

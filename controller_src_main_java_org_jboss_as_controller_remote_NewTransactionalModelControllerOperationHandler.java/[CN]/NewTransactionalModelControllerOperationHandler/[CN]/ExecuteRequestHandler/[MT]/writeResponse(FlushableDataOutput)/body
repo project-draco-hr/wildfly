@@ -1,8 +1,9 @@
 {
+  final CountDownLatch preparedOrFailedLatch=new CountDownLatch(1);
   executorService.execute(new Runnable(){
     @Override public void run(){
       final OperationMessageHandlerProxy messageHandlerProxy=new OperationMessageHandlerProxy(getContext(),executionId);
-      final ProxyOperationControlProxy control=new ProxyOperationControlProxy(getContext(),executionId);
+      final ProxyOperationControlProxy control=new ProxyOperationControlProxy(getContext(),executionId,preparedOrFailedLatch);
       final ModelNode result;
       try {
         result=controller.execute(operation,messageHandlerProxy,control,new OperationAttachmentsProxy(getContext(),executionId,attachmentsLength));
@@ -14,7 +15,7 @@
         control.operationFailed(failure);
         return;
       }
-      if (result.hasDefined(OUTCOME) && result.get(OUTCOME).asString().equals(FAILED)) {
+      if (result.hasDefined(FAILURE_DESCRIPTION)) {
         control.operationFailed(result);
       }
  else {
@@ -23,4 +24,11 @@
     }
   }
 );
+  try {
+    preparedOrFailedLatch.await();
+  }
+ catch (  InterruptedException e) {
+    Thread.currentThread().interrupt();
+    throw new IOException("Thread was interrupted waiting for the operation to prepare/fail");
+  }
 }
