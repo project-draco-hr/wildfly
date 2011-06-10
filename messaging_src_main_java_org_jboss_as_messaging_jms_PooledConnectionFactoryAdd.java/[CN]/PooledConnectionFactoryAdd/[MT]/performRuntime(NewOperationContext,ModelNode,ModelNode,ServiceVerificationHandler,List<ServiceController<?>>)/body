@@ -1,0 +1,29 @@
+{
+  ModelNode opAddr=operation.require(OP_ADDR);
+  final PathAddress address=PathAddress.pathAddress(opAddr);
+  final String name=address.getLastElement().getValue();
+  final String jndiName=operation.get(CommonAttributes.ENTRIES).asList().get(0).asString();
+  final String txSupport;
+  if (operation.hasDefined(TRANSACTION)) {
+    String txType=operation.get(TRANSACTION).asString();
+    if (LOCAL.equals(txType)) {
+      txSupport=LOCAL_TX;
+    }
+ else     if (NONE.equals(txType)) {
+      txSupport=NO_TX;
+    }
+ else {
+      txSupport=XA_TX;
+    }
+  }
+ else {
+    txSupport=XA_TX;
+  }
+  ServiceTarget serviceTarget=context.getServiceTarget();
+  List<String> connectors=getConnectors(operation);
+  List<PooledConnectionFactoryConfigProperties> adapterParams=getAdapterParams(operation);
+  ServiceName hornetQResourceAdapterService=MessagingServices.POOLED_CONNECTION_FACTORY_BASE.append(name);
+  PooledConnectionFactoryService resourceAdapterService=new PooledConnectionFactoryService(name,connectors,adapterParams,jndiName,txSupport);
+  ServiceBuilder serviceBuilder=serviceTarget.addService(hornetQResourceAdapterService,resourceAdapterService).addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,resourceAdapterService.getTransactionManager()).addDependency(MessagingServices.JBOSS_MESSAGING,HornetQServer.class,resourceAdapterService.getHornetQService()).addListener(verificationHandler);
+  newControllers.add(serviceBuilder.setInitialMode(Mode.ACTIVE).install());
+}
