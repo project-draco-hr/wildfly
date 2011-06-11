@@ -1,9 +1,10 @@
 {
   final CountDownLatch preparedOrFailedLatch=new CountDownLatch(1);
+  final CountDownLatch txCompletedLatch=new CountDownLatch(1);
   executorService.execute(new Runnable(){
     @Override public void run(){
       final OperationMessageHandlerProxy messageHandlerProxy=new OperationMessageHandlerProxy(getContext(),batchId);
-      final ProxyOperationControlProxy control=new ProxyOperationControlProxy(getContext(),batchId,preparedOrFailedLatch);
+      final ProxyOperationControlProxy control=new ProxyOperationControlProxy(getContext(),batchId,preparedOrFailedLatch,txCompletedLatch);
       final ModelNode result;
       try {
         result=controller.execute(operation,messageHandlerProxy,control,new OperationAttachmentsProxy(getContext(),batchId,attachmentsLength));
@@ -19,6 +20,12 @@
         control.operationFailed(result);
       }
  else {
+        try {
+          txCompletedLatch.await();
+        }
+ catch (        InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
         control.operationCompleted(result);
       }
     }
