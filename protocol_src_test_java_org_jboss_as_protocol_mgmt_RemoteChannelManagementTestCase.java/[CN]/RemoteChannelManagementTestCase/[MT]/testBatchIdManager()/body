@@ -1,0 +1,25 @@
+{
+  final CountDownLatch freedLatch=new CountDownLatch(1);
+  final AtomicInteger freedId=new AtomicInteger();
+  ManagementChannel channel=channels.getServerChannel();
+  channels.getClientChannel().startReceiving();
+  channel.setOperationHandler(new SimpleHandlers.OperationHandler());
+  channel.setBatchIdManager(new ManagementBatchIdManager(){
+    @Override public void freeBatchId(    int id){
+      freedId.set(id);
+      freedLatch.countDown();
+    }
+    @Override public int createBatchId(){
+      return 12345;
+    }
+  }
+);
+  try {
+    Assert.assertEquals(12345,channels.getClientChannel().createBatchId());
+  }
+  finally {
+    channels.getClientChannel().freeBatchId(12345);
+  }
+  freedLatch.await();
+  Assert.assertEquals(12345,freedId.get());
+}

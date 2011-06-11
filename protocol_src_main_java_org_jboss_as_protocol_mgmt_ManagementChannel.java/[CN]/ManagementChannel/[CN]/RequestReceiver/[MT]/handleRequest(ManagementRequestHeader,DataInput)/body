@@ -1,34 +1,29 @@
 {
-  final FlushableDataOutputImpl output=writeMessage(header.getExecutionId());
+  final FlushableDataOutputImpl output=writeMessage(header.getBatchId());
+  Exception error=null;
   try {
     final ManagementRequestHandler requestHandler;
     try {
-      final ManagementOperationHandler operationHandler=getOperationHandler(header);
-      expectHeader(input,ManagementProtocol.REQUEST_OPERATION);
-      requestHandler=getRequestHandler(operationHandler,input);
-      expectHeader(input,ManagementProtocol.REQUEST_START);
-      expectHeader(input,ManagementProtocol.REQUEST_BODY);
+      requestHandler=getRequestHandler(header);
       requestHandler.setContext(new ManagementRequestContext(ManagementChannel.this,header));
       requestHandler.readRequest(input);
       expectHeader(input,ManagementProtocol.REQUEST_END);
     }
  catch (    Exception e) {
+      error=e;
       throw e;
     }
  finally {
-      writeResponseHeader(header,output);
-      output.writeByte(ManagementProtocol.RESPONSE_START);
-      output.writeByte(ManagementProtocol.RESPONSE_BODY);
+      writeResponseHeader(header,output,error);
+      if (error != null) {
+        output.writeByte(ManagementProtocol.RESPONSE_END);
+      }
     }
     requestHandler.writeResponse(output);
     output.writeByte(ManagementProtocol.RESPONSE_END);
   }
  catch (  Exception e) {
-    e.printStackTrace();
-    if (e instanceof IOException) {
-      throw (IOException)e;
-    }
-    throw new IOException(e);
+    formatException(e);
   }
  finally {
     IoUtils.safeClose(output);
