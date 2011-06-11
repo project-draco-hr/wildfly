@@ -1,0 +1,35 @@
+{
+  final PersistenceResource[] delegates=new PersistenceResource[2];
+  for (  PathAddress addr : affectedAddresses) {
+    if (delegates[0] == null && addr.size() > 0 && HOST.equals(addr.getElement(0).getKey())) {
+      ModelNode hostModel=new ModelNode();
+      hostModel.get(HOST).set(model.get(HOST));
+      delegates[0]=hostPersister.store(hostModel,affectedAddresses);
+    }
+ else     if (delegates[1] == null && (addr.size() == 0 || !HOST.equals(addr.getElement(0).getKey()))) {
+      delegates[1]=hostPersister.store(model,affectedAddresses);
+    }
+    if (delegates[0] != null && delegates[1] != null) {
+      break;
+    }
+  }
+  return new PersistenceResource(){
+    @Override public void commit(){
+      if (delegates[0] != null) {
+        delegates[0].commit();
+      }
+      if (delegates[1] != null) {
+        delegates[1].commit();
+      }
+    }
+    @Override public void rollback(){
+      if (delegates[0] != null) {
+        delegates[0].rollback();
+      }
+      if (delegates[1] != null) {
+        delegates[1].rollback();
+      }
+    }
+  }
+;
+}
