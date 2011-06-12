@@ -6,12 +6,32 @@
     ConfigurationPersister domainPersister=configurationPersister.getDomainPersister();
     List<ModelNode> domainBootOps=domainPersister.load();
   }
+  final NetworkInterfaceBinding interfaceBinding;
+  try {
+    interfaceBinding=hostControllerInfo.getNetworkInterfaceBinding(hostControllerInfo.getNativeManagementInterface());
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(e);
+  }
   ServiceTarget serviceTarget=context.getServiceTarget();
-  final ServerInventoryService inventory=new ServerInventoryService(environment,hostControllerInfo.getNativeManagementPort());
-  serviceTarget.addService(ServerInventoryService.SERVICE_NAME,inventory).addDependency(ProcessControllerConnectionService.SERVICE_NAME,ProcessControllerConnectionService.class,inventory.getClient()).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(hostControllerInfo.getNativeManagementInterface()),NetworkInterfaceBinding.class,inventory.getInterface()).install();
+  final NewServerInventoryService inventory=new NewServerInventoryService(this,environment,interfaceBinding,hostControllerInfo.getNativeManagementPort());
+  serviceTarget.addService(ServerInventoryService.SERVICE_NAME,inventory).addDependency(NewProcessControllerConnectionService.SERVICE_NAME,NewProcessControllerConnectionService.class,inventory.getClient()).install();
   final ServerToHostOperationHandler serverToHost=new ServerToHostOperationHandler();
   serviceTarget.addService(ServerToHostOperationHandler.SERVICE_NAME,serverToHost).addDependency(ServerInventoryService.SERVICE_NAME,ManagedServerLifecycleCallback.class,serverToHost.getCallbackInjector()).install();
+  RemotingServices.installDomainControllerManagementChannelServices(serviceTarget,new NewModelControllerClientOperationHandlerService(),DomainModelControllerService.SERVICE_NAME,interfaceBinding,hostControllerInfo.getNativeManagementPort());
   RemotingServices.installChannelOpenListenerService(serviceTarget,"server",ServerToHostOperationHandler.SERVICE_NAME,null,null);
-  injectedServerInventory.getValue().setDomainController(this);
-  startServers();
+  if (hostControllerInfo.isMasterDomainController()) {
+  }
+  Future<NewServerInventory> future=inventory.getInventoryFuture();
+  try {
+    serverInventory=future.get();
+    startServers();
+  }
+ catch (  InterruptedException e) {
+    Thread.currentThread().interrupt();
+    throw new RuntimeException(e);
+  }
+catch (  ExecutionException e) {
+    throw new RuntimeException(e);
+  }
 }
