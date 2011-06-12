@@ -1,0 +1,17 @@
+{
+  super.boot(context);
+  if (!hostControllerInfo.isMasterDomainController()) {
+  }
+ else {
+    ConfigurationPersister domainPersister=configurationPersister.getDomainPersister();
+    List<ModelNode> domainBootOps=domainPersister.load();
+  }
+  ServiceTarget serviceTarget=context.getServiceTarget();
+  final ServerInventoryService inventory=new ServerInventoryService(environment,hostControllerInfo.getNativeManagementPort());
+  serviceTarget.addService(ServerInventoryService.SERVICE_NAME,inventory).addDependency(ProcessControllerConnectionService.SERVICE_NAME,ProcessControllerConnectionService.class,inventory.getClient()).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(hostControllerInfo.getNativeManagementInterface()),NetworkInterfaceBinding.class,inventory.getInterface()).install();
+  final ServerToHostOperationHandler serverToHost=new ServerToHostOperationHandler();
+  serviceTarget.addService(ServerToHostOperationHandler.SERVICE_NAME,serverToHost).addDependency(ServerInventoryService.SERVICE_NAME,ManagedServerLifecycleCallback.class,serverToHost.getCallbackInjector()).install();
+  RemotingServices.installChannelOpenListenerService(serviceTarget,"server",ServerToHostOperationHandler.SERVICE_NAME,null,null);
+  injectedServerInventory.getValue().setDomainController(this);
+  startServers();
+}
