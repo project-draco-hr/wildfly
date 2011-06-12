@@ -1,6 +1,30 @@
 {
-  if (1 == 1) {
-    throw new UnsupportedOperationException();
+  DomainOperationContext overallContext=new DomainOperationContext(localHostControllerInfo);
+  String localHostName=localHostControllerInfo.getLocalHostName();
+  if (routing.isLocalCallNeeded(localHostName)) {
+    ModelNode localResponse=new ModelNode();
+    overallContext.setCoordinatorResult(localResponse);
+    localSlaveHandler.addSteps(context,operation,localResponse,false);
   }
+  if (localHostControllerInfo.isMasterDomainController()) {
+    Set<String> remoteHosts=new HashSet<String>(routing.getHosts());
+    boolean global=remoteHosts.size() == 0;
+    boolean controllerLocked=false;
+    remoteHosts.remove(localHostName);
+    if (!global) {
+      if (remoteHosts.size() == 1) {
+        throw new UnsupportedOperationException();
+      }
+    }
+ else {
+      context.getServiceRegistry(true);
+      controllerLocked=true;
+      remoteHosts.addAll(hostProxies.keySet());
+    }
+    if (remoteHosts.size() > 0) {
+      throw new UnsupportedOperationException();
+    }
+  }
+  context.addStep(new DomainRolloutStepHandler(overallContext,getExecutorService()),NewOperationContext.Stage.DOMAIN);
   context.completeStep();
 }

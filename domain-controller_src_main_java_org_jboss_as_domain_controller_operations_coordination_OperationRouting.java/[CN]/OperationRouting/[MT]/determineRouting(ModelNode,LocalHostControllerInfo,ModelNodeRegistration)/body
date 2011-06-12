@@ -1,0 +1,73 @@
+{
+  OperationRouting routing=null;
+  String targetHost=null;
+  final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+  final String operationName=operation.get(OP).asString();
+  if (address.size() > 0) {
+    PathElement first=address.getElement(0);
+    if (HOST.equals(first.getKey())) {
+      targetHost=first.getValue();
+    }
+  }
+  if (targetHost != null) {
+    Set<OperationEntry.Flag> flags=registry.getOperationFlags(PathAddress.EMPTY_ADDRESS,operation.require(OP).asString());
+    if (flags.contains(OperationEntry.Flag.READ_ONLY)) {
+      routing=new OperationRouting(targetHost,false);
+    }
+ else     if (address.size() > 1) {
+      PathElement first=address.getElement(1);
+      if (SERVER.equals(first.getKey())) {
+        routing=new OperationRouting(targetHost,false);
+      }
+    }
+    if (routing == null) {
+      if ("start".equals(operationName) || "stop".equals(operationName) || "restart".equals(operationName)) {
+        routing=new OperationRouting(targetHost,false);
+      }
+ else {
+        routing=new OperationRouting(targetHost,true);
+      }
+    }
+  }
+ else   if (!localHostControllerInfo.isMasterDomainController()) {
+    routing=new OperationRouting();
+  }
+ else {
+    Set<OperationEntry.Flag> flags=registry.getOperationFlags(PathAddress.EMPTY_ADDRESS,operation.require(OP).asString());
+    if (flags.contains(OperationEntry.Flag.READ_ONLY)) {
+      routing=new OperationRouting(localHostControllerInfo.getLocalHostName(),false);
+    }
+ else     if (flags.contains(OperationEntry.Flag.DEPLOYMENT_UPLOAD)) {
+      routing=new OperationRouting(localHostControllerInfo.getLocalHostName(),false);
+    }
+  }
+  if (routing == null) {
+    if (COMPOSITE.equals(operationName)) {
+      if (operation.hasDefined(STEPS)) {
+        Set<String> allHosts=new HashSet<String>();
+        boolean twoStep=false;
+        for (        ModelNode step : operation.get(STEPS).asList()) {
+          ModelNodeRegistration stepRegistry=registry.getSubModel(PathAddress.pathAddress(step.get(OP_ADDR)));
+          OperationRouting stepRouting=determineRouting(step,localHostControllerInfo,stepRegistry);
+          if (stepRouting.isTwoStep()) {
+            twoStep=true;
+          }
+          allHosts.addAll(stepRouting.getHosts());
+        }
+        if (allHosts.size() == 1) {
+          routing=new OperationRouting(allHosts.iterator().next(),twoStep);
+        }
+ else {
+          routing=new OperationRouting(allHosts);
+        }
+      }
+ else {
+        routing=new OperationRouting(localHostControllerInfo.getLocalHostName(),false);
+      }
+    }
+ else {
+      routing=new OperationRouting(true);
+    }
+  }
+  return routing;
+}
