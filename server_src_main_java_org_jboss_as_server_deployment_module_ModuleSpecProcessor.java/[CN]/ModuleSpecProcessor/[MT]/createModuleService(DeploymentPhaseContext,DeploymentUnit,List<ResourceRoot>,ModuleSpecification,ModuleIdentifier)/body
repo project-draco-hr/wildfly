@@ -1,62 +1,16 @@
 {
   final ModuleSpec.Builder specBuilder=ModuleSpec.build(moduleIdentifier);
   final List<ModuleDependency> dependencies=moduleSpecification.getDependencies();
+  final List<ModuleDependency> localDependencies=moduleSpecification.getLocalDependencies();
   for (  ResourceLoaderSpec resourceLoaderSpec : moduleSpecification.getResourceLoaders()) {
     specBuilder.addResourceRoot(resourceLoaderSpec);
   }
   for (  ResourceRoot resourceRoot : resourceRoots) {
     addResourceRoot(specBuilder,resourceRoot);
   }
-  final boolean childFirst;
-  if (moduleSpecification.getChildFirst() == null) {
-    childFirst=false;
-  }
- else {
-    childFirst=moduleSpecification.getChildFirst();
-  }
-  if (childFirst) {
-    specBuilder.addDependency(DependencySpec.createLocalDependencySpec());
-  }
-  if (dependencies != null)   for (  ModuleDependency dependency : dependencies) {
-    final List<FilterSpecification> importFilters=dependency.getImportFilters();
-    final List<FilterSpecification> exportFilters=dependency.getExportFilters();
-    final PathFilter importFilter;
-    final PathFilter exportFilter;
-    final MultiplePathFilterBuilder importBuilder=PathFilters.multiplePathFilterBuilder(true);
-    for (    FilterSpecification filter : importFilters) {
-      importBuilder.addFilter(filter.getPathFilter(),filter.isInclude());
-    }
-    if (dependency.isImportServices()) {
-      importBuilder.addFilter(PathFilters.getMetaInfServicesFilter(),true);
-    }
-    importBuilder.addFilter(PathFilters.getMetaInfSubdirectoriesFilter(),false);
-    importBuilder.addFilter(PathFilters.getMetaInfFilter(),false);
-    importFilter=importBuilder.create();
-    if (exportFilters.isEmpty()) {
-      if (dependency.isExport()) {
-        exportFilter=PathFilters.acceptAll();
-      }
- else {
-        exportFilter=PathFilters.rejectAll();
-      }
-    }
- else {
-      final MultiplePathFilterBuilder exportBuilder=PathFilters.multiplePathFilterBuilder(dependency.isExport());
-      for (      FilterSpecification filter : exportFilters) {
-        exportBuilder.addFilter(filter.getPathFilter(),filter.isInclude());
-      }
-      exportFilter=exportBuilder.create();
-    }
-    DependencySpec depSpec=DependencySpec.createModuleDependencySpec(importFilter,exportFilter,dependency.getModuleLoader(),dependency.getIdentifier(),dependency.isOptional());
-    specBuilder.addDependency(depSpec);
-    final String depName=dependency.getIdentifier().getName();
-    if (depName.startsWith(ServiceModuleLoader.MODULE_PREFIX)) {
-      phaseContext.addToAttachmentList(Attachments.NEXT_PHASE_DEPS,ServiceModuleLoader.moduleSpecServiceName(dependency.getIdentifier()));
-    }
-  }
-  if (!childFirst) {
-    specBuilder.addDependency(DependencySpec.createLocalDependencySpec());
-  }
+  createDependencies(phaseContext,specBuilder,dependencies);
+  specBuilder.addDependency(DependencySpec.createLocalDependencySpec());
+  createDependencies(phaseContext,specBuilder,localDependencies);
   final ModuleSpec moduleSpec=specBuilder.create();
   final ServiceName moduleSpecServiceName=ServiceModuleLoader.moduleSpecServiceName(moduleIdentifier);
   final ValueService<ModuleSpec> moduleSpecService=new ValueService<ModuleSpec>(new ImmediateValue<ModuleSpec>(moduleSpec));
