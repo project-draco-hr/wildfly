@@ -1,7 +1,43 @@
 {
-  if (1 == 1) {
-    throw new UnsupportedOperationException();
+  final Map<ServerIdentity,ProxyTask> tasks=new HashMap<ServerIdentity,ProxyTask>();
+  boolean pushToServers=true;
+  ModelNode ourResult=domainOperationContext.getCoordinatorResult();
+  if (ourResult.has(FAILURE_DESCRIPTION)) {
+    pushToServers=false;
   }
-  context.addStep(new DomainResultHandler(domainOperationContext),NewOperationContext.Stage.DOMAIN);
-  context.completeStep();
+ else {
+    for (    ModelNode hostResult : domainOperationContext.getHostControllerResults().values()) {
+      if (!operation.hasDefined(OUTCOME) || !SUCCESS.equals(operation.get(OUTCOME))) {
+        pushToServers=false;
+        break;
+      }
+    }
+  }
+  boolean interrupted=false;
+  try {
+    if (pushToServers) {
+      final Map<ServerIdentity,Future<ModelNode>> futures=new HashMap<ServerIdentity,Future<ModelNode>>();
+      if (1 == 1) {
+        throw new UnsupportedOperationException();
+      }
+    }
+    context.completeStep();
+  }
+  finally {
+    try {
+      boolean completeRollback=domainOperationContext.isCompleteRollback();
+      for (      Map.Entry<ServerIdentity,ProxyTask> entry : tasks.entrySet()) {
+        NewModelController.OperationTransaction tx=entry.getValue().getRemoteTransaction();
+        if (tx != null) {
+          boolean rollback=completeRollback || domainOperationContext.isServerGroupRollback(entry.getKey().getServerGroupName());
+          executorService.submit(new ProxyCommitRollbackTask(tx,rollback));
+        }
+      }
+    }
+  finally {
+      if (interrupted) {
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
 }

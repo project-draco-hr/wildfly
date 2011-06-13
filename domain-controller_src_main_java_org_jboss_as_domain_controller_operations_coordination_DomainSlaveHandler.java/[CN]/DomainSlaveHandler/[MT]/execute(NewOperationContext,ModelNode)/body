@@ -27,22 +27,21 @@ catch (      ExecutionException e) {
       }
       domainOperationContext.addHostControllerResult(entry.getKey(),result);
     }
+    context.completeStep();
   }
   finally {
-    if (interrupted) {
-      Thread.currentThread().interrupt();
-    }
-  }
-  context.completeStep();
-  boolean rollback=domainOperationContext.isCompleteRollback();
-  for (  ProxyTask task : tasks.values()) {
-    NewModelController.OperationTransaction tx=task.getRemoteTransaction();
-    if (tx != null) {
-      if (rollback) {
-        tx.rollback();
+    try {
+      boolean rollback=domainOperationContext.isCompleteRollback();
+      for (      ProxyTask task : tasks.values()) {
+        NewModelController.OperationTransaction tx=task.getRemoteTransaction();
+        if (tx != null) {
+          executorService.submit(new ProxyCommitRollbackTask(tx,rollback));
+        }
       }
- else {
-        tx.commit();
+    }
+  finally {
+      if (interrupted) {
+        Thread.currentThread().interrupt();
       }
     }
   }
