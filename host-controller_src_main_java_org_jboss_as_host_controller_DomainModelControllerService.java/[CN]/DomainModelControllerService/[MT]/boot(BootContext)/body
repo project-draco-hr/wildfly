@@ -1,27 +1,22 @@
 {
+  final ServiceTarget serviceTarget=context.getServiceTarget();
   try {
     super.boot(configurationPersister.load());
+    NewServerInventoryService inventory=setupInventoryAndStartRemoting(serviceTarget);
     if (!hostControllerInfo.isMasterDomainController()) {
+      NewRemoteDomainConnectionService service;
+      try {
+        service=new NewRemoteDomainConnectionService(getValue(),hostControllerInfo.getLocalHostName(),InetAddress.getByName(hostControllerInfo.getRemoteDomainControllerHost()),hostControllerInfo.getRemoteDomainControllertPort(),localFileRepository);
+      }
+ catch (      UnknownHostException e) {
+        throw new RuntimeException(e);
+      }
+      serviceTarget.addService(MasterDomainControllerClient.SERVICE_NAME,service).setInitialMode(ServiceController.Mode.ACTIVE).install();
     }
  else {
       ConfigurationPersister domainPersister=configurationPersister.getDomainPersister();
       super.boot(domainPersister.load());
-    }
-    final NetworkInterfaceBinding interfaceBinding;
-    try {
-      interfaceBinding=hostControllerInfo.getNetworkInterfaceBinding(hostControllerInfo.getNativeManagementInterface());
-    }
- catch (    Exception e) {
-      throw new RuntimeException(e);
-    }
-    ServiceTarget serviceTarget=context.getServiceTarget();
-    final NewServerInventoryService inventory=new NewServerInventoryService(this,environment,interfaceBinding,hostControllerInfo.getNativeManagementPort());
-    serviceTarget.addService(ServerInventoryService.SERVICE_NAME,inventory).addDependency(NewProcessControllerConnectionService.SERVICE_NAME,NewProcessControllerConnectionService.class,inventory.getClient()).install();
-    final ServerToHostOperationHandler serverToHost=new ServerToHostOperationHandler();
-    serviceTarget.addService(ServerToHostOperationHandler.SERVICE_NAME,serverToHost).addDependency(ServerInventoryService.SERVICE_NAME,ManagedServerLifecycleCallback.class,serverToHost.getCallbackInjector()).install();
-    RemotingServices.installDomainControllerManagementChannelServices(serviceTarget,new NewModelControllerClientOperationHandlerService(),DomainModelControllerService.SERVICE_NAME,interfaceBinding,hostControllerInfo.getNativeManagementPort());
-    RemotingServices.installChannelOpenListenerService(serviceTarget,"server",ServerToHostOperationHandler.SERVICE_NAME,null,null);
-    if (hostControllerInfo.isMasterDomainController()) {
+      RemotingServices.installChannelServices(serviceTarget,new NewMasterDomainControllerOperationHandlerService(this),DomainModelControllerService.SERVICE_NAME,RemotingServices.DOMAIN_CHANNEL,null,null);
     }
     Future<NewServerInventory> future=inventory.getInventoryFuture();
     try {

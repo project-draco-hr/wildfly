@@ -1,0 +1,16 @@
+{
+  final NetworkInterfaceBinding interfaceBinding;
+  try {
+    interfaceBinding=hostControllerInfo.getNetworkInterfaceBinding(hostControllerInfo.getNativeManagementInterface());
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(e);
+  }
+  final NewServerInventoryService inventory=new NewServerInventoryService(this,environment,interfaceBinding,hostControllerInfo.getNativeManagementPort());
+  serviceTarget.addService(ServerInventoryService.SERVICE_NAME,inventory).addDependency(NewProcessControllerConnectionService.SERVICE_NAME,NewProcessControllerConnectionService.class,inventory.getClient()).install();
+  final ServerToHostOperationHandler serverToHost=new ServerToHostOperationHandler();
+  serviceTarget.addService(ServerToHostOperationHandler.SERVICE_NAME,serverToHost).addDependency(ServerInventoryService.SERVICE_NAME,ManagedServerLifecycleCallback.class,serverToHost.getCallbackInjector()).install();
+  RemotingServices.installDomainControllerManagementChannelServices(serviceTarget,new NewModelControllerClientOperationHandlerService(),DomainModelControllerService.SERVICE_NAME,interfaceBinding,hostControllerInfo.getNativeManagementPort());
+  RemotingServices.installChannelOpenListenerService(serviceTarget,RemotingServices.SERVER_CHANNEL,ServerToHostOperationHandler.SERVICE_NAME,null,null);
+  return inventory;
+}

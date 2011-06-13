@@ -1,0 +1,47 @@
+{
+  txOperationHandler=new NewTransactionalModelControllerOperationHandler(executor,controller);
+  ProtocolChannelClient<ManagementChannel> client;
+  try {
+    ProtocolChannelClient.Configuration<ManagementChannel> configuration=new ProtocolChannelClient.Configuration<ManagementChannel>();
+    configuration.setEndpointName("endpoint");
+    configuration.setUriScheme("remote");
+    configuration.setUri(new URI("remote://" + host.getHostAddress() + ":"+ port));
+    configuration.setExecutor(executor);
+    configuration.setChannelFactory(new ManagementChannelFactory(txOperationHandler));
+    client=ProtocolChannelClient.create(configuration);
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(e);
+  }
+  try {
+    client.connect();
+    this.channelClient=client;
+    if (connected.get()) {
+      unregister();
+    }
+    ManagementChannel channel=client.openChannel(RemotingServices.DOMAIN_CHANNEL);
+    this.channel=channel;
+    channel.addCloseHandler(new CloseHandler<Channel>(){
+      public void handleClose(      Channel closed){
+        connectionClosed();
+      }
+    }
+);
+    channel.startReceiving();
+    masterProxy=NewModelControllerClient.Factory.create(channel);
+  }
+ catch (  IOException e) {
+    log.warnf("Could not connect to remote domain controller %s:%d",host.getHostAddress(),port);
+    e.printStackTrace();
+    throw new IllegalStateException(e);
+  }
+  try {
+    ModelNode node=new RegisterModelControllerRequest().executeForResult(executor,ManagementClientChannelStrategy.create(channel));
+    if (!connected.get()) {
+    }
+  }
+ catch (  Exception e) {
+    log.warnf("Error retrieving domain model from remote domain controller %s:%d: %s",host.getHostAddress(),port,e.getMessage());
+    throw new IllegalStateException(e);
+  }
+}
