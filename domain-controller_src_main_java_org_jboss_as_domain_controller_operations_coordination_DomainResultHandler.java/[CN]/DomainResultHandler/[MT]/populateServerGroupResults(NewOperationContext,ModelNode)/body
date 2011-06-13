@@ -1,0 +1,34 @@
+{
+  final Set<String> groupNames=new TreeSet<String>();
+  final Map<String,Set<HostServer>> groupToServerMap=new HashMap<String,Set<HostServer>>();
+  for (  Map.Entry<ServerIdentity,ModelNode> entry : domainOperationContext.getServerResults().entrySet()) {
+    final String serverGroup=entry.getKey().getServerGroupName();
+    groupNames.add(serverGroup);
+    final String hostName=entry.getKey().getHostName();
+    final String serverName=entry.getKey().getHostName();
+    if (!groupToServerMap.containsKey(serverGroup)) {
+      groupToServerMap.put(serverGroup,new TreeSet<HostServer>());
+    }
+    groupToServerMap.get(serverGroup).add(new HostServer(hostName,serverName,entry.getValue()));
+  }
+  boolean serverGroupSuccess=false;
+  for (  String groupName : groupNames) {
+    final ModelNode groupNode=new ModelNode();
+    if (domainOperationContext.isServerGroupRollback(groupName)) {
+      groupNode.get(ROLLED_BACK).set(true);
+    }
+ else {
+      serverGroupSuccess=true;
+    }
+    for (    HostServer hostServer : groupToServerMap.get(groupName)) {
+      final ModelNode serverNode=new ModelNode();
+      serverNode.get(HOST).set(hostServer.hostName);
+      serverNode.get(RESPONSE).set(hostServer.result);
+      groupNode.add(hostServer.serverName,serverNode);
+    }
+    result.get(SERVER_GROUPS).add(groupName,groupNode);
+  }
+  if (!serverGroupSuccess) {
+    context.getFailureDescription().set("Operation failed or was rolled back on all servers.");
+  }
+}
