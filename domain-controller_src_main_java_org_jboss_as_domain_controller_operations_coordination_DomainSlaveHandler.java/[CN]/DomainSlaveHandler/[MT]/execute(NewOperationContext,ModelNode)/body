@@ -1,0 +1,49 @@
+{
+  final Map<String,ProxyTask> tasks=new HashMap<String,ProxyTask>();
+  final Map<String,Future<ModelNode>> futures=new HashMap<String,Future<ModelNode>>();
+  for (  Map.Entry<String,NewProxyController> entry : hostProxies.entrySet()) {
+    String host=entry.getKey();
+    ProxyTask task=new ProxyTask(host,operation,context,entry.getValue());
+    tasks.put(host,task);
+    futures.put(host,executorService.submit(task));
+  }
+  boolean interrupted=false;
+  try {
+    for (    Map.Entry<String,Future<ModelNode>> entry : futures.entrySet()) {
+      ModelNode result=null;
+      try {
+        result=entry.getValue().get();
+      }
+ catch (      InterruptedException e) {
+        result=new ModelNode();
+        result.get(OUTCOME).set(FAILED);
+        result.get(FAILURE_DESCRIPTION).set(String.format("Interrupted waiting for result from host %s",entry.getKey()));
+      }
+catch (      ExecutionException e) {
+        Throwable cause=e.getCause();
+        result=new ModelNode();
+        result.get(OUTCOME).set(FAILED);
+        result.get(FAILURE_DESCRIPTION).set(String.format("Caught exception executing operation on host %s -- %s",entry.getKey(),cause == null ? e.toString() : cause.toString()));
+      }
+      domainOperationContext.addHostControllerResult(entry.getKey(),result);
+    }
+  }
+  finally {
+    if (interrupted) {
+      Thread.currentThread().interrupt();
+    }
+  }
+  context.completeStep();
+  boolean rollback=domainOperationContext.isCompleteRollback();
+  for (  ProxyTask task : tasks.values()) {
+    NewModelController.OperationTransaction tx=task.getRemoteTransaction();
+    if (tx != null) {
+      if (rollback) {
+        tx.rollback();
+      }
+ else {
+        tx.commit();
+      }
+    }
+  }
+}
