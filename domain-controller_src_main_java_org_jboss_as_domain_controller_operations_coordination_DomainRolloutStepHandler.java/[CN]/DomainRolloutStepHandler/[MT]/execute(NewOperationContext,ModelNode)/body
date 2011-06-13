@@ -1,43 +1,47 @@
 {
-  final Map<ServerIdentity,ProxyTask> tasks=new HashMap<ServerIdentity,ProxyTask>();
-  boolean pushToServers=true;
-  ModelNode ourResult=domainOperationContext.getCoordinatorResult();
-  if (ourResult.has(FAILURE_DESCRIPTION)) {
-    pushToServers=false;
-  }
+  boolean pushToServers=!domainOperationContext.isCompleteRollback();
+  if (pushToServers) {
+    ModelNode ourResult=domainOperationContext.getCoordinatorResult();
+    if (ourResult.has(FAILURE_DESCRIPTION)) {
+      pushToServers=false;
+      domainOperationContext.setCompleteRollback(true);
+    }
  else {
-    for (    ModelNode hostResult : domainOperationContext.getHostControllerResults().values()) {
-      if (!operation.hasDefined(OUTCOME) || !SUCCESS.equals(operation.get(OUTCOME))) {
-        pushToServers=false;
-        break;
-      }
-    }
-  }
-  boolean interrupted=false;
-  try {
-    if (pushToServers) {
-      final Map<ServerIdentity,Future<ModelNode>> futures=new HashMap<ServerIdentity,Future<ModelNode>>();
-      if (1 == 1) {
-        throw new UnsupportedOperationException();
-      }
-    }
-    context.completeStep();
-  }
-  finally {
-    try {
-      boolean completeRollback=domainOperationContext.isCompleteRollback();
-      for (      Map.Entry<ServerIdentity,ProxyTask> entry : tasks.entrySet()) {
-        NewModelController.OperationTransaction tx=entry.getValue().getRemoteTransaction();
-        if (tx != null) {
-          boolean rollback=completeRollback || domainOperationContext.isServerGroupRollback(entry.getKey().getServerGroupName());
-          executorService.submit(new ProxyCommitRollbackTask(tx,rollback));
+      for (      ModelNode hostResult : domainOperationContext.getHostControllerResults().values()) {
+        if (!hostResult.hasDefined(OUTCOME) || !SUCCESS.equals(hostResult.get(OUTCOME))) {
+          pushToServers=false;
+          domainOperationContext.setCompleteRollback(true);
+          break;
         }
       }
     }
+  }
+  if (pushToServers) {
+    final Map<ServerIdentity,ProxyTask> tasks=new HashMap<ServerIdentity,ProxyTask>();
+    boolean interrupted=false;
+    try {
+      pushToServers(context,tasks);
+      context.completeStep();
+    }
   finally {
-      if (interrupted) {
-        Thread.currentThread().interrupt();
+      try {
+        boolean completeRollback=domainOperationContext.isCompleteRollback();
+        for (        Map.Entry<ServerIdentity,ProxyTask> entry : tasks.entrySet()) {
+          NewModelController.OperationTransaction tx=entry.getValue().getRemoteTransaction();
+          if (tx != null) {
+            boolean rollback=completeRollback || domainOperationContext.isServerGroupRollback(entry.getKey().getServerGroupName());
+            executorService.submit(new ProxyCommitRollbackTask(tx,rollback));
+          }
+        }
+      }
+  finally {
+        if (interrupted) {
+          Thread.currentThread().interrupt();
+        }
       }
     }
+  }
+ else {
+    context.completeStep();
   }
 }

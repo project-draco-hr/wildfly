@@ -1,0 +1,31 @@
+{
+  Map<String,ModelNode> hostResults=new HashMap<String,ModelNode>(domainOperationContext.getHostControllerResults());
+  if (domainOperationContext.getCoordinatorResult().isDefined()) {
+    hostResults.put(domainOperationContext.getLocalHostInfo().getLocalHostName(),domainOperationContext.getCoordinatorResult());
+  }
+  Map<String,Map<ServerIdentity,ModelNode>> opsByGroup=getOpsByGroup(hostResults);
+  if (opsByGroup.size() > 0) {
+    final ModelNode rolloutPlan=getRolloutPlan(this.providedRolloutPlan,opsByGroup);
+    final NewServerOperationExecutor operationExecutor=new NewServerOperationExecutor(){
+      @Override public ModelNode executeServerOperation(      ServerIdentity server,      ModelNode operation){
+        NewProxyController proxy=hostProxies.get(server.getHostName());
+        ProxyTask task=new ProxyTask(server.getHostName(),operation,context,proxy);
+        tasks.put(server,task);
+        try {
+          return task.call();
+        }
+ catch (        Exception e) {
+          ModelNode failure=new ModelNode();
+          failure.get(FAILURE_DESCRIPTION).set(String.format("Caught exception invoking operation %s against address %s on host %s -- %s",operation.require(OP),PathAddress.pathAddress(operation.get(OP_ADDR)),server.getHostName(),e));
+          return failure;
+        }
+      }
+    }
+;
+    NewRolloutPlanController rolloutPlanController=new NewRolloutPlanController(opsByGroup,rolloutPlan,domainOperationContext,operationExecutor,executorService);
+    NewRolloutPlanController.Result result=rolloutPlanController.execute();
+    if (result == NewRolloutPlanController.Result.FAILED) {
+      domainOperationContext.setCompleteRollback(true);
+    }
+  }
+}
