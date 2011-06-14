@@ -1,0 +1,66 @@
+{
+  final String ejbName=beanMetaData.getEjbName();
+  final AssemblyDescriptorMetaData assemblyDescriptor=beanMetaData.getAssemblyDescriptor();
+  if (assemblyDescriptor == null) {
+    return;
+  }
+  final MethodPermissionsMetaData methodPermissions=assemblyDescriptor.getMethodPermissionsByEjbName(ejbName);
+  if (methodPermissions == null || methodPermissions.isEmpty()) {
+    return;
+  }
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
+  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
+  final DeploymentReflectionIndex deploymentReflectionIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
+  final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)moduleDescription.getComponentByName(ejbName);
+  final Class<?> ejbClass;
+  try {
+    ejbClass=module.getClassLoader().loadClass(beanMetaData.getEjbClass());
+  }
+ catch (  ClassNotFoundException e) {
+    throw new DeploymentUnitProcessingException("Could not load EJB class " + beanMetaData.getEjbClass());
+  }
+  final ClassReflectionIndex classReflectionIndex=deploymentReflectionIndex.getClassIndex(ejbClass);
+  for (  final MethodPermissionMetaData methodPermission : methodPermissions) {
+    final MethodsMetaData methods=methodPermission.getMethods();
+    if (methods == null || methods.isEmpty()) {
+      continue;
+    }
+    if (methodPermission.isNotChecked()) {
+      continue;
+    }
+    final Set<String> securityRoles=methodPermission.getRoles();
+    for (    final MethodMetaData method : methods) {
+      final String methodName=method.getMethodName();
+      final MethodIntf methodIntf=this.getMethodIntf(method);
+      if (methodName.equals("*")) {
+        if (methodIntf == null) {
+          ejbComponentDescription.addRolesAllowedForAllMethodsOfAllViews(securityRoles);
+        }
+ else {
+          ejbComponentDescription.addRolesAllowedForAllMethodsOnViewType(methodIntf,securityRoles);
+        }
+      }
+ else {
+        final MethodParametersMetaData methodParams=method.getMethodParams();
+        if (methodParams == null || methodParams.isEmpty()) {
+          final Collection<Method> applicableMethods=ClassReflectionIndexUtil.findAllMethodsByName(deploymentReflectionIndex,classReflectionIndex,methodName);
+          if (applicableMethods.isEmpty()) {
+            logger.warn("No method named: " + methodName + " found on EJB: "+ ejbName+ " while processing method-permission element in ejb-jar.xml");
+            continue;
+          }
+          this.addRolesAllowed(ejbComponentDescription,methodIntf,applicableMethods,securityRoles);
+        }
+ else {
+          final String[] paramTypes=methodParams.toArray(new String[methodParams.size()]);
+          final Collection<Method> applicableMethods=ClassReflectionIndexUtil.findMethods(deploymentReflectionIndex,classReflectionIndex,methodName,paramTypes);
+          if (applicableMethods.isEmpty()) {
+            logger.warn("No method named: " + methodName + " with param types: "+ paramTypes+ " found on EJB: "+ ejbName+ " while processing method-permission element in ejb-jar.xml");
+            continue;
+          }
+          this.addRolesAllowed(ejbComponentDescription,methodIntf,applicableMethods,securityRoles);
+        }
+      }
+    }
+  }
+}
