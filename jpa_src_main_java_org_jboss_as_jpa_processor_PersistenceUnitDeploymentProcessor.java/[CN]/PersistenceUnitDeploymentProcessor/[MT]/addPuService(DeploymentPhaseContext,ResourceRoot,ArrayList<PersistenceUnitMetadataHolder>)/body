@@ -2,6 +2,7 @@
   if (puList.size() > 0) {
     final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
     final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+    final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
     if (module == null)     throw new DeploymentUnitProcessingException("Failed to get module attachment for " + phaseContext.getDeploymentUnit());
     final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
     final ModuleClassLoader classLoader=module.getClassLoader();
@@ -57,6 +58,20 @@
           Iterable<ServiceName> providerDependencies=getProviderDependencies(pu);
           if (providerDependencies != null) {
             builder.addDependencies(providerDependencies);
+          }
+          if (pu.getProperties().containsKey(JNDI_PROPERTY)) {
+            String jndiName=pu.getProperties().get(JNDI_PROPERTY).toString();
+            final ServiceName bindingServiceName=ContextNames.serviceNameOfEnvEntry(eeModuleDescription.getApplicationName(),eeModuleDescription.getModuleName(),eeModuleDescription.getModuleName(),false,jndiName);
+            final BinderService binderService=new BinderService(jndiName);
+            serviceTarget.addService(bindingServiceName,binderService).addDependency(ContextNames.serviceNameOfNamingStore(eeModuleDescription.getApplicationName(),eeModuleDescription.getModuleName(),eeModuleDescription.getModuleName(),jndiName),NamingStore.class,binderService.getNamingStoreInjector()).addDependency(serviceName,PersistenceUnitService.class,new Injector<PersistenceUnitService>(){
+              @Override public void inject(              final PersistenceUnitService value) throws InjectionException {
+                binderService.getManagedObjectInjector().inject(new ValueManagedReferenceFactory(new ImmediateValue<Object>(value.getEntityManagerFactory())));
+              }
+              @Override public void uninject(){
+                binderService.getNamingStoreInjector().uninject();
+              }
+            }
+).install();
           }
           builder.addDependency(TransactionManagerService.SERVICE_NAME,new CastingInjector<TransactionManager>(transactionManagerInjector,TransactionManager.class)).addDependency(TransactionSynchronizationRegistryService.SERVICE_NAME,new CastingInjector<TransactionSynchronizationRegistry>(transactionRegistryInjector,TransactionSynchronizationRegistry.class)).setInitialMode(ServiceController.Mode.ACTIVE).addInjection(service.getPropertiesInjector(),properties).install();
           log.trace("added PersistenceUnitService for '" + serviceName + "'.  PU is ready for injector action. ");
