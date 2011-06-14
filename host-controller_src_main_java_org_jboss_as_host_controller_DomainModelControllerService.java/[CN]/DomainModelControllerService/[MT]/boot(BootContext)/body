@@ -2,38 +2,26 @@
   final ServiceTarget serviceTarget=context.getServiceTarget();
   try {
     super.boot(configurationPersister.load());
-    NewServerInventoryService inventory=setupInventoryAndStartRemoting(serviceTarget);
+    NetworkInterfaceBinding interfaceBinding=getNewtworkInterfaceBinding(hostControllerInfo);
+    Future<NewServerInventory> inventoryFuture=NewServerInventoryService.install(serviceTarget,this,environment,interfaceBinding,hostControllerInfo.getNativeManagementPort());
+    RemotingServices.installRemotingEndpoint(serviceTarget);
     if (!hostControllerInfo.isMasterDomainController()) {
+      serverInventory=getFuture(inventoryFuture);
       Future<NewMasterDomainControllerClient> clientFuture=NewRemoteDomainConnectionService.install(serviceTarget,getValue(),hostControllerInfo.getLocalHostName(),hostControllerInfo.getRemoteDomainControllerHost(),hostControllerInfo.getRemoteDomainControllertPort(),remoteFileRepository);
-      try {
-        NewMasterDomainControllerClient client=clientFuture.get();
-        client.register();
-      }
- catch (      InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new RuntimeException(e);
-      }
-catch (      ExecutionException e) {
-        throw new RuntimeException(e);
-      }
+      NewMasterDomainControllerClient masterDomainControllerClient=getFuture(clientFuture);
+      masterDomainControllerClient.register();
     }
  else {
       ConfigurationPersister domainPersister=configurationPersister.getDomainPersister();
       super.boot(domainPersister.load());
       RemotingServices.installChannelServices(serviceTarget,new NewMasterDomainControllerOperationHandlerService(this,this),DomainModelControllerService.SERVICE_NAME,RemotingServices.DOMAIN_CHANNEL,null,null);
+      serverInventory=getFuture(inventoryFuture);
     }
-    Future<NewServerInventory> future=inventory.getInventoryFuture();
-    try {
-      serverInventory=future.get();
-      startServers();
-    }
- catch (    InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new RuntimeException(e);
-    }
-catch (    ExecutionException e) {
-      throw new RuntimeException(e);
-    }
+    RemotingServices.installDomainConnectorServices(serviceTarget,interfaceBinding,hostControllerInfo.getNativeManagementPort());
+    ServerToHostOperationHandler.install(serviceTarget,ServerInventoryService.SERVICE_NAME);
+    RemotingServices.installChannelOpenListenerService(serviceTarget,RemotingServices.SERVER_CHANNEL,ServerToHostOperationHandler.SERVICE_NAME,null,null);
+    RemotingServices.installChannelServices(serviceTarget,new NewModelControllerClientOperationHandlerService(),DomainModelControllerService.SERVICE_NAME,RemotingServices.MANAGEMENT_CHANNEL,null,null);
+    startServers();
   }
   finally {
     finishBoot();
