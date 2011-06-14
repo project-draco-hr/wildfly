@@ -31,5 +31,29 @@
   if (domainModel.hasDefined(SERVER_GROUP)) {
     rootModel.get(SERVER_GROUP).set(domainModel.get(SERVER_GROUP));
   }
+  final Set<String> modules=new HashSet<String>();
+  if (rootModel != null && rootModel.hasDefined(EXTENSION)) {
+    for (    Property prop : rootModel.get(EXTENSION).asPropertyList()) {
+      try {
+        final String module=prop.getValue().get(ExtensionDescription.MODULE).asString();
+        if (modules.contains(module)) {
+          continue;
+        }
+        for (        final Extension extension : Module.loadServiceFromCallerModuleLoader(ModuleIdentifier.fromString(module),Extension.class)) {
+          modules.add(module);
+          context.addStep(new NewStepHandler(){
+            public void execute(            NewOperationContext context,            ModelNode operation) throws OperationFailedException {
+              extension.initialize(extensionContext);
+              context.completeStep();
+            }
+          }
+,Stage.IMMEDIATE);
+        }
+      }
+ catch (      ModuleLoadException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
   context.completeStep();
 }
