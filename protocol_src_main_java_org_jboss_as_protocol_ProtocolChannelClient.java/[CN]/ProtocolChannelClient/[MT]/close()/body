@@ -1,21 +1,26 @@
 {
-  if (channel != null) {
-    try {
-      channel.writeShutdown();
+synchronized (channels) {
+    for (    T channel : channels) {
+      try {
+        channel.writeShutdown();
+      }
+ catch (      IOException ignore) {
+      }
+      IoUtils.safeClose(channel);
+      try {
+        channel.awaitClosed();
+      }
+ catch (      InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
     }
- catch (    IOException ignore) {
-    }
-    IoUtils.safeClose(channel);
-    try {
-      channel.awaitClosed();
-    }
- catch (    InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
+    channels.clear();
   }
   IoUtils.safeClose(connection);
-  IoUtils.safeClose(endpoint);
-  readChannelThread.shutdown();
-  writeChannelThread.shutdown();
-  connectionChannelThread.shutdown();
+  if (startedEndpoint) {
+    IoUtils.safeClose(endpoint);
+    readChannelThread.shutdown();
+    writeChannelThread.shutdown();
+    connectionChannelThread.shutdown();
+  }
 }
