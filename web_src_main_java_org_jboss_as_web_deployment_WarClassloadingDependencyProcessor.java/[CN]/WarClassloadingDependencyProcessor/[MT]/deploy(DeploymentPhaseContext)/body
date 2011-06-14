@@ -1,15 +1,33 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final DeploymentUnit topLevelDeployment=deploymentUnit.getParent() == null ? deploymentUnit : deploymentUnit.getParent();
   final ModuleSpecification moduleSpecification=deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
+  final ModuleLoader moduleLoader=Module.getBootModuleLoader();
+  final String jsfVersion=JsfVersionMarker.getVersion(topLevelDeployment);
+  if (jsfVersion.equals(JsfVersionMarker.JSF_1_2)) {
+    moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,JSF_1_2_API,false,false,false));
+  }
+ else {
+    moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,JSF_API,false,false,false));
+  }
   if (!DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit)) {
     return;
   }
-  final ModuleLoader moduleLoader=Module.getBootModuleLoader();
   moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,JAVAX_EE_API,false,false,false));
   moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,APACHE_XERCES,false,false,true));
-  ModuleDependency jsf=new ModuleDependency(moduleLoader,JSF_IMPL,false,false,false);
-  jsf.addImportFilter(PathFilters.getMetaInfFilter(),true);
-  moduleSpecification.addSystemDependency(jsf);
+  if (jsfVersion.equals(JsfVersionMarker.JSF_1_2)) {
+    ModuleDependency jsf=new ModuleDependency(moduleLoader,JSF_1_2_IMPL,false,false,false);
+    jsf.addImportFilter(PathFilters.getMetaInfFilter(),true);
+    moduleSpecification.addSystemDependency(jsf);
+  }
+ else {
+    if (!jsfVersion.equals(JsfVersionMarker.JSF_2_0)) {
+      logger.warn("Ukown JSF version " + jsfVersion + " "+ JsfVersionMarker.JSF_2_0+ " will be used instead");
+    }
+    ModuleDependency jsf=new ModuleDependency(moduleLoader,JSF_IMPL,false,false,false);
+    jsf.addImportFilter(PathFilters.getMetaInfFilter(),true);
+    moduleSpecification.addSystemDependency(jsf);
+  }
   moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,BEAN_VALIDATION,false,false,true));
   moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,JBOSS_WEB,false,false,true));
 }
