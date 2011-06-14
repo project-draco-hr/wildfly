@@ -28,13 +28,20 @@
   if (inputStream != null) {
     final Headers responseHeaders=http.getResponseHeaders();
     responseHeaders.add(CONTENT_TYPE,resolveContentType(path));
-    responseHeaders.add(ACCESS_CONTROL_ALLOW_ORIGIN,"*");
+    responseHeaders.add(ACCESS_CONTROL_ALLOW_ORIGIN,WILDCARD);
+    boolean skipcache=resource.endsWith(NOCACHE_JS);
+    if (!skipcache) {
+      if (System.currentTimeMillis() > lastExpiryDate) {
+        lastExpiryDate=calculateExpiryDate();
+        lastExpiryHeader=htmlExpiresDateFormat().format(new Date(lastExpiryDate));
+      }
+      responseHeaders.add(EXPIRES_HEADER,lastExpiryHeader);
+    }
     http.sendResponseHeaders(OK,0);
     OutputStream outputStream=http.getResponseBody();
-    int nextChar;
-    while ((nextChar=inputStream.read()) != -1) {
-      outputStream.write(nextChar);
-    }
+    final ReadableByteChannel inputChannel=Channels.newChannel(inputStream);
+    final WritableByteChannel outputChannel=Channels.newChannel(outputStream);
+    fastChannelCopy(inputChannel,outputChannel);
     outputStream.flush();
     safeClose(outputStream);
     safeClose(inputStream);
