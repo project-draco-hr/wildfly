@@ -1,0 +1,28 @@
+{
+  List<ViewConfiguration> views=componentConfiguration.getViews();
+  if (views == null || views.isEmpty()) {
+    return;
+  }
+  final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)componentConfiguration.getComponentDescription();
+  for (  ViewConfiguration view : views) {
+    final String viewClassName=view.getViewClass().getName();
+    Collection<EJBMethodIdentifier> denyAllMethodsForView=ejbComponentDescription.getDenyAllMethodsForView(viewClassName);
+    if (denyAllMethodsForView == null) {
+      denyAllMethodsForView=Collections.emptySet();
+    }
+    final Method[] viewMethods=view.getProxyFactory().getCachedMethods();
+    for (    final Method viewMethod : viewMethods) {
+      final Method componentMethod=this.findComponentMethod(componentConfiguration,viewMethod);
+      final EJBMethodIdentifier ejbMethodIdentifier=EJBMethodIdentifier.fromMethod(componentMethod);
+      if (denyAllMethodsForView.contains(ejbMethodIdentifier)) {
+        this.applyDenyAll(viewClassName,componentMethod);
+        continue;
+      }
+      final Class<?> declaringClass=componentMethod.getDeclaringClass();
+      if (ejbComponentDescription.isDenyAllApplicableToClass(viewClassName,declaringClass.getName())) {
+        this.applyDenyAll(viewClassName,componentMethod);
+        continue;
+      }
+    }
+  }
+}
