@@ -11,7 +11,15 @@
       @Override public void execute(      RuntimeTaskContext context) throws OperationFailedException {
         final SecurityDomainService securityDomainService=new SecurityDomainService(securityDomain,applicationPolicy,jsseSecurityDomain,cacheType);
         final ServiceTarget target=context.getServiceTarget();
-        ServiceBuilder<SecurityDomainContext> builder=target.addService(SecurityDomainService.SERVICE_NAME.append(securityDomain),securityDomainService).addDependency(SecurityManagementService.SERVICE_NAME,ISecurityManagement.class,securityDomainService.getSecurityManagementInjector()).addDependency(JaasConfigurationService.SERVICE_NAME,Configuration.class,securityDomainService.getConfigurationInjector());
+        final Injector<TransactionManager> transactionManagerInjector=new Injector<TransactionManager>(){
+          public void inject(          final TransactionManager value) throws InjectionException {
+            TransactionManagerLocator.setTransactionManager(value);
+          }
+          public void uninject(){
+          }
+        }
+;
+        ServiceBuilder<SecurityDomainContext> builder=target.addService(SecurityDomainService.SERVICE_NAME.append(securityDomain),securityDomainService).addDependency(SecurityManagementService.SERVICE_NAME,ISecurityManagement.class,securityDomainService.getSecurityManagementInjector()).addDependency(JaasConfigurationService.SERVICE_NAME,Configuration.class,securityDomainService.getConfigurationInjector()).addDependency(TransactionManagerService.SERVICE_NAME,TransactionManager.class,transactionManagerInjector);
         if ("infinispan".equals(cacheType)) {
           builder.addDependency(EmbeddedCacheManagerService.getServiceName(CACHE_CONTAINER_NAME),EmbeddedCacheManager.class,securityDomainService.getCacheManagerInjector());
         }
