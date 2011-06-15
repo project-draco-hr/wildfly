@@ -1,18 +1,23 @@
 {
-  DeploymentUnit unit=phaseContext.getDeploymentUnit();
-  DeploymentUnit top=DeploymentUtils.getTopDeploymentUnit(unit);
-  if (top.hasAttachment(ADDED))   return;
-  final ResourceRoot mainRoot=unit.getAttachment(Attachments.DEPLOYMENT_ROOT);
-  if (mainRoot == null)   return;
-  VirtualFile root=mainRoot.getRoot();
-  for (  String path : SEAM_FILES) {
-    if (root.getChild(path).exists()) {
-      top.putAttachment(ADDED,true);
-      final ModuleSpecification moduleSpecification=top.getAttachment(Attachments.MODULE_SPECIFICATION);
-      final ModuleLoader moduleLoader=Module.getBootModuleLoader();
-      moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,VFS_MODULE,false,false,false));
-      moduleSpecification.addResourceLoader(getSeamIntResourceLoader());
-      break;
+  DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (deploymentUnit.getParent() == null) {
+    return;
+  }
+  final List<DeploymentUnit> deploymentUnits=new ArrayList<DeploymentUnit>();
+  deploymentUnits.add(deploymentUnit);
+  deploymentUnits.addAll(deploymentUnit.getAttachmentList(Attachments.SUB_DEPLOYMENTS));
+  for (  DeploymentUnit unit : deploymentUnits) {
+    final ResourceRoot mainRoot=unit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+    if (mainRoot == null)     continue;
+    VirtualFile root=mainRoot.getRoot();
+    for (    String path : SEAM_FILES) {
+      if (root.getChild(path).exists()) {
+        final ModuleSpecification moduleSpecification=deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
+        final ModuleLoader moduleLoader=Module.getBootModuleLoader();
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,VFS_MODULE,false,false,false));
+        moduleSpecification.addResourceLoader(getSeamIntResourceLoader());
+        return;
+      }
     }
   }
 }
