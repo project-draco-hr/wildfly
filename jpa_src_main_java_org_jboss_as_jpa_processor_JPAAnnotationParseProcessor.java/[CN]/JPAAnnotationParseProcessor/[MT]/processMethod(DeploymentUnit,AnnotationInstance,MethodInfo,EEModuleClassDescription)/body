@@ -1,7 +1,8 @@
 {
   final String methodName=methodInfo.name();
   if (!methodName.startsWith("set") || methodInfo.args().length != 1) {
-    throw new IllegalArgumentException("injection target is invalid.  Only setter methods are allowed: " + methodInfo);
+    eeModuleClassDescription.setInvalid("injection target is invalid.  Only setter methods are allowed: " + methodInfo);
+    return;
   }
   final String contextNameSuffix=methodName.substring(3,4).toLowerCase() + methodName.substring(4);
   final AnnotationValue declaredNameValue=annotation.value("name");
@@ -14,21 +15,23 @@
     localContextName=declaredName;
   }
   final String injectionType=methodInfo.args()[0].name().toString();
-  final InjectionSource bindingSource=this.getBindingSource(deploymentUnit,annotation,injectionType);
-  final BindingConfiguration bindingConfiguration=new BindingConfiguration(localContextName,bindingSource);
-  eeModuleClassDescription.getConfigurators().add(new ClassConfigurator(){
-    @Override public void configure(    DeploymentPhaseContext context,    EEModuleClassDescription description,    EEModuleClassConfiguration configuration) throws DeploymentUnitProcessingException {
-      configuration.getBindingConfigurations().add(bindingConfiguration);
+  final InjectionSource bindingSource=this.getBindingSource(deploymentUnit,annotation,injectionType,eeModuleClassDescription);
+  if (bindingSource != null) {
+    final BindingConfiguration bindingConfiguration=new BindingConfiguration(localContextName,bindingSource);
+    eeModuleClassDescription.getConfigurators().add(new ClassConfigurator(){
+      @Override public void configure(      DeploymentPhaseContext context,      EEModuleClassDescription description,      EEModuleClassConfiguration configuration) throws DeploymentUnitProcessingException {
+        configuration.getBindingConfigurations().add(bindingConfiguration);
+      }
     }
-  }
 );
-  final InjectionTarget injectionTarget=new MethodInjectionTarget(methodInfo.declaringClass().name().toString(),methodName,methodInfo.args()[0].name().toString());
-  final InjectionSource injectionSource=new LookupInjectionSource(localContextName);
-  final ResourceInjectionConfiguration injectionConfiguration=new ResourceInjectionConfiguration(injectionTarget,injectionSource);
-  eeModuleClassDescription.getConfigurators().add(new ClassConfigurator(){
-    @Override public void configure(    DeploymentPhaseContext context,    EEModuleClassDescription description,    EEModuleClassConfiguration configuration) throws DeploymentUnitProcessingException {
-      configuration.getInjectionConfigurations().add(injectionConfiguration);
+    final InjectionTarget injectionTarget=new MethodInjectionTarget(methodInfo.declaringClass().name().toString(),methodName,methodInfo.args()[0].name().toString());
+    final InjectionSource injectionSource=new LookupInjectionSource(localContextName);
+    final ResourceInjectionConfiguration injectionConfiguration=new ResourceInjectionConfiguration(injectionTarget,injectionSource);
+    eeModuleClassDescription.getConfigurators().add(new ClassConfigurator(){
+      @Override public void configure(      DeploymentPhaseContext context,      EEModuleClassDescription description,      EEModuleClassConfiguration configuration) throws DeploymentUnitProcessingException {
+        configuration.getInjectionConfigurations().add(injectionConfiguration);
+      }
     }
-  }
 );
+  }
 }
