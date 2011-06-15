@@ -1,6 +1,6 @@
 {
   try {
-    new OperationStatusRequest(batchId,result){
+    new OperationStatusRequest(executeRequestContext.getBatchId(),result){
       @Override protected byte getRequestCode(){
         return NewModelControllerProtocol.OPERATION_PREPARED_REQUEST;
       }
@@ -9,15 +9,15 @@
       }
       @Override protected Void readResponse(      DataInput input) throws IOException {
         ProtocolUtils.expectHeader(input,NewModelControllerProtocol.PARAM_PREPARED);
-        preparedOrFailedLatch.countDown();
+        executeRequestContext.setPreparedOrFailed();
         byte status=input.readByte();
         if (status == NewModelControllerProtocol.PARAM_COMMIT) {
           transaction.commit();
-          txCompletedLatch.countDown();
+          executeRequestContext.setTxCompleted();
         }
  else         if (status == NewModelControllerProtocol.PARAM_ROLLBACK) {
           transaction.rollback();
-          txCompletedLatch.countDown();
+          executeRequestContext.setTxCompleted();
         }
  else {
           throw new IllegalArgumentException("Invalid status code " + status);
@@ -25,9 +25,10 @@
         return null;
       }
     }
-.executeForResult(executorService,getChannelStrategy(context.getChannel()));
+.executeForResult(executorService,getChannelStrategy(executeRequestContext.getChannel()));
   }
  catch (  Exception e) {
+    executeRequestContext.setError(e.getMessage());
     throw new RuntimeException(e);
   }
 }

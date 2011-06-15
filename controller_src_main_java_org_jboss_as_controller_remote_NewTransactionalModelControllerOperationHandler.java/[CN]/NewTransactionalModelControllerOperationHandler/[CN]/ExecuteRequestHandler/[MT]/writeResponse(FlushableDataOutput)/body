@@ -1,13 +1,11 @@
 {
-  final CountDownLatch preparedOrFailedLatch=new CountDownLatch(1);
-  final CountDownLatch txCompletedLatch=new CountDownLatch(1);
   executorService.execute(new Runnable(){
     @Override public void run(){
-      final OperationMessageHandlerProxy messageHandlerProxy=new OperationMessageHandlerProxy(getContext(),batchId);
-      final ProxyOperationControlProxy control=new ProxyOperationControlProxy(getContext(),batchId,preparedOrFailedLatch,txCompletedLatch);
+      final OperationMessageHandlerProxy messageHandlerProxy=new OperationMessageHandlerProxy(getContext(),executeRequestContext.getBatchId());
+      final ProxyOperationControlProxy control=new ProxyOperationControlProxy(executeRequestContext);
       final ModelNode result;
       try {
-        result=controller.execute(operation,messageHandlerProxy,control,new OperationAttachmentsProxy(getContext(),batchId,attachmentsLength));
+        result=controller.execute(operation,messageHandlerProxy,control,new OperationAttachmentsProxy(getContext(),executeRequestContext.getBatchId(),attachmentsLength));
       }
  catch (      Exception e) {
         final ModelNode failure=new ModelNode();
@@ -21,10 +19,11 @@
       }
  else {
         try {
-          txCompletedLatch.await();
+          executeRequestContext.awaitTxCompleted();
         }
  catch (        InterruptedException e) {
           Thread.currentThread().interrupt();
+          executeRequestContext.setError("Error waiting for Tx commit/rollback");
         }
         control.operationCompleted(result);
       }
@@ -32,7 +31,7 @@
   }
 );
   try {
-    preparedOrFailedLatch.await();
+    executeRequestContext.awaitPreparedOrFailed();
   }
  catch (  InterruptedException e) {
     Thread.currentThread().interrupt();
