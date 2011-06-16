@@ -3,12 +3,14 @@
   if (pushToServers) {
     ModelNode ourResult=domainOperationContext.getCoordinatorResult();
     if (ourResult.has(FAILURE_DESCRIPTION)) {
+      System.out.println("domain failed");
       pushToServers=false;
       domainOperationContext.setCompleteRollback(true);
     }
  else {
       for (      ModelNode hostResult : domainOperationContext.getHostControllerResults().values()) {
         if (!hostResult.hasDefined(OUTCOME) || !SUCCESS.equals(hostResult.get(OUTCOME))) {
+          System.out.println("host failed");
           pushToServers=false;
           domainOperationContext.setCompleteRollback(true);
           break;
@@ -16,27 +18,20 @@
       }
     }
   }
+ else   System.out.println("Complete rollback");
   if (pushToServers) {
     final Map<ServerIdentity,ProxyTask> tasks=new HashMap<ServerIdentity,ProxyTask>();
-    boolean interrupted=false;
     try {
       pushToServers(context,tasks);
       context.completeStep();
     }
   finally {
-      try {
-        boolean completeRollback=domainOperationContext.isCompleteRollback();
-        for (        Map.Entry<ServerIdentity,ProxyTask> entry : tasks.entrySet()) {
-          NewModelController.OperationTransaction tx=entry.getValue().getRemoteTransaction();
-          if (tx != null) {
-            boolean rollback=completeRollback || domainOperationContext.isServerGroupRollback(entry.getKey().getServerGroupName());
-            executorService.submit(new ProxyCommitRollbackTask(tx,rollback));
-          }
-        }
-      }
-  finally {
-        if (interrupted) {
-          Thread.currentThread().interrupt();
+      boolean completeRollback=domainOperationContext.isCompleteRollback();
+      for (      Map.Entry<ServerIdentity,ProxyTask> entry : tasks.entrySet()) {
+        NewModelController.OperationTransaction tx=entry.getValue().getRemoteTransaction();
+        if (tx != null) {
+          boolean rollback=completeRollback || domainOperationContext.isServerGroupRollback(entry.getKey().getServerGroupName());
+          executorService.submit(new ProxyCommitRollbackTask(tx,rollback));
         }
       }
     }
