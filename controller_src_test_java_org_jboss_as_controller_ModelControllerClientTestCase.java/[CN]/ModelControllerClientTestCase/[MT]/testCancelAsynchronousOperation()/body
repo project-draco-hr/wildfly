@@ -1,0 +1,45 @@
+{
+  ManagementChannel serverChannel=channels.getServerChannel();
+  ManagementChannel clientChannel=channels.getClientChannel();
+  clientChannel.startReceiving();
+  final CountDownLatch executeLatch=new CountDownLatch(1);
+  MockModelController controller=new MockModelController(){
+    @Override public ModelNode execute(    ModelNode operation,    OperationMessageHandler handler,    OperationTransactionControl control,    OperationAttachments attachments){
+      this.operation=operation;
+      executeLatch.countDown();
+      try {
+        Thread.sleep(10000000);
+        ModelNode result=new ModelNode();
+        result.get("testing").set(operation.get("test"));
+        return result;
+      }
+ catch (      InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(e);
+      }
+    }
+  }
+;
+  NewModelControllerClientOperationHandler operationHandler=new NewModelControllerClientOperationHandler(channels.getExecutorService(),controller);
+  serverChannel.setOperationHandler(operationHandler);
+  NewModelControllerClient client=NewModelControllerClient.Factory.create(channels.getClientChannel());
+  try {
+    clientChannel.setOperationHandler((ManagementOperationHandler)client);
+    ModelNode operation=new ModelNode();
+    operation.get("test").set("123");
+    final BlockingQueue<String> messages=new LinkedBlockingQueue<String>();
+    AsyncFuture<ModelNode> resultFuture=client.executeAsync(operation,new OperationMessageHandler(){
+      @Override public void handleReport(      MessageSeverity severity,      String message){
+        if (severity == MessageSeverity.INFO && message.startsWith("Test")) {
+          messages.add(message);
+        }
+      }
+    }
+);
+    executeLatch.await();
+    Assert.assertTrue(resultFuture.cancel(false));
+  }
+  finally {
+    IoUtils.safeClose(client);
+  }
+}
