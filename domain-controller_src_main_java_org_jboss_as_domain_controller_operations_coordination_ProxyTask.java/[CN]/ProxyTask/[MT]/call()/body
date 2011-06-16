@@ -18,12 +18,42 @@
   }
 ;
   proxyController.execute(operation,messageHandler,proxyControl,new DelegatingOperationAttachments(context));
+  NewModelController.OperationTransaction remoteTransaction=null;
   ModelNode result=finalResultRef.get();
   if (result != null) {
+    System.out.println("Received final result " + result + " from "+ host);
   }
  else {
     result=preparedResultRef.get();
+    System.out.println("Received prepared result " + result + " from "+ host);
     remoteTransaction=txRef.get();
   }
-  return result;
+synchronized (proxyResultRef) {
+    proxyResultRef.set(result);
+    proxyResultRef.notifyAll();
+  }
+  if (remoteTransaction != null) {
+    if (cancelRemoteTransaction) {
+      remoteTransaction.rollback();
+    }
+ else {
+synchronized (transactionAction) {
+        while (transactionAction.get() == null) {
+          try {
+            transactionAction.wait();
+          }
+ catch (          InterruptedException ie) {
+            transactionAction.set(Boolean.FALSE);
+          }
+        }
+        if (transactionAction.get().booleanValue()) {
+          remoteTransaction.commit();
+        }
+ else {
+          remoteTransaction.rollback();
+        }
+      }
+    }
+  }
+  return finalResultRef.get();
 }

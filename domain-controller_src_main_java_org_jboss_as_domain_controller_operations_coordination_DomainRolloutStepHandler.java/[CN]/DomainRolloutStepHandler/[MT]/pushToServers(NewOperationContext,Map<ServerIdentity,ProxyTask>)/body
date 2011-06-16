@@ -1,7 +1,8 @@
 {
+  final String localHostName=domainOperationContext.getLocalHostInfo().getLocalHostName();
   Map<String,ModelNode> hostResults=new HashMap<String,ModelNode>(domainOperationContext.getHostControllerResults());
   if (domainOperationContext.getCoordinatorResult().isDefined()) {
-    hostResults.put(domainOperationContext.getLocalHostInfo().getLocalHostName(),domainOperationContext.getCoordinatorResult());
+    hostResults.put(localHostName,domainOperationContext.getCoordinatorResult());
   }
   Map<String,Map<ServerIdentity,ModelNode>> opsByGroup=getOpsByGroup(hostResults);
   if (opsByGroup.size() > 0) {
@@ -10,22 +11,45 @@
     final NewServerOperationExecutor operationExecutor=new NewServerOperationExecutor(){
       @Override public ModelNode executeServerOperation(      ServerIdentity server,      ModelNode operation){
         NewProxyController proxy=hostProxies.get(server.getHostName());
+        if (proxy == null) {
+          if (localHostName.equals(server.getHostName())) {
+            proxy=serverProxies.get(server.getServerName());
+            if (proxy == null) {
+              System.out.println("No proxy for " + server);
+              return null;
+            }
+          }
+        }
         ProxyTask task=new ProxyTask(server.getHostName(),operation,context,proxy);
         tasks.put(server,task);
+        boolean interrupted=false;
+        Future<ModelNode> future=null;
+        ModelNode result=null;
         try {
-          return task.call();
+          future=executorService.submit(task);
+          result=task.getResult();
         }
- catch (        Exception e) {
-          ModelNode failure=new ModelNode();
-          failure.get(FAILURE_DESCRIPTION).set(String.format("Caught exception invoking operation %s against address %s on host %s -- %s",operation.require(OP),PathAddress.pathAddress(operation.get(OP_ADDR)),server.getHostName(),e));
-          return failure;
+ catch (        InterruptedException e) {
+          interrupted=true;
+          result=new ModelNode();
+          result.get(OUTCOME).set(FAILED);
+          result.get(FAILURE_DESCRIPTION).set(String.format("Interrupted waiting for result from server %s",server));
+          task.cancel();
+          future.cancel(true);
         }
+ finally {
+          if (interrupted) {
+            Thread.currentThread().interrupt();
+          }
+        }
+        return result;
       }
     }
 ;
     NewRolloutPlanController rolloutPlanController=new NewRolloutPlanController(opsByGroup,rolloutPlan,domainOperationContext,operationExecutor,executorService);
-    NewRolloutPlanController.Result result=rolloutPlanController.execute();
-    if (result == NewRolloutPlanController.Result.FAILED) {
+    NewRolloutPlanController.Result planResult=rolloutPlanController.execute();
+    System.out.println("Rollout plan result is " + planResult);
+    if (planResult == NewRolloutPlanController.Result.FAILED) {
       domainOperationContext.setCompleteRollback(true);
     }
   }

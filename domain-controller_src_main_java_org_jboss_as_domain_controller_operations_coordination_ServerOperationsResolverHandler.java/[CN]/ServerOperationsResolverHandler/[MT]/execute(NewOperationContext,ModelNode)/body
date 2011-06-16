@@ -1,26 +1,30 @@
 {
-  if (!response.has(FAILURE_DESCRIPTION)) {
-    final ModelNode domainModel=context.readModel(PathAddress.EMPTY_ADDRESS);
+  if (localResponse.has(FAILURE_DESCRIPTION)) {
+    context.getFailureDescription().set(localResponse.get(FAILURE_DESCRIPTION));
+  }
+ else {
+    final ModelNode domainModel=context.getModel();
     ParsedOp.ServerOperationProvider provider=new ParsedOp.ServerOperationProvider(){
       @Override public Map<Set<ServerIdentity>,ModelNode> getServerOperations(      ModelNode domainOp,      PathAddress address){
         return ServerOperationsResolverHandler.this.getServerOperations(domainOp,address,domainModel,domainModel.get(HOST).get(localHostName));
       }
     }
 ;
-    Map<Set<ServerIdentity>,ModelNode> serverOps=parsedOp.getServerOps(provider);
-    createOverallResult(serverOps);
-    if (recordResponse) {
-      if (response.has(RESULT)) {
-        context.getResult().set(response.get(RESULT));
-      }
-      if (response.has(FAILURE_DESCRIPTION)) {
-        context.getFailureDescription().set(response.get(FAILURE_DESCRIPTION));
-      }
+    ModelNode localResult=localResponse.get(RESULT);
+    localResponse.remove(RESULT);
+    ModelNode responseNode=recordResponse ? context.getResult() : localResponse.get(RESULT);
+    boolean ignored=(ModelType.STRING == localResult.getType() && IGNORED.equals(localResult.asString()));
+    if (ignored) {
+      responseNode.set(localResult);
     }
-    System.out.println("ServerOperationResolverHandler response is " + response);
-  }
- else   if (recordResponse) {
-    context.getFailureDescription().set(response.get(FAILURE_DESCRIPTION));
+ else {
+      Map<Set<ServerIdentity>,ModelNode> serverOps=parsedOp.getServerOps(provider);
+      createOverallResult(serverOps,localResult,responseNode);
+    }
+    System.out.println("ServerOperationResolverHandler responseNode is " + responseNode);
+    if (!recordResponse) {
+      System.out.println("ServerOperationResolverHandler localResponse is " + localResponse);
+    }
   }
   context.completeStep();
 }
