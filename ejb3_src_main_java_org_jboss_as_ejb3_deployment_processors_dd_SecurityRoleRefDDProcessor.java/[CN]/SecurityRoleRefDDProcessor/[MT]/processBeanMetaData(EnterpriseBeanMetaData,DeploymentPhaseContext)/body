@@ -1,16 +1,26 @@
 {
-  SecurityRoleRefsMetaData securityRoles=null;
+  SecurityRoleRefsMetaData securityRoleRefs=null;
   if (beanMetaData instanceof SessionBeanMetaData) {
-    securityRoles=((SessionBeanMetaData)beanMetaData).getSecurityRoleRefs();
+    securityRoleRefs=((SessionBeanMetaData)beanMetaData).getSecurityRoleRefs();
   }
  else   if (beanMetaData instanceof MessageDrivenBeanMetaData) {
     logger.warn("security-role-ref for message driven beans isn't yet implemented");
   }
-  if (securityRoles == null) {
+  if (securityRoleRefs == null) {
     return;
   }
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
   final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)moduleDescription.getComponentByName(beanMetaData.getEjbName());
-  ejbComponentDescription.setDeclaredRoles(securityRoles.keySet());
+  for (  final SecurityRoleRefMetaData securityRoleRef : securityRoleRefs) {
+    final String fromRole=securityRoleRef.getRoleName();
+    String toRole=securityRoleRef.getRoleLink();
+    if (fromRole == null || fromRole.trim().isEmpty()) {
+      throw new DeploymentUnitProcessingException("<role-name> cannot be null or empty in <security-role-ref> " + "for bean: " + ejbComponentDescription.getEJBName());
+    }
+    if (toRole == null) {
+      toRole=fromRole;
+    }
+    ejbComponentDescription.linkSecurityRoles(fromRole,toRole);
+  }
 }
