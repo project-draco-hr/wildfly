@@ -14,6 +14,7 @@
   final ComponentStartService startService=new ComponentStartService();
   final ServiceBuilder<Component> startBuilder=serviceTarget.addService(startServiceName,startService);
   final EEModuleConfiguration moduleConfiguration=deploymentUnit.getAttachment(Attachments.EE_MODULE_CONFIGURATION);
+  final IntHolder i=new IntHolder();
   if (moduleConfiguration == null) {
     return;
   }
@@ -40,18 +41,20 @@
     serviceTarget.addService(serviceName,viewService).addDependency(createServiceName,Component.class,viewService.getComponentInjector()).install();
     for (    BindingConfiguration bindingConfiguration : viewConfiguration.getBindingConfigurations()) {
       final String bindingName=bindingConfiguration.getName();
-      final BinderService service=new BinderService(bindingName);
-      ServiceBuilder<ManagedReferenceFactory> serviceBuilder=serviceTarget.addService(ContextNames.serviceNameOfContext(applicationName,moduleName,componentName,bindingName),service);
+      final ServiceName binderServiceName=ContextNames.serviceNameOfContext(applicationName,moduleName,componentName,bindingName);
+      final ServiceName namingStoreName=ContextNames.serviceNameOfNamingStore(applicationName,moduleName,componentName,bindingName);
+      final BindingHandleService service=new BindingHandleService(bindingName,binderServiceName,bindingConfiguration.getSource(),namingStoreName);
+      final ServiceName handleServiceName=binderServiceName.append(baseName).append(String.valueOf(i.value++));
+      ServiceBuilder<Void> serviceBuilder=serviceTarget.addService(handleServiceName,service);
       bindingConfiguration.getSource().getResourceValue(resolutionContext,serviceBuilder,phaseContext,service.getManagedObjectInjector());
-      serviceBuilder.addDependency(ContextNames.serviceNameOfNamingStore(applicationName,moduleName,componentName,bindingName),NamingStore.class,service.getNamingStoreInjector());
       serviceBuilder.install();
     }
   }
   if (configuration.getComponentDescription().getNamingMode() == ComponentNamingMode.CREATE) {
-    processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,configuration.getComponentDescription().getBindingConfigurations());
+    processBindings(phaseContext,configuration,serviceTarget,contextServiceName,baseName,resolutionContext,configuration.getComponentDescription().getBindingConfigurations(),i);
     new ClassDescriptionTraversal(configuration.getModuleClassConfiguration(),applicationDescription){
       @Override protected void handle(      final EEModuleClassConfiguration classConfiguration,      final EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
-        processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,classConfiguration.getBindingConfigurations());
+        processBindings(phaseContext,configuration,serviceTarget,contextServiceName,baseName,resolutionContext,classConfiguration.getBindingConfigurations(),i);
       }
     }
 .run();
@@ -60,7 +63,7 @@
       if (interceptorClass != null) {
         new ClassDescriptionTraversal(interceptorClass,applicationDescription){
           @Override protected void handle(          final EEModuleClassConfiguration classConfiguration,          final EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
-            processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,classConfiguration.getBindingConfigurations());
+            processBindings(phaseContext,configuration,serviceTarget,contextServiceName,baseName,resolutionContext,classConfiguration.getBindingConfigurations(),i);
           }
         }
 .run();

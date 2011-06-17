@@ -1,0 +1,26 @@
+{
+  final String bindingName=bindingConfiguration.getName().startsWith("java:") ? bindingConfiguration.getName() : "java:module/env/" + bindingConfiguration.getName();
+  if (bindingName != null) {
+    if (serviceName == null) {
+      throw new IllegalArgumentException("Invalid context name '" + bindingName + "' for binding");
+    }
+    final BindingHandleService service=new BindingHandleService(bindingName,serviceName,bindingConfiguration.getSource(),serviceName.getParent());
+    final ServiceName handleServiceName=serviceName.append(ownerName).append(String.valueOf(handleCount.value++));
+    ServiceBuilder<Void> sourceServiceBuilder=phaseContext.getServiceTarget().addService(handleServiceName,service);
+    InjectionSource.ResolutionContext resolutionContext=new InjectionSource.ResolutionContext(true,module.getModuleName(),module.getModuleName(),module.getApplicationName());
+    bindingConfiguration.getSource().getResourceValue(resolutionContext,sourceServiceBuilder,phaseContext,service.getManagedObjectInjector());
+    ServiceContainer container=sourceServiceBuilder.install().getServiceContainer();
+    try {
+      BinderService binder=new BinderService(bindingName,bindingConfiguration.getSource());
+      ServiceBuilder<ManagedReferenceFactory> builder=container.addService(serviceName,binder);
+      builder.addDependency(serviceName.getParent(),NamingStore.class,binder.getNamingStoreInjector());
+      bindingConfiguration.getSource().getResourceValue(resolutionContext,builder,phaseContext,binder.getManagedObjectInjector());
+      builder.install();
+    }
+ catch (    Exception e) {
+    }
+  }
+ else {
+    throw new DeploymentUnitProcessingException("Binding name must not be null: " + bindingConfiguration);
+  }
+}

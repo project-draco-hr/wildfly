@@ -5,23 +5,14 @@
   if (moduleConfiguration == null) {
     return;
   }
-  final Map<ServiceName,BindingConfiguration> existingBindings=new HashMap<ServiceName,BindingConfiguration>();
   final Map<ServiceName,BindingConfiguration> deploymentDescriptorBindings=new HashMap<ServiceName,BindingConfiguration>();
-  final Set<BindingConfiguration> bindingConfigurations=new HashSet<BindingConfiguration>(moduleConfiguration.getBindingConfigurations());
+  IntHolder moduleCount=new IntHolder();
+  final List<BindingConfiguration> bindingConfigurations=moduleConfiguration.getBindingConfigurations();
+  final ServiceName moduleOwnerName=deploymentUnit.getServiceName().append("module").append(moduleConfiguration.getApplicationName()).append(moduleConfiguration.getModuleName());
   for (  BindingConfiguration binding : bindingConfigurations) {
     final ServiceName serviceName=ContextNames.serviceNameOfEnvEntry(moduleConfiguration.getApplicationName(),moduleConfiguration.getModuleName(),null,false,binding.getName());
-    final BindingConfiguration existingConfiguration=existingBindings.get(serviceName);
-    if (existingConfiguration != null) {
-      if (!existingConfiguration.equalTo(binding,phaseContext)) {
-        throw new DeploymentUnitProcessingException("Bindings with the same name at " + binding.getName() + " "+ binding+ " and "+ existingConfiguration);
-      }
- else {
-        continue;
-      }
-    }
-    existingBindings.put(serviceName,binding);
     deploymentDescriptorBindings.put(serviceName,binding);
-    addJndiBinding(moduleConfiguration,binding,phaseContext,serviceName);
+    addJndiBinding(moduleConfiguration,binding,phaseContext,serviceName,moduleOwnerName,moduleCount);
   }
   for (  final ComponentConfiguration componentConfiguration : moduleConfiguration.getComponentConfigurations()) {
     for (    BindingConfiguration binding : componentConfiguration.getComponentDescription().getBindingConfigurations()) {
@@ -31,18 +22,8 @@
         continue;
       }
       final ServiceName serviceName=ContextNames.serviceNameOfEnvEntry(moduleConfiguration.getApplicationName(),moduleConfiguration.getModuleName(),null,false,binding.getName());
-      final BindingConfiguration existingConfiguration=existingBindings.get(serviceName);
-      if (existingConfiguration != null) {
-        if (!existingConfiguration.equalTo(binding,phaseContext)) {
-          throw new DeploymentUnitProcessingException("Bindings with the same name at " + binding.getName() + " "+ binding+ " and "+ existingConfiguration);
-        }
- else {
-          continue;
-        }
-      }
-      existingBindings.put(serviceName,binding);
       deploymentDescriptorBindings.put(serviceName,binding);
-      addJndiBinding(moduleConfiguration,binding,phaseContext,serviceName);
+      addJndiBinding(moduleConfiguration,binding,phaseContext,serviceName,moduleOwnerName,moduleCount);
     }
   }
   final Set<String> handledClasses=new HashSet<String>();
@@ -55,6 +36,6 @@
         classConfigurations.add(interceptorClass);
       }
     }
-    processClassConfigurations(phaseContext,applicationDescription,moduleConfiguration,existingBindings,deploymentDescriptorBindings,handledClasses,componentConfiguration.getComponentDescription().getNamingMode(),classConfigurations,componentConfiguration.getComponentName());
+    processClassConfigurations(phaseContext,applicationDescription,moduleConfiguration,deploymentDescriptorBindings,handledClasses,componentConfiguration.getComponentDescription().getNamingMode(),classConfigurations,componentConfiguration.getComponentName(),moduleOwnerName,moduleCount);
   }
 }
