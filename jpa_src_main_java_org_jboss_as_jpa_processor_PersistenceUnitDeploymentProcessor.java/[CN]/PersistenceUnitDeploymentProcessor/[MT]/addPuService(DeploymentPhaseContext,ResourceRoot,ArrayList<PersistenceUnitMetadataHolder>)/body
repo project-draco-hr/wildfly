@@ -11,7 +11,7 @@
         pu.setClassLoader(classLoader);
         pu.setTempClassloader(new TempClassLoader(classLoader));
         try {
-          PersistenceUnitService service=new PersistenceUnitService(pu,resourceRoot);
+          final PersistenceUnitService service=new PersistenceUnitService(pu);
           final Injector<TransactionManager> transactionManagerInjector=new Injector<TransactionManager>(){
             public void inject(            final TransactionManager value) throws InjectionException {
               TransactionUtil.setTransactionManager(value);
@@ -41,12 +41,24 @@
           final String jtaDataSource=adjustJndi(pu.getJtaDataSourceName());
           final String nonJtaDataSource=adjustJndi(pu.getNonJtaDataSourceName());
           if (jtaDataSource != null) {
-            builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(jtaDataSource),new CastingInjector<DataSource>(service.getJtaDataSourceInjector(),DataSource.class));
-            useDefaultDataSource=false;
+            if (jtaDataSource.startsWith("java:")) {
+              builder.addDependency(ContextNames.serviceNameOfContext(eeModuleDescription.getApplicationName(),eeModuleDescription.getModuleName(),eeModuleDescription.getModuleName(),jtaDataSource),ManagedReferenceFactory.class,new ManagedReferenceFactoryInjector(service.getJtaDataSourceInjector()));
+              useDefaultDataSource=false;
+            }
+ else {
+              builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(jtaDataSource),new CastingInjector<DataSource>(service.getJtaDataSourceInjector(),DataSource.class));
+              useDefaultDataSource=false;
+            }
           }
           if (nonJtaDataSource != null) {
-            builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(nonJtaDataSource),new CastingInjector<DataSource>(service.getNonJtaDataSourceInjector(),DataSource.class));
-            useDefaultDataSource=false;
+            if (nonJtaDataSource.startsWith("java:")) {
+              builder.addDependency(ContextNames.serviceNameOfContext(eeModuleDescription.getApplicationName(),eeModuleDescription.getModuleName(),eeModuleDescription.getModuleName(),nonJtaDataSource),ManagedReferenceFactory.class,new ManagedReferenceFactoryInjector(service.getNonJtaDataSourceInjector()));
+              useDefaultDataSource=false;
+            }
+ else {
+              builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(nonJtaDataSource),new CastingInjector<DataSource>(service.getNonJtaDataSourceInjector(),DataSource.class));
+              useDefaultDataSource=false;
+            }
           }
           if (useDefaultDataSource) {
             final String defaultJtaDataSource=adjustJndi(JPAService.getDefaultDataSourceName());
@@ -61,7 +73,7 @@
           }
           if (pu.getProperties().containsKey(JNDI_PROPERTY)) {
             String jndiName=pu.getProperties().get(JNDI_PROPERTY).toString();
-            final ServiceName bindingServiceName=ContextNames.serviceNameOfEnvEntry(eeModuleDescription.getApplicationName(),eeModuleDescription.getModuleName(),eeModuleDescription.getModuleName(),false,jndiName);
+            final ServiceName bindingServiceName=ContextNames.serviceNameOfContext(eeModuleDescription.getApplicationName(),eeModuleDescription.getModuleName(),eeModuleDescription.getModuleName(),jndiName);
             final BinderService binderService=new BinderService(jndiName);
             serviceTarget.addService(bindingServiceName,binderService).addDependency(ContextNames.serviceNameOfNamingStore(eeModuleDescription.getApplicationName(),eeModuleDescription.getModuleName(),eeModuleDescription.getModuleName(),jndiName),NamingStore.class,binderService.getNamingStoreInjector()).addDependency(serviceName,PersistenceUnitService.class,new Injector<PersistenceUnitService>(){
               @Override public void inject(              final PersistenceUnitService value) throws InjectionException {
