@@ -146,25 +146,25 @@
   }
 .run();
   final InterceptorFactory tcclInterceptor=new ImmediateInterceptorFactory(new TCCLInterceptor(module.getClassLoader()));
-  for (  InterceptorFactory injector : injectors) {
-    configuration.addPostConstructInterceptor(injector,InterceptorOrder.ComponentPostConstruct.RESOURCE_INJECTION_INTERCEPTORS);
+  if (!injectors.isEmpty()) {
+    configuration.addPostConstructInterceptor(weaved(injectors),InterceptorOrder.ComponentPostConstruct.RESOURCE_INJECTION_INTERCEPTORS);
   }
-  for (  InterceptorFactory instantiator : instantiators) {
-    configuration.addPostConstructInterceptor(instantiator,InterceptorOrder.ComponentPostConstruct.INSTANTIATION_INTERCEPTORS);
+  if (!instantiators.isEmpty()) {
+    configuration.addPostConstructInterceptor(weaved(instantiators),InterceptorOrder.ComponentPostConstruct.INSTANTIATION_INTERCEPTORS);
   }
-  for (  InterceptorFactory interceptor : userPostConstruct) {
-    configuration.addPostConstructInterceptor(interceptor,InterceptorOrder.ComponentPostConstruct.USER_INTERCEPTORS);
+  if (!userPostConstruct.isEmpty()) {
+    configuration.addPostConstructInterceptor(weaved(userPostConstruct),InterceptorOrder.ComponentPostConstruct.USER_INTERCEPTORS);
   }
   configuration.addPostConstructInterceptor(Interceptors.getTerminalInterceptorFactory(),InterceptorOrder.ComponentPostConstruct.TERMINAL_INTERCEPTOR);
   configuration.addPostConstructInterceptor(tcclInterceptor,InterceptorOrder.ComponentPostConstruct.TCCL_INTERCEPTOR);
-  for (  InterceptorFactory uninjector : uninjectors) {
-    configuration.addPreDestroyInterceptor(uninjector,InterceptorOrder.ComponentPreDestroy.UNINJECTION_INTERCEPTORS);
+  if (!uninjectors.isEmpty()) {
+    configuration.addPreDestroyInterceptor(weaved(uninjectors),InterceptorOrder.ComponentPreDestroy.UNINJECTION_INTERCEPTORS);
   }
-  for (  InterceptorFactory destructor : destructors) {
-    configuration.addPreDestroyInterceptor(destructor,InterceptorOrder.ComponentPreDestroy.DESTRUCTION_INTERCEPTORS);
+  if (!destructors.isEmpty()) {
+    configuration.addPreDestroyInterceptor(weaved(destructors),InterceptorOrder.ComponentPreDestroy.DESTRUCTION_INTERCEPTORS);
   }
-  for (  InterceptorFactory interceptor : userPreDestroy) {
-    configuration.addPreDestroyInterceptor(interceptor,InterceptorOrder.ComponentPreDestroy.USER_INTERCEPTORS);
+  if (!userPreDestroy.isEmpty()) {
+    configuration.addPreDestroyInterceptor(weaved(userPreDestroy),InterceptorOrder.ComponentPreDestroy.USER_INTERCEPTORS);
   }
   configuration.addPreDestroyInterceptor(Interceptors.getTerminalInterceptorFactory(),InterceptorOrder.ComponentPreDestroy.TERMINAL_INTERCEPTOR);
   configuration.addPreDestroyInterceptor(tcclInterceptor,InterceptorOrder.ComponentPreDestroy.TCCL_INTERCEPTOR);
@@ -175,14 +175,13 @@
     configuration.addComponentInterceptor(method,new ManagedReferenceMethodInterceptorFactory(instanceKey,method),InterceptorOrder.Component.TERMINAL_INTERCEPTOR);
     configuration.addComponentInterceptor(method,tcclInterceptor,InterceptorOrder.Component.TCCL_INTERCEPTOR);
     final MethodIdentifier identifier=MethodIdentifier.getIdentifier(method.getReturnType(),method.getName(),method.getParameterTypes());
+    final List<InterceptorFactory> userAroundInvokes=new ArrayList<InterceptorFactory>();
     if (!description.isExcludeDefaultInterceptors() && !description.isExcludeDefaultInterceptors(identifier)) {
       for (      InterceptorDescription interceptorDescription : description.getDefaultInterceptors()) {
         String interceptorClassName=interceptorDescription.getInterceptorClassName();
         List<InterceptorFactory> aroundInvokes=userAroundInvokesByInterceptorClass.get(interceptorClassName);
         if (aroundInvokes != null) {
-          for (          final InterceptorFactory factory : aroundInvokes) {
-            configuration.addComponentInterceptor(method,factory,InterceptorOrder.Component.USER_INTERCEPTORS);
-          }
+          userAroundInvokes.addAll(aroundInvokes);
         }
       }
     }
@@ -192,9 +191,7 @@
         List<InterceptorFactory> aroundInvokes=userAroundInvokesByInterceptorClass.get(interceptorClassName);
         if (aroundInvokes != null) {
           if (aroundInvokes != null) {
-            for (            final InterceptorFactory factory : aroundInvokes) {
-              configuration.addComponentInterceptor(method,factory,InterceptorOrder.Component.USER_INTERCEPTORS);
-            }
+            userAroundInvokes.addAll(aroundInvokes);
           }
         }
       }
@@ -206,17 +203,16 @@
         List<InterceptorFactory> aroundInvokes=userAroundInvokesByInterceptorClass.get(interceptorClassName);
         if (aroundInvokes != null) {
           if (aroundInvokes != null) {
-            for (            final InterceptorFactory factory : aroundInvokes) {
-              configuration.addComponentInterceptor(method,factory,InterceptorOrder.Component.USER_INTERCEPTORS);
-            }
+            userAroundInvokes.addAll(aroundInvokes);
           }
         }
       }
     }
     if (componentUserAroundInvoke != null) {
-      for (      final InterceptorFactory factory : componentUserAroundInvoke) {
-        configuration.addComponentInterceptor(method,factory,InterceptorOrder.Component.USER_INTERCEPTORS);
-      }
+      userAroundInvokes.addAll(componentUserAroundInvoke);
+    }
+    if (!userAroundInvokes.isEmpty()) {
+      configuration.addComponentInterceptor(method,weaved(userAroundInvokes),InterceptorOrder.Component.USER_INTERCEPTORS);
     }
   }
   for (  ViewDescription view : description.getViews()) {
