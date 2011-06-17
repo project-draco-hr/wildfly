@@ -1,0 +1,26 @@
+{
+  final Component component=context.getPrivateData(Component.class);
+  if (component instanceof EJBComponent == false) {
+    throw new IllegalStateException("Unexpected component type: " + component.getClass() + " expected: "+ EJBComponent.class);
+  }
+  final Method invokedMethod=context.getMethod();
+  final ComponentViewInstance componentViewInstance=context.getPrivateData(ComponentViewInstance.class);
+  if (componentViewInstance != null) {
+    final String viewClassOfInvokedMethod=componentViewInstance.getViewClass().getName();
+    if (!this.viewClassName.equals(viewClassOfInvokedMethod) || !this.viewMethod.equals(invokedMethod)) {
+      throw new IllegalStateException(this.getClass().getName() + " cannot handle method " + invokedMethod+ " of view class "+ viewClassOfInvokedMethod+ ".Expected view "+ "method to be "+ viewMethod+ " on view class "+ viewClassName);
+    }
+    final EJBComponent ejbComponent=(EJBComponent)component;
+    if (ejbMethodSecurityMetaData.isAccessDenied()) {
+      throw new EJBAccessException("Invocation on method: " + invokedMethod + " of bean: "+ ejbComponent.getComponentName()+ " is not allowed");
+    }
+    final Collection<String> allowedRoles=ejbMethodSecurityMetaData.getRolesAllowed();
+    if (!allowedRoles.isEmpty()) {
+      final SimpleSecurityManager securityManager=ejbComponent.getSecurityManager();
+      if (!securityManager.isCallerInRole(allowedRoles.toArray(new String[allowedRoles.size()]))) {
+        throw new EJBAccessException("Invocation on method: " + invokedMethod + " of bean: "+ ejbComponent.getComponentName()+ " is not allowed because caller is *not* in any of the "+ "allowed roles: "+ allowedRoles);
+      }
+    }
+  }
+  return context.proceed();
+}
