@@ -12,6 +12,24 @@
     }
     object=ctor.newInstance();
     setProperties(deploymentReflectionIndex,classIndex,object);
+    if (transactional) {
+      final ServiceController<?> syncController=phaseContext.getServiceRegistry().getService(JBOSS_TXN_SYNCHRONIZATION_REGISTRY);
+      final ServiceController<?> managerController=phaseContext.getServiceRegistry().getService(JBOSS_TXN_TRANSACTION_MANAGER);
+      if (syncController == null || managerController == null) {
+        logger.warn("Transactional datasource " + className + " will not be enlisted in the transaction as the transaction subsystem is not available");
+      }
+ else {
+        try {
+          TransactionSynchronizationRegistry transactionSynchronizationRegistry=(TransactionSynchronizationRegistry)syncController.getValue();
+          TransactionManager transactionManager=(TransactionManager)managerController.getValue();
+          ProxyFactory<?> proxyFactory=new ProxyFactory(clazz);
+          object=proxyFactory.newInstance(new DataSourceTransactionProxyHandler(object,transactionManager,transactionSynchronizationRegistry));
+        }
+ catch (        Exception e) {
+          logger.warn("Transactional datasource " + className + " could not be proxied and will not be enlisted in transactions automatically",e);
+        }
+      }
+    }
     injector.inject(new ValueManagedReferenceFactory(Values.immediateValue(object)));
   }
  catch (  Exception e) {
