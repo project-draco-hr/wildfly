@@ -1,0 +1,20 @@
+{
+  log.info("Activating JacORB Subsystem");
+  EnumSet<ORBInitializer> initializers=getORBInitializers(operation);
+  Properties props=new Properties();
+  getConfigurationProperties(operation,props);
+  CorbaORBService orbService=new CorbaORBService(initializers,props);
+  final ServiceBuilder<ORB> builder=context.getServiceTarget().addService(CorbaORBService.SERVICE_NAME,orbService);
+  builder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(JACORB_SOCKET_BINDING),SocketBinding.class,orbService.getJacORBSocketBindingInjector());
+  builder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(JACORB_SSL_SOCKET_BINDING),SocketBinding.class,orbService.getJacORBSSLSocketBindingInjector());
+  builder.addListener(verificationHandler);
+  newControllers.add(builder.setInitialMode(ServiceController.Mode.ACTIVE).install());
+  CorbaPOAService rootPOAService=new CorbaPOAService("RootPOA","poa");
+  newControllers.add(context.getServiceTarget().addService(CorbaPOAService.SERVICE_NAME.append("rootpoa"),rootPOAService).addDependency(CorbaORBService.SERVICE_NAME,ORB.class,rootPOAService.getORBInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+  CorbaPOAService irPOAService=new CorbaPOAService("IRPOA","irpoa",IdAssignmentPolicyValue.USER_ID,null,null,LifespanPolicyValue.PERSISTENT,null,null,null);
+  newControllers.add(context.getServiceTarget().addService(CorbaPOAService.SERVICE_NAME.append("irpoa"),irPOAService).addDependency(CorbaPOAService.SERVICE_NAME.append("rootpoa"),POA.class,irPOAService.getParentPOAInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+  CorbaPOAService namingPOAService=new CorbaPOAService("NamingPOA",null,IdAssignmentPolicyValue.USER_ID,null,null,LifespanPolicyValue.PERSISTENT,null,null,null);
+  newControllers.add(context.getServiceTarget().addService(CorbaPOAService.SERVICE_NAME.append("namingpoa"),namingPOAService).addDependency(CorbaPOAService.SERVICE_NAME.append("rootpoa"),POA.class,namingPOAService.getParentPOAInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+  CorbaNamingService namingService=new CorbaNamingService();
+  newControllers.add(context.getServiceTarget().addService(CorbaNamingService.SERVICE_NAME,namingService).addDependency(CorbaORBService.SERVICE_NAME,ORB.class,namingService.getORBInjector()).addDependency(CorbaPOAService.SERVICE_NAME.append("rootpoa"),POA.class,namingService.getRootPOAInjector()).addDependency(CorbaPOAService.SERVICE_NAME.append("namingpoa"),POA.class,namingService.getNamingPOAInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+}
