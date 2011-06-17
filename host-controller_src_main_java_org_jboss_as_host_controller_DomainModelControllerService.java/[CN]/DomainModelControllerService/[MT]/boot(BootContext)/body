@@ -2,8 +2,8 @@
   final ServiceTarget serviceTarget=context.getServiceTarget();
   try {
     super.boot(configurationPersister.load());
-    NetworkInterfaceBinding interfaceBinding=getNewtworkInterfaceBinding(hostControllerInfo);
-    Future<NewServerInventory> inventoryFuture=NewServerInventoryService.install(serviceTarget,this,environment,interfaceBinding,hostControllerInfo.getNativeManagementPort());
+    NetworkInterfaceBinding nativeManagementInterfaceBinding=getNativeManagementNetworkInterfaceBinding();
+    Future<NewServerInventory> inventoryFuture=NewServerInventoryService.install(serviceTarget,this,environment,nativeManagementInterfaceBinding,hostControllerInfo.getNativeManagementPort());
     RemotingServices.installRemotingEndpoint(serviceTarget);
     if (!hostControllerInfo.isMasterDomainController()) {
       serverInventory=getFuture(inventoryFuture);
@@ -17,10 +17,13 @@
       RemotingServices.installChannelServices(serviceTarget,new NewMasterDomainControllerOperationHandlerService(this,this),DomainModelControllerService.SERVICE_NAME,RemotingServices.DOMAIN_CHANNEL,null,null);
       serverInventory=getFuture(inventoryFuture);
     }
-    RemotingServices.installDomainConnectorServices(serviceTarget,interfaceBinding,hostControllerInfo.getNativeManagementPort());
+    RemotingServices.installDomainConnectorServices(serviceTarget,nativeManagementInterfaceBinding,hostControllerInfo.getNativeManagementPort());
     ServerToHostOperationHandlerFactoryService.install(serviceTarget,ServerInventoryService.SERVICE_NAME);
     RemotingServices.installChannelOpenListenerService(serviceTarget,RemotingServices.SERVER_CHANNEL,ServerToHostOperationHandlerFactoryService.SERVICE_NAME,null,null);
     RemotingServices.installChannelServices(serviceTarget,new NewModelControllerClientOperationHandlerFactoryService(),DomainModelControllerService.SERVICE_NAME,RemotingServices.MANAGEMENT_CHANNEL,null,null);
+    if (hostControllerInfo.getHttpManagementInterface() != null) {
+      installHttpManagementServices(serviceTarget);
+    }
     startServers();
   }
   finally {

@@ -1,0 +1,14 @@
+{
+  String interfaceName=hostControllerInfo.getHttpManagementInterface();
+  int port=hostControllerInfo.getHttpManagementPort();
+  int securePort=hostControllerInfo.getHttpManagementSecurePort();
+  String securityRealm=hostControllerInfo.getHttpManagementSecurityRealm();
+  Logger.getLogger("org.jboss.as").infof("creating http management service using network interface (%s) port (%s) securePort (%s)",interfaceName,port,securePort);
+  final ThreadFactory httpMgmtThreads=new JBossThreadFactory(new ThreadGroup("HttpManagementService-threads"),Boolean.FALSE,null,"%G - %t",null,null,AccessController.getContext());
+  final HttpManagementService service=new HttpManagementService();
+  ServiceBuilder builder=serviceTarget.addService(HttpManagementService.SERVICE_NAME,service).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(interfaceName),NetworkInterfaceBinding.class,service.getInterfaceInjector()).addDependency(SERVICE_NAME,NewModelController.class,service.getModelControllerInjector()).addInjection(service.getTempDirInjector(),environment.getDomainTempDir().getAbsolutePath()).addInjection(service.getPortInjector(),port).addInjection(service.getSecurePortInjector(),securePort).addInjection(service.getExecutorServiceInjector(),Executors.newCachedThreadPool(httpMgmtThreads));
+  if (securityRealm != null) {
+    builder.addDependency(SecurityRealmService.BASE_SERVICE_NAME.append(securityRealm),SecurityRealmService.class,service.getSecurityRealmInjector());
+  }
+  builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+}
