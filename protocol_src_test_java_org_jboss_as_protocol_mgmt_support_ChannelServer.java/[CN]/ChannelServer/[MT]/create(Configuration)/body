@@ -5,18 +5,11 @@
   configuration.validate();
   final Endpoint endpoint=Remoting.createEndpoint(configuration.getEndpointName(),configuration.getExecutor(),configuration.getOptionMap());
   final Xnio xnio=Xnio.getInstance();
-  final ReadChannelThread readChannelThread=xnio.createReadChannelThread();
-  final WriteChannelThread writeChannelThread=xnio.createWriteChannelThread();
-  final ConnectionChannelThread connectionChannelThread=xnio.createReadChannelThread();
-  final ChannelThreadPool<ReadChannelThread> readPool=ChannelThreadPools.singleton(readChannelThread);
-  final ChannelThreadPool<WriteChannelThread> writePool=ChannelThreadPools.singleton(writeChannelThread);
-  final ChannelThreadPool<ConnectionChannelThread> connectionPool=ChannelThreadPools.singleton(connectionChannelThread);
-  final Pool<ByteBuffer> bufferPool=Buffers.allocatedBufferPool(BufferAllocator.BYTE_BUFFER_ALLOCATOR,8192);
-  endpoint.addConnectionProvider(configuration.getUriScheme(),new RemoteConnectionProviderFactory(xnio,bufferPool,readPool,writePool,connectionPool));
+  endpoint.addConnectionProvider(configuration.getUriScheme(),new RemoteConnectionProviderFactory(xnio),OptionMap.create(Options.SSL_ENABLED,false));
   final NetworkServerProvider networkServerProvider=endpoint.getConnectionProviderInterface(configuration.getUriScheme(),NetworkServerProvider.class);
   SimpleServerAuthenticationProvider provider=new SimpleServerAuthenticationProvider();
   provider.addUser("bob",configuration.getEndpointName(),"pass".toCharArray());
-  ChannelListener<AcceptingChannel<ConnectedStreamChannel>> serverListener=networkServerProvider.getServerListener(OptionMap.create(Options.SASL_MECHANISMS,Sequence.of("DIGEST-MD5")),provider);
-  AcceptingChannel<? extends ConnectedStreamChannel> streamServer=xnio.createStreamServer(configuration.getBindAddress(),connectionChannelThread,serverListener,OptionMap.EMPTY);
-  return new ChannelServer(endpoint,streamServer,readChannelThread,writeChannelThread,connectionChannelThread);
+  System.out.println(configuration.getBindAddress());
+  AcceptingChannel<? extends ConnectedStreamChannel> streamServer=networkServerProvider.createServer(configuration.getBindAddress(),OptionMap.create(Options.SASL_MECHANISMS,Sequence.of("CRAM-MD5")),provider);
+  return new ChannelServer(endpoint,streamServer);
 }

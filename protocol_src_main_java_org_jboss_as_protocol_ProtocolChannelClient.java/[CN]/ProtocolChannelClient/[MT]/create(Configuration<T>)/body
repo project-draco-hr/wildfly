@@ -6,7 +6,7 @@
   final Endpoint endpoint;
   if (configuration.getEndpoint() != null) {
     endpoint=configuration.getEndpoint();
-    return new ProtocolChannelClient<T>(endpoint,configuration.getUri(),configuration.getChannelFactory());
+    return new ProtocolChannelClient<T>(false,endpoint,null,configuration.getUri(),configuration.getChannelFactory());
   }
  else {
     endpoint=Remoting.createEndpoint(configuration.getEndpointName(),configuration.getExecutor(),configuration.getOptionMap());
@@ -17,14 +17,7 @@
  catch (    ModuleLoadException e) {
       throw new RuntimeException(e);
     }
-    final ReadChannelThread readChannelThread=xnio.createReadChannelThread(configuration.getGroup(),OptionMap.EMPTY);
-    final WriteChannelThread writeChannelThread=xnio.createWriteChannelThread(configuration.getGroup(),OptionMap.EMPTY);
-    final ConnectionChannelThread connectionChannelThread=xnio.createReadChannelThread(configuration.getGroup(),OptionMap.EMPTY);
-    final ChannelThreadPool<ReadChannelThread> readPool=ChannelThreadPools.singleton(readChannelThread);
-    final ChannelThreadPool<WriteChannelThread> writePool=ChannelThreadPools.singleton(writeChannelThread);
-    final ChannelThreadPool<ConnectionChannelThread> connectionPool=ChannelThreadPools.singleton(connectionChannelThread);
-    final Pool<ByteBuffer> bufferPool=Buffers.allocatedBufferPool(BufferAllocator.BYTE_BUFFER_ALLOCATOR,8192);
-    endpoint.addConnectionProvider(configuration.getUri().getScheme(),new RemoteConnectionProviderFactory(xnio,bufferPool,readPool,writePool,connectionPool));
-    return new ProtocolChannelClient<T>(endpoint,configuration.getUri(),readChannelThread,writeChannelThread,connectionChannelThread,configuration.getChannelFactory());
+    Registration providerRegistration=endpoint.addConnectionProvider(configuration.getUri().getScheme(),new RemoteConnectionProviderFactory(xnio),OptionMap.create(Options.SSL_ENABLED,false));
+    return new ProtocolChannelClient<T>(true,endpoint,providerRegistration,configuration.getUri(),configuration.getChannelFactory());
   }
 }
