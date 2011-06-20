@@ -1,0 +1,29 @@
+{
+  final ServiceController<?> existingController=serviceContainer.getService(ServiceName.of("ModelController"));
+  if (existingController != null) {
+    final CountDownLatch latch=new CountDownLatch(1);
+    existingController.addListener(new AbstractServiceListener<Object>(){
+      public void listenerAdded(      ServiceController<?> serviceController){
+        serviceController.setMode(ServiceController.Mode.REMOVE);
+      }
+      public void transition(      ServiceController<?> serviceController,      ServiceController.Transition transition){
+        if (transition.equals(ServiceController.Transition.REMOVING_to_REMOVED)) {
+          latch.countDown();
+        }
+      }
+    }
+);
+    latch.await();
+  }
+  ServiceTarget target=serviceContainer.subTarget();
+  ControlledProcessState processState=new ControlledProcessState(true);
+  ModelControllerService svc=new ModelControllerService(processState,registration,model);
+  ServiceBuilder<NewModelController> builder=target.addService(ServiceName.of("ModelController"),svc);
+  builder.install();
+  svc.latch.await();
+  NewModelController controller=svc.getValue();
+  ModelNode setup=Util.getEmptyOperation("setup",new ModelNode());
+  controller.execute(setup,null,null,null);
+  processState.setRunning();
+  return controller;
+}
