@@ -1,0 +1,93 @@
+{
+  ExecutorService executor=Executors.newCachedThreadPool();
+  ChannelServer.Configuration serverConfig=new ChannelServer.Configuration();
+  serverConfig.setBindAddress(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),6999));
+  serverConfig.setEndpointName("Test");
+  serverConfig.setUriScheme("testing");
+  serverConfig.setExecutor(executor);
+  ChannelServer server=ChannelServer.create(serverConfig);
+  server.addChannelOpenListener("channel",new OpenListener(){
+    @Override public void registrationTerminated(){
+    }
+    @Override public void channelOpened(    Channel channel){
+      System.out.println("Opened channel");
+      final ManagementChannel protocolChannel=new ManagementChannelFactory(new ManagementOperationHandler(){
+        @Override public ManagementRequestHandler getRequestHandler(        byte id){
+          return new ManagementRequestHandler(){
+            int i;
+            @Override protected void readRequest(            DataInput input) throws IOException {
+              System.out.println("Reading request");
+              ProtocolUtils.expectHeader(input,11);
+              i=input.readInt();
+            }
+            @Override protected void writeResponse(            FlushableDataOutput output) throws IOException {
+              System.out.println("Writing response " + i);
+              output.write(22);
+              output.writeInt(i);
+            }
+          }
+;
+        }
+      }
+).create("channel",channel);
+      protocolChannel.startReceiving();
+      channel.addCloseHandler(new CloseHandler<Channel>(){
+        @Override public void handleClose(        Channel closed){
+          System.out.println("server close handler!!!");
+        }
+      }
+);
+    }
+  }
+);
+  try {
+    for (int i=0; i < 1000; i++) {
+      ProtocolChannelClient.Configuration<ManagementChannel> clientConfig=new ProtocolChannelClient.Configuration<ManagementChannel>();
+      clientConfig.setEndpointName("Test");
+      clientConfig.setExecutor(executor);
+      clientConfig.setUri(new URI("testing://127.0.0.1:6999"));
+      clientConfig.setUriScheme("testing");
+      clientConfig.setChannelFactory(new ManagementChannelFactory());
+      ProtocolChannelClient<ManagementChannel> client=ProtocolChannelClient.create(clientConfig);
+      final int val=i;
+      client.connect();
+      System.out.println("Opening channel");
+      final ManagementChannel clientChannel=client.openChannel("channel");
+      clientChannel.addCloseHandler(new CloseHandler<Channel>(){
+        @Override public void handleClose(        Channel closed){
+          System.out.println("client close handler");
+        }
+      }
+);
+      clientChannel.startReceiving();
+      try {
+        int result=new ManagementRequest<Integer>(){
+          @Override protected byte getRequestCode(){
+            return 66;
+          }
+          @Override protected void writeRequest(          int protocolVersion,          FlushableDataOutput output) throws IOException {
+            System.out.println("Writing request");
+            output.write(11);
+            output.writeInt(val);
+          }
+          protected Integer readResponse(          DataInput input) throws IOException {
+            System.out.println("Reading response");
+            ProtocolUtils.expectHeader(input,22);
+            return input.readInt();
+          }
+        }
+.executeForResult(executor,ManagementClientChannelStrategy.create(clientChannel));
+        Assert.assertEquals(val,result);
+      }
+  finally {
+        IoUtils.safeClose(client);
+      }
+    }
+  }
+  finally {
+    server.close();
+    executor.shutdown();
+    executor.awaitTermination(10,TimeUnit.SECONDS);
+    executor.shutdownNow();
+  }
+}
