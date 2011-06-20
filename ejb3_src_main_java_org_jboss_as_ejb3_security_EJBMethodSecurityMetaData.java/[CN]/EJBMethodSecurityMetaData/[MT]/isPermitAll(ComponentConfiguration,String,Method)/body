@@ -1,13 +1,24 @@
 {
   final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)componentConfiguration.getComponentDescription();
-  Collection<EJBMethodIdentifier> permitAllMethodsForView=ejbComponentDescription.getPermitAllMethodsForView(viewClassName);
-  if (permitAllMethodsForView == null) {
-    permitAllMethodsForView=Collections.emptySet();
-  }
   final Method componentMethod=this.findComponentMethod(componentConfiguration,viewMethod);
   final EJBMethodIdentifier ejbMethodIdentifier=EJBMethodIdentifier.fromMethod(componentMethod);
-  if (permitAllMethodsForView.contains(ejbMethodIdentifier)) {
+  final Set<String> rolesAllowed=ejbComponentDescription.getRolesAllowed(viewClassName,ejbMethodIdentifier);
+  final boolean methodMarkedForDenyAll=this.isMethodMarkedForDenyAll(ejbComponentDescription,viewClassName,ejbMethodIdentifier);
+  final boolean methodMarkedForPermitAll=this.isMethodMarkedForPermitAll(ejbComponentDescription,viewClassName,ejbMethodIdentifier);
+  if (methodMarkedForPermitAll) {
+    if (methodMarkedForDenyAll) {
+      throw new IllegalStateException("Method " + componentMethod + " for view "+ viewClassName+ " shouldn't be "+ "marked for both @PemitAll and @DenyAll at the same time");
+    }
+    if (!rolesAllowed.isEmpty()) {
+      throw new IllegalStateException("Method " + componentMethod + " for view "+ viewClassName+ " shouldn't be "+ "marked for both @RolesAllowed and @PermitAll at the same time");
+    }
     return true;
+  }
+  if (!rolesAllowed.isEmpty()) {
+    return false;
+  }
+  if (methodMarkedForPermitAll) {
+    return false;
   }
   final Class<?> declaringClass=componentMethod.getDeclaringClass();
   if (ejbComponentDescription.isPermitAllApplicableToClass(viewClassName,declaringClass.getName())) {
