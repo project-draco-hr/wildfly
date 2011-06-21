@@ -1,0 +1,12 @@
+{
+  final String interfaceName=subModel.require(ModelDescriptionConstants.INTERFACE).asString();
+  final int port=getIntValue(subModel,ModelDescriptionConstants.PORT);
+  final int securePort=getIntValue(subModel,ModelDescriptionConstants.SECURE_PORT);
+  final String securityRealm=subModel.hasDefined(SECURITY_REALM) ? subModel.get(SECURITY_REALM).asString() : null;
+  final HttpManagementService service=new HttpManagementService();
+  ServiceBuilder builder=serviceTarget.addService(HttpManagementService.SERVICE_NAME,service).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(interfaceName),NetworkInterfaceBinding.class,service.getInterfaceInjector()).addListener(handler).addDependency(Services.JBOSS_SERVER_CONTROLLER,ModelController.class,service.getModelControllerInjector()).addDependency(AbstractPathService.pathNameOf(ServerEnvironment.SERVER_TEMP_DIR),String.class,service.getTempDirInjector()).addInjection(service.getPortInjector(),port).addInjection(service.getSecurePortInjector(),securePort).addInjection(service.getExecutorServiceInjector(),Executors.newCachedThreadPool(new JBossThreadFactory(new ThreadGroup("HttpManagementService-threads"),Boolean.FALSE,null,"%G - %t",null,null,AccessController.getContext())));
+  if (securityRealm != null) {
+    builder.addDependency(SecurityRealmService.BASE_SERVICE_NAME.append(securityRealm),SecurityRealmService.class,service.getSecurityRealmInjector());
+  }
+  builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+}

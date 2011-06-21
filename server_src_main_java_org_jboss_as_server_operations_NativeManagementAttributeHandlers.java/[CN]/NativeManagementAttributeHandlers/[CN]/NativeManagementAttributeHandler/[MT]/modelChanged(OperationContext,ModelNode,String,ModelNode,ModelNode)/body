@@ -1,0 +1,28 @@
+{
+  final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
+  final ModelNode subModel=resource.getModel();
+  if (!newValue.equals(currentValue)) {
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      final OperationContext context,      final ModelNode operation) throws OperationFailedException {
+        final String interfaceName=subModel.require(ModelDescriptionConstants.INTERFACE).asString();
+        final int port=subModel.require(ModelDescriptionConstants.PORT).asInt();
+        context.removeService(RemotingServices.AUTHENTICATION_PROVIDER);
+        context.removeService(RemotingServices.OPTION_MAP);
+        context.removeService(RemotingServices.serverServiceName(RemotingServices.MANAGEMENT_CHANNEL,port));
+        final ServiceTarget serviceTarget=context.getServiceTarget();
+        final ServiceName interfaceSvcName=NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(interfaceName);
+        ServiceName realmSvcName=null;
+        if (subModel.hasDefined(SECURITY_REALM)) {
+          realmSvcName=SecurityRealmService.BASE_SERVICE_NAME.append(subModel.require(SECURITY_REALM).asString());
+        }
+        List<ServiceController<?>> list=new ArrayList<ServiceController<?>>();
+        final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+        RemotingServices.installStandaloneConnectorServices(serviceTarget,interfaceSvcName,port,realmSvcName,verificationHandler,list);
+        context.addStep(verificationHandler,OperationContext.Stage.VERIFY);
+        context.completeStep();
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}
