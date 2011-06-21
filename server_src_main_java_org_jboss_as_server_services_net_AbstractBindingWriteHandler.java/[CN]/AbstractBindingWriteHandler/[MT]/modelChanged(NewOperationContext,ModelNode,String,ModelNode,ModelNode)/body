@@ -13,17 +13,25 @@
           final ModelNode resolvedValue=newValue.isDefined() ? newValue.resolve() : newValue;
           final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
           final PathElement element=address.getLastElement();
-          final ServiceController<?> controller=context.getServiceRegistry(true).getRequiredService(SOCKET_BINDING.append(element.getValue()));
-          final SocketBinding binding=SocketBinding.class.cast(controller.getValue());
-          boolean mustRestart=binding.isBound();
-          if (mustRestart) {
+          final String bindingName=element.getValue();
+          final ModelNode bindingModel=context.readResource(PathAddress.EMPTY_ADDRESS).getModel();
+          final ServiceController<?> controller=context.getServiceRegistry(true).getRequiredService(SOCKET_BINDING.append(bindingName));
+          final SocketBinding binding=controller.getState() == ServiceController.State.UP ? SocketBinding.class.cast(controller.getValue()) : null;
+          final boolean bound=binding != null && binding.isBound();
+          if (binding == null) {
+            handleBindingReinstall(context,bindingName,bindingModel);
+          }
+ else           if (bound) {
             context.reloadRequired();
           }
  else {
             handleRuntimeChange(operation,attributeName,resolvedValue,binding);
           }
           if (context.completeStep() != NewOperationContext.ResultAction.KEEP) {
-            if (mustRestart) {
+            if (binding == null) {
+              revertBindingReinstall(context,bindingName,bindingModel,attributeName,currentValue);
+            }
+ else             if (bound) {
               context.revertReloadRequired();
             }
  else {
