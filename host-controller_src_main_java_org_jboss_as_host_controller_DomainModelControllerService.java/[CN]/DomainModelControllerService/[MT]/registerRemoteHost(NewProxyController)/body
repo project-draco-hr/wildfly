@@ -4,10 +4,16 @@
   }
   PathAddress pa=hostControllerClient.getProxyNodeAddress();
   PathElement pe=pa.getElement(0);
-  Logger.getLogger("org.jboss.domain").info("Registering host " + pe.getValue());
-  if (modelNodeRegistration.getProxyController(pa) != null || hostControllerInfo.getLocalHostName().equals(pe.getValue())) {
-    throw new IllegalArgumentException("There is already a registered host named '" + pe.getValue() + "'");
+  NewProxyController existingController=modelNodeRegistration.getProxyController(pa);
+  if (existingController != null || hostControllerInfo.getLocalHostName().equals(pe.getValue())) {
+    if ((existingController instanceof NewRemoteProxyController)) {
+      if (((NewRemoteProxyController)existingController).ping(3000)) {
+        throw new IllegalArgumentException("There is already a registered host named '" + pe.getValue() + "'");
+      }
+      unregisterRemoteHost(pe.getValue());
+    }
   }
   modelNodeRegistration.registerProxyController(pe,hostControllerClient);
   hostProxies.put(pe.getValue(),hostControllerClient);
+  Logger.getLogger("org.jboss.domain").info("Registered remote slave host " + pe.getValue());
 }
