@@ -3,11 +3,22 @@
   if (!JaxrsDeploymentMarker.isJaxrsDeployment(deploymentUnit)) {
     return;
   }
+  final DeploymentUnit parent=deploymentUnit.getParent() == null ? deploymentUnit : deploymentUnit.getParent();
+  ResteasyDeploymentData resteasyDeploymentData=new ResteasyDeploymentData();
   final WarMetaData warMetaData=deploymentUnit.getAttachment(WarMetaData.ATTACHMENT_KEY);
   final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
   final ServiceController<ModuleIndexService> serviceController=(ServiceController<ModuleIndexService>)phaseContext.getServiceRegistry().getRequiredService(Services.JBOSS_MODULE_INDEX_SERVICE);
   try {
-    scan(deploymentUnit,warMetaData.getMergedJBossWebMetaData(),module.getClassLoader(),serviceController.getValue());
+    if (warMetaData == null) {
+      resteasyDeploymentData.setScanAll(true);
+      scan(deploymentUnit,module.getClassLoader(),resteasyDeploymentData,serviceController.getValue(),false);
+      parent.addToAttachmentList(JaxrsAttachments.ADDITIONAL_RESTEASY_DEPLOYMENT_DATA,resteasyDeploymentData);
+    }
+ else {
+      scanWebDeployment(deploymentUnit,warMetaData.getMergedJBossWebMetaData(),module.getClassLoader(),resteasyDeploymentData);
+      scan(deploymentUnit,module.getClassLoader(),resteasyDeploymentData,serviceController.getValue(),true);
+    }
+    deploymentUnit.putAttachment(JaxrsAttachments.RESTEASY_DEPLOYMENT_DATA,resteasyDeploymentData);
   }
  catch (  ModuleLoadException e) {
     throw new DeploymentUnitProcessingException(e);
