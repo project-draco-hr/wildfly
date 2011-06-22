@@ -1,0 +1,150 @@
+{
+  String authenticationManagerClassName="default";
+  String callbackHandlerClassName="default";
+  String subjectFactoryClassName="default";
+  String authorizationManagerClassName="default";
+  String auditManagerClassName="default";
+  String identityTrustManagerClassName="default";
+  String mappingManagerClassName="default";
+  final ModelNode subModel=context.readModelForUpdate(PathAddress.EMPTY_ADDRESS);
+  Properties securityProperties=null;
+  final List<ModelNode> securityPropertiesList;
+  if (operation.hasDefined(SECURITY_PROPERTIES)) {
+    securityPropertiesList=operation.get(SECURITY_PROPERTIES).asList();
+    subModel.get(SECURITY_PROPERTIES).set(securityPropertiesList);
+    securityProperties=new Properties();
+    for (    ModelNode node : securityPropertiesList) {
+      Property prop=node.asProperty();
+      securityProperties.setProperty(prop.getName(),prop.getValue().asString());
+    }
+  }
+  if (operation.hasDefined(AUTHENTICATION_MANAGER_CLASS_NAME)) {
+    authenticationManagerClassName=operation.get(AUTHENTICATION_MANAGER_CLASS_NAME).asString();
+    subModel.get(AUTHENTICATION_MANAGER_CLASS_NAME).set(authenticationManagerClassName);
+  }
+  final boolean deepCopySubject;
+  if (operation.hasDefined(DEEP_COPY_SUBJECT_MODE)) {
+    deepCopySubject=operation.get(DEEP_COPY_SUBJECT_MODE).asBoolean();
+    subModel.get(DEEP_COPY_SUBJECT_MODE).set(deepCopySubject);
+  }
+ else {
+    deepCopySubject=DEFAULT_DEEP_COPY_OPERATION_MODE;
+  }
+  if (operation.hasDefined(DEFAULT_CALLBACK_HANDLER_CLASS_NAME)) {
+    callbackHandlerClassName=operation.get(DEFAULT_CALLBACK_HANDLER_CLASS_NAME).asString();
+    subModel.get(DEFAULT_CALLBACK_HANDLER_CLASS_NAME).set(callbackHandlerClassName);
+  }
+  if (operation.hasDefined(SUBJECT_FACTORY_CLASS_NAME)) {
+    subjectFactoryClassName=operation.get(SUBJECT_FACTORY_CLASS_NAME).asString();
+    subModel.get(SUBJECT_FACTORY_CLASS_NAME).set(subjectFactoryClassName);
+  }
+  if (operation.hasDefined(AUTHORIZATION_MANAGER_CLASS_NAME)) {
+    authorizationManagerClassName=operation.get(AUTHORIZATION_MANAGER_CLASS_NAME).asString();
+    subModel.get(AUTHORIZATION_MANAGER_CLASS_NAME).set(authorizationManagerClassName);
+  }
+  if (operation.hasDefined(AUDIT_MANAGER_CLASS_NAME)) {
+    auditManagerClassName=operation.get(AUDIT_MANAGER_CLASS_NAME).asString();
+    subModel.get(AUDIT_MANAGER_CLASS_NAME).set(auditManagerClassName);
+  }
+  if (operation.hasDefined(IDENTITY_TRUST_MANAGER_CLASS_NAME)) {
+    identityTrustManagerClassName=operation.get(IDENTITY_TRUST_MANAGER_CLASS_NAME).asString();
+    subModel.get(IDENTITY_TRUST_MANAGER_CLASS_NAME).set(identityTrustManagerClassName);
+  }
+  if (operation.hasDefined(MAPPING_MANAGER_CLASS_NAME)) {
+    mappingManagerClassName=operation.get(MAPPING_MANAGER_CLASS_NAME).asString();
+    subModel.get(MAPPING_MANAGER_CLASS_NAME).set(mappingManagerClassName);
+  }
+  subModel.get(SECURITY_DOMAIN).setEmptyObject();
+  final String resolvedAuthenticationManagerClassName;
+  if ("default".equals(authenticationManagerClassName)) {
+    resolvedAuthenticationManagerClassName=AUTHENTICATION_MANAGER;
+  }
+ else {
+    resolvedAuthenticationManagerClassName=authenticationManagerClassName;
+  }
+  final String resolvedCallbackHandlerClassName;
+  if ("default".equals(callbackHandlerClassName)) {
+    resolvedCallbackHandlerClassName=CALLBACK_HANDLER;
+  }
+ else {
+    resolvedCallbackHandlerClassName=callbackHandlerClassName;
+  }
+  final String resolvedAuthorizationManagerClassName;
+  if ("default".equals(authorizationManagerClassName)) {
+    resolvedAuthorizationManagerClassName=AUTHORIZATION_MANAGER;
+  }
+ else {
+    resolvedAuthorizationManagerClassName=authorizationManagerClassName;
+  }
+  final String resolvedAuditManagerClassName;
+  if ("default".equals(auditManagerClassName)) {
+    resolvedAuditManagerClassName=AUDIT_MANAGER;
+  }
+ else {
+    resolvedAuditManagerClassName=auditManagerClassName;
+  }
+  final String resolvedIdentityTrustManagerClassName;
+  if ("default".equals(identityTrustManagerClassName)) {
+    resolvedIdentityTrustManagerClassName=IDENTITY_TRUST_MANAGER;
+  }
+ else {
+    resolvedIdentityTrustManagerClassName=identityTrustManagerClassName;
+  }
+  final String resolvedMappingManagerClassName;
+  if ("default".equals(mappingManagerClassName)) {
+    resolvedMappingManagerClassName=MAPPING_MANAGER;
+  }
+ else {
+    resolvedMappingManagerClassName=mappingManagerClassName;
+  }
+  final String resolvedSubjectFactoryClassName;
+  if ("default".equals(subjectFactoryClassName)) {
+    resolvedSubjectFactoryClassName=SUBJECT_FACTORY;
+  }
+ else {
+    resolvedSubjectFactoryClassName=subjectFactoryClassName;
+  }
+  if (context.getType() == OperationContext.Type.SERVER) {
+    if (!context.isBooting()) {
+      context.reloadRequired();
+    }
+ else {
+      context.addStep(new AbstractDeploymentChainStep(){
+        protected void execute(        DeploymentProcessorTarget processorTarget){
+          processorTarget.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_MODULE,new SecurityDependencyProcessor());
+        }
+      }
+,OperationContext.Stage.RUNTIME);
+      final Properties securityPropertiesStr=securityProperties;
+      context.addStep(new OperationStepHandler(){
+        public void execute(        OperationContext context,        ModelNode operation){
+          final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+          log.info("Activating Security Subsystem");
+          final ServiceTarget target=context.getServiceTarget();
+          final SecurityBootstrapService bootstrapService=new SecurityBootstrapService();
+          if (securityPropertiesStr != null && !securityPropertiesStr.isEmpty())           bootstrapService.setSecurityProperties(securityPropertiesStr);
+          target.addService(SecurityBootstrapService.SERVICE_NAME,bootstrapService).setInitialMode(ServiceController.Mode.ACTIVE).install();
+          final SecurityDomainJndiInjectable securityDomainJndiInjectable=new SecurityDomainJndiInjectable();
+          final BinderService binderService=new BinderService("jaas");
+          target.addService(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append("jboss","jaas"),binderService).addInjection(binderService.getManagedObjectInjector(),securityDomainJndiInjectable).addDependency(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append("jboss"),NamingStore.class,binderService.getNamingStoreInjector()).addDependency(SecurityManagementService.SERVICE_NAME,ISecurityManagement.class,securityDomainJndiInjectable.getSecurityManagementInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+          final SecurityManagementService securityManagementService=new SecurityManagementService(resolvedAuthenticationManagerClassName,deepCopySubject,resolvedCallbackHandlerClassName,resolvedAuthorizationManagerClassName,resolvedAuditManagerClassName,resolvedIdentityTrustManagerClassName,resolvedMappingManagerClassName);
+          target.addService(SecurityManagementService.SERVICE_NAME,securityManagementService).setInitialMode(ServiceController.Mode.ACTIVE).install();
+          final SubjectFactoryService subjectFactoryService=new SubjectFactoryService(resolvedSubjectFactoryClassName);
+          target.addService(SubjectFactoryService.SERVICE_NAME,subjectFactoryService).addDependency(SecurityManagementService.SERVICE_NAME,ISecurityManagement.class,subjectFactoryService.getSecurityManagementInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+          Configuration loginConfig=XMLLoginConfigImpl.getInstance();
+          final JaasConfigurationService jaasConfigurationService=new JaasConfigurationService(loginConfig);
+          target.addService(JaasConfigurationService.SERVICE_NAME,jaasConfigurationService).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install();
+          target.addService(SimpleSecurityManagerService.SERVICE_NAME,new SimpleSecurityManagerService()).addListener(verificationHandler).install();
+          context.addStep(verificationHandler,OperationContext.Stage.VERIFY);
+          if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
+            context.removeService(JaasConfigurationService.SERVICE_NAME);
+          }
+        }
+      }
+,OperationContext.Stage.RUNTIME);
+    }
+  }
+  if (context.completeStep() != OperationContext.ResultAction.KEEP && context.getType() == OperationContext.Type.SERVER && !context.isBooting()) {
+    context.revertReloadRequired();
+  }
+}

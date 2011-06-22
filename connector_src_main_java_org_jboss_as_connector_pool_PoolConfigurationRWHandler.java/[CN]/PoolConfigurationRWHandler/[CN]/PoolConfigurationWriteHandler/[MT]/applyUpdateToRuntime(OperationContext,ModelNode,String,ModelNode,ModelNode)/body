@@ -1,0 +1,27 @@
+{
+  if (context.getType() == OperationContext.Type.SERVER) {
+    context.addStep(new OperationStepHandler(){
+      public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+        final String jndiName=address.getLastElement().getValue();
+        final ServiceController<?> managementRepoService=context.getServiceRegistry(false).getService(ConnectorServices.MANAGEMENT_REPOSISTORY_SERVICE);
+        List<PoolConfiguration> poolConfigs=null;
+        if (managementRepoService != null) {
+          try {
+            final ManagementRepository repository=(ManagementRepository)managementRepoService.getValue();
+            poolConfigs=getMatchingPoolConfigs(jndiName,repository);
+            updatePoolConfigs(poolConfigs,parameterName,newValue);
+          }
+ catch (          Exception e) {
+            throw new OperationFailedException(new ModelNode().set("failed to set attribute" + e.getMessage()));
+          }
+        }
+        if (context.completeStep() == OperationContext.ResultAction.ROLLBACK && poolConfigs != null) {
+          updatePoolConfigs(poolConfigs,parameterName,currentValue);
+        }
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  return (IDLETIMEOUTMINUTES.equals(parameterName) || BACKGROUNDVALIDATION.equals(parameterName) || BACKGROUNDVALIDATIONMINUTES.equals(parameterName)|| POOL_PREFILL.equals(parameterName));
+}

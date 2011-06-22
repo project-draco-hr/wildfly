@@ -1,0 +1,31 @@
+{
+  String name=operation.require("name").asString();
+  ModelNode attr=context.readModelForUpdate(PathAddress.EMPTY_ADDRESS).get(name);
+  final int current=attr.asInt();
+  attr.set(operation.require("value"));
+  context.addStep(new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation){
+      context.getResult().set(current);
+      Service<Void> bad=new Service<Void>(){
+        @Override public Void getValue() throws IllegalStateException, IllegalArgumentException {
+          return null;
+        }
+        @Override public void start(        StartContext context) throws StartException {
+          throw new RuntimeException("Bad service!");
+        }
+        @Override public void stop(        StopContext context){
+        }
+      }
+;
+      ServiceName svcName=ServiceName.JBOSS.append("bad-service");
+      ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+      context.getServiceTarget().addService(svcName,bad).addListener(verificationHandler).install();
+      context.addStep(verificationHandler,OperationContext.Stage.VERIFY);
+      if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
+        context.removeService(svcName);
+      }
+    }
+  }
+,OperationContext.Stage.RUNTIME);
+  context.completeStep();
+}

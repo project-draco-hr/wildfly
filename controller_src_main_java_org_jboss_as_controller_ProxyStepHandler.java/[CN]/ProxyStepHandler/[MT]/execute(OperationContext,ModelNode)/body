@@ -1,0 +1,43 @@
+{
+  OperationMessageHandler messageHandler=new DelegatingMessageHandler(context);
+  final AtomicReference<ModelController.OperationTransaction> txRef=new AtomicReference<ModelController.OperationTransaction>();
+  final AtomicReference<ModelNode> preparedResultRef=new AtomicReference<ModelNode>();
+  final AtomicReference<ModelNode> finalResultRef=new AtomicReference<ModelNode>();
+  final ProxyController.ProxyOperationControl proxyControl=new ProxyController.ProxyOperationControl(){
+    @Override public void operationPrepared(    ModelController.OperationTransaction transaction,    ModelNode result){
+      txRef.set(transaction);
+      preparedResultRef.set(result);
+    }
+    @Override public void operationFailed(    ModelNode response){
+      finalResultRef.set(response);
+    }
+    @Override public void operationCompleted(    ModelNode response){
+      finalResultRef.set(response);
+    }
+  }
+;
+  proxyController.execute(operation,messageHandler,proxyControl,new DelegatingOperationAttachments(context));
+  ModelNode finalResult=finalResultRef.get();
+  if (finalResult != null) {
+    context.getResult().set(finalResult.get(RESULT));
+    context.getFailureDescription().set(finalResult.get(FAILURE_DESCRIPTION));
+    context.completeStep();
+  }
+ else {
+    ModelNode preparedResult=preparedResultRef.get();
+    context.getResult().set(preparedResult.get(RESULT));
+    if (preparedResult.hasDefined(FAILURE_DESCRIPTION)) {
+      context.getFailureDescription().set(preparedResult.get(FAILURE_DESCRIPTION));
+    }
+    OperationContext.ResultAction resultAction=context.completeStep();
+    ModelController.OperationTransaction tx=txRef.get();
+    if (tx != null) {
+      if (resultAction == OperationContext.ResultAction.KEEP) {
+        tx.commit();
+      }
+ else {
+        tx.rollback();
+      }
+    }
+  }
+}

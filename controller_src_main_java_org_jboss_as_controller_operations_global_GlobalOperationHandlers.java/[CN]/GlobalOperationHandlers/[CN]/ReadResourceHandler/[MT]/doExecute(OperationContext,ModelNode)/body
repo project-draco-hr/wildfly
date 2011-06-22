@@ -1,0 +1,102 @@
+{
+  validator.validate(operation);
+  final String opName=operation.require(OP).asString();
+  final ModelNode opAddr=operation.get(OP_ADDR);
+  final PathAddress address=PathAddress.pathAddress(opAddr);
+  final boolean recursive=operation.get(RECURSIVE).asBoolean(false);
+  final boolean queryRuntime=!recursive && operation.get(INCLUDE_RUNTIME).asBoolean(false);
+  final boolean proxies=operation.get(PROXIES).asBoolean(false);
+  final Map<String,ModelNode> directAttributes=new HashMap<String,ModelNode>();
+  final Map<String,ModelNode> directChildren=new HashMap<String,ModelNode>();
+  final Map<String,ModelNode> metrics=queryRuntime ? new HashMap<String,ModelNode>() : Collections.<String,ModelNode>emptyMap();
+  final Map<String,ModelNode> otherAttributes=new HashMap<String,ModelNode>();
+  final Map<PathElement,ModelNode> childResources=recursive ? new HashMap<PathElement,ModelNode>() : Collections.<PathElement,ModelNode>emptyMap();
+  final ReadResourceAssemblyHandler assemblyHandler=new ReadResourceAssemblyHandler(directAttributes,metrics,otherAttributes,directChildren,childResources);
+  context.addStep(assemblyHandler,OperationContext.Stage.IMMEDIATE);
+  final ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
+  final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
+  final ModelNode model=resource.getModel();
+  final Map<String,Set<String>> childrenByType=registry != null ? getChildAddresses(registry,resource,null) : Collections.<String,Set<String>>emptyMap();
+  if (model.isDefined()) {
+    for (    String key : model.keys()) {
+      if (!childrenByType.containsKey(key)) {
+        directAttributes.put(key,model.get(key));
+      }
+    }
+  }
+  for (  Map.Entry<String,Set<String>> entry : childrenByType.entrySet()) {
+    String childType=entry.getKey();
+    Set<String> children=entry.getValue();
+    if (children.isEmpty()) {
+      directAttributes.put(childType,new ModelNode());
+    }
+ else {
+      for (      String child : children) {
+        boolean storeDirect=!recursive;
+        if (recursive) {
+          PathElement childPE=PathElement.pathElement(childType,child);
+          PathAddress relativeAddr=PathAddress.pathAddress(childPE);
+          ImmutableManagementResourceRegistration childReg=registry.getSubModel(relativeAddr);
+          if (childReg == null) {
+            throw new OperationFailedException(new ModelNode().set(String.format("no child registry for (%s, %s)",childType,child)));
+          }
+          if (childReg.isRuntimeOnly() && (!proxies || !childReg.isRemote())) {
+            storeDirect=true;
+          }
+ else {
+            ModelNode rrOp=new ModelNode();
+            rrOp.get(OP).set(opName);
+            rrOp.get(OP_ADDR).set(PathAddress.pathAddress(address,childPE).toModelNode());
+            rrOp.get(RECURSIVE).set(true);
+            rrOp.get(PROXIES).set(proxies);
+            rrOp.get(INCLUDE_RUNTIME).set(queryRuntime);
+            ModelNode rrRsp=new ModelNode();
+            childResources.put(childPE,rrRsp);
+            OperationStepHandler rrHandler=childReg.getOperationHandler(relativeAddr,opName);
+            context.addStep(rrRsp,rrOp,rrHandler,OperationContext.Stage.IMMEDIATE);
+          }
+        }
+        if (storeDirect) {
+          ModelNode childMap=directChildren.get(childType);
+          if (childMap == null) {
+            childMap=new ModelNode();
+            childMap.setEmptyObject();
+            directChildren.put(childType,childMap);
+          }
+          childMap.get(child);
+        }
+      }
+    }
+  }
+  final Set<String> attributeNames=registry != null ? registry.getAttributeNames(PathAddress.EMPTY_ADDRESS) : Collections.<String>emptySet();
+  for (  final String attributeName : attributeNames) {
+    final AttributeAccess access=registry.getAttributeAccess(PathAddress.EMPTY_ADDRESS,attributeName);
+    if (access == null) {
+      continue;
+    }
+ else {
+      final AttributeAccess.Storage storage=access.getStorageType();
+      if (!queryRuntime && storage != AttributeAccess.Storage.CONFIGURATION) {
+        continue;
+      }
+      final AccessType type=access.getAccessType();
+      final OperationStepHandler handler=access.getReadHandler();
+      if (handler != null) {
+        directAttributes.remove(attributeName);
+        final ModelNode attributeOperation=new ModelNode();
+        attributeOperation.get(OP_ADDR).set(opAddr);
+        attributeOperation.get(OP).set(READ_ATTRIBUTE_OPERATION);
+        attributeOperation.get(NAME).set(attributeName);
+        final ModelNode attrResponse=new ModelNode();
+        if (type == AccessType.METRIC) {
+          metrics.put(attributeName,attrResponse);
+        }
+ else {
+          otherAttributes.put(attributeName,attrResponse);
+        }
+        context.addStep(attrResponse,attributeOperation,handler,OperationContext.Stage.IMMEDIATE);
+      }
+    }
+  }
+  context.completeStep();
+}

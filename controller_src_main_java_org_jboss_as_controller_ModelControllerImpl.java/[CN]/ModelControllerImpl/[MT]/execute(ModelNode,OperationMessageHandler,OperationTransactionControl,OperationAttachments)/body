@@ -1,0 +1,25 @@
+{
+  final ModelNode headers=operation.has(OPERATION_HEADERS) ? operation.get(OPERATION_HEADERS) : null;
+  final boolean rollbackOnFailure=headers == null || !headers.hasDefined(ROLLBACK_ON_RUNTIME_FAILURE) || headers.get(ROLLBACK_ON_RUNTIME_FAILURE).asBoolean();
+  final EnumSet<OperationContextImpl.ContextFlag> contextFlags=rollbackOnFailure ? EnumSet.of(OperationContextImpl.ContextFlag.ROLLBACK_ON_FAIL) : EnumSet.noneOf(OperationContextImpl.ContextFlag.class);
+  OperationContextImpl context=new OperationContextImpl(this,controllerType,contextFlags,handler,attachments,model,control,processState,bootingFlag.get());
+  ModelNode response=new ModelNode();
+  context.addStep(response,operation,prepareStep,OperationContext.Stage.MODEL);
+  RB_ON_RT_FAILURE.set(Boolean.valueOf(rollbackOnFailure));
+  try {
+    context.completeStep();
+  }
+  finally {
+    RB_ON_RT_FAILURE.set(null);
+  }
+  ControlledProcessState.State state=processState.getState();
+switch (state) {
+case RELOAD_REQUIRED:
+case RESTART_REQUIRED:
+    response.get(RESPONSE_HEADERS,PROCESS_STATE).set(state.toString());
+  break;
+default :
+break;
+}
+return response;
+}

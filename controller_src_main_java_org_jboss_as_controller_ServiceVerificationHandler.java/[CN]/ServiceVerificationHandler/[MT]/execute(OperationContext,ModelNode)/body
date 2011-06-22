@@ -1,0 +1,37 @@
+{
+  while (outstanding > 0) {
+    try {
+      wait();
+    }
+ catch (    InterruptedException e) {
+      Thread.currentThread().interrupt();
+      context.getFailureDescription().set("Operation cancelled");
+      context.completeStep();
+      return;
+    }
+  }
+  if (!failed.isEmpty() || !problem.isEmpty()) {
+    final ModelNode failureDescription=context.getFailureDescription();
+    ModelNode failedList=null;
+    for (    ServiceController<?> controller : failed) {
+      if (failedList == null) {
+        failedList=failureDescription.get("Failed services");
+      }
+      failedList.get(controller.getName().getCanonicalName()).set(controller.getStartException().toString());
+    }
+    ModelNode problemList=null;
+    for (    ServiceController<?> controller : problem) {
+      if (problemList == null) {
+        problemList=failureDescription.get("Services with missing/unavailable dependencies");
+      }
+      problemList.add(controller.getName().getCanonicalName());
+    }
+    if (ModelControllerImpl.RB_ON_RT_FAILURE.get() == Boolean.TRUE) {
+      context.setRollbackOnly();
+    }
+  }
+  for (  ServiceController<?> controller : set) {
+    controller.removeListener(this);
+  }
+  context.completeStep();
+}

@@ -1,0 +1,59 @@
+{
+  return new ModelControllerClient(){
+    @Override public void close() throws IOException {
+    }
+    @Override public ModelNode execute(    ModelNode operation) throws IOException {
+      return execute(operation,null);
+    }
+    @Override public ModelNode execute(    Operation operation) throws IOException {
+      return execute(operation,null);
+    }
+    @Override public ModelNode execute(    final ModelNode operation,    final OperationMessageHandler messageHandler){
+      return ModelControllerImpl.this.execute(operation,messageHandler,OperationTransactionControl.COMMIT,null);
+    }
+    @Override public ModelNode execute(    Operation operation,    OperationMessageHandler messageHandler) throws IOException {
+      return ModelControllerImpl.this.execute(operation.getOperation(),messageHandler,OperationTransactionControl.COMMIT,operation);
+    }
+    @Override public AsyncFuture<ModelNode> executeAsync(    ModelNode operation,    OperationMessageHandler messageHandler){
+      return executeAsync(operation,messageHandler,null);
+    }
+    @Override public AsyncFuture<ModelNode> executeAsync(    final Operation operation,    final OperationMessageHandler messageHandler){
+      return executeAsync(operation.getOperation(),messageHandler,operation);
+    }
+    private AsyncFuture<ModelNode> executeAsync(    final ModelNode operation,    final OperationMessageHandler messageHandler,    final OperationAttachments attachments){
+      if (executor == null) {
+        throw new IllegalStateException("Cannot execute asynchronous operation without an executor");
+      }
+      final AtomicReference<Thread> opThread=new AtomicReference<Thread>();
+class OpTask extends AsyncFutureTask<ModelNode> {
+        OpTask(){
+          super(executor);
+        }
+        public void asyncCancel(        final boolean interruptionDesired){
+          Thread thread=opThread.get();
+          if (thread != null) {
+            thread.interrupt();
+          }
+        }
+        void handleResult(        final ModelNode result){
+          setResult(result);
+        }
+      }
+      final OpTask opTask=new OpTask();
+      executor.execute(new Runnable(){
+        public void run(){
+          opThread.set(Thread.currentThread());
+          try {
+            opTask.handleResult(ModelControllerImpl.this.execute(operation,messageHandler,OperationTransactionControl.COMMIT,attachments));
+          }
+  finally {
+            opThread.set(null);
+          }
+        }
+      }
+);
+      return opTask;
+    }
+  }
+;
+}

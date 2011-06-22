@@ -1,0 +1,32 @@
+{
+  final ModelNode subModel=context.readModelForUpdate(PathAddress.EMPTY_ADDRESS);
+  populateModel(operation,subModel);
+  final ModelNode address=operation.require(OP_ADDR);
+  final String archive=PathAddress.pathAddress(address).getLastElement().getValue();
+  operation.get(ARCHIVE).set(archive);
+  if (context.getType() == OperationContext.Type.SERVER) {
+    context.addStep(new OperationStepHandler(){
+      public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        final ServiceTarget serviceTarget=context.getServiceTarget();
+        final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+        ModifiableResourceAdaptors resourceAdapters=buildResourceAdaptersObject(operation);
+        final ServiceController<?> raService=context.getServiceRegistry(false).getService(ConnectorServices.RESOURCEADAPTERS_SERVICE);
+        ServiceController<?> controller=null;
+        if (raService == null) {
+          controller=serviceTarget.addService(ConnectorServices.RESOURCEADAPTERS_SERVICE,new ResourceAdaptersService(resourceAdapters)).setInitialMode(Mode.ACTIVE).addListener(verificationHandler).install();
+        }
+ else {
+          ((ModifiableResourceAdaptors)raService.getValue()).addAllResourceAdapters(resourceAdapters.getResourceAdapters());
+        }
+        context.addStep(verificationHandler,OperationContext.Stage.VERIFY);
+        if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
+          if (controller != null) {
+            context.removeService(ConnectorServices.RESOURCEADAPTERS_SERVICE);
+          }
+        }
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}

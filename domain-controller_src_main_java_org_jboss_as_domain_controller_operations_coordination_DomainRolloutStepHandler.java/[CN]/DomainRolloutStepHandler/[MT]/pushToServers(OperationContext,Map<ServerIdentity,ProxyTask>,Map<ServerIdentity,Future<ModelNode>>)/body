@@ -1,0 +1,66 @@
+{
+  final String localHostName=domainOperationContext.getLocalHostInfo().getLocalHostName();
+  Map<String,ModelNode> hostResults=new HashMap<String,ModelNode>(domainOperationContext.getHostControllerResults());
+  if (domainOperationContext.getCoordinatorResult().isDefined()) {
+    hostResults.put(localHostName,domainOperationContext.getCoordinatorResult());
+  }
+  Map<String,Map<ServerIdentity,ModelNode>> opsByGroup=getOpsByGroup(hostResults);
+  if (opsByGroup.size() > 0) {
+    final ModelNode rolloutPlan=getRolloutPlan(this.providedRolloutPlan,opsByGroup);
+    if (trace) {
+      PrepareStepHandler.log.trace("Rollout plan is " + rolloutPlan);
+    }
+    final NewServerOperationExecutor operationExecutor=new NewServerOperationExecutor(){
+      @Override public ModelNode executeServerOperation(      ServerIdentity server,      ModelNode operation){
+        ProxyController proxy=hostProxies.get(server.getHostName());
+        if (proxy == null) {
+          if (localHostName.equals(server.getHostName())) {
+            proxy=serverProxies.get(server.getServerName());
+            if (proxy == null) {
+              if (trace) {
+                PrepareStepHandler.log.trace("No proxy for " + server);
+              }
+              return null;
+            }
+          }
+        }
+        ProxyTask task=new ProxyTask(server.getHostName(),operation,context,proxy);
+        tasks.put(server,task);
+        boolean interrupted=false;
+        Future<ModelNode> future=null;
+        ModelNode result=null;
+        try {
+          future=executorService.submit(task);
+          result=task.getUncommittedResult();
+          futures.put(server,future);
+        }
+ catch (        InterruptedException e) {
+          interrupted=true;
+          result=new ModelNode();
+          result.get(OUTCOME).set(FAILED);
+          result.get(FAILURE_DESCRIPTION).set(String.format("Interrupted waiting for result from server %s",server));
+          task.cancel();
+          future.cancel(true);
+        }
+ finally {
+          if (interrupted) {
+            Thread.currentThread().interrupt();
+          }
+        }
+        return result;
+      }
+    }
+;
+    NewRolloutPlanController rolloutPlanController=new NewRolloutPlanController(opsByGroup,rolloutPlan,domainOperationContext,operationExecutor,executorService);
+    NewRolloutPlanController.Result planResult=rolloutPlanController.execute();
+    if (trace) {
+      PrepareStepHandler.log.trace("Rollout plan result is " + planResult);
+    }
+    if (planResult == NewRolloutPlanController.Result.FAILED) {
+      domainOperationContext.setCompleteRollback(true);
+      context.getResult();
+      context.getFailureDescription().set("Operation failed or was rolled back on all servers.");
+      domainOperationContext.setFailureReported(true);
+    }
+  }
+}

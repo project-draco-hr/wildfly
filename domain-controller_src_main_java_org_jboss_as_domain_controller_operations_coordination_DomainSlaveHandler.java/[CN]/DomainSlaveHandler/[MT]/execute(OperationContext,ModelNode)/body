@@ -1,0 +1,66 @@
+{
+  if (context.hasFailureDescription()) {
+    context.setRollbackOnly();
+    context.completeStep();
+    return;
+  }
+  final Map<String,ProxyTask> tasks=new HashMap<String,ProxyTask>();
+  final Map<String,Future<ModelNode>> futures=new HashMap<String,Future<ModelNode>>();
+  for (  Map.Entry<String,ProxyController> entry : hostProxies.entrySet()) {
+    String host=entry.getKey();
+    ProxyTask task=new ProxyTask(host,operation.clone(),context,entry.getValue());
+    tasks.put(host,task);
+    futures.put(host,executorService.submit(task));
+  }
+  boolean interrupted=false;
+  try {
+    for (    Map.Entry<String,ProxyTask> entry : tasks.entrySet()) {
+      ProxyTask task=entry.getValue();
+      ModelNode result=null;
+      try {
+        result=entry.getValue().getUncommittedResult();
+      }
+ catch (      InterruptedException e) {
+        result=new ModelNode();
+        result.get(OUTCOME).set(FAILED);
+        result.get(FAILURE_DESCRIPTION).set(String.format("Interrupted waiting for result from host %s",entry.getKey()));
+        interrupted=true;
+        task.cancel();
+        futures.get(entry.getKey()).cancel(true);
+      }
+      if (PrepareStepHandler.isTraceEnabled()) {
+        PrepareStepHandler.log.trace("Result for remote host " + entry.getKey() + " is "+ result);
+      }
+      domainOperationContext.addHostControllerResult(entry.getKey(),result);
+    }
+    context.completeStep();
+  }
+  finally {
+    try {
+      boolean rollback=domainOperationContext.isCompleteRollback();
+      for (      ProxyTask task : tasks.values()) {
+        task.finalizeTransaction(!rollback);
+      }
+      final short timeout=10;
+      for (      Map.Entry<String,Future<ModelNode>> entry : futures.entrySet()) {
+        Future<ModelNode> future=entry.getValue();
+        try {
+          ModelNode finalResult=future.isCancelled() ? getCancelledResult() : future.get();
+          domainOperationContext.addHostControllerResult(entry.getKey(),finalResult);
+        }
+ catch (        InterruptedException e) {
+          interrupted=true;
+          log.warnf("Interrupted awaiting final response from host %s",entry.getKey());
+        }
+catch (        ExecutionException e) {
+          log.warnf(e.getCause(),"Caught exception awaiting final response from host %s",entry.getKey());
+        }
+      }
+    }
+  finally {
+      if (interrupted) {
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
+}

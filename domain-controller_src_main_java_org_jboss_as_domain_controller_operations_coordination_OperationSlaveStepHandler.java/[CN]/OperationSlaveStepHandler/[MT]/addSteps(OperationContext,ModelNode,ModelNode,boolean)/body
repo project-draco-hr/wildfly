@@ -1,0 +1,21 @@
+{
+  final PathAddress originalAddress=PathAddress.pathAddress(operation.get(OP_ADDR));
+  final ImmutableManagementResourceRegistration originalRegistration=context.getResourceRegistration();
+  if (originalRegistration == null) {
+    String operationName=operation.require(OP).asString();
+    throw new OperationFailedException(new ModelNode().set(String.format("No handler for operation %s at address %s",operationName,originalAddress)));
+  }
+  final Resource root=context.getRootResource();
+  final ModelNode model=Resource.Tools.readModel(root);
+  ParsedOp parsedOp=parseOperation(operation,0,model);
+  ModelNode domainOp=parsedOp.getDomainOperation();
+  if (domainOp.isDefined()) {
+    addBasicStep(context,domainOp);
+  }
+ else {
+    response.get(RESULT).set(IGNORED);
+  }
+  ServerOperationResolver resolver=new ServerOperationResolver(localHostControllerInfo.getLocalHostName());
+  ServerOperationsResolverHandler sorh=new ServerOperationsResolverHandler(localHostControllerInfo.getLocalHostName(),resolver,parsedOp,originalAddress,originalRegistration,response,recordResponse);
+  context.addStep(sorh,OperationContext.Stage.DOMAIN);
+}

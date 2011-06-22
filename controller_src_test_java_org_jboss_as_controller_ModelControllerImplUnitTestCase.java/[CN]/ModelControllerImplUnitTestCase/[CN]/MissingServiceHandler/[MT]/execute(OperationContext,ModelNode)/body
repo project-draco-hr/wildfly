@@ -1,0 +1,20 @@
+{
+  String name=operation.require("name").asString();
+  ModelNode attr=context.readModelForUpdate(PathAddress.EMPTY_ADDRESS).get(name);
+  final int current=attr.asInt();
+  attr.set(operation.require("value"));
+  context.addStep(new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation){
+      context.getResult().set(current);
+      ServiceName svcName=ServiceName.JBOSS.append("missing-service");
+      ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+      context.getServiceTarget().addService(svcName,Service.NULL).addDependency(ServiceName.JBOSS.append("missing")).addListener(verificationHandler).install();
+      context.addStep(verificationHandler,OperationContext.Stage.VERIFY);
+      if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
+        context.removeService(svcName);
+      }
+    }
+  }
+,OperationContext.Stage.RUNTIME);
+  context.completeStep();
+}

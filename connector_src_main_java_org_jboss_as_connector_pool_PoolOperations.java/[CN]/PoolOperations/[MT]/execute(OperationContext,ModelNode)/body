@@ -1,0 +1,30 @@
+{
+  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  final String jndiName=address.getLastElement().getValue();
+  if (context.getType() == OperationContext.Type.SERVER) {
+    context.addStep(new OperationStepHandler(){
+      public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        final ServiceController<?> managementRepoService=context.getServiceRegistry(false).getService(ConnectorServices.MANAGEMENT_REPOSISTORY_SERVICE);
+        if (managementRepoService != null) {
+          ModelNode operationResult=null;
+          try {
+            final ManagementRepository repository=(ManagementRepository)managementRepoService.getValue();
+            List<Pool> pools=matcher.match(jndiName,repository);
+            for (            Pool pool : pools) {
+              operationResult=invokeCommandOn(pool);
+            }
+          }
+ catch (          Exception e) {
+            throw new OperationFailedException(new ModelNode().set("failed to set attribute" + e.getMessage()));
+          }
+          if (operationResult != null) {
+            context.getResult().set(operationResult);
+          }
+        }
+        context.completeStep();
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}

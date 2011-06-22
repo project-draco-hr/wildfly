@@ -1,0 +1,24 @@
+{
+  if (!context.isBooting()) {
+    throw new OperationFailedException(new ModelNode().set(String.format("Cannot invoke %s after host boot",operation.require(OP))));
+  }
+  final ModelNode domainModel=Resource.Tools.readModel(context.getRootResource());
+  context.addStep(new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
+      final ModelNode hostModel=Resource.Tools.readModel(resource);
+      if (hostModel.hasDefined(SERVER_CONFIG)) {
+        final ModelNode servers=hostModel.get(SERVER_CONFIG).clone();
+        if (hostControllerEnvironment.isRestart()) {
+          restartedHcStartOrReconnectServers(servers,domainModel);
+        }
+ else {
+          cleanStartServers(servers,domainModel);
+        }
+      }
+      context.completeStep();
+    }
+  }
+,OperationContext.Stage.RUNTIME);
+  context.completeStep();
+}
