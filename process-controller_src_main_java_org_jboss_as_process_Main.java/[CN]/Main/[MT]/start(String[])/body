@@ -3,13 +3,14 @@
   String javaHome=System.getProperty("java.home",".");
   String jvmName=javaHome + "/bin/java";
   String jbossHome=System.getProperty("jboss.home.dir",".");
-  String modulePath=System.getProperty("jboss.module.path","modules");
-  String bootJar="jboss-modules.jar";
+  String modulePath=null;
+  String bootJar=null;
   String logModule="org.jboss.logmanager";
   String jaxpModule="javax.xml.jaxp-provider";
   String bootModule=HOST_CONTROLLER_MODULE;
   String bindAddress="127.0.0.1";
   int bindPort=0;
+  String currentWorkingDir=System.getProperty("user.dir");
   final List<String> javaOptions=new ArrayList<String>();
   final List<String> smOptions=new ArrayList<String>();
   OUT:   for (int i=0; i < args.length; i++) {
@@ -58,6 +59,12 @@
       throw new IllegalArgumentException("Bad option: " + arg);
     }
   }
+  if (modulePath == null) {
+    modulePath=System.getProperty("jboss.module.path",jbossHome + File.separator + "modules");
+  }
+  if (bootJar == null) {
+    bootJar=jbossHome + File.separator + "jboss-modules.jar";
+  }
   Handler consoleHandler=null;
   final Logger rootLogger=Logger.getLogger("");
   for (  Handler handler : rootLogger.getHandlers()) {
@@ -87,7 +94,6 @@
   final InetSocketAddress boundAddress=processController.getServer().getBoundAddress();
   final List<String> initialCommand=new ArrayList<String>();
   initialCommand.add(jvmName);
-  initialCommand.add("-D" + "jboss.home.dir=" + jbossHome);
   initialCommand.addAll(javaOptions);
   initialCommand.add("-jar");
   initialCommand.add(bootJar);
@@ -103,7 +109,8 @@
   initialCommand.add(CommandLineConstants.INTERPROCESS_PC_PORT);
   initialCommand.add(Integer.toString(boundAddress.getPort()));
   initialCommand.addAll(smOptions);
-  processController.addProcess(HOST_CONTROLLER_PROCESS_NAME,initialCommand,Collections.<String,String>emptyMap(),jbossHome,true);
+  initialCommand.add("-D" + "jboss.home.dir=" + jbossHome);
+  processController.addProcess(HOST_CONTROLLER_PROCESS_NAME,initialCommand,Collections.<String,String>emptyMap(),currentWorkingDir,true);
   processController.startProcess(HOST_CONTROLLER_PROCESS_NAME);
   final Thread shutdownThread=new Thread(new Runnable(){
     public void run(){
