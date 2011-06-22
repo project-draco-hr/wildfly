@@ -1,22 +1,37 @@
 {
-  if (closed) {
-    throw new IllegalStateException("Closed this client");
-  }
   if (connection != null) {
     throw new IllegalStateException("Already connected");
   }
   OptionMap map=OptionMap.create(SASL_POLICY_NOANONYMOUS,Boolean.FALSE);
   IoFuture<Connection> future;
-  if (handler != null) {
-    future=endpoint.connect(uri,map,handler);
-  }
- else {
-    future=endpoint.connect(uri,map,new AnonymousCallbackHandler());
-  }
+  CallbackHandler actualHandler=handler != null ? handler : new AnonymousCallbackHandler();
+  WrapperCallbackHandler wrapperHandler=new WrapperCallbackHandler(actualHandler);
+  future=endpoint.connect(uri,map,wrapperHandler);
   Status status=future.await(connectTimeout,TimeUnit.MILLISECONDS);
-  if (status == Status.WAITING) {
-    future.cancel();
-    throw new ConnectException("Could not connect to remote server at " + connectTimeout + " within "+ connectTimeout+ "ms");
+  while (status == Status.WAITING) {
+    boolean cancel=false;
+    if (wrapperHandler.isInCall()) {
+      status=future.await(connectTimeout,TimeUnit.MILLISECONDS);
+    }
+ else     if (wrapperHandler.getCallFinished() > -1) {
+      long timeSinceFinished=System.currentTimeMillis() - wrapperHandler.getCallFinished();
+      if (timeSinceFinished < 0) {
+        timeSinceFinished=0;
+      }
+      if (timeSinceFinished < connectTimeout) {
+        status=future.await(connectTimeout - timeSinceFinished,TimeUnit.MILLISECONDS);
+      }
+ else {
+        cancel=true;
+      }
+    }
+ else {
+      cancel=true;
+    }
+    if (cancel == true) {
+      future.cancel();
+      throw new ConnectException("Could not connect to remote server at " + connectTimeout + " within "+ connectTimeout+ "ms");
+    }
   }
   this.connection=future.get();
   return connection;
