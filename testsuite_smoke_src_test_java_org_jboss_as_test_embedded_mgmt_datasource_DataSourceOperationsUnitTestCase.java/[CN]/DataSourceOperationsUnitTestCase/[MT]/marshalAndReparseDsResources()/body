@@ -1,0 +1,34 @@
+{
+  final ModelNode address=new ModelNode();
+  address.add("subsystem","datasources");
+  address.protect();
+  final ModelNode operation=new ModelNode();
+  operation.get(OP).set("read-children-resources");
+  operation.get("child-type").set("data-source");
+  operation.get(OP_ADDR).set(address);
+  final ModelNode result=getModelControllerClient().execute(operation);
+  Assert.assertTrue(result.hasDefined(RESULT));
+  Assert.assertEquals(SUCCESS,result.get(OUTCOME).asString());
+  final Map<String,ModelNode> children=getChildren(result.get(RESULT));
+  Assert.assertFalse(children.isEmpty());
+  for (  final Entry<String,ModelNode> child : children.entrySet()) {
+    Assert.assertTrue(child.getKey() != null);
+    Assert.assertTrue(child.getValue().hasDefined("connection-url"));
+    Assert.assertTrue(child.getValue().hasDefined("jndi-name"));
+    Assert.assertTrue(child.getValue().hasDefined("driver-name"));
+  }
+  ModelNode dsNode=new ModelNode();
+  dsNode.get("data-source").set(result.get("result"));
+  StringWriter strWriter=new StringWriter();
+  XMLExtendedStreamWriter writer=XMLExtendedStreamWriterFactory.create(XMLOutputFactory.newFactory().createXMLStreamWriter(strWriter));
+  NewDataSourceSubsystemParser parser=new NewDataSourceSubsystemParser();
+  parser.writeContent(writer,new SubsystemMarshallingContext(dsNode,writer));
+  writer.flush();
+  XMLMapper mapper=XMLMapper.Factory.create();
+  mapper.registerRootElement(new QName(Namespace.CURRENT.getUriString(),"subsystem"),parser);
+  StringReader strReader=new StringReader(strWriter.toString());
+  XMLStreamReader reader=XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(strReader));
+  List<ModelNode> newList=new ArrayList<ModelNode>();
+  mapper.parseDocument(newList,reader);
+  return newList;
+}
