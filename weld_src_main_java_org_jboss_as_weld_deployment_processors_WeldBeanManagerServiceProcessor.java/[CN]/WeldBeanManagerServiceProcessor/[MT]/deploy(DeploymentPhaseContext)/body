@@ -2,14 +2,7 @@
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   final DeploymentUnit topLevelDeployment=deploymentUnit.getParent() == null ? deploymentUnit : deploymentUnit.getParent();
   final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
-  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
   if (!WeldDeploymentMarker.isPartOfWeldDeployment(topLevelDeployment)) {
-    return;
-  }
-  if (!deploymentUnit.getName().endsWith(".war") && !deploymentUnit.getName().endsWith(".jar")) {
-    return;
-  }
-  if (moduleDescription == null) {
     return;
   }
   BeanDeploymentArchiveImpl rootBda=deploymentUnit.getAttachment(WeldAttachments.DEPLOYMENT_ROOT_BEAN_DEPLOYMENT_ARCHIVE);
@@ -17,14 +10,21 @@
     rootBda=topLevelDeployment.getAttachment(WeldAttachments.DEPLOYMENT_ROOT_BEAN_DEPLOYMENT_ARCHIVE);
   }
   if (rootBda == null) {
-    throw new RuntimeException("Could not find BeanManager for deployment " + deploymentUnit.getName());
+    logger.errorf("Could not find BeanManager for deployment %d",deploymentUnit.getName());
+    return;
   }
   final ServiceName weldServiceName=topLevelDeployment.getServiceName().append(WeldService.SERVICE_NAME);
   final ServiceName beanManagerServiceName=BeanManagerService.serviceName(deploymentUnit);
   BeanManagerService beanManagerService=new BeanManagerService(rootBda.getId());
   serviceTarget.addService(beanManagerServiceName,beanManagerService).addDependency(weldServiceName,WeldContainer.class,beanManagerService.getWeldContainer()).install();
-  final ServiceName moduleContextServiceName=ContextNames.contextServiceNameOfModule(moduleDescription.getApplicationName(),moduleDescription.getModuleName());
-  bindBeanManager(serviceTarget,beanManagerServiceName,moduleContextServiceName);
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+  if (moduleDescription == null) {
+    return;
+  }
+  if (DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit) || deploymentUnit.getName().endsWith(".jar")) {
+    final ServiceName moduleContextServiceName=ContextNames.contextServiceNameOfModule(moduleDescription.getApplicationName(),moduleDescription.getModuleName());
+    bindBeanManager(serviceTarget,beanManagerServiceName,moduleContextServiceName);
+  }
   for (  ComponentDescription component : moduleDescription.getComponentDescriptions()) {
     if (component.getNamingMode() == ComponentNamingMode.CREATE) {
       final ServiceName compContextServiceName=ContextNames.contextServiceNameOfComponent(moduleDescription.getApplicationName(),moduleDescription.getModuleName(),component.getComponentName());
