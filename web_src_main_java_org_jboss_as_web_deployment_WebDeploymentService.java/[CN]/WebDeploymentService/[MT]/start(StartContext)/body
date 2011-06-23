@@ -1,28 +1,35 @@
 {
-  context.setRealm(realm.getValue());
-  JsfInjectionProvider.getInjectionContainer().set(injectionContainer);
+  final ClassLoader oldTccl=SecurityActions.getContextClassLoader();
   try {
-    NamingValve.beginComponentStart(namespaceSelector.getOptionalValue());
+    SecurityActions.setContextClassLoader(context.getLoader().getClassLoader());
+    context.setRealm(realm.getValue());
+    JsfInjectionProvider.getInjectionContainer().set(injectionContainer);
     try {
+      NamingValve.beginComponentStart(namespaceSelector.getOptionalValue());
       try {
-        context.create();
+        try {
+          context.create();
+        }
+ catch (        Exception e) {
+          throw new StartException("failed to create context",e);
+        }
+        try {
+          context.start();
+        }
+ catch (        LifecycleException e) {
+          throw new StartException("failed to start context",e);
+        }
+        log.info("registering web context: " + context.getName());
       }
- catch (      Exception e) {
-        throw new StartException("failed to create context",e);
+  finally {
+        NamingValve.endComponentStart();
       }
-      try {
-        context.start();
-      }
- catch (      LifecycleException e) {
-        throw new StartException("failed to start context",e);
-      }
-      log.info("registering web context: " + context.getName());
     }
   finally {
-      NamingValve.endComponentStart();
+      JsfInjectionProvider.getInjectionContainer().set(null);
     }
   }
   finally {
-    JsfInjectionProvider.getInjectionContainer().set(null);
+    SecurityActions.setContextClassLoader(oldTccl);
   }
 }
