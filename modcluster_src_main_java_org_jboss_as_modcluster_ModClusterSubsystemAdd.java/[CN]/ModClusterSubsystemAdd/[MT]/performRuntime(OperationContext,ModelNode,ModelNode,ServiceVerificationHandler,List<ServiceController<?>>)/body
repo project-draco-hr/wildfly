@@ -1,7 +1,16 @@
 {
+  String bindingRef=null;
+  if (operation.hasDefined(CommonAttributes.MOD_CLUSTER_CONFIG)) {
+    final ModelNode node=operation.get(CommonAttributes.MOD_CLUSTER_CONFIG);
+    if (node.hasDefined(CommonAttributes.ADVERTISE_SOCKET)) {
+      bindingRef=node.get(CommonAttributes.ADVERTISE_SOCKET).asString();
+    }
+  }
   try {
     final ModClusterService service=new ModClusterService(operation.get(CommonAttributes.MOD_CLUSTER_CONFIG).clone());
-    newControllers.add(context.getServiceTarget().addService(ModClusterService.NAME,service).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,service.getWebServer()).addListener(verificationHandler).setInitialMode(Mode.ACTIVE).install());
+    final ServiceBuilder<ModCluster> serviceBuilder=context.getServiceTarget().addService(ModClusterService.NAME,service).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,service.getWebServer()).addListener(verificationHandler).setInitialMode(Mode.ACTIVE);
+    if (bindingRef != null)     serviceBuilder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(bindingRef),SocketBinding.class,service.getBinding());
+    newControllers.add(serviceBuilder.install());
   }
  catch (  Throwable t) {
     log.error("Error: " + t);
