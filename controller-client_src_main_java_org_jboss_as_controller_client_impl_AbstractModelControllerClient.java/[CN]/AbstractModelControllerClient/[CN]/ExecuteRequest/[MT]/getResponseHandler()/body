@@ -1,0 +1,31 @@
+{
+  return new ManagementResponseHandler<ModelNode>(){
+    @Override protected ModelNode readResponse(    final DataInput input) throws IOException {
+      log.tracef("Client reading response %d",getBatchId());
+      try {
+        ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_RESPONSE);
+        ModelNode node=new ModelNode();
+        node.readExternal(input);
+        log.tracef("Client read response %d successfully",getBatchId());
+        return node;
+      }
+ catch (      Exception e) {
+        log.tracef(e,"Client read response %d with error",getBatchId());
+        setError(e);
+        if (e instanceof IOException) {
+          throw (IOException)e;
+        }
+        if (e instanceof RuntimeException) {
+          throw (RuntimeException)e;
+        }
+        throw new IOException(e);
+      }
+ finally {
+        ManagementBatchIdManager.DEFAULT.freeBatchId(getBatchId());
+        activeRequests.remove(getCurrentRequestId());
+        executeRequestContext.done();
+      }
+    }
+  }
+;
+}

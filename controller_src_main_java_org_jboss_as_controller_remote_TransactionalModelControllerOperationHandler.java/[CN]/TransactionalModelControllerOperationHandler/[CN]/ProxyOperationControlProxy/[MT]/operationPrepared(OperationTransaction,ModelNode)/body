@@ -7,22 +7,27 @@
       @Override protected void writeRequest(      final int protocolVersion,      final FlushableDataOutput output) throws IOException {
         super.writeRequest(protocolVersion,output);
       }
-      @Override protected Void readResponse(      DataInput input) throws IOException {
-        ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_PREPARED);
-        executeRequestContext.setPreparedOrFailed();
-        byte status=input.readByte();
-        if (status == ModelControllerProtocol.PARAM_COMMIT) {
-          transaction.commit();
-          executeRequestContext.setTxCompleted();
-        }
- else         if (status == ModelControllerProtocol.PARAM_ROLLBACK) {
-          transaction.rollback();
-          executeRequestContext.setTxCompleted();
-        }
+      protected ManagementResponseHandler<Void> getResponseHandler(){
+        return new ManagementResponseHandler<Void>(){
+          @Override protected Void readResponse(          DataInput input) throws IOException {
+            ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_PREPARED);
+            executeRequestContext.setPreparedOrFailed();
+            byte status=input.readByte();
+            if (status == ModelControllerProtocol.PARAM_COMMIT) {
+              transaction.commit();
+              executeRequestContext.setTxCompleted();
+            }
+ else             if (status == ModelControllerProtocol.PARAM_ROLLBACK) {
+              transaction.rollback();
+              executeRequestContext.setTxCompleted();
+            }
  else {
-          throw new IllegalArgumentException("Invalid status code " + status);
+              throw new IllegalArgumentException("Invalid status code " + status);
+            }
+            return null;
+          }
         }
-        return null;
+;
       }
     }
 .executeForResult(executorService,getChannelStrategy(executeRequestContext.getChannel()));

@@ -1,0 +1,27 @@
+{
+  OperationAttachmentsProxy attachmentsProxy=new OperationAttachmentsProxy(getChannel(),batchId,attachmentsLength);
+  try {
+    try {
+      log.tracef("Executing client request %d(%d)",batchId,getHeader().getRequestId());
+      if (asynch) {
+        asynchRequests.put(batchId,Thread.currentThread());
+      }
+      result=controller.execute(operation,new OperationMessageHandlerProxy(getChannel(),batchId),ModelController.OperationTransactionControl.COMMIT,attachmentsProxy);
+    }
+ catch (    Exception e) {
+      final ModelNode failure=new ModelNode();
+      failure.get(OUTCOME).set(FAILED);
+      failure.get(FAILURE_DESCRIPTION).set(e.getClass().getName() + ":" + e.getMessage());
+      result=failure;
+      attachmentsProxy.shutdown(e);
+    }
+ finally {
+      log.tracef("Executed client request %d",batchId);
+    }
+  }
+  finally {
+    if (asynch) {
+      asynchRequests.remove(batchId);
+    }
+  }
+}
