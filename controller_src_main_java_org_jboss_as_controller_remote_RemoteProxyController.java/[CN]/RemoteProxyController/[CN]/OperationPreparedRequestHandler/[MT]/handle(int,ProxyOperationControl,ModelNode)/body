@@ -7,8 +7,24 @@
       done(true);
     }
     private void done(    boolean commit){
-      status=commit ? ModelControllerProtocol.PARAM_COMMIT : ModelControllerProtocol.PARAM_ROLLBACK;
-      requestContext.setTxCommittedOrRolledBack();
+      final byte status=commit ? ModelControllerProtocol.PARAM_COMMIT : ModelControllerProtocol.PARAM_ROLLBACK;
+      try {
+        new ManagementRequest<Void>(batchId){
+          @Override protected byte getRequestCode(){
+            return ModelControllerProtocol.COMPLETE_TX_REQUEST;
+          }
+          @Override protected void writeRequest(          int protocolVersion,          FlushableDataOutput output) throws IOException {
+            output.write(status);
+          }
+          @Override protected ManagementResponseHandler<Void> getResponseHandler(){
+            return ManagementResponseHandler.EMPTY_RESPONSE;
+          }
+        }
+.executeForResult(executorService,getChannelStrategy());
+      }
+ catch (      Exception e) {
+        requestContext.setError(e.getMessage());
+      }
       try {
         requestContext.awaitControlCompleted();
       }

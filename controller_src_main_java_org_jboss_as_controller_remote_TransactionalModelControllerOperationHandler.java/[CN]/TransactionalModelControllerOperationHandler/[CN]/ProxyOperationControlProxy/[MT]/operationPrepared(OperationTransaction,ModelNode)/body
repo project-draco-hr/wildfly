@@ -5,25 +5,13 @@
         return ModelControllerProtocol.OPERATION_PREPARED_REQUEST;
       }
       @Override protected void writeRequest(      final int protocolVersion,      final FlushableDataOutput output) throws IOException {
+        executeRequestContext.setActiveTX(transaction);
+        activeTransactions.put(executeRequestContext.getBatchId(),executeRequestContext);
         super.writeRequest(protocolVersion,output);
       }
       protected ManagementResponseHandler<Void> getResponseHandler(){
         return new ManagementResponseHandler<Void>(){
           @Override protected Void readResponse(          DataInput input) throws IOException {
-            ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_PREPARED);
-            executeRequestContext.setPreparedOrFailed();
-            byte status=input.readByte();
-            if (status == ModelControllerProtocol.PARAM_COMMIT) {
-              transaction.commit();
-              executeRequestContext.setTxCompleted();
-            }
- else             if (status == ModelControllerProtocol.PARAM_ROLLBACK) {
-              transaction.rollback();
-              executeRequestContext.setTxCompleted();
-            }
- else {
-              throw new IllegalArgumentException("Invalid status code " + status);
-            }
             return null;
           }
         }
@@ -31,9 +19,17 @@
       }
     }
 .executeForResult(executorService,getChannelStrategy(executeRequestContext.getChannel()));
+    executeRequestContext.setPreparedOrFailed();
   }
  catch (  Exception e) {
     executeRequestContext.setError(e.getMessage());
     throw new RuntimeException(e);
+  }
+  try {
+    executeRequestContext.awaitTxCompleted();
+  }
+ catch (  InterruptedException e) {
+    executeRequestContext.setError("Interrupted while waiting for request");
+    Thread.currentThread().interrupt();
   }
 }
