@@ -1,10 +1,24 @@
 {
   final CountDownLatch latch=new CountDownLatch(1);
+  final AtomicReference<Exception> errorRef=new AtomicReference<Exception>();
   MockModelController controller=new MockModelController(){
     @Override public ModelNode execute(    ModelNode operation,    OperationMessageHandler handler,    OperationTransactionControl control,    OperationAttachments attachments){
-      IoUtils.safeClose(channels.getClientChannel());
+      try {
+        channels.getClientChannel().writeShutdown();
+        channels.getClientChannel().awaitClosed();
+      }
+ catch (      Exception e) {
+        errorRef.set(e);
+        throw new RuntimeException();
+      }
       latch.countDown();
-      IoUtils.safeClose(channels.getServerChannel());
+      try {
+        channels.getServerChannel().writeShutdown();
+        channels.getServerChannel().awaitClosed();
+      }
+ catch (      Exception e) {
+        errorRef.set(e);
+      }
       return new ModelNode();
     }
   }
@@ -15,8 +29,10 @@
   CommitProxyOperationControl commitControl=new CommitProxyOperationControl();
   try {
     proxyController.execute(operation,null,commitControl,null);
+    latch.await();
     Assert.fail("Should have failed");
   }
  catch (  Exception expected) {
   }
+  Assert.assertNull(errorRef.get());
 }
