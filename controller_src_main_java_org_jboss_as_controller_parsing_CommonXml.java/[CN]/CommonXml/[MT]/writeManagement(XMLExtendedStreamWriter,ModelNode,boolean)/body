@@ -1,12 +1,13 @@
 {
-  boolean hasSecurityRealm=management.get(SECURITY_REALMS).hasDefined(SECURITY_REALM);
-  boolean hasConnection=management.get(CONNECTIONS).hasDefined(CONNECTION);
-  if ((hasSecurityRealm == false) && (hasConnection == false)) {
+  boolean hasSecurityRealm=management.hasDefined(SECURITY_REALM);
+  boolean hasConnection=management.hasDefined(OUTBOUND_CONNECTION);
+  boolean hasInterface=allowInterfaces && management.hasDefined(MANAGEMENT_INTERFACE);
+  if ((hasSecurityRealm == false) && (hasConnection == false) && (hasInterface == false)) {
     return;
   }
   writer.writeStartElement(Element.MANAGEMENT.getLocalName());
   if (hasSecurityRealm) {
-    ModelNode securityRealms=management.get(SECURITY_REALMS).get(SECURITY_REALM);
+    ModelNode securityRealms=management.get(SECURITY_REALM);
     writer.writeStartElement(Element.SECURITY_REALMS.getLocalName());
     for (    Property variable : securityRealms.asPropertyList()) {
       writer.writeStartElement(Element.SECURITY_REALM.getLocalName());
@@ -93,7 +94,7 @@
   }
   if (hasConnection) {
     writer.writeStartElement(Element.OUTBOUND_CONNECTIONS.getLocalName());
-    ModelNode connections=management.get(CONNECTIONS).get(CONNECTION);
+    ModelNode connections=management.get(OUTBOUND_CONNECTION);
     for (    Property variable : connections.asPropertyList()) {
       ModelNode connection=variable.getValue();
       String type=connection.require(TYPE).asString();
@@ -111,8 +112,16 @@
     }
     writer.writeEndElement();
   }
-  if (managementInterface != null) {
-    writeManagementInterfaces(writer,managementInterface);
+  if (allowInterfaces && hasInterface) {
+    writer.writeStartElement(Element.MANAGEMENT_INTERFACES.getLocalName());
+    ModelNode managementInterfaces=management.get(MANAGEMENT_INTERFACE);
+    if (managementInterfaces.hasDefined(NATIVE_INTERFACE)) {
+      writeManagementProtocol(Element.NATIVE_INTERFACE,writer,managementInterfaces.get(NATIVE_INTERFACE));
+    }
+    if (managementInterfaces.hasDefined(HTTP_INTERFACE)) {
+      writeManagementProtocol(Element.HTTP_INTERFACE,writer,managementInterfaces.get(HTTP_INTERFACE));
+    }
+    writer.writeEndElement();
   }
   writer.writeEndElement();
 }
