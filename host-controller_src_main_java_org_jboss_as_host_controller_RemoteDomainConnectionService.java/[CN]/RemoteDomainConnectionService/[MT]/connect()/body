@@ -1,10 +1,21 @@
 {
+  if (this.channelClient != null) {
+    try {
+      new UnregisterModelControllerRequest().executeForResult(executor,ManagementClientChannelStrategy.create(channel));
+    }
+ catch (    Exception e) {
+    }
+    this.channelClient.close();
+    this.channelClient=null;
+  }
   Security.addProvider(saslProvider);
   txOperationHandler=new TransactionalModelControllerOperationHandler(executor,controller);
   ProtocolChannelClient<ManagementChannel> client;
+  ProtocolChannelClient.Configuration<ManagementChannel> configuration=new ProtocolChannelClient.Configuration<ManagementChannel>();
+  configuration.setEndpointName("endpoint");
+  configuration.setExecutor(RemotingServices.createExecutor());
+  configuration.setUriScheme("remote");
   try {
-    ProtocolChannelClient.Configuration<ManagementChannel> configuration=new ProtocolChannelClient.Configuration<ManagementChannel>();
-    configuration.setEndpoint(endpointInjector.getValue());
     configuration.setUri(new URI("remote://" + host.getHostAddress() + ":"+ port));
     configuration.setChannelFactory(new ManagementChannelFactory(txOperationHandler));
     client=ProtocolChannelClient.create(configuration);
@@ -20,9 +31,6 @@
     }
     client.connect(handler);
     this.channelClient=client;
-    if (connected.get()) {
-      unregister();
-    }
     ManagementChannel channel=client.openChannel(RemotingServices.DOMAIN_CHANNEL);
     this.channel=channel;
     channel.addCloseHandler(new CloseHandler<Channel>(){
@@ -36,7 +44,6 @@
   }
  catch (  IOException e) {
     log.warnf("Could not connect to remote domain controller %s:%d",host.getHostAddress(),port);
-    e.printStackTrace();
     throw new IllegalStateException(e);
   }
   try {
