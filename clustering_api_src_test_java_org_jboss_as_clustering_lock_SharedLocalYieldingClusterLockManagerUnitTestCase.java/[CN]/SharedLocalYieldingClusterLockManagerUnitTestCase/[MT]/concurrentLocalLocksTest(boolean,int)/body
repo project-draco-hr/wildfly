@@ -15,25 +15,30 @@
     lockers[i]=new Locker(ts,newOne,readyLatch,startLatch,endLatch);
     executor.submit(lockers[i]);
   }
-  readyLatch.await(5,TimeUnit.SECONDS);
+  boolean gotLatch=readyLatch.await(5,TimeUnit.SECONDS);
+  assertTrue("timed out waiting for ready latch",gotLatch);
   startLatch.countDown();
-  endLatch.await(5,TimeUnit.SECONDS);
+  gotLatch=endLatch.await(5,TimeUnit.SECONDS);
+  assertTrue("timed out waiting for ready latch",gotLatch);
   boolean sawNewLockResult=false;
+  int lockPosition=-1;
   for (  Locker locker : lockers) {
+    lockPosition++;
+    String details="failure on lock#" + lockPosition + " newLock is #"+ newLockPos;
     if (locker.exception != null) {
       throw (Exception)locker.exception;
     }
     LockResult newLockResult=locker.newLock ? LockResult.NEW_LOCK : LockResult.ACQUIRED_FROM_CLUSTER;
     if (sawNewLockResult) {
       if (locker.newLock) {
-        assertTrue(locker.result == LockResult.ALREADY_HELD || locker.result == LockResult.NEW_LOCK);
+        assertTrue("locker result (" + locker.result + ") is not ALREADY_HELD or NEW_LOCK, "+ details,locker.result == LockResult.ALREADY_HELD || locker.result == LockResult.NEW_LOCK);
       }
  else {
-        assertTrue(locker.result == LockResult.ALREADY_HELD || locker.result == LockResult.ACQUIRED_FROM_CLUSTER);
+        assertTrue("locker result (" + locker.result + ") is not ALREADY_HELD or ACQUIRED_FROM_CLUSTER, "+ details,locker.result == LockResult.ALREADY_HELD || locker.result == LockResult.ACQUIRED_FROM_CLUSTER);
       }
     }
  else     if (locker.result != LockResult.ALREADY_HELD) {
-      assertEquals(newLockResult,locker.result);
+      assertEquals("expected lock to be " + newLockResult + " but was "+ locker.result+ ", "+ details,newLockResult,locker.result);
       sawNewLockResult=true;
     }
   }
