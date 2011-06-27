@@ -1,0 +1,23 @@
+{
+  final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
+  final ModelNode subModel=resource.getModel();
+  if (!newValue.equals(currentValue)) {
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      final OperationContext context,      final ModelNode operation) throws OperationFailedException {
+        final String interfaceName=subModel.require(INTERFACE).asString();
+        final int port=subModel.require(ModelDescriptionConstants.PORT).asInt();
+        final String realmName=subModel.hasDefined(SECURITY_REALM) ? subModel.require(SECURITY_REALM).asString() : null;
+        hostControllerInfo.setHttpManagementInterface(interfaceName);
+        hostControllerInfo.setHttpManagementPort(port);
+        hostControllerInfo.setHttpManagementSecurityRealm(realmName);
+        context.removeService(HttpManagementService.SERVICE_NAME);
+        final ServiceVerificationHandler handler=new ServiceVerificationHandler();
+        installHttpManagementServices(context.getServiceTarget(),hostControllerInfo,environment,handler);
+        context.addStep(handler,OperationContext.Stage.VERIFY);
+        context.completeStep();
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}
