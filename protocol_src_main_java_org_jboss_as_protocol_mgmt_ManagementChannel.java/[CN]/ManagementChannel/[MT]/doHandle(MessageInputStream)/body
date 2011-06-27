@@ -4,6 +4,7 @@
   Exception error=null;
   ManagementRequestHeader requestHeader=null;
   ManagementRequestHandler requestHandler=null;
+  boolean wasPing=false;
   try {
     ManagementProtocolHeader header;
     header=ManagementProtocolHeader.parse(input);
@@ -13,14 +14,17 @@ case ManagementProtocol.TYPE_REQUEST:
     requestHandler=requestReceiver.readRequest(requestHeader,input);
   break;
 case ManagementProtocol.TYPE_RESPONSE:
+gotIncomingResponse();
 responseReceiver.handleResponse((ManagementResponseHeader)header,input);
 break;
 case ManagementProtocol.TYPE_BYE_BYE:
 close();
 break;
 case ManagementProtocol.TYPE_PING:
+wasPing=true;
 break;
 case ManagementProtocol.TYPE_PONG:
+gotIncomingResponse();
 break;
 }
 }
@@ -52,5 +56,9 @@ if (error != null) {
 error.printStackTrace();
 }
 requestReceiver.writeResponse(requestHeader,requestHandler,error);
+}
+ else if (wasPing) {
+ManagementPongHeader pongHeader=new ManagementPongHeader(ManagementProtocol.VERSION);
+sendHeaderAndCloseOnError(pongHeader);
 }
 }
