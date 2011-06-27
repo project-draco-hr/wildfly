@@ -6,48 +6,51 @@
   ManagementRequestHandler requestHandler=null;
   try {
     ManagementProtocolHeader header;
-    try {
-      header=ManagementProtocolHeader.parse(input);
-    }
- catch (    ByeByeException bbe) {
-      close();
-      return;
-    }
-    if (header.isRequest()) {
+    header=ManagementProtocolHeader.parse(input);
+switch (header.getType()) {
+case ManagementProtocol.TYPE_REQUEST:
       requestHeader=(ManagementRequestHeader)header;
-      requestHandler=requestReceiver.readRequest(requestHeader,input);
-    }
- else {
-      responseReceiver.handleResponse((ManagementResponseHeader)header,input);
-    }
-  }
- catch (  Exception e) {
-    error=e;
-    log.tracef(e,"%s error handling incoming data",this);
-  }
+    requestHandler=requestReceiver.readRequest(requestHeader,input);
+  break;
+case ManagementProtocol.TYPE_RESPONSE:
+responseReceiver.handleResponse((ManagementResponseHeader)header,input);
+break;
+case ManagementProtocol.TYPE_BYE_BYE:
+close();
+break;
+case ManagementProtocol.TYPE_PING:
+break;
+case ManagementProtocol.TYPE_PONG:
+break;
+}
+}
+ catch (Exception e) {
+error=e;
+log.tracef(e,"%s error handling incoming data",this);
+}
  finally {
-    log.tracef("%s done handling incoming data",this);
-    try {
-      while (input.read() != -1) {
-      }
-    }
- catch (    IOException ignore) {
-    }
-    IoUtils.safeClose(input);
-    IoUtils.safeClose(message);
-  }
-  if (requestHeader != null) {
-    if (error == null) {
-      try {
-        requestReceiver.processRequest(requestHeader,requestHandler);
-      }
- catch (      Exception e) {
-        error=e;
-      }
-    }
-    if (error != null) {
-      error.printStackTrace();
-    }
-    requestReceiver.writeResponse(requestHeader,requestHandler,error);
-  }
+log.tracef("%s done handling incoming data",this);
+try {
+while (input.read() != -1) {
+}
+}
+ catch (IOException ignore) {
+}
+IoUtils.safeClose(input);
+IoUtils.safeClose(message);
+}
+if (requestHeader != null) {
+if (error == null) {
+try {
+requestReceiver.processRequest(requestHeader,requestHandler);
+}
+ catch (Exception e) {
+error=e;
+}
+}
+if (error != null) {
+error.printStackTrace();
+}
+requestReceiver.writeResponse(requestHeader,requestHandler,error);
+}
 }
