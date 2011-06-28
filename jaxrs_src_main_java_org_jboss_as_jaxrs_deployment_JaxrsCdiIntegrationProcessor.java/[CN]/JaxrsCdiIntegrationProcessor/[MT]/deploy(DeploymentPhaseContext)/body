@@ -1,0 +1,52 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+  if (!JaxrsDeploymentMarker.isJaxrsDeployment(deploymentUnit)) {
+    return;
+  }
+  if (!DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit)) {
+    return;
+  }
+  final DeploymentUnit parent=deploymentUnit.getParent() == null ? deploymentUnit : deploymentUnit.getParent();
+  final WarMetaData warMetaData=deploymentUnit.getAttachment(WarMetaData.ATTACHMENT_KEY);
+  final JBossWebMetaData webdata=warMetaData.getMergedJBossWebMetaData();
+  try {
+    module.getClassLoader().loadClass(CDI_INJECTOR_FACTORY_CLASS);
+    if (WeldDeploymentMarker.isPartOfWeldDeployment(deploymentUnit)) {
+      log.debug("Found CDI, adding injector factory class");
+      setContextParameter(webdata,"resteasy.injector.factory",CDI_INJECTOR_FACTORY_CLASS);
+synchronized (parent) {
+        boolean found=false;
+        final List<Metadata<Extension>> extensions=parent.getAttachmentList(WeldAttachments.PORTABLE_EXTENSIONS);
+        for (        Metadata<Extension> extension : extensions) {
+          if (extension.getValue() instanceof ResteasyCdiExtension) {
+            found=true;
+            break;
+          }
+        }
+        if (!found) {
+          final ClassLoader classLoader=SecurityActions.getContextClassLoader();
+          try {
+            SecurityActions.setContextClassLoader(ResteasyCdiExtension.class.getClassLoader());
+            final ResteasyCdiExtension ext=new ResteasyCdiExtension();
+            Metadata<Extension> metadata=new Metadata<Extension>(){
+              @Override public Extension getValue(){
+                return ext;
+              }
+              @Override public String getLocation(){
+                return "org.jboss.as.jaxrs.JaxrsExtension";
+              }
+            }
+;
+            parent.addToAttachmentList(WeldAttachments.PORTABLE_EXTENSIONS,metadata);
+          }
+  finally {
+            SecurityActions.setContextClassLoader(classLoader);
+          }
+        }
+      }
+    }
+  }
+ catch (  ClassNotFoundException ignored) {
+  }
+}
