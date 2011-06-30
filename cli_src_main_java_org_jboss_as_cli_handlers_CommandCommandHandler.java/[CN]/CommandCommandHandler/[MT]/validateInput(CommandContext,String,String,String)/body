@@ -1,0 +1,78 @@
+{
+  ModelNode request=new ModelNode();
+  ModelNode address=request.get("address");
+  if (profileName != null) {
+    address.add("profile",profileName);
+  }
+  DefaultOperationCallbackHandler handler=new DefaultOperationCallbackHandler();
+  try {
+    DefaultOperationRequestParser.INSTANCE.parse(typePath,handler);
+  }
+ catch (  CommandFormatException e) {
+    ctx.printLine("Failed to validate input: " + e.getLocalizedMessage());
+    return false;
+  }
+  OperationRequestAddress typeAddress=handler.getAddress();
+  if (!typeAddress.endsOnType()) {
+    ctx.printLine("Node path '" + typePath + "' doesn't appear to end on a type.");
+    return false;
+  }
+  final String typeName=typeAddress.toParentNode().getType();
+  for (  OperationRequestAddress.Node node : typeAddress) {
+    address.add(node.getType(),node.getName());
+  }
+  request.get("operation").set("read-children-types");
+  ModelNode result;
+  try {
+    result=ctx.getModelControllerClient().execute(request);
+  }
+ catch (  IOException e) {
+    ctx.printLine("Failed to validate input: " + e.getLocalizedMessage());
+    return false;
+  }
+  if (!result.hasDefined("result")) {
+    ctx.printLine("Failed to validate input: operation response doesn't contain result info.");
+    return false;
+  }
+  boolean pathValid=false;
+  for (  ModelNode typeNode : result.get("result").asList()) {
+    if (typeNode.asString().equals(typeName)) {
+      pathValid=true;
+      break;
+    }
+  }
+  if (!pathValid) {
+    ctx.printLine("Type '" + typeName + "' not found amoung child types of '"+ ctx.getPrefixFormatter().format(typeAddress)+ "'");
+    return false;
+  }
+  address.add(typeName,"?");
+  request.get("operation").set("read-resource-description");
+  try {
+    result=ctx.getModelControllerClient().execute(request);
+  }
+ catch (  IOException e) {
+    ctx.printLine(e.getLocalizedMessage());
+    return false;
+  }
+  if (!result.hasDefined("result")) {
+    ctx.printLine("Failed to validate input: operation response doesn't contain result info.");
+    return false;
+  }
+  result=result.get("result");
+  if (!result.hasDefined("attributes")) {
+    ctx.printLine("Failed to validate input: description of attributes is missing for " + typePath);
+    return false;
+  }
+  for (  Property prop : result.get("attributes").asPropertyList()) {
+    if (prop.getName().equals(propertyName)) {
+      ModelNode value=prop.getValue();
+      if (value.has("access-type") && "read-only".equals(value.get("access-type").asString())) {
+        return true;
+      }
+      ctx.printLine("Property " + propertyName + " is not read-only.");
+      return false;
+    }
+  }
+  ctx.printLine("Property '" + propertyName + "' wasn't found among the properties of "+ typePath);
+  return false;
+}

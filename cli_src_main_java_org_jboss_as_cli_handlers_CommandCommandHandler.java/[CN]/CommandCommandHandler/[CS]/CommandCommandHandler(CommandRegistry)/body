@@ -1,0 +1,97 @@
+{
+  super("command",true);
+  this.cmdRegistry=cmdRegistry;
+  profile=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
+    @Override public List<String> getAllCandidates(    CommandContext ctx){
+      return Util.getNodeNames(ctx.getModelControllerClient(),null,"profile");
+    }
+  }
+),"--profile"){
+    @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
+      if (!ctx.isDomainMode()) {
+        return false;
+      }
+      return super.canAppearNext(ctx);
+    }
+  }
+;
+  profile.addCantAppearAfter(helpArg);
+  nodePath=new ArgumentWithValue(this,new CommandLineCompleter(){
+    @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
+      return OperationRequestCompleter.INSTANCE.complete(ctx,buffer,cursor,candidates);
+    }
+  }
+,"--node-type"){
+    @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
+      if (ctx.isDomainMode() && !profile.isPresent(ctx.getParsedArguments())) {
+        return false;
+      }
+      return "add".equals(action.getValue(ctx.getParsedArguments())) && super.canAppearNext(ctx);
+    }
+  }
+;
+  idProperty=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
+    @Override public List<String> getAllCandidates(    CommandContext ctx){
+      List<Property> props=getNodeProperties(ctx);
+      if (props.isEmpty()) {
+        return Collections.emptyList();
+      }
+      final List<String> candidates=new ArrayList<String>();
+      for (      Property prop : props) {
+        final ModelNode value=prop.getValue();
+        if (value.has("access-type") && "read-only".equals(value.get("access-type").asString())) {
+          candidates.add(prop.getName());
+        }
+      }
+      return candidates;
+    }
+  }
+),"--property-id");
+  idProperty.addRequiredPreceding(nodePath);
+  commandName=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
+    @Override public List<String> getAllCandidates(    CommandContext ctx){
+      final String actionName=action.getValue(ctx.getParsedArguments());
+      if (actionName == null) {
+        return Collections.emptyList();
+      }
+      if (actionName.equals("add")) {
+        final String thePath=nodePath.getValue(ctx.getParsedArguments());
+        if (thePath == null) {
+          return Collections.emptyList();
+        }
+        DefaultOperationCallbackHandler handler=new DefaultOperationCallbackHandler();
+        try {
+          DefaultOperationRequestParser.INSTANCE.parse(thePath,handler);
+        }
+ catch (        CommandFormatException e) {
+          return Collections.emptyList();
+        }
+        OperationRequestAddress typeAddress=handler.getAddress();
+        if (!typeAddress.endsOnType()) {
+          return Collections.emptyList();
+        }
+        return Collections.singletonList(typeAddress.getNodeType());
+      }
+      if (actionName.equals("remove")) {
+        return getExistingCommands();
+      }
+      return Collections.emptyList();
+    }
+  }
+),"--command-name"){
+    @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
+      final String actionStr=action.getValue(ctx.getParsedArguments());
+      if (action == null) {
+        return false;
+      }
+      if ("add".equals(actionStr)) {
+        return idProperty.isPresent(ctx.getParsedArguments());
+      }
+      if ("remove".equals(actionStr)) {
+        return true;
+      }
+      return false;
+    }
+  }
+;
+}
