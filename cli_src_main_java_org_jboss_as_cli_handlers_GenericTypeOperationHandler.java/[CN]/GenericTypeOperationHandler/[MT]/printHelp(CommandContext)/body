@@ -25,19 +25,8 @@
     printNodeDescription(ctx);
     return;
   }
-  ModelNode request=initRequest(ctx);
-  if (request == null) {
-    return;
-  }
-  request.get("operation").set("read-operation-description");
-  request.get("name").set(operationName);
   try {
-    ModelNode result=ctx.getModelControllerClient().execute(request);
-    if (!result.hasDefined("result")) {
-      ctx.printLine("Operation description is not available.");
-      return;
-    }
-    result=result.get("result");
+    ModelNode result=getOperationDescription(ctx,operationName);
     if (!result.hasDefined("description")) {
       ctx.printLine("Operation description is not available.");
       return;
@@ -47,36 +36,55 @@
     buf.append(result.get("description").asString());
     buf.append("\n\nProperties:");
     ctx.printLine(buf.toString());
-    result=result.get("request-properties");
-    for (    Property attr : result.asPropertyList()) {
-      final ModelNode value=attr.getValue();
-      final boolean required=value.has("required") ? value.get("required").asBoolean() : false;
-      final String type=value.has("type") ? value.get("type").asString() : "no type info";
+    boolean idPropListed=false;
+    if (result.has("request-properties")) {
+      result=result.get("request-properties");
+      for (      Property attr : result.asPropertyList()) {
+        if (!idPropListed) {
+          idPropListed=idProperty.equals(attr.getName());
+        }
+        final ModelNode value=attr.getValue();
+        final boolean required=value.has("required") ? value.get("required").asBoolean() : false;
+        final String type=value.has("type") ? value.get("type").asString() : "no type info";
+        final StringBuilder descr=new StringBuilder();
+        descr.append("\n --");
+        descr.append(attr.getName());
+        final int length=descr.length();
+        int newLength=Math.max(24,((length + 4) / 4) * 4);
+        descr.setLength(newLength);
+        for (int i=length; i < newLength; ++i) {
+          descr.setCharAt(i,' ');
+        }
+        descr.append("- ");
+        if (value.has("description")) {
+          descr.append('(');
+          descr.append(type).append(',');
+          if (required) {
+            descr.append("required");
+          }
+ else {
+            descr.append("optional");
+          }
+          descr.append(") ");
+          descr.append(value.get("description").asString());
+        }
+ else {
+          descr.append("no description");
+        }
+        ctx.printLine(descr.toString());
+      }
+    }
+    if (!idPropListed) {
       final StringBuilder descr=new StringBuilder();
       descr.append("\n --");
-      descr.append(attr.getName());
+      descr.append(idProperty);
       final int length=descr.length();
       int newLength=Math.max(24,((length + 4) / 4) * 4);
       descr.setLength(newLength);
       for (int i=length; i < newLength; ++i) {
         descr.setCharAt(i,' ');
       }
-      descr.append("- ");
-      if (value.has("description")) {
-        descr.append('(');
-        descr.append(type).append(',');
-        if (required) {
-          descr.append("required");
-        }
- else {
-          descr.append("optional");
-        }
-        descr.append(") ");
-        descr.append(value.get("description").asString());
-      }
- else {
-        descr.append("no description");
-      }
+      descr.append("- identifies the instance to perform the operation on.");
       ctx.printLine(descr.toString());
     }
   }

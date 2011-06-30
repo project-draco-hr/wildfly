@@ -15,6 +15,7 @@
   this.type=nodePath.getNodeType();
   nodePath.toParentNode();
   this.commandName=type;
+  this.idProperty=idProperty;
   this.excludeOps=excludeOperations;
   profile=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
     @Override public List<String> getAllCandidates(    CommandContext ctx){
@@ -33,6 +34,30 @@
   profile.addCantAppearAfter(helpArg);
   operation=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
     @Override public List<String> getAllCandidates(    CommandContext ctx){
+      final boolean writeAttribute;
+      try {
+        writeAttribute=name.isPresent(ctx.getParsedArguments());
+      }
+ catch (      CommandFormatException e) {
+        return Collections.emptyList();
+      }
+      if (writeAttribute) {
+        Set<String> specified;
+        try {
+          specified=ctx.getParsedArguments().getArgumentNames();
+        }
+ catch (        CommandFormatException e) {
+          return Collections.emptyList();
+        }
+        final List<String> theProps=new ArrayList<String>();
+        for (        Property prop : getNodeProperties(ctx)) {
+          final String propName="--" + prop.getName();
+          if (!specified.contains(propName) && prop.getValue().has("access-type") && prop.getValue().get("access-type").asString().contains("write")) {
+            theProps.add(propName + "=");
+          }
+        }
+        return theProps;
+      }
       DefaultOperationRequestAddress address=new DefaultOperationRequestAddress();
       if (ctx.isDomainMode()) {
         final String profileName=profile.getValue(ctx.getParsedArguments());
@@ -80,7 +105,7 @@
       return Util.getNodeNames(ctx.getModelControllerClient(),address,type);
     }
   }
-),idName){
+),"--" + idProperty){
     @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
       if (ctx.isDomainMode() && !profile.isPresent(ctx.getParsedArguments())) {
         return false;
@@ -89,7 +114,6 @@
     }
   }
 ;
-  name.addRequiredPreceding(operation);
   name.addCantAppearAfter(helpArg);
   props=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
     @Override public List<String> getAllCandidates(    CommandContext ctx){
@@ -98,48 +122,47 @@
       if (theName == null) {
         return Collections.emptyList();
       }
-      final String op=operation.getValue(args);
-      if (op == null) {
+      final Set<String> specified;
+      try {
+        specified=args.getArgumentNames();
+      }
+ catch (      CommandFormatException e) {
         return Collections.emptyList();
       }
-      DefaultOperationRequestAddress address=new DefaultOperationRequestAddress();
-      if (ctx.isDomainMode()) {
-        final String profileName=profile.getValue(args);
-        if (profile == null) {
-          return Collections.emptyList();
-        }
-        address.toNode("profile=",profileName);
+      final List<Property> requestProps;
+      final String op=operation.getValue(args);
+      if (op == null) {
+        requestProps=getNodeProperties(ctx);
       }
-      for (      OperationRequestAddress.Node node : nodePath) {
-        address.toNode(node.getType(),node.getName());
-      }
-      address.toNode(type,"?");
-      final List<String> allProps=ctx.getOperationCandidatesProvider().getPropertyNames(op,address);
-      if (allProps.size() > 0) {
-        try {
-          Set<String> specified=args.getArgumentNames();
-          int i=0;
-          while (i < allProps.size()) {
-            final String propName="--" + allProps.get(i);
-            if (specified.contains(propName)) {
-              allProps.remove(i);
-            }
  else {
-              allProps.set(i,propName + "=");
-              ++i;
-            }
+        try {
+          ModelNode descr=getOperationDescription(ctx,op);
+          if (descr == null || !descr.has("request-properties")) {
+            return Collections.emptyList();
           }
+          requestProps=descr.get("request-properties").asPropertyList();
         }
- catch (        CommandFormatException e) {
+ catch (        IOException e1) {
           return Collections.emptyList();
         }
       }
-      return allProps;
+      final List<String> theProps=new ArrayList<String>();
+      for (      Property attr : requestProps) {
+        final String propName="--" + attr.getName();
+        if (!specified.contains(propName)) {
+          theProps.add(propName + "=");
+        }
+      }
+      return theProps;
     }
   }
 ),2,"--props"){
     @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
-      if (ctx.isDomainMode() && !profile.isPresent(ctx.getParsedArguments())) {
+      ParsedArguments args=ctx.getParsedArguments();
+      if (ctx.isDomainMode() && !profile.isPresent(args)) {
+        return false;
+      }
+      if (!operation.isPresent(args) || !name.isPresent(args)) {
         return false;
       }
       return super.canAppearNext(ctx);
@@ -149,10 +172,8 @@
     }
   }
 ;
-  props.addRequiredPreceding(operation);
-  props.addRequiredPreceding(name);
   helpArg.addCantAppearAfter(name);
-  helpProperties=new ArgumentWithoutValue(this,"--attributes");
+  helpProperties=new ArgumentWithoutValue(this,"--properties");
   helpProperties.addRequiredPreceding(helpArg);
   helpProperties.addCantAppearAfter(operation);
   helpCommands=new ArgumentWithoutValue(this,"--commands");

@@ -1,0 +1,52 @@
+{
+  ParsedArguments args=ctx.getParsedArguments();
+  DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
+  if (ctx.isDomainMode()) {
+    final String profile=this.profile.getValue(args);
+    if (profile == null) {
+      throw new OperationFormatException("Required argument --profile is missing.");
+    }
+    builder.addNode("profile",profile);
+  }
+  final String name=this.name.getValue(ctx.getParsedArguments(),true);
+  for (  OperationRequestAddress.Node node : nodePath) {
+    builder.addNode(node.getType(),node.getName());
+  }
+  builder.addNode(type,name);
+  builder.setOperationName(operation);
+  for (  String argName : args.getArgumentNames()) {
+    if (argName.equals("--profile")) {
+      continue;
+    }
+    final String valueString=args.getArgument(argName);
+    if (valueString == null) {
+      continue;
+    }
+    if (argName.charAt(1) == '-') {
+      argName=argName.substring(2);
+    }
+ else {
+      argName=argName.substring(1);
+    }
+    if (argName.endsWith("properties")) {
+      ModelNode nodeValue=new ModelNode();
+      String[] props=valueString.split(",");
+      for (      String prop : props) {
+        int equals=prop.indexOf('=');
+        if (equals == -1) {
+          throw new CommandFormatException("Property '" + prop + "' in '"+ valueString+ "' is missing the equals sign.");
+        }
+        String propName=prop.substring(0,equals);
+        if (propName.isEmpty()) {
+          throw new CommandFormatException("Property name is missing for '" + prop + "' in '"+ valueString+ "'");
+        }
+        nodeValue.add(propName,prop.substring(equals + 1));
+      }
+      builder.getModelNode().get(argName).set(nodeValue);
+    }
+ else {
+      builder.addProperty(argName,valueString);
+    }
+  }
+  return builder.buildRequest();
+}
