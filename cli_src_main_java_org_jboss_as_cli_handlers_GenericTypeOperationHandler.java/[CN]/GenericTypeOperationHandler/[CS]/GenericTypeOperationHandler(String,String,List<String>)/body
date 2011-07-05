@@ -115,63 +115,6 @@
   }
 ;
   name.addCantAppearAfter(helpArg);
-  props=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
-    @Override public List<String> getAllCandidates(    CommandContext ctx){
-      ParsedArguments args=ctx.getParsedArguments();
-      final String theName=name.getValue(args);
-      if (theName == null) {
-        return Collections.emptyList();
-      }
-      final Set<String> specified;
-      try {
-        specified=args.getArgumentNames();
-      }
- catch (      CommandFormatException e) {
-        return Collections.emptyList();
-      }
-      final List<Property> requestProps;
-      final String op=operation.getValue(args);
-      if (op == null) {
-        requestProps=getNodeProperties(ctx);
-      }
- else {
-        try {
-          ModelNode descr=getOperationDescription(ctx,op);
-          if (descr == null || !descr.has("request-properties")) {
-            return Collections.emptyList();
-          }
-          requestProps=descr.get("request-properties").asPropertyList();
-        }
- catch (        IOException e1) {
-          return Collections.emptyList();
-        }
-      }
-      final List<String> theProps=new ArrayList<String>();
-      for (      Property attr : requestProps) {
-        final String propName="--" + attr.getName();
-        if (!specified.contains(propName)) {
-          theProps.add(propName + "=");
-        }
-      }
-      return theProps;
-    }
-  }
-),2,"--driver-name"){
-    @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
-      ParsedArguments args=ctx.getParsedArguments();
-      if (ctx.isDomainMode() && !profile.isPresent(args)) {
-        return false;
-      }
-      if (!operation.isPresent(args) || !name.isPresent(args)) {
-        return false;
-      }
-      return super.canAppearNext(ctx);
-    }
-    @Override public boolean isPresent(    ParsedArguments args) throws CommandFormatException {
-      return false;
-    }
-  }
-;
   helpArg.addCantAppearAfter(name);
   helpProperties=new ArgumentWithoutValue(this,"--properties");
   helpProperties.addRequiredPreceding(helpArg);
@@ -181,4 +124,64 @@
   helpCommands.addCantAppearAfter(operation);
   helpCommands.addCantAppearAfter(helpProperties);
   helpProperties.addCantAppearAfter(helpCommands);
+  genericCompleter=new BaseArgumentTabCompleter(){
+    private final List<CommandArgument> staticArgs=new ArrayList<CommandArgument>();
+{
+      staticArgs.add(helpArg);
+      staticArgs.add(helpCommands);
+      staticArgs.add(helpProperties);
+      staticArgs.add(profile);
+      staticArgs.add(name);
+      staticArgs.add(operation);
+    }
+    private List<CommandArgument> nodeProps;
+    private Map<String,List<CommandArgument>> propsByOp;
+    @Override protected Iterable<CommandArgument> getAllArguments(    CommandContext ctx){
+      ParsedArguments args=ctx.getParsedArguments();
+      final String theName=name.getValue(args);
+      if (theName == null) {
+        return staticArgs;
+      }
+      final String op=operation.getValue(args);
+      if (op == null) {
+        if (nodeProps == null) {
+          nodeProps=new ArrayList<CommandArgument>();
+          for (          Property prop : getNodeProperties(ctx)) {
+            final ModelNode propDescr=prop.getValue();
+            if (propDescr.has("access-type") && "read-write".equals(propDescr.get("access-type").asString())) {
+              nodeProps.add(new ArgumentWithValue(GenericTypeOperationHandler.this,"--" + prop.getName()));
+            }
+          }
+        }
+        return nodeProps;
+      }
+ else {
+        if (propsByOp == null) {
+          propsByOp=new HashMap<String,List<CommandArgument>>();
+        }
+        List<CommandArgument> opProps=propsByOp.get(op);
+        if (opProps == null) {
+          final ModelNode descr;
+          try {
+            descr=getOperationDescription(ctx,op);
+          }
+ catch (          IOException e1) {
+            return Collections.emptyList();
+          }
+          if (descr == null || !descr.has("request-properties")) {
+            opProps=Collections.emptyList();
+          }
+ else {
+            opProps=new ArrayList<CommandArgument>();
+            for (            Property prop : descr.get("request-properties").asPropertyList()) {
+              opProps.add(new ArgumentWithValue(GenericTypeOperationHandler.this,"--" + prop.getName()));
+            }
+          }
+          propsByOp.put(op,opProps);
+        }
+        return opProps;
+      }
+    }
+  }
+;
 }
