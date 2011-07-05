@@ -1,20 +1,26 @@
 {
   if (event.isPre() || event.isOriginLocal())   return;
-  K key=event.getKey();
+  K key=this.getEventKey(event);
   if (this.keyFactory.ours(key)) {
     try {
-      Map<Object,Object> map=event.getValue();
-      if (!map.isEmpty()) {
-        String sessionId=key.getSessionId();
-        Integer version=SessionMapEntry.VERSION.get(map);
-        Long timestamp=SessionMapEntry.TIMESTAMP.get(map);
-        DistributableSessionMetadata metadata=SessionMapEntry.METADATA.get(map);
-        if ((version != null) && (timestamp != null) && (metadata != null)) {
-          boolean updated=this.manager.sessionChangedInDistributedCache(sessionId,null,version.intValue(),timestamp.longValue(),metadata);
-          if (!updated) {
-            log.warnf("Possible concurrency problem: Replicated version id %d is less than or equal to in-memory version for session %s",version,mask(sessionId));
+      ContextClassLoaderSwitcher.SwitchContext context=this.getSwitchContext(event);
+      try {
+        Map<Object,Object> map=event.getValue();
+        if (!map.isEmpty()) {
+          String sessionId=key.getSessionId();
+          Integer version=SessionMapEntry.VERSION.get(map);
+          Long timestamp=SessionMapEntry.TIMESTAMP.get(map);
+          DistributableSessionMetadata metadata=SessionMapEntry.METADATA.get(map);
+          if ((version != null) && (timestamp != null) && (metadata != null)) {
+            boolean updated=this.manager.sessionChangedInDistributedCache(sessionId,null,version.intValue(),timestamp.longValue(),metadata);
+            if (!updated) {
+              log.warnf("Possible concurrency problem: Replicated version id %d is less than or equal to in-memory version for session %s",version,mask(sessionId));
+            }
           }
         }
+      }
+  finally {
+        context.reset();
       }
     }
  catch (    Throwable e) {
