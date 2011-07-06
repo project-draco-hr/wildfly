@@ -3,18 +3,18 @@
   VirtualFile deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
   final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
   final EEApplicationClasses applicationClassesDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_APPLICATION_CLASSES_DESCRIPTION);
-  VirtualFile ejbJarXml=null;
-  if (deploymentRoot.getName().toLowerCase().endsWith(WAR_FILE_EXTENSION)) {
-    ejbJarXml=deploymentRoot.getChild(EJB_JAR_XML_LOCATION_IN_WAR);
+  final EjbJarMetaData ejbJarMetaData;
+  final EjbJarMetaData specMetaData=parseEjbJarXml(deploymentUnit);
+  final EjbJarMetaData jbossMetaData=parseJBossEjb3Xml(deploymentUnit);
+  if (specMetaData == null) {
+    if (jbossMetaData == null)     return;
+    ejbJarMetaData=jbossMetaData;
   }
- else   if (deploymentRoot.getName().toLowerCase().endsWith(JAR_FILE_EXTENSION)) {
-    ejbJarXml=deploymentRoot.getChild(EJB_JAR_XML_LOCATION_IN_JAR);
+ else   if (jbossMetaData == null) {
+    ejbJarMetaData=specMetaData;
   }
  else {
-    return;
-  }
-  if (ejbJarXml == null || !ejbJarXml.exists()) {
-    return;
+    throw new UnsupportedOperationException("NYI: descriptor merging");
   }
   EjbDeploymentMarker.mark(deploymentUnit);
   if (!deploymentUnit.hasAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_DESCRIPTION)) {
@@ -22,40 +22,17 @@
     final EjbJarDescription ejbModuleDescription=new EjbJarDescription(moduleDescription,applicationClassesDescription,deploymentUnit.getName().endsWith(".war"));
     deploymentUnit.putAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_DESCRIPTION,ejbModuleDescription);
   }
-  MetaDataElementParser.DTDInfo dtdInfo=new MetaDataElementParser.DTDInfo();
-  InputStream stream=null;
-  try {
-    stream=ejbJarXml.openStream();
-    XMLStreamReader reader=this.getXMLStreamReader(stream,ejbJarXml,dtdInfo);
-    EjbJarMetaData ejbJarMetaData=EjbJarMetaDataParser.parse(reader,dtdInfo);
-    deploymentUnit.putAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_METADATA,ejbJarMetaData);
-    if (ejbJarMetaData instanceof EjbJar31MetaData) {
-      EjbJar31MetaData ejbJar31MetaData=(EjbJar31MetaData)ejbJarMetaData;
-      if (ejbJar31MetaData.getModuleName() != null) {
-        eeModuleDescription.setModuleName(ejbJar31MetaData.getModuleName());
-      }
-      if (ejbJar31MetaData.isMetadataComplete()) {
-        MetadataCompleteMarker.setMetadataComplete(deploymentUnit,true);
-      }
+  deploymentUnit.putAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_METADATA,ejbJarMetaData);
+  if (ejbJarMetaData instanceof EjbJar31MetaData) {
+    EjbJar31MetaData ejbJar31MetaData=(EjbJar31MetaData)ejbJarMetaData;
+    if (ejbJar31MetaData.getModuleName() != null) {
+      eeModuleDescription.setModuleName(ejbJar31MetaData.getModuleName());
     }
- else     if (!ejbJarMetaData.isEJB3x()) {
+    if (ejbJar31MetaData.isMetadataComplete()) {
       MetadataCompleteMarker.setMetadataComplete(deploymentUnit,true);
     }
   }
- catch (  XMLStreamException xmlse) {
-    throw new DeploymentUnitProcessingException("Exception while parsing ejb-jar.xml: " + ejbJarXml.getPathName(),xmlse);
-  }
-catch (  IOException ioe) {
-    throw new DeploymentUnitProcessingException("Failed to create reader for ejb-jar.xml: " + ejbJarXml.getPathName(),ioe);
-  }
- finally {
-    try {
-      if (stream != null) {
-        stream.close();
-      }
-    }
- catch (    IOException ioe) {
-      logger.debug("Ignoring exception while closing the InputStream ",ioe);
-    }
+ else   if (!ejbJarMetaData.isEJB3x()) {
+    MetadataCompleteMarker.setMetadataComplete(deploymentUnit,true);
   }
 }
