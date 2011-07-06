@@ -1,0 +1,24 @@
+{
+  final ServiceName serviceName=configuration.getComponentDescription().getServiceName().append("WeldInstantiator");
+  final WeldManagedReferenceFactory factory=new WeldManagedReferenceFactory(componentClass,beanName,interceptorClasses,classLoader,beanDeploymentArchiveId);
+  ServiceBuilder<WeldManagedReferenceFactory> builder=target.addService(serviceName,factory).addDependency(weldServiceName,WeldContainer.class,factory.getWeldContainer());
+  configuration.setInstanceFactory(factory);
+  configuration.getStartDependencies().add(new DependencyConfigurator(){
+    @Override public void configureDependency(    final ServiceBuilder<?> serviceBuilder) throws DeploymentUnitProcessingException {
+      serviceBuilder.addDependency(serviceName);
+    }
+  }
+);
+  if (beanName != null) {
+    final Jsr299BindingsInterceptor.Factory aroundInvokeFactory=new Jsr299BindingsInterceptor.Factory(description.getBeanDeploymentArchiveId(),beanName,InterceptionType.AROUND_INVOKE);
+    builder.addDependency(weldServiceName,WeldContainer.class,aroundInvokeFactory.getWeldContainer());
+    configuration.addComponentInterceptor(aroundInvokeFactory,InterceptorOrder.Component.CDI_INTERCEPTORS,false);
+    final Jsr299BindingsInterceptor.Factory preDestroyInterceptor=new Jsr299BindingsInterceptor.Factory(description.getBeanDeploymentArchiveId(),beanName,InterceptionType.PRE_DESTROY);
+    builder.addDependency(weldServiceName,WeldContainer.class,preDestroyInterceptor.getWeldContainer());
+    configuration.addPreDestroyInterceptor(preDestroyInterceptor,InterceptorOrder.ComponentPreDestroy.CDI_INTERCEPTORS);
+    final Jsr299BindingsInterceptor.Factory postConstruct=new Jsr299BindingsInterceptor.Factory(description.getBeanDeploymentArchiveId(),beanName,InterceptionType.POST_CONSTRUCT);
+    builder.addDependency(weldServiceName,WeldContainer.class,postConstruct.getWeldContainer());
+    configuration.addPostConstructInterceptor(postConstruct,InterceptorOrder.ComponentPostConstruct.CDI_INTERCEPTORS);
+  }
+  builder.install();
+}
