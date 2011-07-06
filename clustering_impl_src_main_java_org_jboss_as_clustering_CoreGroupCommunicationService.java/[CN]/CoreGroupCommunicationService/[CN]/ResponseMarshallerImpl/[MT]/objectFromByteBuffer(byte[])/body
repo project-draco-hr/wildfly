@@ -1,31 +1,17 @@
 {
-  boolean trace=CoreGroupCommunicationService.this.log.isTraceEnabled();
   Object retval=CoreGroupCommunicationService.this.objectFromByteBufferResponseInternal(buf);
   if (!(retval instanceof HAServiceResponse)) {
     return retval;
   }
   String serviceName=((HAServiceResponse)retval).getServiceName();
   byte[] payload=((HAServiceResponse)retval).getPayload();
-  ClassLoader previousCL=null;
-  boolean overrideCL=false;
+  WeakReference<ClassLoader> weak=CoreGroupCommunicationService.this.clmap.get(serviceName);
+  SwitchContext context=CoreGroupCommunicationService.this.classLoaderSwitcher.getSwitchContext((weak != null) ? weak.get() : CoreGroupCommunicationService.class.getClassLoader());
   try {
-    WeakReference<ClassLoader> weak=CoreGroupCommunicationService.this.clmap.get(serviceName);
-    if (weak != null) {
-      previousCL=Thread.currentThread().getContextClassLoader();
-      ClassLoader loader=weak.get();
-      if (trace) {
-        CoreGroupCommunicationService.this.log.trace("overriding response Thread ContextClassLoader for service " + serviceName);
-      }
-      overrideCL=true;
-      Thread.currentThread().setContextClassLoader(loader);
-    }
     retval=CoreGroupCommunicationService.this.objectFromByteBufferResponseInternal(payload);
     return retval;
   }
   finally {
-    if (overrideCL == true) {
-      CoreGroupCommunicationService.this.log.trace("resetting response classloader");
-      Thread.currentThread().setContextClassLoader(previousCL);
-    }
+    context.reset();
   }
 }

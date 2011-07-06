@@ -3,8 +3,6 @@
   Object retval=null;
   Object handler=null;
   boolean trace=this.log.isTraceEnabled();
-  boolean overrideCL=false;
-  ClassLoader previousCL=null;
   String service=null;
   byte[] request_bytes=null;
   if (trace) {
@@ -35,17 +33,9 @@
     this.log.warn("Partition " + CoreGroupCommunicationService.this.getGroupName() + " failed unserializing message buffer (msg="+ req+ ")",e);
     return null;
   }
+  WeakReference<ClassLoader> weak=CoreGroupCommunicationService.this.clmap.get(service);
+  SwitchContext context=CoreGroupCommunicationService.this.classLoaderSwitcher.getSwitchContext((weak != null) ? weak.get() : CoreGroupCommunicationService.class.getClassLoader());
   try {
-    WeakReference<ClassLoader> weak=CoreGroupCommunicationService.this.clmap.get(service);
-    if (weak != null) {
-      if (trace) {
-        this.log.trace("overriding Thread ContextClassLoader for RPC service " + service);
-      }
-      previousCL=Thread.currentThread().getContextClassLoader();
-      ClassLoader loader=weak.get();
-      overrideCL=true;
-      Thread.currentThread().setContextClassLoader(loader);
-    }
     body=CoreGroupCommunicationService.this.objectFromByteBufferInternal(request_bytes);
   }
  catch (  Exception e) {
@@ -53,10 +43,7 @@
     return null;
   }
  finally {
-    if (overrideCL) {
-      this.log.trace("resetting Thread ContextClassLoader");
-      Thread.currentThread().setContextClassLoader(previousCL);
-    }
+    context.reset();
   }
   if (body == null || !(body instanceof MethodCall)) {
     this.log.warn("Partition " + CoreGroupCommunicationService.this.getGroupName() + " message does not contain a MethodCall object!");
@@ -77,7 +64,7 @@
   method_call.setName(newMethodName);
   try {
     retval=method_call.invoke(handler);
-    if (overrideCL) {
+    if (weak != null) {
       byte[] retbytes=CoreGroupCommunicationService.this.objectToByteBufferResponseInternal(retval);
       retval=new HAServiceResponse(handlerName,retbytes);
     }
