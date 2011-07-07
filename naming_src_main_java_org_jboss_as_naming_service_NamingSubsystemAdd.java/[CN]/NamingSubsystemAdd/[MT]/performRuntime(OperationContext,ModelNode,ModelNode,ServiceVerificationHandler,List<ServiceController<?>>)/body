@@ -4,11 +4,36 @@
   final NamingStore namingStore=new InMemoryNamingStore(new NamingEventCoordinator());
   final ServiceTarget target=context.getServiceTarget();
   newControllers.add(target.addService(NamingService.SERVICE_NAME,new NamingService(namingStore)).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME).setInitialMode(ServiceController.Mode.ACTIVE).addListener(verificationHandler).install());
-  newControllers.add(addGlobalContextFactory(target,"global",verificationHandler));
-  newControllers.add(addGlobalContextFactory(target,"jboss",verificationHandler));
-  newControllers.add(addContextFactory(target,"app",verificationHandler));
-  newControllers.add(addContextFactory(target,"module",verificationHandler));
-  newControllers.add(addContextFactory(target,"comp",verificationHandler));
+  final NamingStore globalNamingStore=new InMemoryNamingStore();
+  newControllers.add(target.addService(ContextNames.GLOBAL_CONTEXT_SERVICE_NAME,new NamingStoreService(globalNamingStore)).setInitialMode(ServiceController.Mode.ACTIVE).addListener(verificationHandler).install());
+  final NamingStore jbossNamingStore=new InMemoryNamingStore();
+  newControllers.add(target.addService(ContextNames.JBOSS_CONTEXT_SERVICE_NAME,new NamingStoreService(jbossNamingStore)).setInitialMode(ServiceController.Mode.ACTIVE).addListener(verificationHandler).install());
+  NamespaceContextSelector.setDefault(new NamespaceContextSelector(){
+    public Context getContext(    String identifier){
+      final NamingStore namingStore;
+      if (identifier.equals("global")) {
+        namingStore=globalNamingStore;
+      }
+ else       if (identifier.equals("jboss")) {
+        namingStore=jbossNamingStore;
+      }
+ else {
+        namingStore=null;
+      }
+      if (namingStore != null) {
+        try {
+          return (Context)namingStore.lookup(EMPTY_NAME);
+        }
+ catch (        NamingException e) {
+          throw new IllegalStateException(e);
+        }
+      }
+ else {
+        return null;
+      }
+    }
+  }
+);
   newControllers.add(InitialContextFactoryService.addService(target,verificationHandler));
   newControllers.add(target.addService(JndiViewExtensionRegistry.SERVICE_NAME,new JndiViewExtensionRegistry()).install());
   if (context.isBooting()) {
