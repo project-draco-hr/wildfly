@@ -1,0 +1,24 @@
+{
+  if (messageBeanAnnotations.isEmpty())   return;
+  final EjbJarDescription ejbJarDescription=getEjbJarDescription(deploymentUnit);
+  final ServiceName deploymentUnitServiceName=deploymentUnit.getServiceName();
+  for (  final AnnotationInstance messageBeanAnnotation : messageBeanAnnotations) {
+    final AnnotationTarget target=messageBeanAnnotation.target();
+    final ClassInfo beanClassInfo=(ClassInfo)target;
+    final String ejbName=beanClassInfo.name().local();
+    final AnnotationValue nameValue=messageBeanAnnotation.value("name");
+    final String beanName=nameValue == null || nameValue.asString().isEmpty() ? ejbName : nameValue.asString();
+    final MessageDrivenBeanMetaData beanMetaData=getEnterpriseBeanMetaData(deploymentUnit,beanName,MessageDrivenBeanMetaData.class);
+    final String beanClassName;
+    if (beanMetaData != null) {
+      beanClassName=override(beanClassInfo.name().toString(),beanMetaData.getEjbClass());
+    }
+ else {
+      beanClassName=beanClassInfo.name().toString();
+    }
+    final String messageListenerInterfaceName=messageBeanAnnotation.value("messageListenerInterface").asClass().name().toString();
+    final MessageDrivenComponentDescription beanDescription=new MessageDrivenComponentDescription(beanName,beanClassName,ejbJarDescription,deploymentUnitServiceName,messageListenerInterfaceName);
+    ejbJarDescription.getEEModuleDescription().addComponent(beanDescription);
+  }
+  EjbDeploymentMarker.mark(deploymentUnit);
+}
