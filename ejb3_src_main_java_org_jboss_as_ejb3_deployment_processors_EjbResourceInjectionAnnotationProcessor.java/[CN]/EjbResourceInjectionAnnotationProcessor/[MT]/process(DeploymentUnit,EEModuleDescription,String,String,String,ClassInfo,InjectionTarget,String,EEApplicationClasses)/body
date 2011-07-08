@@ -1,0 +1,31 @@
+{
+  if (!isEmpty(lookup) && !isEmpty(beanName)) {
+    logger.debug("Both beanName = " + beanName + " and lookup = "+ lookup+ " have been specified in @EJB annotation."+ " lookup will be given preference. Class: "+ classInfo.name());
+  }
+  final EEModuleClassDescription classDescription=applicationClasses.getOrAddClassByName(classInfo.name().toString());
+  final InjectionSource valueSource;
+  EjbInjectionSource ejbInjectionSource=null;
+  if (!isEmpty(lookup)) {
+    valueSource=new LookupInjectionSource(lookup);
+  }
+ else   if (!isEmpty(beanName)) {
+    valueSource=ejbInjectionSource=new EjbInjectionSource(beanName,beanInterface);
+  }
+ else {
+    valueSource=ejbInjectionSource=new EjbInjectionSource(beanInterface);
+  }
+  if (ejbInjectionSource != null) {
+    deploymentUnit.addToAttachmentList(EjbDeploymentAttachmentKeys.EJB_INJECTIONS,ejbInjectionSource);
+  }
+  final ResourceInjectionConfiguration injectionConfiguration=targetDescription != null ? new ResourceInjectionConfiguration(targetDescription,new LookupInjectionSource(localContextName)) : null;
+  final BindingConfiguration bindingConfiguration=new BindingConfiguration(localContextName,valueSource);
+  classDescription.getConfigurators().add(new ClassConfigurator(){
+    public void configure(    final DeploymentPhaseContext context,    final EEModuleClassDescription description,    final EEModuleClassConfiguration configuration) throws DeploymentUnitProcessingException {
+      configuration.getBindingConfigurations().add(bindingConfiguration);
+      if (injectionConfiguration != null) {
+        configuration.getInjectionConfigurations().add(injectionConfiguration);
+      }
+    }
+  }
+);
+}

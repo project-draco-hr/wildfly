@@ -1,0 +1,72 @@
+{
+  if (entry.getInjectionTargets() != null) {
+    for (    ResourceInjectionTargetMetaData injectionTarget : entry.getInjectionTargets()) {
+      final Class<?> injectionTargetClass;
+      try {
+        injectionTargetClass=classLoader.loadClass(injectionTarget.getInjectionTargetClass());
+      }
+ catch (      ClassNotFoundException e) {
+        throw new DeploymentUnitProcessingException("Could not load " + injectionTarget.getInjectionTargetClass() + " referenced in env-entry injection point ",e);
+      }
+      EEModuleClassDescription eeModuleClassDescription=applicationClasses.getOrAddClassByName(injectionTargetClass.getName());
+      final ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(injectionTargetClass);
+      String methodName="set" + injectionTarget.getInjectionTargetName().substring(0,1).toUpperCase() + injectionTarget.getInjectionTargetName().substring(1);
+      boolean methodFound=false;
+      Method method=null;
+      Field field=null;
+      Class<?> injectionTargetType=null;
+      String memberName=injectionTarget.getInjectionTargetName();
+      Class<?> current=injectionTargetClass;
+      while (current != Object.class && current != null && !methodFound) {
+        final Collection<Method> methods=index.getAllMethods(methodName);
+        for (        Method m : methods) {
+          if (m.getParameterTypes().length == 1) {
+            if (m.isBridge() || m.isSynthetic()) {
+              continue;
+            }
+            if (methodFound) {
+              throw new DeploymentUnitProcessingException("Two setter methods for " + injectionTarget.getInjectionTargetName() + " on class "+ injectionTarget.getInjectionTargetClass()+ " found when applying <injection-target> for env-entry");
+            }
+            methodFound=true;
+            method=m;
+            injectionTargetType=m.getParameterTypes()[0];
+            memberName=methodName;
+          }
+        }
+        current=current.getSuperclass();
+      }
+      if (method == null) {
+        current=injectionTargetClass;
+        while (current != Object.class && current != null && field == null) {
+          field=index.getField(injectionTarget.getInjectionTargetName());
+          if (field != null) {
+            injectionTargetType=field.getType();
+            memberName=injectionTarget.getInjectionTargetName();
+            break;
+          }
+          current=current.getSuperclass();
+        }
+      }
+      if (field == null && method == null) {
+        throw new DeploymentUnitProcessingException("Could not resolve injection point " + injectionTarget.getInjectionTargetName() + " on class "+ injectionTarget.getInjectionTargetClass()+ " specified in web.xml");
+      }
+      if (classType != null) {
+        if (!classType.isAssignableFrom(injectionTargetType)) {
+          throw new DeploymentUnitProcessingException("Injection target " + injectionTarget.getInjectionTargetName() + " on class "+ injectionTarget.getInjectionTargetClass()+ " is not compatible with the type of injection");
+        }
+      }
+ else {
+        classType=injectionTargetType;
+      }
+      final InjectionTarget injectionTargetDescription=method == null ? new FieldInjectionTarget(eeModuleClassDescription.getClassName(),memberName,classType.getName()) : new MethodInjectionTarget(eeModuleClassDescription.getClassName(),memberName,classType.getName());
+      final ResourceInjectionConfiguration injectionConfiguration=new ResourceInjectionConfiguration(injectionTargetDescription,injectionSource);
+      eeModuleClassDescription.getConfigurators().add(new ClassConfigurator(){
+        @Override public void configure(        DeploymentPhaseContext context,        EEModuleClassDescription description,        EEModuleClassConfiguration configuration) throws DeploymentUnitProcessingException {
+          configuration.getInjectionConfigurations().add(injectionConfiguration);
+        }
+      }
+);
+    }
+  }
+  return classType;
+}
