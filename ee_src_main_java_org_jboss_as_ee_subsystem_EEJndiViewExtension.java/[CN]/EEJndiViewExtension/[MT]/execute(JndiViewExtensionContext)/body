@@ -1,0 +1,42 @@
+{
+  final ModelNode applicationsNode=context.getResult().get("applications");
+  final ServiceRegistry serviceRegistry=context.getOperationContext().getServiceRegistry(false);
+  final Set<Resource.ResourceEntry> deploymentResource=context.getOperationContext().getRootResource().getChildren(DEPLOYMENT);
+  for (  final Resource.ResourceEntry entry : deploymentResource) {
+    final ServiceController<?> deploymentUnitServiceController=serviceRegistry.getService(ServiceName.JBOSS.append("deployment","unit",entry.getName()));
+    if (deploymentUnitServiceController != null) {
+      final ModelNode deploymentNode=applicationsNode.get(entry.getName());
+      final DeploymentUnit deploymentUnit=DeploymentUnit.class.cast(deploymentUnitServiceController.getValue());
+      final String appName=cleanName(deploymentUnit.getName());
+      final ServiceName appContextName=ContextNames.contextServiceNameOfApplication(appName);
+      final ServiceController<?> appContextController=serviceRegistry.getService(appContextName);
+      if (appContextController != null) {
+        final NamingStore appStore=NamingStore.class.cast(appContextController.getValue());
+        try {
+          context.addEntries(deploymentNode.get("java:app"),new NamingContext(appStore,null));
+        }
+ catch (        NamingException e) {
+          throw new OperationFailedException(e,new ModelNode().set("Failed to read java:app entries for application [" + appName + "]"));
+        }
+      }
+      if (DeploymentTypeMarker.isType(DeploymentType.EAR,deploymentUnit)) {
+        final List<ResourceRoot> roots=deploymentUnit.getAttachmentList(org.jboss.as.server.deployment.Attachments.RESOURCE_ROOTS);
+        if (roots != null)         for (        ResourceRoot root : roots) {
+          if (SubDeploymentMarker.isSubDeployment(root)) {
+            final ResourceRoot parentRoot=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.DEPLOYMENT_ROOT);
+            final String relativePath=root.getRoot().getPathNameRelativeTo(parentRoot.getRoot());
+            final ServiceName subDeploymentServiceName=Services.deploymentUnitName(deploymentUnit.getName(),relativePath);
+            final ServiceController<?> subDeploymentController=serviceRegistry.getService(subDeploymentServiceName);
+            if (subDeploymentController != null) {
+              final DeploymentUnit subDeploymentUnit=DeploymentUnit.class.cast(subDeploymentController.getValue());
+              handleModule(context,subDeploymentUnit,deploymentNode.get("modules"),serviceRegistry);
+            }
+          }
+        }
+      }
+ else {
+        handleModule(context,deploymentUnit,deploymentNode.get("modules"),serviceRegistry);
+      }
+    }
+  }
+}

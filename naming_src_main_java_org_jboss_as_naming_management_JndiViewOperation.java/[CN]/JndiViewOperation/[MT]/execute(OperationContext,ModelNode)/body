@@ -1,0 +1,53 @@
+{
+  final ModelNode resultNode=context.getResult();
+  if (context.getType() == OperationContext.Type.SERVER) {
+    context.addStep(new OperationStepHandler(){
+      public void execute(      final OperationContext context,      final ModelNode operation) throws OperationFailedException {
+        final ServiceRegistry serviceRegistry=context.getServiceRegistry(false);
+        final ModelNode contextsNode=resultNode.get("java: contexts");
+        final ServiceController<?> jbossContextService=serviceRegistry.getService(ContextNames.JBOSS_CONTEXT_SERVICE_NAME);
+        final NamingStore jbossContextNamingStore=NamingStore.class.cast(jbossContextService.getValue());
+        try {
+          addEntries(contextsNode.get("java:jboss"),new NamingContext(jbossContextNamingStore,null));
+        }
+ catch (        NamingException e) {
+          e.printStackTrace();
+          throw new OperationFailedException(e,new ModelNode().set("Failed to read java:jboss context entries."));
+        }
+        final ServiceController<?> globalContextService=serviceRegistry.getService(ContextNames.GLOBAL_CONTEXT_SERVICE_NAME);
+        final NamingStore globalContextNamingStore=NamingStore.class.cast(globalContextService.getValue());
+        try {
+          addEntries(contextsNode.get("java:global"),new NamingContext(globalContextNamingStore,null));
+        }
+ catch (        NamingException e) {
+          e.printStackTrace();
+          throw new OperationFailedException(e,new ModelNode().set("Failed to read java:global context entries."));
+        }
+        final ServiceController<?> extensionRegistryController=serviceRegistry.getService(JndiViewExtensionRegistry.SERVICE_NAME);
+        if (extensionRegistryController != null) {
+          final JndiViewExtensionRegistry extensionRegistry=JndiViewExtensionRegistry.class.cast(extensionRegistryController.getValue());
+          for (          JndiViewExtension extension : extensionRegistry.getExtensions()) {
+            extension.execute(new JndiViewExtensionContext(){
+              public OperationContext getOperationContext(){
+                return context;
+              }
+              public ModelNode getResult(){
+                return resultNode;
+              }
+              public void addEntries(              ModelNode current,              Context context) throws NamingException {
+                JndiViewOperation.this.addEntries(current,context);
+              }
+            }
+);
+          }
+        }
+        context.completeStep();
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+ else {
+    resultNode.set("Jndi view is only available in runtime mode.");
+  }
+  context.completeStep();
+}

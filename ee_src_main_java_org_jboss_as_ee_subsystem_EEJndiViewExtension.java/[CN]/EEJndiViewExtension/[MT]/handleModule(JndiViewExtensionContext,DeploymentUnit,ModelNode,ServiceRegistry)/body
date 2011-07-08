@@ -1,0 +1,33 @@
+{
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+  final String appName=moduleDescription.getApplicationName();
+  final String moduleName=moduleDescription.getModuleName();
+  final ModelNode moduleNode=modulesNode.get(moduleDescription.getModuleName());
+  final ServiceName moduleContextName=ContextNames.contextServiceNameOfModule(appName,moduleName);
+  final ServiceController<?> moduleContextController=serviceRegistry.getService(moduleContextName);
+  if (moduleContextController != null) {
+    final NamingStore moduleStore=NamingStore.class.cast(moduleContextController.getValue());
+    try {
+      context.addEntries(moduleNode.get("java:module"),new NamingContext(moduleStore,null));
+    }
+ catch (    NamingException e) {
+      throw new OperationFailedException(e,new ModelNode().set("Failed to read java:module entries for module [" + appName + ", "+ moduleName+ "]"));
+    }
+    final Collection<ComponentDescription> componentDescriptions=moduleDescription.getComponentDescriptions();
+    for (    ComponentDescription componentDescription : componentDescriptions) {
+      final String componentName=componentDescription.getComponentName();
+      final ServiceName compContextServiceName=ContextNames.contextServiceNameOfComponent(appName,moduleName,componentName);
+      final ServiceController<?> compContextController=serviceRegistry.getService(compContextServiceName);
+      if (compContextController != null) {
+        final ModelNode componentNode=moduleNode.get("components").get(componentName);
+        final NamingStore compStore=NamingStore.class.cast(compContextController.getValue());
+        try {
+          context.addEntries(componentNode.get("java:comp"),new NamingContext(compStore,null));
+        }
+ catch (        NamingException e) {
+          throw new OperationFailedException(e,new ModelNode().set("Failed to read java:comp entries for component [" + appName + ", "+ moduleName+ ", "+ componentName+ "]"));
+        }
+      }
+    }
+  }
+}
