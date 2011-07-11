@@ -20,7 +20,7 @@
         if (!status.warned) {
           String suffix=deployed.containsKey(deploymentName) ? " A previous version of this content was deployed and remains deployed." : "";
           String msg=String.format("Deployment content %s appears to be incomplete and is not progressing toward " + "completion. This content cannot be auto-deployed.%s",incompleteFile,suffix,DO_DEPLOY,SKIP_DEPLOY);
-          writeFailedMarker(incompleteFile,new ModelNode().set(msg));
+          writeFailedMarker(incompleteFile,new ModelNode().set(msg),status.timestamp);
           log.error(msg);
           status.warned=true;
           warnLogged=true;
@@ -49,13 +49,14 @@
   if (scanContext.nonscannable.size() > 0) {
     result=(result == ScanStatus.PROCEED ? ScanStatus.RETRY : result);
     boolean logAll=nonscannableLogged.size() != oldNonScannableCount;
-    for (    Map.Entry<File,NonScannableZipException> entry : scanContext.nonscannable.entrySet()) {
+    for (    Map.Entry<File,NonScannableStatus> entry : scanContext.nonscannable.entrySet()) {
       File nonScannable=entry.getKey();
       String fileName=nonScannable.getName();
       if (nonscannableLogged.add(nonScannable) || logAll) {
-        NonScannableZipException e=entry.getValue();
+        NonScannableStatus nonScannableStatus=entry.getValue();
+        NonScannableZipException e=nonScannableStatus.exception;
         String msg=String.format("File %s was configured for auto-deploy but could not be safely auto-deployed. The reason the file " + "could not be auto-deployed was: %s.  To enable deployment of this file create a file called %s%s",fileName,e.getLocalizedMessage(),fileName,DO_DEPLOY);
-        writeFailedMarker(nonScannable,new ModelNode().set(msg));
+        writeFailedMarker(nonScannable,new ModelNode().set(msg),nonScannableStatus.timestamp);
         log.error(msg);
         warnLogged=true;
         result=ScanStatus.ABORT;
