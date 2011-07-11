@@ -7,7 +7,8 @@
     final String fileName=child.getName();
     if (fileName.endsWith(DEPLOYED)) {
       final String deploymentName=fileName.substring(0,fileName.length() - DEPLOYED.length());
-      if (!deployed.containsKey(deploymentName)) {
+      DeploymentMarker deploymentMarker=deployed.get(deploymentName);
+      if (deploymentMarker == null) {
         scanContext.toRemove.remove(deploymentName);
         removeExtraneousMarker(child,fileName);
       }
@@ -16,7 +17,16 @@
         if (deploymentFile.exists()) {
           scanContext.toRemove.remove(deploymentName);
           if (deployed.get(deploymentName).lastModified != child.lastModified()) {
-            scanContext.scannerTasks.add(new RedeployTask(deploymentName,child.lastModified(),directory));
+            scanContext.scannerTasks.add(new RedeployTask(deploymentName,child.lastModified(),directory,!child.isDirectory()));
+          }
+        }
+ else {
+          boolean autoDeployable=deploymentMarker.archive ? autoDeployZip : autoDeployExploded;
+          if (!autoDeployable) {
+            scanContext.toRemove.remove(deploymentName);
+            if (!deploymentMarker.archive) {
+              scanContext.prematureExplodedDeletions.add(deploymentName);
+            }
           }
         }
       }
