@@ -1,0 +1,51 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+  final ServicesAttachment servicesAttachment=deploymentUnit.getAttachment(Attachments.SERVICES);
+  if (module != null && servicesAttachment != null) {
+    final ModuleClassLoader classLoader=module.getClassLoader();
+    PersistenceProvider provider=null;
+    final List<String> providerNames=servicesAttachment.getServiceImplementations(PersistenceProvider.class.getName());
+    if (providerNames.size() > 1) {
+      throw new DeploymentUnitProcessingException("only one persistence provider can be packaged with an application " + providerNames);
+    }
+    for (    String providerName : providerNames) {
+      try {
+        final Class<? extends PersistenceProvider> providerClass=classLoader.loadClass(providerName).asSubclass(PersistenceProvider.class);
+        final Constructor<? extends PersistenceProvider> constructor=providerClass.getConstructor();
+        provider=constructor.newInstance();
+        log.infof("Deployment has its own Persistence Provider %s ",providerClass);
+      }
+ catch (      Exception e) {
+        throw new DeploymentUnitProcessingException("Could not deploy application packaged persistence provider '" + providerName + "'",e);
+      }
+    }
+    PersistenceProviderDeploymentHolder holder;
+    Attachable topDu=top(deploymentUnit);
+    holder=topDu.getAttachment(PersistenceProviderDeploymentHolder.DEPLOYED_PERSISTENCE_PROVIDER);
+    if (provider != null) {
+      if (holder == null) {
+        holder=new PersistenceProviderDeploymentHolder();
+      }
+      holder.setProvider(provider);
+      String adapterClass=holder.getPersistenceProviderAdaptorClassName();
+      if (adapterClass != null) {
+        try {
+          PersistenceProviderAdaptor adaptor=(PersistenceProviderAdaptor)classLoader.loadClass(adapterClass).newInstance();
+          holder.setAdapter(adaptor);
+          adaptor.setJtaManager(JtaManagerImpl.getInstance());
+        }
+ catch (        InstantiationException e) {
+          throw new DeploymentUnitProcessingException("could not create instance of adapter class '" + adapterClass + "'",e);
+        }
+catch (        IllegalAccessException e) {
+          throw new DeploymentUnitProcessingException("could not create instance of adapter class '" + adapterClass + "'",e);
+        }
+catch (        ClassNotFoundException e) {
+          throw new DeploymentUnitProcessingException("could not create instance of adapter class '" + adapterClass + "'",e);
+        }
+      }
+      topDu.putAttachment(PersistenceProviderDeploymentHolder.DEPLOYED_PERSISTENCE_PROVIDER,holder);
+    }
+  }
+}

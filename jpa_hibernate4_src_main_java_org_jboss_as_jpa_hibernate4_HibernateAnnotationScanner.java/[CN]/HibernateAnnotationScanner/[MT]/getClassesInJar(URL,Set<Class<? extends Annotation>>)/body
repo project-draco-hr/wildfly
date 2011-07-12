@@ -1,0 +1,36 @@
+{
+  log.tracef("getClassesInJar url=%s annotations=%s",jartoScan.getPath(),annotationsToLookFor);
+  PersistenceUnitMetadata pu=persistenceUnitMetadataTLS.get();
+  if (pu == null) {
+    throw new RuntimeException("Missing PersistenceUnitMetadataImpl (thread local wasn't set)");
+  }
+  Index index=getJarFileIndex(jartoScan,pu);
+  if (index == null) {
+    throw new RuntimeException("Missing annotation index to scan entity classes");
+  }
+  if (jartoScan == null) {
+    throw new IllegalArgumentException("Null jar to scan url");
+  }
+  if (annotationsToLookFor == null) {
+    throw new IllegalArgumentException("Null annotations to look for");
+  }
+  if (annotationsToLookFor.size() == 0) {
+    throw new IllegalArgumentException("Zero annotations to look for");
+  }
+  Set<Class<?>> result=new HashSet<Class<?>>();
+  for (  Class<? extends Annotation> annClass : annotationsToLookFor) {
+    DotName annotation=DotName.createSimple(annClass.getName());
+    List<AnnotationInstance> classesWithAnnotation=index.getAnnotations(annotation);
+    for (    AnnotationInstance annotationInstance : classesWithAnnotation) {
+      String className=annotationInstance.target().toString();
+      try {
+        log.tracef("getClassesInJar found class %s with annotation %s",className,annClass.getName());
+        result.add(pu.getClassLoader().loadClass(className));
+      }
+ catch (      ClassNotFoundException e) {
+        throw new RuntimeException("could not load entity class '" + className + "' with PersistenceUnitInfo.getNewTempClassLoader()",e);
+      }
+    }
+  }
+  return result;
+}

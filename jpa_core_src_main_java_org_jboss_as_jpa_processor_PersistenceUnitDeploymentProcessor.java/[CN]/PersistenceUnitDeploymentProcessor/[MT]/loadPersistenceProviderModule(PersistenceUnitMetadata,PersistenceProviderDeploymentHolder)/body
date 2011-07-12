@@ -1,0 +1,37 @@
+{
+  if (persistenceProviderDeploymentHolder == null || persistenceProviderDeploymentHolder.getProvider() == null) {
+    String persistenceProviderModule=pu.getProperties().getProperty(Configuration.PROVIDER_MODULE);
+    String persistenceProviderClassName=pu.getPersistenceProviderClassName();
+    if (persistenceProviderClassName == null) {
+      persistenceProviderClassName=Configuration.PROVIDER_CLASS_DEFAULT;
+    }
+    if (persistenceProviderModule == null) {
+      if (persistenceProviderClassName.equals(Configuration.PROVIDER_CLASS_DEFAULT)) {
+        persistenceProviderModule=Configuration.PROVIDER_MODULE_DEFAULT;
+      }
+    }
+    if (!PersistenceProviderResolverImpl.getInstance().getPersistenceProviders().contains(persistenceProviderClassName)) {
+      if (persistenceProviderModule != null) {
+        final ModuleLoader moduleLoader=Module.getBootModuleLoader();
+        Module module=null;
+        try {
+          module=moduleLoader.loadModule(ModuleIdentifier.fromString(persistenceProviderModule));
+        }
+ catch (        ModuleLoadException e) {
+          throw new DeploymentUnitProcessingException("persistence provider module load error" + persistenceProviderModule + "(class "+ persistenceProviderClassName+ ")",e);
+        }
+        final ServiceLoader<PersistenceProvider> serviceLoader=module.loadService(PersistenceProvider.class);
+        if (serviceLoader != null) {
+          PersistenceProvider persistenceProvider=null;
+          for (          PersistenceProvider provider : serviceLoader) {
+            if (persistenceProvider != null) {
+              throw new DeploymentUnitProcessingException("persistence provider module has more than one provider" + persistenceProviderModule + "(class "+ persistenceProviderClassName+ ")");
+            }
+            persistenceProvider=provider;
+          }
+          PersistenceProviderResolverImpl.getInstance().addPersistenceProvider(persistenceProvider);
+        }
+      }
+    }
+  }
+}

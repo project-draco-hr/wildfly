@@ -1,0 +1,32 @@
+{
+  PersistenceUnitMetadata pu=getPersistenceUnit(deploymentUnit,annotation,classDescription);
+  if (pu == null) {
+    return null;
+  }
+  String scopedPuName=pu.getScopedPersistenceUnitName();
+  ServiceName puServiceName=getPuServiceName(scopedPuName);
+  if (isPersistenceContext(annotation)) {
+    if (pu.getTransactionType() == PersistenceUnitTransactionType.RESOURCE_LOCAL) {
+      classDescription.setInvalid("Cannot inject RESOURCE_LOCAL container manged EntityManager's using @PersistenceContext");
+      return null;
+    }
+    AnnotationValue pcType=annotation.value("type");
+    PersistenceContextType type=(pcType == null || PersistenceContextType.TRANSACTION.name().equals(pcType.asString())) ? PersistenceContextType.TRANSACTION : PersistenceContextType.EXTENDED;
+    Map properties;
+    AnnotationValue value=annotation.value("properties");
+    AnnotationInstance[] props=value != null ? value.asNestedArray() : null;
+    if (props != null) {
+      properties=new HashMap();
+      for (int source=0; source < props.length; source++) {
+        properties.put(props[source].value("name"),props[source].value("value"));
+      }
+    }
+ else {
+      properties=null;
+    }
+    return new PersistenceContextInjectionSource(type,properties,puServiceName,deploymentUnit,scopedPuName,injectionTypeName,SFSBXPCMap.getXpcMap(deploymentUnit),pu);
+  }
+ else {
+    return new PersistenceUnitInjectionSource(puServiceName,deploymentUnit,injectionTypeName,pu);
+  }
+}
