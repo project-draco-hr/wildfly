@@ -32,15 +32,6 @@
  else {
     fluentTransport.transportClass(null);
   }
-  FluentGlobalConfiguration.GlobalJmxStatisticsConfig globalJmx=fluentTransport.globalJmxStatistics();
-  globalJmx.cacheManagerName(this.configuration.getName());
-  MBeanServer server=this.configuration.getMBeanServer();
-  if (server != null) {
-    globalJmx.mBeanServerLookup(new MBeanServerProvider(server)).jmxDomain(server.getDefaultDomain());
-  }
- else {
-    globalJmx.disable();
-  }
   Executor listenerExecutor=this.configuration.getListenerExecutor();
   if (listenerExecutor != null) {
     ExecutorProvider.initListenerExecutor(global,listenerExecutor);
@@ -53,14 +44,26 @@
   if (replicationQueueExecutor != null) {
     ExecutorProvider.initReplicationQueueExecutor(global,replicationQueueExecutor);
   }
+  FluentGlobalConfiguration.GlobalJmxStatisticsConfig globalJmx=fluentTransport.globalJmxStatistics();
+  globalJmx.cacheManagerName(this.configuration.getName());
   Configuration defaultConfig=new Configuration();
-  TransactionManager transactionManager=this.configuration.getTransactionManager();
-  if (transactionManager != null) {
-    defaultConfig.fluent().transaction().transactionManagerLookup(new TransactionManagerProvider(transactionManager));
+  FluentConfiguration fluent=defaultConfig.fluent();
+  MBeanServer server=this.configuration.getMBeanServer();
+  if (server != null) {
+    globalJmx.mBeanServerLookup(new MBeanServerProvider(server)).jmxDomain(SERVICE_NAME.getCanonicalName());
+    fluent.jmxStatistics();
   }
-  TransactionSynchronizationRegistry transactionSynchronizationRegistry=this.configuration.getTransactionSynchronizationRegistry();
-  if (transactionSynchronizationRegistry != null) {
-    defaultConfig.fluent().transaction().transactionSynchronizationRegistryLookup(new TransactionSynchronizationRegistryProvider(transactionSynchronizationRegistry));
+ else {
+    globalJmx.disable();
+  }
+  FluentConfiguration.TransactionConfig tx=fluent.transaction();
+  TransactionManager txManager=this.configuration.getTransactionManager();
+  if (txManager != null) {
+    tx.transactionManagerLookup(new TransactionManagerProvider(txManager));
+  }
+  TransactionSynchronizationRegistry txSyncRegistry=this.configuration.getTransactionSynchronizationRegistry();
+  if (txSyncRegistry != null) {
+    tx.transactionSynchronizationRegistryLookup(new TransactionSynchronizationRegistryProvider(txSyncRegistry));
   }
   EmbeddedCacheManager manager=new DefaultCacheManager(global,defaultConfig,false);
   manager.addListener(this);
