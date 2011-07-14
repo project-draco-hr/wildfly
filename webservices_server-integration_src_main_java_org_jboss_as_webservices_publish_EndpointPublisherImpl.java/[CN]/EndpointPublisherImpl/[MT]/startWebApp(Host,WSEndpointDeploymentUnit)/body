@@ -1,0 +1,31 @@
+{
+  StandardContext context=new StandardContext();
+  try {
+    JBossWebMetaData jbwebMD=unit.getAttachment(WSAttachmentKeys.JBOSSWEB_METADATA_KEY);
+    context.setPath(jbwebMD.getContextRoot());
+    context.addLifecycleListener(new ContextConfig());
+    ServerConfigService config=(ServerConfigService)unit.getServiceRegistry().getService(WSServices.CONFIG_SERVICE).getService();
+    File docBase=new File(config.getValue().getServerTempDir(),jbwebMD.getContextRoot());
+    if (!docBase.exists()) {
+      docBase.mkdirs();
+    }
+    context.setDocBase(docBase.getPath());
+    final Loader loader=new WebCtxLoader(unit.getAttachment(WSAttachmentKeys.CLASSLOADER_KEY));
+    loader.setContainer(host);
+    context.setLoader(loader);
+    context.setInstanceManager(new LocalInstanceManager());
+    addServlets(jbwebMD,context);
+    host.addChild(context);
+    context.create();
+  }
+ catch (  Exception e) {
+    throw new Exception("Failed to create context",e);
+  }
+  try {
+    context.start();
+  }
+ catch (  LifecycleException e) {
+    throw new Exception("Failed to start context",e);
+  }
+  return context;
+}
