@@ -1,0 +1,27 @@
+{
+  ((OtherServicesSubsystemExtension)getMainExtension()).setAddHandler(SubsystemAddWithSocketBindingUserService.INSTANCE);
+  String subsystemXml="<subsystem xmlns=\"" + SimpleSubsystemExtension.NAMESPACE + "\">"+ "</subsystem>";
+  KernelServices services=super.installInController(new SocketBindingInit(),subsystemXml);
+  ModelNode model=services.readWholeModel();
+  Assert.assertTrue(model.get(SUBSYSTEM).hasDefined(OtherServicesSubsystemExtension.SUBSYSTEM_NAME));
+  ModelNode iface=model.require(INTERFACE).require(ControllerInitializer.INTERFACE_NAME);
+  Assert.assertEquals(ControllerInitializer.INTERFACE_NAME,iface.get(NAME).asString());
+  List<ModelNode> criteria=iface.require(CRITERIA).asList();
+  Assert.assertEquals(1,criteria.size());
+  Assert.assertEquals("127.0.0.1",criteria.get(0).require(INET_ADDRESS).asString());
+  ModelNode group=model.require(SOCKET_BINDING_GROUP).require(ControllerInitializer.SOCKET_BINDING_GROUP_NAME);
+  Assert.assertEquals(ControllerInitializer.INTERFACE_NAME,group.require(DEFAULT_INTERFACE).asString());
+  Assert.assertEquals(ControllerInitializer.SOCKET_BINDING_GROUP_NAME,group.require(NAME).asString());
+  Assert.assertEquals(0,group.require(PORT_OFFSET).asInt());
+  ModelNode bindings=group.require(SOCKET_BINDING);
+  Assert.assertEquals(3,bindings.asList().size());
+  Assert.assertEquals(123,group.require(SOCKET_BINDING).require("test1").require(PORT).asInt());
+  Assert.assertEquals(234,group.require(SOCKET_BINDING).require("test2").require(PORT).asInt());
+  Assert.assertEquals(345,group.require(SOCKET_BINDING).require("test3").require(PORT).asInt());
+  ServiceController<?> controller=services.getContainer().getService(SocketBindingUserService.NAME);
+  Assert.assertNotNull(controller);
+  SocketBindingUserService service=(SocketBindingUserService)controller.getValue();
+  SocketBinding socketBinding=service.socketBindingValue.getValue();
+  Assert.assertEquals(234,socketBinding.getPort());
+  Assert.assertEquals("127.0.0.1",socketBinding.getAddress().getHostAddress());
+}

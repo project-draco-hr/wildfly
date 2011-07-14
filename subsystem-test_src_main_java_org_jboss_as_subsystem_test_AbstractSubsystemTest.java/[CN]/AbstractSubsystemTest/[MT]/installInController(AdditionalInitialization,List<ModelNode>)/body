@@ -1,0 +1,30 @@
+{
+  ControllerInitializer controllerInitializer=createControllerInitializer();
+  if (additionalInit != null) {
+    additionalInit.setupController(controllerInitializer);
+  }
+  ServiceContainer container=ServiceContainer.Factory.create("test" + counter.incrementAndGet());
+  ServiceTarget target=container.subTarget();
+  ControlledProcessState processState=new ControlledProcessState(true);
+  List<ModelNode> extraOps=controllerInitializer.initializeBootOperations();
+  List<ModelNode> allOps=new ArrayList<ModelNode>();
+  if (extraOps != null) {
+    allOps.addAll(extraOps);
+  }
+  allOps.addAll(bootOperations);
+  StringConfigurationPersister persister=new StringConfigurationPersister(allOps,testParser);
+  ModelControllerService svc=new ModelControllerService(mainExtension,controllerInitializer,additionalInit,processState,persister);
+  ServiceBuilder<ModelController> builder=target.addService(ServiceName.of("ModelController"),svc);
+  builder.install();
+  if (additionalInit != null) {
+    additionalInit.addExtraServices(target);
+  }
+  svc.latch.await();
+  ModelController controller=svc.getValue();
+  ModelNode setup=Util.getEmptyOperation("setup",new ModelNode());
+  controller.execute(setup,null,null,null);
+  processState.setRunning();
+  KernelServices kernelServices=new KernelServices(container,controller,persister);
+  this.kernelServices.add(kernelServices);
+  return kernelServices;
+}
