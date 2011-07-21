@@ -6,10 +6,9 @@
   final ServiceName pagingPath=createDirectoryService(DEFAULT_PAGING_DIR,operation.get(PAGING_DIRECTORY),serviceTarget);
   context.addStep(new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
+      final ModelNode model=Resource.Tools.readModel(resource);
       final Configuration configuration=transformConfig(model);
-      final Set<String> socketBindings=new HashSet<String>();
-      processAcceptors(configuration,operation,socketBindings);
-      processConnectors(configuration,operation,socketBindings);
       final HornetQService hqService=new HornetQService();
       hqService.setConfiguration(configuration);
       final ServiceBuilder<HornetQServer> serviceBuilder=serviceTarget.addService(MessagingServices.JBOSS_MESSAGING,hqService).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,hqService.getMBeanServer());
@@ -17,6 +16,9 @@
       serviceBuilder.addDependency(journalPath,String.class,hqService.getPathInjector(DEFAULT_JOURNAL_DIR));
       serviceBuilder.addDependency(largeMessagePath,String.class,hqService.getPathInjector(DEFAULT_LARGE_MESSSAGE_DIR));
       serviceBuilder.addDependency(pagingPath,String.class,hqService.getPathInjector(DEFAULT_PAGING_DIR));
+      final Set<String> socketBindings=new HashSet<String>();
+      processAcceptors(configuration,model,socketBindings);
+      processConnectors(configuration,model,socketBindings);
       for (      final String socketBinding : socketBindings) {
         final ServiceName socketName=SocketBinding.JBOSS_BINDING_NAME.append(socketBinding);
         serviceBuilder.addDependency(socketName,SocketBinding.class,hqService.getSocketBindingInjector(socketBinding));
