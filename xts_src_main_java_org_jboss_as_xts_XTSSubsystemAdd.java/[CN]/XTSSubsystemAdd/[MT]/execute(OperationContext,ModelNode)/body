@@ -1,0 +1,39 @@
+{
+  final String coordinatorURL=operation.get(CommonAttributes.XTS_ENVIRONMENT).hasDefined(ModelDescriptionConstants.URL) ? operation.get(CommonAttributes.XTS_ENVIRONMENT,ModelDescriptionConstants.URL).asString() : null;
+  if (coordinatorURL != null) {
+    if (log.isDebugEnabled()) {
+      log.debugf("nodeIdentifier=%s\n",coordinatorURL);
+    }
+    final ModelNode subModel=context.readModelForUpdate(PathAddress.EMPTY_ADDRESS);
+    subModel.get(CommonAttributes.XTS_ENVIRONMENT,ModelDescriptionConstants.URL).set(operation.get(CommonAttributes.XTS_ENVIRONMENT).require(ModelDescriptionConstants.URL));
+  }
+  context.addStep(new OperationStepHandler(){
+    public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      final ServiceTarget target=context.getServiceTarget();
+      final ClassLoader loader=XTSService.class.getClassLoader();
+      ServiceBuilder<Context> endpointBuilder;
+      ArrayList<ServiceController<Context>> controllers=new ArrayList<ServiceController<Context>>();
+      for (      ContextInfo contextInfo : contextDefinitions) {
+        String contextName=contextInfo.contextPath;
+        Map<String,String> map=new HashMap<String,String>();
+        for (        EndpointInfo endpointInfo : contextInfo.endpointInfo) {
+          map.put(endpointInfo.URLPattern,endpointInfo.SEIClassname);
+        }
+        endpointBuilder=EndpointPublishService.createServiceBuilder(target,contextName,loader,ENDPOINT_SERVICE_HOST_NAME,map);
+        controllers.add(endpointBuilder.setInitialMode(Mode.ACTIVE).install());
+      }
+      final XTSManagerService xtsService=new XTSManagerService(coordinatorURL);
+      ServiceBuilder<?> xtsServiceBuilder=target.addService(XTSServices.JBOSS_XTS_MAIN,xtsService);
+      xtsServiceBuilder.addDependency(TxnServices.JBOSS_TXN_ARJUNA_RECOVERY_MANAGER);
+      for (      ServiceController<Context> controller : controllers) {
+        xtsServiceBuilder.addDependency(controller.getName());
+      }
+      xtsServiceBuilder.setInitialMode(Mode.ACTIVE).install();
+      if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
+        context.removeService(XTSServices.JBOSS_XTS_MAIN);
+      }
+    }
+  }
+,OperationContext.Stage.RUNTIME);
+  context.completeStep();
+}
