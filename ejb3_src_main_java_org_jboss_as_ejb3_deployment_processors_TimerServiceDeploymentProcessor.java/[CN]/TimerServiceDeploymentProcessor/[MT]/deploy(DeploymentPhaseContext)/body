@@ -1,0 +1,72 @@
+{
+  if (!enabled) {
+    return;
+  }
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
+  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
+  boolean timerServiceRequired=false;
+  for (  final ComponentDescription component : moduleDescription.getComponentDescriptions()) {
+    if (component instanceof SingletonComponentDescription || component instanceof StatelessComponentDescription) {
+      timerServiceRequired=true;
+      logger.debug("Installing timer service for component " + component.getComponentName());
+      component.getConfigurators().add(new ComponentConfigurator(){
+        @Override public void configure(        final DeploymentPhaseContext context,        final ComponentDescription description,        final ComponentConfiguration configuration) throws DeploymentUnitProcessingException {
+          final SessionBeanComponentDescription ejbComponentDescription=(SessionBeanComponentDescription)description;
+          final DeploymentReflectionIndex deploymentReflectionIndex=context.getDeploymentUnit().getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
+          Class<?> c=configuration.getComponentClass();
+          while (c != null && c != Object.class) {
+            final ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(c);
+            Method method=null;
+            if (TimedObject.class.isAssignableFrom(configuration.getComponentClass())) {
+              method=index.getMethod(Void.TYPE,"ejbTimeout",javax.ejb.Timer.class);
+            }
+ else             if (ejbComponentDescription.getTimeoutMethod() == null && ejbComponentDescription.getTimeoutMethodIdentifier() != null) {
+              method=index.getMethod(ejbComponentDescription.getTimeoutMethodIdentifier());
+            }
+ else {
+              break;
+            }
+            if (method != null) {
+              ejbComponentDescription.setTimeoutMethod(method);
+              break;
+            }
+            c=c.getSuperclass();
+          }
+          for (          Map.Entry<MethodIdentifier,List<AutoTimer>> entry : ejbComponentDescription.getScheduleMethodIdentifiers().entrySet()) {
+            c=configuration.getComponentClass();
+            while (c != null && c != Object.class) {
+              final ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(c);
+              final Method method=index.getMethod(entry.getKey());
+              if (method != null) {
+                for (                AutoTimer timer : entry.getValue()) {
+                  ejbComponentDescription.addScheduleMethod(method,timer);
+                }
+                break;
+              }
+              c=c.getSuperclass();
+            }
+          }
+          configuration.addTimeoutInterceptor(SessionInvocationContextInterceptor.FACTORY,InterceptorOrder.Component.TIMEOUT_INVOCATION_CONTEXT_INTERCEPTOR);
+          final TimerServiceService service=new TimerServiceService(ejbComponentDescription.getScheduleMethods(),module.getClassLoader());
+          final ServiceName serviceName=component.getServiceName().append(TimerServiceService.SERVICE_NAME);
+          final ServiceBuilder<javax.ejb.TimerService> createBuilder=context.getServiceTarget().addService(serviceName,service);
+          createBuilder.addDependency(deploymentUnit.getServiceName().append(TimerServiceFactoryService.SERVICE_NAME),TimerServiceFactory.class,service.getTimerServiceFactoryInjectedValue());
+          createBuilder.addDependency(component.getCreateServiceName(),EJBComponent.class,service.getEjbComponentInjectedValue());
+          createBuilder.install();
+          ejbComponentDescription.setTimerService(service);
+          configuration.getStartDependencies().add(new DependencyConfigurator<ComponentStartService>(){
+            @Override public void configureDependency(            final ServiceBuilder<?> serviceBuilder,            final ComponentStartService service) throws DeploymentUnitProcessingException {
+              serviceBuilder.addDependency(serviceName);
+            }
+          }
+);
+        }
+      }
+);
+    }
+  }
+  if (timerServiceRequired) {
+    addTimerService(phaseContext.getServiceTarget(),deploymentUnit,module);
+  }
+}
