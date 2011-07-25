@@ -1,0 +1,38 @@
+{
+  if (clazz == null)   return value;
+  if (value == null)   return null;
+  Class<?> valueClass=value.getClass();
+  if (valueClass == String.class) {
+    String string=(String)value;
+    if (trim)     string=string.trim();
+    if (replaceProperties)     value=StringPropertyReplacer.replaceProperties(string);
+  }
+  if (clazz.isAssignableFrom(valueClass))   return value;
+  if (clazz.isEnum()) {
+    Class<? extends Enum> eclazz=clazz.asSubclass(Enum.class);
+    return Enum.valueOf(eclazz,value.toString());
+  }
+  if (valueClass == String.class) {
+    PropertyEditor editor=PropertyEditorManager.findEditor(clazz);
+    if (editor != null) {
+      editor.setAsText((String)value);
+      return editor.getValue();
+    }
+  }
+  try {
+    Method method=clazz.getMethod("valueOf",valueClass);
+    int modifiers=method.getModifiers();
+    if (Modifier.isPublic(modifiers) && Modifier.isStatic(modifiers) && clazz.isAssignableFrom(method.getReturnType()))     return method.invoke(null,value);
+  }
+ catch (  Exception ignored) {
+  }
+  if (valueClass == String.class) {
+    try {
+      Constructor constructor=clazz.getConstructor(valueClass);
+      if (Modifier.isPublic(constructor.getModifiers()))       return constructor.newInstance(value);
+    }
+ catch (    Exception ignored) {
+    }
+  }
+  return value;
+}
