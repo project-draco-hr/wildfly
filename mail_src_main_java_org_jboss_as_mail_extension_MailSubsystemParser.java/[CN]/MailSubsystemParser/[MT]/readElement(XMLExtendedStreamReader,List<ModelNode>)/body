@@ -1,30 +1,48 @@
 {
-  list.add(MailSubsystemExtension.createAddSubsystemOperation());
+  final ModelNode address=new ModelNode();
+  address.add(ModelDescriptionConstants.SUBSYSTEM,MailSubsystemExtension.SUBSYSTEM_NAME);
+  address.protect();
+  final ModelNode subsystem=new ModelNode();
+  subsystem.get(OP).set(ADD);
+  subsystem.get(OP_ADDR).set(address);
+  list.add(subsystem);
+  List<MailSessionConfig> sessionConfigList=new LinkedList<MailSessionConfig>();
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
-    String name=reader.getLocalName();
-    log.info("element: " + name);
-    if ("mail-session".equals(name)) {
-      ParseUtils.requireAttributes(reader,"jndi-name");
-      String jndiName=reader.getAttributeValue(0);
-      log.info("jndi name: " + jndiName);
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case MAIL_1_0:
+{
+        final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case MAIL_SESSION:
+{
+            sessionConfigList.add(parseMailSession(reader,list));
+            break;
+          }
+default :
+{
+          reader.handleAny(list);
+          break;
+        }
     }
-    if ("username".equals(name)) {
-      String username=reader.getElementText();
-      log.info("username: " + username);
-    }
-    if ("password".equals(name)) {
-      String pass=reader.getElementText();
-      log.info("password: " + pass);
-    }
-    if ("properties".equals(name)) {
-      while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
-        name=reader.getLocalName();
-        ParseUtils.requireSingleAttribute(reader,"name");
-        log.info("name: " + name);
-        log.info("prop name: " + reader.getAttributeValue(0) + " has value: "+ reader.getElementText());
-      }
-    }
+    break;
   }
-  log.info("parsing done");
-  reader.discardRemainder();
+default :
+{
+  throw unexpectedElement(reader);
+}
+}
+}
+for (MailSessionConfig c : sessionConfigList) {
+final ModelNode dsAddress=address.clone();
+dsAddress.add(ModelKeys.MAIL_SESSION,c.getJndiName());
+dsAddress.protect();
+final ModelNode operation=new ModelNode();
+operation.get(OP_ADDR).set(dsAddress);
+operation.get(OP).set(ADD);
+Util.fillFrom(operation,c);
+list.add(operation);
+log.info("operation: " + operation);
+}
+log.info("parsing done, config is: " + sessionConfigList);
+log.info("list is: " + list);
 }
