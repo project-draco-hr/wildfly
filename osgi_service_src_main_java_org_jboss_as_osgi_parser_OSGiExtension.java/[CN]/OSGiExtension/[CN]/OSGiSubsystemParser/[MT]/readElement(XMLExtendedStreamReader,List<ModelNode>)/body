@@ -1,8 +1,12 @@
 {
-  final ModelNode addSubsystemOp=new ModelNode();
-  addSubsystemOp.get(OP).set(ADD);
-  addSubsystemOp.get(OP_ADDR).add(SUBSYSTEM,SUBSYSTEM_NAME);
-  parseActivationAttribute(reader,addSubsystemOp);
+  ModelNode address=new ModelNode();
+  address.add(SUBSYSTEM,SUBSYSTEM_NAME);
+  address.protect();
+  final ModelNode operation=new ModelNode();
+  operation.get(OP).set(ADD);
+  operation.get(OP_ADDR).set(address);
+  parseActivationAttribute(reader,operation);
+  operations.add(operation);
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
 case OSGI_1_0:
@@ -11,24 +15,20 @@ case OSGI_1_0:
 switch (element) {
 case CONFIGURATION:
 {
-            ModelNode configuration=parseConfigurationElement(reader);
-            addSubsystemOp.get(CONFIGURATION).set(configuration);
+            ModelNode configurations=parseConfigurationElement(reader,address);
+            if (configurations != null) {
+              operations.add(configurations);
+            }
             break;
           }
 case PROPERTIES:
 {
-          ModelNode properties=parsePropertiesElement(reader);
-          if (properties != null) {
-            addSubsystemOp.get(PROPERTIES).set(properties);
-          }
+          operations.addAll(parsePropertiesElement(reader,address,operations));
           break;
         }
 case MODULES:
 {
-        ModelNode modules=parseModulesElement(reader);
-        if (modules != null) {
-          addSubsystemOp.get(MODULES).set(modules);
-        }
+        operations.addAll(parseModulesElement(reader,address));
         break;
       }
 default :
@@ -40,5 +40,4 @@ default :
 throw unexpectedElement(reader);
 }
 }
-operations.add(addSubsystemOp);
 }

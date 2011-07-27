@@ -1,0 +1,25 @@
+{
+  Resource resource=context.createResource(PathAddress.EMPTY_ADDRESS);
+  ModelNode model=resource.getModel();
+  ModelNode slNode=null;
+  if (operation.has(CommonAttributes.STARTLEVEL)) {
+    slNode=operation.get(CommonAttributes.STARTLEVEL);
+    model.get(CommonAttributes.STARTLEVEL).set(slNode);
+  }
+  final Integer startLevel=(slNode != null ? slNode.asInt() : null);
+  if (context.getType() == OperationContext.Type.SERVER) {
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        String identifier=operation.get(ModelDescriptionConstants.OP_ADDR).asObject().get(CommonAttributes.MODULE).asString();
+        OSGiModule module=new OSGiModule(ModuleIdentifier.fromString(identifier),startLevel);
+        SubsystemState stateService=(SubsystemState)context.getServiceRegistry(true).getRequiredService(SubsystemState.SERVICE_NAME).getValue();
+        stateService.addModule(module);
+        if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
+          stateService.removeModule(identifier);
+        }
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}
