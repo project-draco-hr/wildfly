@@ -14,29 +14,19 @@
   }
   allOps.addAll(bootOperations);
   StringConfigurationPersister persister=new StringConfigurationPersister(allOps,testParser);
-  final ModelControllerService svc=new ModelControllerService(additionalInit.getType(),mainExtension,controllerInitializer,additionalInit,processState,persister);
+  ModelControllerService svc=new ModelControllerService(additionalInit.getType(),mainExtension,controllerInitializer,additionalInit,processState,persister,additionalInit.isValidateOperations());
   ServiceBuilder<ModelController> builder=target.addService(ServiceName.of("ModelController"),svc);
-  builder.addListener(new AbstractServiceListener<Object>(){
-    @Override public void transition(    ServiceController<?> controller,    ServiceController.Transition transition){
-switch (transition) {
-case STARTING_to_START_FAILED:
-        svc.latch.countDown();
-      break;
+  builder.install();
+  additionalInit.addExtraServices(target);
+  svc.latch.await();
+  ModelController controller=svc.getValue();
+  ModelNode setup=Util.getEmptyOperation("setup",new ModelNode());
+  controller.execute(setup,null,null,null);
+  processState.setRunning();
+  KernelServices kernelServices=new KernelServices(container,controller,persister,new OperationValidator(svc.rootRegistration));
+  this.kernelServices.add(kernelServices);
+  if (svc.error != null) {
+    throw svc.error;
   }
-}
-}
-);
-builder.install();
-additionalInit.addExtraServices(target);
-svc.latch.await();
-ModelController controller=svc.getValue();
-ModelNode setup=Util.getEmptyOperation("setup",new ModelNode());
-controller.execute(setup,null,null,null);
-processState.setRunning();
-KernelServices kernelServices=new KernelServices(container,controller,persister,new OperationValidator(svc.rootRegistration));
-this.kernelServices.add(kernelServices);
-if (svc.error != null) {
-throw svc.error;
-}
-return kernelServices;
+  return kernelServices;
 }
