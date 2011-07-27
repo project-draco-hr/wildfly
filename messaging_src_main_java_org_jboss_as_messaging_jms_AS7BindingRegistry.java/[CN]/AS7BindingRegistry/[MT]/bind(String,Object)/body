@@ -1,5 +1,16 @@
 {
+  if (name == null || name.isEmpty()) {
+    throw new IllegalArgumentException("Cannot bind a null or empty string as jndi name");
+  }
+  if (name.equals("java:jboss/") || name.equals("java:comp/") || name.equals("java:module/")|| name.equals("java:/app")|| name.equals("java:global/")|| name.equals("java:/")) {
+    throw new IllegalArgumentException("Missing relative path in (invalid) jndi name: " + name);
+  }
+  final JndiBinding jndiBinding=JndiBinding.parse(name);
+  if (jndiBinding == null) {
+    throw new IllegalArgumentException("Binding to " + name + " isn't allowed, since it belongs to a unknown/unsupported jndi name context");
+  }
   final BinderService binderService=new BinderService(name);
-  container.addService(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(name),binderService).addDependency(ContextNames.JAVA_CONTEXT_SERVICE_NAME,NamingStore.class,binderService.getNamingStoreInjector()).addInjection(binderService.getManagedObjectInjector(),new ValueManagedReferenceFactory(Values.immediateValue(obj))).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  container.addService(jndiBinding.jndiContextServiceName.append(jndiBinding.relativeJndiName),binderService).addDependency(jndiBinding.jndiContextServiceName,NamingStore.class,binderService.getNamingStoreInjector()).addInjection(binderService.getManagedObjectInjector(),new ValueManagedReferenceFactory(Values.immediateValue(obj))).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  logger.info("Bound messaging object to jndi name " + jndiBinding);
   return true;
 }
