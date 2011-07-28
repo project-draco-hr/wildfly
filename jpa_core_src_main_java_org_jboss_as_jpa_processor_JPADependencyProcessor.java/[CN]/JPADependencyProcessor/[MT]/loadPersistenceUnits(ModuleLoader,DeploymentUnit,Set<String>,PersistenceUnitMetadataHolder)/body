@@ -1,0 +1,44 @@
+{
+  int defaultProviderCount=0;
+  if (holder != null) {
+    for (    PersistenceUnitMetadata pu : holder.getPersistenceUnits()) {
+      String providerModule=pu.getProperties().getProperty(Configuration.PROVIDER_MODULE);
+      String adapterModule=pu.getProperties().getProperty(Configuration.ADAPTER_MODULE);
+      String adapterClass=pu.getProperties().getProperty(Configuration.ADAPTER_CLASS);
+      if (providerModule != null) {
+        if (providerModule.equals(Configuration.PROVIDER_MODULE_HIBERNATE3_BUNDLED)) {
+          adapterClass=HIBERNATE3_PROVIDER_ADAPTOR;
+          pu.getProperties().put(Configuration.ADAPTER_CLASS,adapterClass);
+          pu.getProperties().put(Configuration.PROVIDER_MODULE,Configuration.PROVIDER_MODULE_APPLICATION_SUPPLIED);
+          pu.getProperties().remove(Configuration.ADAPTER_MODULE);
+          addHibernate3AdaptorToDeployment(moduleLoader,deploymentUnit);
+        }
+ else         if (providerModule.equals(Configuration.PROVIDER_MODULE_HIBERNATE3)) {
+          if (adapterModule == null) {
+            adapterModule=Configuration.ADAPTER_MODULE_HIBERNATE3;
+            pu.getProperties().put(Configuration.ADAPTER_MODULE,adapterModule);
+          }
+        }
+      }
+      if (adapterModule != null) {
+        log.info(pu.getPersistenceUnitName() + " is configured to use adapter module '" + adapterModule+ "'");
+        String persistenceProvider=pu.getPersistenceProviderClassName() != null ? pu.getPersistenceProviderClassName() : Configuration.PROVIDER_CLASS_DEFAULT;
+        moduleDependencies.add(adapterModule);
+      }
+      deploymentUnit.putAttachment(JpaAttachments.ADAPTOR_CLASS_NAME,adapterClass);
+      String provider=pu.getProperties().getProperty(Configuration.PROVIDER_MODULE);
+      if (provider != null) {
+        if (provider.equals(Configuration.PROVIDER_MODULE_APPLICATION_SUPPLIED)) {
+          log.info(pu.getPersistenceUnitName() + " is configured to use application supplied persistence provider");
+        }
+ else {
+          moduleDependencies.add(provider);
+        }
+      }
+ else {
+        defaultProviderCount++;
+      }
+    }
+  }
+  return defaultProviderCount;
+}

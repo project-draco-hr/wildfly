@@ -7,21 +7,28 @@
     if (module == null)     throw new DeploymentUnitProcessingException("Failed to get module attachment for " + phaseContext.getDeploymentUnit());
     final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
     final ModuleClassLoader classLoader=module.getClassLoader();
-    final PersistenceProviderDeploymentHolder persistenceProviderDeploymentHolder=top(deploymentUnit).getAttachment(PersistenceProviderDeploymentHolder.DEPLOYED_PERSISTENCE_PROVIDER);
+    final PersistenceProviderDeploymentHolder persistenceProviderDeploymentHolder=deploymentUnit.getAttachment(JpaAttachments.DEPLOYED_PERSISTENCE_PROVIDER);
     for (    PersistenceUnitMetadataHolder holder : puList) {
       for (      PersistenceUnitMetadata pu : holder.getPersistenceUnits()) {
         pu.setClassLoader(classLoader);
         pu.setTempClassloader(new TempClassLoader(classLoader));
         try {
-          final PersistenceUnitService service=new PersistenceUnitService(pu,persistenceProviderDeploymentHolder);
           final HashMap properties=new HashMap();
           if (!ValidationMode.NONE.equals(pu.getValidationMode())) {
             ValidatorFactory validatorFactory=SerializableValidatorFactory.getINSTANCE();
             properties.put("javax.persistence.validation.factory",validatorFactory);
           }
-          PersistenceProviderAdaptor adaptor=getPersistenceProviderAdaptor(pu,persistenceProviderDeploymentHolder);
-          adaptor.addProviderProperties(properties,pu);
+          final PersistenceProviderAdaptor adaptor=getPersistenceProviderAdaptor(pu,persistenceProviderDeploymentHolder);
           loadPersistenceProviderModule(pu,persistenceProviderDeploymentHolder);
+          final PersistenceProvider provider;
+          if (persistenceProviderDeploymentHolder != null && persistenceProviderDeploymentHolder.getProvider() != null && persistenceProviderDeploymentHolder.getProvider().getClass().getName().equals(pu.getPersistenceProviderClassName())) {
+            provider=persistenceProviderDeploymentHolder.getProvider();
+          }
+ else {
+            provider=lookupProvider(pu.getPersistenceProviderClassName());
+          }
+          final PersistenceUnitService service=new PersistenceUnitService(pu,adaptor,provider);
+          adaptor.addProviderProperties(properties,pu);
           final ServiceName puServiceName=PersistenceUnitService.getPUServiceName(pu);
           this.addPUServiceDependencyToComponents(components,puServiceName);
           deploymentUnit.addToAttachmentList(Attachments.WEB_DEPENDENCIES,puServiceName);
@@ -56,8 +63,7 @@
               log.trace(puServiceName + " is using the default data source '" + defaultJtaDataSource+ "'");
             }
           }
-          Iterable<ServiceName> providerDependencies1=adaptor.getProviderDependencies(pu);
-          Iterable<ServiceName> providerDependencies=providerDependencies1;
+          Iterable<ServiceName> providerDependencies=adaptor.getProviderDependencies(pu);
           if (providerDependencies != null) {
             builder.addDependencies(providerDependencies);
           }
