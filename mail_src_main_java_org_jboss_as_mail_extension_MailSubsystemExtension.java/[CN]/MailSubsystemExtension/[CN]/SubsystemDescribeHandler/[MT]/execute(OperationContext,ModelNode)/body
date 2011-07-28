@@ -1,4 +1,19 @@
 {
-  context.getResult().add(createAddSubsystemOperation());
+  final ModelNode result=context.getResult();
+  final PathAddress rootAddress=PathAddress.pathAddress(PathAddress.pathAddress(operation.require(OP_ADDR)).getLastElement());
+  final ModelNode subModel=context.readModel(PathAddress.EMPTY_ADDRESS);
+  final ModelNode subsystemAdd=new ModelNode();
+  subsystemAdd.get(OP).set(ADD);
+  subsystemAdd.get(OP_ADDR).set(rootAddress.toModelNode());
+  result.add(subsystemAdd);
+  if (subModel.hasDefined(ModelKeys.MAIL_SESSION)) {
+    for (    final Property session : subModel.get(ModelKeys.MAIL_SESSION).asPropertyList()) {
+      final ModelNode address=rootAddress.toModelNode();
+      address.add(ModelKeys.MAIL_SESSION,session.getName());
+      final ModelNode addOperation=org.jboss.as.controller.operations.common.Util.getEmptyOperation(ADD,address);
+      addOperation.get(ModelKeys.SMTP_SERVER).set(session.getValue().get(ModelKeys.SMTP_SERVER));
+      result.add(addOperation);
+    }
+  }
   context.completeStep();
 }
