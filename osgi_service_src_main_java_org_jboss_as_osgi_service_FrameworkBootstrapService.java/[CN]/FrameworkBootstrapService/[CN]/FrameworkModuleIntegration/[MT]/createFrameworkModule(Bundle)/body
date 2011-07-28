@@ -1,20 +1,25 @@
 {
-  Module systemModule=injectedSystemModule.getValue();
-  ModuleIdentifier systemIdentifier=systemModule.getIdentifier();
-  ModuleLoader systemLoader=systemModule.getModuleLoader();
   ModuleSpec.Builder specBuilder=ModuleSpec.build(ModuleIdentifier.create(JBOSGI_PREFIX + ".framework"));
-  specBuilder.addDependency(createSystemModuleDependency(systemLoader,systemIdentifier));
-  String sysmodules=(String)props.get(PROP_JBOSS_OSGI_SYSTEM_MODULES);
-  if (sysmodules == null)   sysmodules="";
-  String extramodules=(String)props.get(PROP_JBOSS_OSGI_SYSTEM_MODULES_EXTRA);
-  if (extramodules != null)   sysmodules+="," + extramodules;
+  SystemPathsProvider provider=injectedSystemPaths.getValue();
+  Set<String> sysPaths=provider.getSystemPaths();
+  PathFilter sysImport=provider.getSystemFilter();
+  PathFilter acceptAll=PathFilters.acceptAll();
+  specBuilder.addDependency(DependencySpec.createSystemDependencySpec(sysImport,acceptAll,sysPaths));
   ModuleLoader bootLoader=Module.getBootModuleLoader();
-  for (  String moduleProp : sysmodules.split(",")) {
-    moduleProp=moduleProp.trim();
-    if (moduleProp.length() > 0) {
-      ModuleIdentifier moduleId=ModuleIdentifier.create(moduleProp);
-      DependencySpec moduleDep=createSystemModuleDependency(bootLoader,moduleId);
-      specBuilder.addDependency(moduleDep);
+  String[] modids=new String[]{"org.jboss.osgi.framework","org.jboss.as.osgi"};
+  for (  String modid : modids) {
+    ModuleIdentifier identifier=ModuleIdentifier.create(modid);
+    specBuilder.addDependency(DependencySpec.createModuleDependencySpec(acceptAll,acceptAll,bootLoader,identifier,false));
+  }
+  String modulesProps=(String)injectedSubsystemState.getValue().getProperties().get(PROP_JBOSS_OSGI_SYSTEM_MODULES);
+  if (modulesProps != null) {
+    for (    String moduleProp : modulesProps.split(",")) {
+      moduleProp=moduleProp.trim();
+      if (moduleProp.length() > 0) {
+        ModuleIdentifier moduleId=ModuleIdentifier.create(moduleProp);
+        DependencySpec moduleDep=DependencySpec.createModuleDependencySpec(acceptAll,acceptAll,bootLoader,moduleId,false);
+        specBuilder.addDependency(moduleDep);
+      }
     }
   }
   specBuilder.setModuleClassLoaderFactory(new BundleReferenceClassLoader.Factory(systemBundle));
@@ -25,7 +30,7 @@
         return (moduleSpec.getModuleIdentifier().equals(identifier) ? moduleSpec : null);
       }
       @Override public String toString(){
-        return getClass().getSimpleName();
+        return "FrameworkModuleLoader";
       }
     }
 ;
