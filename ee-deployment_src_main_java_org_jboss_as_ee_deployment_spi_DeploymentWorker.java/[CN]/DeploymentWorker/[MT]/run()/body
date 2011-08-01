@@ -1,0 +1,39 @@
+{
+  log.trace("Begin run");
+  CommandType cmdType=progress.getDeploymentStatus().getCommand();
+  TargetModuleID[] modules=progress.getResultTargetModuleIDs();
+  for (int i=0; i < modules.length; i++) {
+    TargetModuleID moduleid=modules[i];
+    JBossTarget target=(JBossTarget)moduleid.getTarget();
+    try {
+      progress.sendProgressEvent(StateType.RUNNING,"Operation " + cmdType + " started",moduleid);
+      if (cmdType == CommandType.DISTRIBUTE) {
+        target.deploy(moduleid);
+        deleteDeployment(moduleid);
+      }
+ else       if (cmdType == CommandType.START) {
+        target.start(moduleid);
+      }
+ else       if (cmdType == CommandType.STOP) {
+        target.stop(moduleid);
+      }
+ else       if (cmdType == CommandType.UNDEPLOY) {
+        target.undeploy(moduleid);
+        deleteDeployment(moduleid);
+      }
+      progress.sendProgressEvent(StateType.COMPLETED,"Operation " + cmdType + " completed",moduleid);
+    }
+ catch (    Exception e) {
+      String message="Operation " + cmdType + " failed on target "+ target;
+      StringWriter sw=new StringWriter();
+      PrintWriter pw=new PrintWriter(sw);
+      pw.println(message);
+      e.printStackTrace(pw);
+      pw.close();
+      message=sw.toString();
+      progress.sendProgressEvent(StateType.FAILED,message,moduleid);
+      log.error(message,e);
+    }
+  }
+  log.trace("End run");
+}

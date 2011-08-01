@@ -1,0 +1,41 @@
+{
+  try {
+    List<TargetModuleID> list=new ArrayList<TargetModuleID>();
+    final ModelNode operation=new ModelNode();
+    operation.get(OP).set(READ_CHILDREN_NAMES_OPERATION);
+    operation.get(CHILD_TYPE).set(DEPLOYMENT);
+    ModelNode result=modelControllerClient.execute(operation);
+    if (FAILED.equals(result.get(OUTCOME).asString()))     throw new IllegalStateException("Management request failed: " + result);
+    List<ModelNode> nodeList=result.get(RESULT).asList();
+    for (    ModelNode node : nodeList) {
+      String moduleID=node.asString();
+      ModuleType moduleType=null;
+      if (moduleID.endsWith(".ear")) {
+        moduleType=ModuleType.EAR;
+      }
+ else       if (moduleID.endsWith(".war")) {
+        moduleType=ModuleType.WAR;
+      }
+ else       if (moduleID.endsWith(".jar")) {
+        moduleType=ModuleType.EJB;
+      }
+      if (moduleType == null) {
+        log.warnf("Cannot determine module type of: %s",node);
+        continue;
+      }
+      if (filterType == null || filterType.equals(moduleType)) {
+        TargetModuleIDImpl targetModuleID=new TargetModuleIDImpl(this,moduleID,null,moduleType);
+        targetModuleID.setRunning(true);
+        list.add(targetModuleID);
+      }
+    }
+    TargetModuleID[] targetModuleIDs=new TargetModuleID[list.size()];
+    list.toArray(targetModuleIDs);
+    return targetModuleIDs;
+  }
+ catch (  Exception e) {
+    TargetException tex=new TargetException("Failed to get available modules");
+    tex.initCause(e);
+    throw tex;
+  }
+}

@@ -1,0 +1,49 @@
+{
+  File tmpFile=File.createTempFile("jboss_deployment_",".zip");
+  log.debug("temporary deployment file: " + tmpFile);
+  JarInputStream jis=new JarInputStream(moduleArchive);
+  JarOutputStream jos=null;
+  FileOutputStream fos=new FileOutputStream(tmpFile);
+  Manifest manifest=jis.getManifest();
+  if (manifest != null)   jos=new JarOutputStream(fos,manifest);
+ else   jos=new JarOutputStream(fos);
+  TargetModuleInfo moduleInfo=new TargetModuleInfo();
+  ModuleType moduleType=null;
+  JarEntry entry=jis.getNextJarEntry();
+  while (entry != null) {
+    String entryName=entry.getName();
+    if (entryName.endsWith("/") == false) {
+      moduleType=ifNotNull(determineModuleType(entryName),moduleType);
+      if (entryName.endsWith(".jar") || entryName.endsWith(".war")) {
+        File tmpSubModule=processSubModule(entryName,jis);
+        FileInputStream fis=new FileInputStream(tmpSubModule);
+        JarUtils.addJarEntry(jos,entryName,fis);
+        fis.close();
+      }
+ else {
+        if (mapDeploymentPlan.get("!/" + entryName) == null)         JarUtils.addJarEntry(jos,entryName,jis);
+ else         log.debug("Skip entry found in deployment plan: " + entryName);
+      }
+    }
+    entry=jis.getNextJarEntry();
+  }
+  for (  String entryName : mapDeploymentPlan.keySet()) {
+    moduleType=determineModuleType(entryName);
+    if (moduleType != null)     break;
+  }
+  if (moduleType == null) {
+    if (moduleName.endsWith(ModuleType.EAR.getModuleExtension()))     moduleType=ModuleType.EAR;
+ else     if (moduleName.endsWith(ModuleType.WAR.getModuleExtension()))     moduleType=ModuleType.WAR;
+ else     if (moduleName.endsWith(ModuleType.RAR.getModuleExtension()))     moduleType=ModuleType.RAR;
+ else     throw new RuntimeException("cannot obtain module type for " + moduleName);
+  }
+  moduleInfo.setModuleType(moduleType);
+  addDeploymentPlanEntry(jos,null);
+  jos.close();
+  String deploymentName=tmpFile.getParent() + File.separator + metaData.getDeploymentName();
+  File deployment=new File(deploymentName);
+  if (deployment.exists() && deployment.delete() == false)   throw new IOException("Cannot delete existing deployment: " + deployment);
+  tmpFile.renameTo(deployment);
+  moduleInfo.setModuleID(deployment.toURI().toURL());
+  return moduleInfo;
+}
