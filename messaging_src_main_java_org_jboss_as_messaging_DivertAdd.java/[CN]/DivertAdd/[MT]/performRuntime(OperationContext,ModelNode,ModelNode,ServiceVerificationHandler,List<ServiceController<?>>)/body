@@ -1,23 +1,15 @@
 {
-  final String name=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
-  final ModelNode routingNode=CommonAttributes.ROUTING_NAME.validateResolvedOperation(model);
-  final String routingName=routingNode.isDefined() ? routingNode.asString() : null;
-  final String address=CommonAttributes.DIVERT_ADDRESS.validateResolvedOperation(model).asString();
-  final String forwardingAddress=CommonAttributes.FORWARDING_ADDRESS.validateResolvedOperation(model).asString();
-  final boolean exclusive=CommonAttributes.EXCLUSIVE.validateResolvedOperation(model).asBoolean();
-  final ModelNode filterNode=CommonAttributes.FILTER.validateResolvedOperation(model);
-  final String filter=filterNode.isDefined() ? filterNode.asString() : null;
-  final ModelNode transformerNode=CommonAttributes.TRANSFORMER_CLASS_NAME.validateResolvedOperation(model);
-  final String transformerClassName=transformerNode.isDefined() ? transformerNode.asString() : null;
   ServiceRegistry registry=context.getServiceRegistry(true);
   ServiceController<?> hqService=registry.getService(MessagingServices.JBOSS_MESSAGING);
   if (hqService != null) {
     if (hqService.getState() != ServiceController.State.UP) {
       throw new IllegalStateException(String.format("Service %s is not in state %s, it is in state %s",MessagingServices.JBOSS_MESSAGING,ServiceController.State.UP,hqService.getState()));
     }
+    final String name=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
+    DivertConfiguration divertConfiguration=createDivertConfiguration(name,model);
     HornetQServerControl serverControl=HornetQServer.class.cast(hqService.getValue()).getHornetQServerControl();
     try {
-      serverControl.createDivert(name,routingName,address,forwardingAddress,exclusive,filter,transformerClassName);
+      serverControl.createDivert(name,divertConfiguration.getRoutingName(),divertConfiguration.getAddress(),divertConfiguration.getForwardingAddress(),divertConfiguration.isExclusive(),divertConfiguration.getFilterString(),divertConfiguration.getTransformerClassName());
     }
  catch (    RuntimeException e) {
       throw e;
@@ -25,10 +17,5 @@
 catch (    Exception e) {
       throw new RuntimeException(e);
     }
-  }
- else {
-    List<DivertConfiguration> divertConfigs=configuration.getDivertConfigurations();
-    DivertConfiguration divertConfig=new DivertConfiguration(name,routingName,address,forwardingAddress,exclusive,filter,transformerClassName);
-    divertConfigs.add(divertConfig);
   }
 }
