@@ -1,0 +1,64 @@
+{
+  MBeanServerConnection connection=setupAndGetConnection(new MBeanInfoAdditionalInitialization(new TestExtension()));
+  MBeanInfo info=connection.getMBeanInfo(ROOT_NAME);
+  Assert.assertNotNull(info);
+  for (  MBeanAttributeInfo attr : info.getAttributes()) {
+    Assert.assertFalse(attr.getName().contains("-"));
+  }
+  for (  MBeanOperationInfo op : info.getOperations()) {
+    Assert.assertFalse(op.getName().contains("-"));
+    for (    MBeanParameterInfo param : op.getSignature()) {
+      Assert.assertFalse(param.getName().contains("-"));
+    }
+  }
+  info=connection.getMBeanInfo(createObjectName(Constants.DOMAIN + ":subsystem=jmx"));
+  Assert.assertNotNull(info);
+  Assert.assertEquals("The configuration of the JMX subsystem.",info.getDescription());
+  info=connection.getMBeanInfo(createObjectName(Constants.DOMAIN + ":subsystem=test"));
+  Assert.assertNotNull(info);
+  Assert.assertEquals("A test subsystem",info.getDescription());
+  MBeanAttributeInfo[] attributes=info.getAttributes();
+  Assert.assertEquals(14,attributes.length);
+  assertAttributeDescription(attributes[0],"roInt",Integer.class.getName(),"A read-only int",true,false);
+  assertAttributeDescription(attributes[1],"undefinedInt",Integer.class.getName(),"A read-only int",true,true);
+  assertAttributeDescription(attributes[2],"int",Integer.class.getName(),"A int",true,true);
+  assertAttributeDescription(attributes[4],"bigdec",BigDecimal.class.getName(),"A big dec",true,true);
+  assertAttributeDescription(attributes[5],"boolean",Boolean.class.getName(),"A boolean",true,true);
+  assertAttributeDescription(attributes[6],"bytes",byte[].class.getName(),"A bytes",true,true);
+  assertAttributeDescription(attributes[7],"double",Double.class.getName(),"A double",true,true);
+  assertAttributeDescription(attributes[8],"string",String.class.getName(),"A string",true,true);
+  assertAttributeDescription(attributes[9],"list",Integer[].class.getName(),"A list",true,true);
+  assertAttributeDescription(attributes[10],"long",Long.class.getName(),"A long",true,true);
+  assertAttributeDescription(attributes[11],"type",String.class.getName(),"A type",true,true);
+  assertAttributeDescription(attributes[12],"map",TabularData.class.getName(),"A map",true,true);
+  assertMapType(assertCast(OpenMBeanAttributeInfo.class,attributes[12]).getOpenType(),SimpleType.STRING,SimpleType.INTEGER);
+  checkComplexTypeInfo(assertCast(CompositeType.class,assertCast(OpenMBeanAttributeInfo.class,attributes[13]).getOpenType()));
+  MBeanOperationInfo[] operations=info.getOperations();
+  Assert.assertEquals(3,operations.length);
+  OpenMBeanOperationInfo op=findOperation(operations,VoidOperationNoParams.OPERATION_JMX_NAME);
+  Assert.assertEquals(VoidOperationNoParams.OPERATION_JMX_NAME,op.getName());
+  Assert.assertEquals("Test1",op.getDescription());
+  Assert.assertEquals(0,op.getSignature().length);
+  Assert.assertEquals(Void.class.getName(),op.getReturnType());
+  op=findOperation(operations,IntOperationWithParams.OPERATION_JMX_NAME);
+  Assert.assertEquals(IntOperationWithParams.OPERATION_JMX_NAME,op.getName());
+  Assert.assertEquals("Test2",op.getDescription());
+  Assert.assertEquals(String.class.getName(),op.getReturnType());
+  Assert.assertEquals(3,op.getSignature().length);
+  Assert.assertEquals("param1",op.getSignature()[0].getName());
+  Assert.assertEquals("Param1",op.getSignature()[0].getDescription());
+  Assert.assertEquals(Long.class.getName(),op.getSignature()[0].getType());
+  Assert.assertEquals("param2",op.getSignature()[1].getName());
+  Assert.assertEquals("Param2",op.getSignature()[1].getDescription());
+  Assert.assertEquals(String[].class.getName(),op.getSignature()[1].getType());
+  Assert.assertEquals("param3",op.getSignature()[2].getName());
+  Assert.assertEquals("Param3",op.getSignature()[2].getDescription());
+  Assert.assertEquals(TabularData.class.getName(),op.getSignature()[2].getType());
+  assertMapType(assertCast(OpenMBeanParameterInfo.class,op.getSignature()[2]).getOpenType(),SimpleType.STRING,SimpleType.INTEGER);
+  op=findOperation(operations,ComplexOperation.OPERATION_NAME);
+  Assert.assertEquals(ComplexOperation.OPERATION_NAME,op.getName());
+  Assert.assertEquals("Test3",op.getDescription());
+  checkComplexTypeInfo(assertCast(CompositeType.class,op.getReturnOpenType()));
+  Assert.assertEquals(1,op.getSignature().length);
+  checkComplexTypeInfo(assertCast(CompositeType.class,assertCast(OpenMBeanParameterInfo.class,op.getSignature()[0]).getOpenType()));
+}

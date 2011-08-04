@@ -1,0 +1,25 @@
+{
+  final ImmutableManagementResourceRegistration registration=getMBeanRegistration(address,reg);
+  final DescriptionProvider provider=registration.getModelDescription(PathAddress.EMPTY_ADDRESS);
+  if (provider == null) {
+    throw new InstanceNotFoundException("No description provider found for " + address);
+  }
+  final ModelNode description=provider.getModelDescription(null);
+  final String attributeName=findAttributeName(description.get(ATTRIBUTES),attribute.getName());
+  ModelNode op=new ModelNode();
+  op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
+  op.get(OP_ADDR).set(address.toModelNode());
+  op.get(NAME).set(attributeName);
+  try {
+    op.get(VALUE).set(TypeConverter.toModelNode(description.require(ATTRIBUTES).require(attributeName),attribute.getValue()));
+  }
+ catch (  ClassCastException e) {
+    e.printStackTrace();
+    throw new InvalidAttributeValueException("Bad type for '" + attribute.getName() + "'");
+  }
+  ModelNode result=execute(op);
+  String error=getFailureDescription(result);
+  if (error != null) {
+    throw new InvalidAttributeValueException(error);
+  }
+}

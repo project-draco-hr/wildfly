@@ -1,0 +1,45 @@
+{
+  final ObjectName testObjectName=createObjectName(Constants.DOMAIN + ":subsystem=test");
+  final ObjectName childObjectName=createObjectName(Constants.DOMAIN + ":subsystem=test,single=only");
+  MBeanServerConnection connection=setupAndGetConnection(new MBeanInfoAdditionalInitialization(new SubystemWithSingleFixedChildExtension()));
+  Set<ObjectName> names=connection.queryNames(createObjectName(Constants.DOMAIN + ":subsystem=test,*"),null);
+  Assert.assertEquals(1,names.size());
+  Assert.assertTrue(names.contains(testObjectName));
+  MBeanInfo subsystemInfo=connection.getMBeanInfo(testObjectName);
+  Assert.assertEquals(0,subsystemInfo.getAttributes().length);
+  Assert.assertEquals(1,subsystemInfo.getOperations().length);
+  OpenMBeanOperationInfo op=findOperation(subsystemInfo.getOperations(),"addSingleOnly");
+  Assert.assertEquals("Adds a child",op.getDescription());
+  Assert.assertEquals(1,op.getSignature().length);
+  Assert.assertEquals(Integer.class.getName(),op.getSignature()[0].getType());
+  connection.invoke(testObjectName,"addSingleOnly",new Object[]{Integer.valueOf(123)},new String[]{String.class.getName()});
+  names=connection.queryNames(createObjectName(Constants.DOMAIN + ":subsystem=test,*"),null);
+  Assert.assertEquals(2,names.size());
+  Assert.assertTrue(names.contains(testObjectName));
+  Assert.assertTrue(names.contains(childObjectName));
+  subsystemInfo=connection.getMBeanInfo(testObjectName);
+  Assert.assertEquals(0,subsystemInfo.getAttributes().length);
+  Assert.assertEquals(1,subsystemInfo.getOperations().length);
+  op=findOperation(subsystemInfo.getOperations(),"addSingleOnly");
+  Assert.assertEquals("Adds a child",op.getDescription());
+  Assert.assertEquals(1,op.getSignature().length);
+  Assert.assertEquals(Integer.class.getName(),op.getSignature()[0].getType());
+  MBeanInfo childInfo=connection.getMBeanInfo(childObjectName);
+  Assert.assertEquals(1,childInfo.getAttributes().length);
+  Assert.assertEquals(Integer.class.getName(),childInfo.getAttributes()[0].getType());
+  Assert.assertEquals(1,childInfo.getOperations().length);
+  op=findOperation(childInfo.getOperations(),REMOVE);
+  Assert.assertEquals("Removes a child",op.getDescription());
+  Assert.assertEquals(0,op.getSignature().length);
+  Assert.assertEquals(Integer.valueOf(123),connection.getAttribute(childObjectName,"attr"));
+  try {
+    connection.invoke(testObjectName,"addSingleOnly",new Object[]{Integer.valueOf(123)},new String[]{String.class.getName()});
+    Assert.fail("Should not have been able to register a duplicate resource");
+  }
+ catch (  Exception expected) {
+  }
+  connection.invoke(childObjectName,REMOVE,new Object[]{},new String[]{});
+  names=connection.queryNames(createObjectName(Constants.DOMAIN + ":subsystem=test,*"),null);
+  Assert.assertEquals(1,names.size());
+  Assert.assertTrue(names.contains(testObjectName));
+}

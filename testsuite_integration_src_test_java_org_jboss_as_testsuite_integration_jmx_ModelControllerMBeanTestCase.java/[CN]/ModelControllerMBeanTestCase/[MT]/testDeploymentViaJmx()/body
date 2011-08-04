@@ -1,0 +1,40 @@
+{
+  ObjectName testSarMBeanName=new ObjectName("jboss:name=test,type=jmx-sar");
+  ObjectName testDeploymentModelName=new ObjectName("jboss.model:deployment=test-jmx-sar.sar");
+  assertNoMBean(testSarMBeanName);
+  assertNoMBean(testDeploymentModelName);
+  final JavaArchive sar=ShrinkWrap.create(JavaArchive.class,"test-jmx-sar.sar");
+  sar.addClasses(org.jboss.as.testsuite.integration.jmx.sar.Test.class,TestMBean.class);
+  sar.addAsManifestResource("jmx-sar/jboss-service.xml","jboss-service.xml");
+  InputStream in=sar.as(ZipExporter.class).exportAsInputStream();
+  ByteArrayOutputStream bout=new ByteArrayOutputStream();
+  int i=in.read();
+  while (i != -1) {
+    bout.write(i);
+    i=in.read();
+  }
+  byte[] bytes=bout.toByteArray();
+  byte[] hash=(byte[])connection.invoke(ROOT_MODEL_NAME,"uploadDeploymentBytes",new Object[]{bytes},new String[]{byte.class.getName()});
+  CompositeType contentType=null;
+  MBeanInfo info=connection.getMBeanInfo(ROOT_MODEL_NAME);
+  for (  MBeanOperationInfo op : info.getOperations()) {
+    if (op.getName().equals("addDeployment")) {
+      contentType=(CompositeType)((ArrayType<CompositeType>)((OpenMBeanParameterInfo)op.getSignature()[2]).getOpenType()).getElementOpenType();
+      break;
+    }
+  }
+  Map<String,Object> values=new HashMap<String,Object>();
+  for (  String key : contentType.keySet()) {
+    values.put(key,null);
+  }
+  values.put("hash",hash);
+  CompositeData contents=new CompositeDataSupport(contentType,values);
+  connection.invoke(ROOT_MODEL_NAME,"addDeployment",new Object[]{"test-jmx-sar.sar","test-jmx-sar.sar",new CompositeData[]{contents},Boolean.TRUE},new String[]{String.class.getName(),String.class.getName(),CompositeData.class.getName(),Boolean.class.getName()});
+  Assert.assertNotNull(connection.getMBeanInfo(testSarMBeanName));
+  Assert.assertTrue((Boolean)connection.getAttribute(testDeploymentModelName,"enabled"));
+  connection.invoke(testDeploymentModelName,"undeploy",new Object[0],new String[0]);
+  assertNoMBean(testSarMBeanName);
+  Assert.assertFalse((Boolean)connection.getAttribute(testDeploymentModelName,"enabled"));
+  connection.invoke(testDeploymentModelName,"remove",new Object[0],new String[0]);
+  assertNoMBean(testDeploymentModelName);
+}

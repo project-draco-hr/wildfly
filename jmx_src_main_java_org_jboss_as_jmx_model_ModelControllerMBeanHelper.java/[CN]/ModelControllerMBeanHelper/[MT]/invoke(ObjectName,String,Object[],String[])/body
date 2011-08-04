@@ -1,0 +1,53 @@
+{
+  if (operationName == null) {
+    throw new IllegalArgumentException("Null operation name");
+  }
+  if (params == null) {
+    params=new Object[0];
+  }
+  if (signature == null) {
+    signature=new String[0];
+  }
+  if (params.length != signature.length) {
+    throw new IllegalArgumentException("params and signature have different lengths");
+  }
+  final ResourceAndRegistration reg=getRootResourceAndRegistration();
+  PathAddress address=ObjectNameAddressUtil.resolvePathAddress(reg.getResource(),name);
+  if (address == null) {
+    throw createInstanceNotFoundException(name);
+  }
+  final ImmutableManagementResourceRegistration registration=getMBeanRegistration(address,reg);
+  String realOperationName=null;
+  DescriptionProvider provider=registration.getOperationDescription(PathAddress.EMPTY_ADDRESS,operationName);
+  if (provider != null) {
+    realOperationName=operationName;
+  }
+ else {
+    Map<String,OperationEntry> ops=registration.getOperationDescriptions(PathAddress.EMPTY_ADDRESS,false);
+    for (    Map.Entry<String,OperationEntry> entry : ops.entrySet()) {
+      if (operationName.equals(NameConverter.convertToCamelCase(entry.getKey()))) {
+        provider=entry.getValue().getDescriptionProvider();
+        realOperationName=entry.getKey();
+        break;
+      }
+    }
+  }
+  if (provider == null) {
+    ChildAddOperationEntry entry=ChildAddOperationFinder.findAddChildOperation(reg.getRegistration().getSubModel(address),operationName);
+    if (entry == null) {
+      throw new MBeanException(null,"No operation called '" + operationName + "' at "+ address);
+    }
+    PathElement element=entry.getElement();
+    if (element.isWildcard()) {
+      if (params.length == 0) {
+        throw new IllegalStateException("Need the name parameter for wildcard add");
+      }
+      element=PathElement.pathElement(element.getKey(),(String)params[0]);
+      Object[] newParams=new Object[params.length - 1];
+      System.arraycopy(params,1,newParams,0,newParams.length);
+      params=newParams;
+    }
+    return invoke(entry.getDescriptionProvider(),ADD,address.append(element),params);
+  }
+  return invoke(provider,realOperationName,address,params);
+}

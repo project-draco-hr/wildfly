@@ -1,0 +1,28 @@
+{
+  final ModelNode description=provider.getModelDescription(null);
+  ModelNode op=new ModelNode();
+  op.get(OP).set(operationName);
+  op.get(OP_ADDR).set(address.toModelNode());
+  if (params.length > 0) {
+    ModelNode requestProperties=description.require(REQUEST_PROPERTIES);
+    Set<String> keys=requestProperties.keys();
+    if (keys.size() != params.length) {
+      throw new IllegalArgumentException("params have a different length than the description");
+    }
+    Iterator<String> it=requestProperties.keys().iterator();
+    for (int i=0; i < params.length; i++) {
+      String attributeName=it.next();
+      ModelNode paramDescription=requestProperties.get(attributeName);
+      op.get(attributeName).set(TypeConverter.toModelNode(paramDescription,params[i]));
+    }
+  }
+  ModelNode result=execute(op);
+  String error=getFailureDescription(result);
+  if (error != null) {
+    throw new ReflectionException(null,error);
+  }
+  if (!description.hasDefined(REPLY_PROPERTIES)) {
+    return null;
+  }
+  return TypeConverter.fromModelNode(description.get(REPLY_PROPERTIES),result.get(RESULT));
+}
