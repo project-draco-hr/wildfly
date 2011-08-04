@@ -1,8 +1,8 @@
 {
   requireSingleAttribute(reader,CommonAttributes.NAME);
   String name=reader.getAttributeValue(0);
-  ModelNode bridgeAdd=org.jboss.as.controller.operations.common.Util.getEmptyOperation(ADD,address.clone().add(CommonAttributes.BRIDGE,name));
-  EnumSet<Element> required=EnumSet.of(Element.QUEUE_NAME);
+  ModelNode bridgeAdd=org.jboss.as.controller.operations.common.Util.getEmptyOperation(ADD,address.clone().add(CommonAttributes.CLUSTER_CONNECTION,name));
+  EnumSet<Element> required=EnumSet.of(Element.ADDRESS,Element.CONNECTOR_REF);
   Set<Element> seen=EnumSet.noneOf(Element.class);
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
     final Element element=Element.forName(reader.getLocalName());
@@ -11,36 +11,30 @@
     }
     required.remove(element);
 switch (element) {
-case QUEUE_NAME:
-case HA:
-case TRANSFORMER_CLASS_NAME:
-case RETRY_INTERVAL_MULTIPLIER:
-case FAILOVER_ON_SERVER_SHUTDOWN:
-case USE_DUPLICATE_DETECTION:
+case FORWARD_WHEN_NO_CONSUMERS:
+case MAX_HOPS:
 case CONFIRMATION_WINDOW_SIZE:
-case USER:
-case PASSWORD:
       handleElementText(reader,element,bridgeAdd);
     break;
-case FILTER:
+case ADDRESS:
 {
-    final Location location=reader.getLocation();
-    String string=readStringAttributeElement(reader,CommonAttributes.STRING);
-    FILTER.parseAndSetParameter(string,bridgeAdd,location);
+    handleElementText(reader,element,CommonAttributes.CLUSTER_CONNECTION_ADDRESS.getName(),bridgeAdd);
     break;
   }
+case CONNECTOR_REF:
+{
+  handleElementText(reader,element,"simple",bridgeAdd);
+  break;
+}
+case USE_DUPLICATE_DETECTION:
 case RETRY_INTERVAL:
-handleElementText(reader,element,"default",bridgeAdd);
-break;
-case FORWARDING_ADDRESS:
-case RECONNECT_ATTEMPTS:
-handleElementText(reader,element,"bridge",bridgeAdd);
+handleElementText(reader,element,"cluster",bridgeAdd);
 break;
 case STATIC_CONNECTORS:
 if (seen.contains(Element.DISCOVERY_GROUP_REF)) {
 throw new XMLStreamException(String.format("Illegal element %s: cannot be used when %s is used",STATIC_CONNECTORS,DISCOVERY_GROUP_REF),reader.getLocation());
 }
-processStaticConnectors(reader,bridgeAdd,false);
+processStaticConnectors(reader,bridgeAdd,true);
 break;
 case DISCOVERY_GROUP_REF:
 {
@@ -57,9 +51,6 @@ default :
 throw ParseUtils.unexpectedElement(reader);
 }
 }
-}
-if (!seen.contains(Element.STATIC_CONNECTORS) && !seen.contains(Element.DISCOVERY_GROUP_REF)) {
-throw new XMLStreamException(String.format("Either %s or %s is required",Element.STATIC_CONNECTORS.getLocalName(),Element.DISCOVERY_GROUP_REF.getLocalName()),reader.getLocation());
 }
 if (!required.isEmpty()) {
 missingRequired(reader,required);
