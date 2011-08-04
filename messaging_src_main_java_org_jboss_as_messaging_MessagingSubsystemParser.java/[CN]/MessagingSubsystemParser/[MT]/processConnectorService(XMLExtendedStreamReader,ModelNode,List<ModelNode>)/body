@@ -1,0 +1,40 @@
+{
+  requireSingleAttribute(reader,CommonAttributes.NAME);
+  String name=reader.getAttributeValue(0);
+  final ModelNode serviceAddress=address.clone().add(CommonAttributes.CONNECTOR_SERVICE,name);
+  final ModelNode add=org.jboss.as.controller.operations.common.Util.getEmptyOperation(ADD,serviceAddress);
+  updates.add(add);
+  EnumSet<Element> required=EnumSet.of(Element.FACTORY_CLASS);
+  Set<Element> seen=EnumSet.noneOf(Element.class);
+  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+    final Element element=Element.forName(reader.getLocalName());
+    if (!seen.add(element) && element != Element.PARAM) {
+      throw ParseUtils.duplicateNamedElement(reader,element.getLocalName());
+    }
+    required.remove(element);
+switch (element) {
+case FACTORY_CLASS:
+{
+        handleElementText(reader,element,add);
+        break;
+      }
+case PARAM:
+{
+      final Location location=reader.getLocation();
+      String[] attrs=ParseUtils.requireAttributes(reader,Attribute.KEY.getLocalName(),Attribute.VALUE.getLocalName());
+      requireNoContent(reader);
+      final ModelNode paramAdd=org.jboss.as.controller.operations.common.Util.getEmptyOperation(ADD,serviceAddress.clone().add(CommonAttributes.PARAM,attrs[0]));
+      CommonAttributes.VALUE.parseAndSetParameter(attrs[1],paramAdd,location);
+      updates.add(paramAdd);
+      break;
+    }
+default :
+{
+    throw ParseUtils.unexpectedElement(reader);
+  }
+}
+}
+if (!required.isEmpty()) {
+missingRequired(reader,required);
+}
+}
