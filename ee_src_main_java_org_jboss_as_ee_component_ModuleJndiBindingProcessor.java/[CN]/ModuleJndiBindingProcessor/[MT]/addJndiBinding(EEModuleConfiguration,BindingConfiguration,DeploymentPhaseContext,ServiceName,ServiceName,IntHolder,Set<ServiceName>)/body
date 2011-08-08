@@ -1,17 +1,51 @@
 {
   final String bindingName=bindingConfiguration.getName().startsWith("java:") ? bindingConfiguration.getName() : "java:module/env/" + bindingConfiguration.getName();
   final ServiceVerificationHandler serviceVerificationHandler=phaseContext.getDeploymentUnit().getAttachment(org.jboss.as.server.deployment.Attachments.SERVICE_VERIFICATION_HANDLER);
+  InjectionSource.ResolutionContext resolutionContext=new InjectionSource.ResolutionContext(true,module.getModuleName(),module.getModuleName(),module.getApplicationName());
   if (bindingName != null) {
-    if (serviceName == null) {
-      throw new IllegalArgumentException("Invalid context name '" + bindingName + "' for binding");
+    final ServiceName binderServiceName=ContextNames.serviceNameOfEnvEntry(module.getApplicationName(),module.getModuleName(),module.getModuleName(),false,bindingName);
+    if (bindingName.startsWith("java:comp") || bindingName.startsWith("java:module") || bindingName.startsWith("java:app")) {
+      try {
+        final BinderService service=new BinderService(bindingName,bindingConfiguration.getSource());
+        dependencies.add(binderServiceName);
+        ServiceBuilder<ManagedReferenceFactory> serviceBuilder=phaseContext.getServiceTarget().addService(binderServiceName,service);
+        bindingConfiguration.getSource().getResourceValue(resolutionContext,serviceBuilder,phaseContext,service.getManagedObjectInjector());
+        serviceBuilder.addDependency(binderServiceName.getParent(),NamingStore.class,service.getNamingStoreInjector());
+        serviceBuilder.install();
+      }
+ catch (      DuplicateServiceException e) {
+        ServiceController<ManagedReferenceFactory> registered=(ServiceController<ManagedReferenceFactory>)CurrentServiceContainer.getServiceContainer().getService(binderServiceName);
+        if (registered == null)         throw e;
+        BinderService service=(BinderService)registered.getService();
+        if (!service.getSource().equals(bindingConfiguration.getSource()))         throw new IllegalArgumentException("Incompatible conflicting binding at " + bindingName + " source: "+ bindingConfiguration.getSource());
+      }
     }
-    final BindingHandleService service=new BindingHandleService(bindingName,serviceName,bindingConfiguration.getSource(),serviceName.getParent(),serviceVerificationHandler);
-    final ServiceName handleServiceName=serviceName.append(ownerName).append(String.valueOf(handleCount.value++));
-    dependencies.add(serviceName);
-    ServiceBuilder<Void> sourceServiceBuilder=phaseContext.getServiceTarget().addService(handleServiceName,service);
-    InjectionSource.ResolutionContext resolutionContext=new InjectionSource.ResolutionContext(true,module.getModuleName(),module.getModuleName(),module.getApplicationName());
-    bindingConfiguration.getSource().getResourceValue(resolutionContext,sourceServiceBuilder,phaseContext,service.getManagedObjectInjector());
-    sourceServiceBuilder.install();
+ else {
+      ServiceController<ManagedReferenceFactory> controller=null;
+      BinderService service;
+      try {
+        service=new BinderService(bindingName,bindingConfiguration.getSource());
+        dependencies.add(binderServiceName);
+        ServiceBuilder<ManagedReferenceFactory> serviceBuilder=CurrentServiceContainer.getServiceContainer().addService(binderServiceName,service);
+        bindingConfiguration.getSource().getResourceValue(resolutionContext,serviceBuilder,phaseContext,service.getManagedObjectInjector());
+        serviceBuilder.addDependency(binderServiceName.getParent(),NamingStore.class,service.getNamingStoreInjector());
+        serviceBuilder.addListener(serviceVerificationHandler);
+        controller=serviceBuilder.install();
+        service.acquire();
+      }
+ catch (      DuplicateServiceException e) {
+        controller=(ServiceController<ManagedReferenceFactory>)CurrentServiceContainer.getServiceContainer().getService(binderServiceName);
+        if (controller == null)         throw e;
+        service=(BinderService)controller.getService();
+        if (!service.getSource().equals(bindingConfiguration.getSource())) {
+          throw new IllegalArgumentException("Incompatible conflicting binding at " + bindingName + " source: "+ bindingConfiguration.getSource());
+        }
+        service.acquire();
+      }
+      ServiceController<?> unitService=CurrentServiceContainer.getServiceContainer().getService(phaseContext.getDeploymentUnit().getServiceName());
+      final BinderService binderService=service;
+      unitService.addListener(new BinderReleaseListener(binderService));
+    }
   }
  else {
     throw new DeploymentUnitProcessingException("Binding name must not be null: " + bindingConfiguration);
