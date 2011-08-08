@@ -1,32 +1,42 @@
 {
-  final File deployDir=createDeploymentDir("exploded-deployments");
-  ModelControllerClient client=ModelControllerClient.Factory.create(InetAddress.getByName("localhost"),9999);
-  final String scannerName="exploded";
-  addDeploymentScanner(deployDir,client,scannerName,false);
   final JavaArchive archive=ShrinkWrapUtils.createJavaArchive("servermodule/test-deployment.sar",Simple.class.getPackage());
   final File dir=new File("target/archives");
   dir.mkdirs();
-  archive.as(ExplodedExporter.class).exportExploded(deployDir);
+  final File file=new File(dir,"test-deployment.sar");
+  archive.as(ZipExporter.class).exportTo(file,true);
+  final File deployDir=createDeploymentDir("auto-deployments");
+  ModelControllerClient client=ModelControllerClient.Factory.create(InetAddress.getByName("localhost"),9999);
+  final String scannerName="autoZips";
+  addDeploymentScanner(deployDir,client,scannerName,true);
   try {
+    final File target=new File(deployDir,"test-deployment.sar");
     final File deployed=new File(deployDir,"test-deployment.sar.deployed");
-    Assert.assertFalse(deployed.exists());
+    Assert.assertFalse(target.exists());
     testDeployments(new DeploymentExecutor(){
       @Override public void initialDeploy() throws IOException {
-        final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
-        final OutputStream out=new BufferedOutputStream(new FileOutputStream(dodeploy));
+        final InputStream in=new BufferedInputStream(new FileInputStream(file));
         try {
-          out.write("test-deployment.sar".getBytes());
+          final OutputStream out=new BufferedOutputStream(new FileOutputStream(target));
+          try {
+            int i=in.read();
+            while (i != -1) {
+              out.write(i);
+              i=in.read();
+            }
+          }
+  finally {
+            StreamUtils.safeClose(out);
+          }
         }
   finally {
-          StreamUtils.safeClose(out);
+          StreamUtils.safeClose(in);
         }
-        Assert.assertTrue(dodeploy.exists());
+        Assert.assertTrue(file.exists());
       }
       @Override public void fullReplace() throws IOException {
-        final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
         final File isdeploying=new File(deployDir,"test-deployment.sar.isdeploying");
         for (int i=0; i < 500; i++) {
-          if (!dodeploy.exists() && !isdeploying.exists()) {
+          if (!isdeploying.exists()) {
             break;
           }
           try {
@@ -37,16 +47,15 @@
             break;
           }
         }
-        if (dodeploy.exists()) {
+        if (isdeploying.exists()) {
           Assert.fail("initialDeploy step did not complete in a reasonably timely fashion");
         }
         initialDeploy();
       }
       @Override public void undeploy(){
-        final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
         final File isdeploying=new File(deployDir,"test-deployment.sar.isdeploying");
         for (int i=0; i < 500; i++) {
-          if (!dodeploy.exists() && !isdeploying.exists() && deployed.exists()) {
+          if (!isdeploying.exists() && deployed.exists()) {
             break;
           }
           try {
@@ -57,10 +66,10 @@
             break;
           }
         }
-        if (dodeploy.exists() || !deployed.exists()) {
+        if (!deployed.exists()) {
           Assert.fail("fullReplace step did not complete in a reasonably timely fashion");
         }
-        deployed.delete();
+        target.delete();
       }
     }
 );
