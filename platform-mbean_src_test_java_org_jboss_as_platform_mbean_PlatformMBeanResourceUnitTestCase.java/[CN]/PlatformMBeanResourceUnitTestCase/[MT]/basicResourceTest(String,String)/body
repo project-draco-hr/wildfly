@@ -1,0 +1,34 @@
+{
+  ModelNode op=getOperation(READ_RESOURCE_DESCRIPTION_OPERATION,type,name);
+  op.get(RECURSIVE).set(true);
+  op.get(OPERATIONS).set(true);
+  ModelNode result=executeOp(op,false);
+  Assert.assertTrue(result.isDefined());
+  final ModelNode description=result;
+  op=getOperation(GlobalOperationHandlers.VALIDATE_ADDRESS_OPERATION_NAME,type,name);
+  result=executeOp(op,false);
+  op=getOperation(READ_RESOURCE_OPERATION,type,name);
+  op.get(INCLUDE_RUNTIME).set(true);
+  result=executeOp(op,false);
+  Assert.assertTrue(result.isDefined());
+  final ModelNode resource=result;
+  validateResource(description,resource);
+  for (  Property prop : resource.asPropertyList()) {
+    op=getOperation(READ_ATTRIBUTE_OPERATION,type,name);
+    op.get(NAME).set(prop.getName());
+    final ModelNode response=client.execute(op);
+    if (SUCCESS.equals(response.get(OUTCOME).asString())) {
+      final ModelNode resultNode=response.get(RESULT);
+      if (resultNode.isDefined()) {
+        Assert.assertEquals(prop.getName() + " has correct ModelType",description.get(ATTRIBUTES,prop.getName(),TYPE).asType(),resultNode.getType());
+      }
+ else {
+        Assert.assertTrue(prop.getName() + " is undefined",description.get(ATTRIBUTES,prop.getName(),NILLABLE).asBoolean());
+      }
+    }
+ else {
+      Assert.assertFalse(prop.getValue().isDefined());
+    }
+  }
+  return new DescribedResource(description,resource);
+}

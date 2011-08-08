@@ -1,0 +1,139 @@
+{
+  DescribedResource describedResource=basicResourceTest("threading",null);
+  ThreadMXBean mbean=ManagementFactory.getThreadMXBean();
+  boolean syncSupported=describedResource.resource.get(PlatformMBeanConstants.SYNCHRONIZER_USAGE_SUPPORTED).asBoolean();
+  Assert.assertEquals(mbean.isSynchronizerUsageSupported(),syncSupported);
+  boolean monitorSupported=describedResource.resource.get(PlatformMBeanConstants.OBJECT_MONITOR_USAGE_SUPPORTED).asBoolean();
+  Assert.assertEquals(mbean.isObjectMonitorUsageSupported(),monitorSupported);
+  boolean threadContentionSupported=describedResource.resource.get(PlatformMBeanConstants.THREAD_CONTENTION_MONITORING_SUPPORTED).asBoolean();
+  Assert.assertEquals(mbean.isThreadContentionMonitoringSupported(),threadContentionSupported);
+  boolean threadContentionEnabled=describedResource.resource.get(PlatformMBeanConstants.THREAD_CONTENTION_MONITORING_ENABLED).asBoolean();
+  Assert.assertEquals(mbean.isThreadContentionMonitoringEnabled(),threadContentionEnabled);
+  boolean threadCPUSupported=describedResource.resource.get(PlatformMBeanConstants.THREAD_CPU_TIME_SUPPORTED).asBoolean();
+  Assert.assertEquals(mbean.isThreadCpuTimeSupported(),threadCPUSupported);
+  boolean threadCPUEnabled=describedResource.resource.get(PlatformMBeanConstants.THREAD_CPU_TIME_ENABLED).asBoolean();
+  Assert.assertEquals(mbean.isThreadCpuTimeSupported(),threadCPUEnabled);
+  boolean currentThreadPUSupported=describedResource.resource.get(PlatformMBeanConstants.CURRENT_THREAD_CPU_TIME_SUPPORTED).asBoolean();
+  Assert.assertEquals(mbean.isCurrentThreadCpuTimeSupported(),currentThreadPUSupported);
+  ModelNode op=getOperation("reset-peak-thread-count","threading",null);
+  Assert.assertFalse(executeOp(op,false).isDefined());
+  op=getOperation("find-deadlocked-threads","threading",null);
+  ModelNode result=executeOp(op,!syncSupported);
+  if (syncSupported && result.isDefined()) {
+    Assert.assertEquals(ModelType.LIST,result.getType());
+  }
+  op=getOperation("find-monitor-deadlocked-threads","threading",null);
+  result=executeOp(op,!monitorSupported);
+  if (monitorSupported && result.isDefined()) {
+    Assert.assertEquals(ModelType.LIST,result.getType());
+  }
+  op=getOperation("dump-all-threads","threading",null);
+  op.get("locked-monitors").set(false);
+  op.get("locked-synchronizers").set(false);
+  result=executeOp(op,false);
+  Assert.assertEquals(ModelType.LIST,result.getType());
+  long mainThreadId=findMainThread(result);
+  op=getOperation("dump-all-threads","threading",null);
+  op.get("locked-monitors").set(true);
+  op.get("locked-synchronizers").set(false);
+  result=executeOp(op,!monitorSupported);
+  if (monitorSupported) {
+    Assert.assertEquals(ModelType.LIST,result.getType());
+  }
+  op=getOperation("dump-all-threads","threading",null);
+  op.get("locked-monitors").set(false);
+  op.get("locked-synchronizers").set(true);
+  result=executeOp(op,!syncSupported);
+  if (syncSupported) {
+    Assert.assertEquals(ModelType.LIST,result.getType());
+  }
+  op=getOperation("dump-all-threads","threading",null);
+  op.get("locked-monitors").set(true);
+  op.get("locked-synchronizers").set(true);
+  boolean canDump=syncSupported && monitorSupported;
+  result=executeOp(op,!canDump);
+  if (canDump) {
+    Assert.assertEquals(ModelType.LIST,result.getType());
+  }
+  op=getOperation("get-thread-info","threading",null);
+  op.get("id").set(mainThreadId);
+  result=executeOp(op,false);
+  Assert.assertTrue(result.isDefined());
+  Assert.assertEquals("main",result.get("thread-name").asString());
+  Assert.assertEquals(mainThreadId,result.get("thread-id").asLong());
+  List<ModelNode> list=result.get("stack-trace").asList();
+  Assert.assertEquals(0,list.size());
+  op=getOperation("get-thread-info","threading",null);
+  op.get("id").set(mainThreadId);
+  op.get("max-depth").set(2);
+  result=executeOp(op,false);
+  Assert.assertTrue(result.isDefined());
+  Assert.assertEquals("main",result.get("thread-name").asString());
+  Assert.assertEquals(mainThreadId,result.get("thread-id").asLong());
+  list=result.get("stack-trace").asList();
+  Assert.assertEquals(2,list.size());
+  op=getOperation("get-thread-infos","threading",null);
+  op.get("ids").add(mainThreadId);
+  result=executeOp(op,false);
+  Assert.assertEquals(ModelType.LIST,result.getType());
+  List<ModelNode> threads=result.asList();
+  Assert.assertEquals(1,threads.size());
+  ModelNode thread=threads.get(0);
+  Assert.assertEquals("main",thread.get("thread-name").asString());
+  Assert.assertEquals(mainThreadId,thread.get("thread-id").asLong());
+  list=thread.get("stack-trace").asList();
+  Assert.assertEquals(0,list.size());
+  op=getOperation("get-thread-infos","threading",null);
+  op.get("ids").add(mainThreadId);
+  op.get("max-depth").set(2);
+  result=executeOp(op,false);
+  Assert.assertEquals(ModelType.LIST,result.getType());
+  threads=result.asList();
+  Assert.assertEquals(1,threads.size());
+  thread=threads.get(0);
+  Assert.assertEquals("main",thread.get("thread-name").asString());
+  Assert.assertEquals(mainThreadId,thread.get("thread-id").asLong());
+  list=thread.get("stack-trace").asList();
+  Assert.assertEquals(2,list.size());
+  op=getOperation("get-thread-infos","threading",null);
+  op.get("ids").add(mainThreadId);
+  op.get("locked-monitors").set(true);
+  op.get("locked-synchronizers").set(true);
+  result=executeOp(op,!canDump);
+  if (canDump) {
+    Assert.assertEquals(ModelType.LIST,result.getType());
+    threads=result.asList();
+    Assert.assertEquals(1,threads.size());
+    thread=threads.get(0);
+    Assert.assertEquals("main",thread.get("thread-name").asString());
+    Assert.assertEquals(mainThreadId,thread.get("thread-id").asLong());
+    list=thread.get("stack-trace").asList();
+    Assert.assertTrue(list.size() > 1);
+  }
+  op=getOperation("get-thread-cpu-time","threading",null);
+  op.get("id").set(mainThreadId);
+  result=executeOp(op,!threadCPUSupported);
+  Assert.assertEquals(ModelType.LONG,result.getType());
+  if (!threadCPUEnabled) {
+    Assert.assertEquals(-1L,result.asLong());
+  }
+  op=getOperation("get-thread-user-time","threading",null);
+  op.get("id").set(mainThreadId);
+  result=executeOp(op,!threadCPUSupported);
+  Assert.assertEquals(ModelType.LONG,result.getType());
+  if (!threadCPUEnabled) {
+    Assert.assertEquals(-1L,result.asLong());
+  }
+  op=getOperation("write-attribute","threading",null);
+  op.get("name").set("thread-cpu-time-enabled");
+  op.get("value").set(!threadCPUEnabled);
+  executeOp(op,false);
+  Assert.assertEquals(mbean.isThreadCpuTimeEnabled(),!threadCPUEnabled);
+  mbean.setThreadCpuTimeEnabled(threadCPUEnabled);
+  op=getOperation("write-attribute","threading",null);
+  op.get("name").set("thread-contention-monitoring-enabled");
+  op.get("value").set(!threadContentionEnabled);
+  executeOp(op,false);
+  Assert.assertEquals(mbean.isThreadContentionMonitoringEnabled(),!threadContentionEnabled);
+  mbean.setThreadContentionMonitoringEnabled(threadContentionEnabled);
+}

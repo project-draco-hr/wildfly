@@ -1,0 +1,42 @@
+{
+  final String gcName=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
+  final String name=operation.require(ModelDescriptionConstants.NAME).asString();
+  GarbageCollectorMXBean gcMBean=null;
+  for (  GarbageCollectorMXBean mbean : ManagementFactory.getGarbageCollectorMXBeans()) {
+    if (gcName.equals(escapeMBeanName(mbean.getName()))) {
+      gcMBean=mbean;
+    }
+  }
+  if (gcMBean == null) {
+    throw new OperationFailedException(new ModelNode().set(String.format("No GarbageCollectorMXBean with name %s currently exists",gcName)));
+  }
+  if (PlatformMBeanUtil.JVM_MAJOR_VERSION > 6 && PlatformMBeanConstants.OBJECT_NAME.equals(name)) {
+    final String objName=PlatformMBeanUtil.getObjectNameStringWithNameKey(ManagementFactory.GARBAGE_COLLECTOR_MXBEAN_DOMAIN_TYPE,gcName);
+    context.getResult().set(objName);
+  }
+ else   if (ModelDescriptionConstants.NAME.equals(name)) {
+    context.getResult().set(escapeMBeanName(gcMBean.getName()));
+  }
+ else   if (PlatformMBeanConstants.VALID.equals(name)) {
+    context.getResult().set(gcMBean.isValid());
+  }
+ else   if (PlatformMBeanConstants.MEMORY_POOL_NAMES.equals(name)) {
+    final ModelNode result=context.getResult();
+    result.setEmptyList();
+    for (    String pool : gcMBean.getMemoryPoolNames()) {
+      result.add(escapeMBeanName(pool));
+    }
+  }
+ else   if (PlatformMBeanConstants.COLLECTION_COUNT.equals(name)) {
+    context.getResult().set(gcMBean.getCollectionCount());
+  }
+ else   if (PlatformMBeanConstants.COLLECTION_TIME.equals(name)) {
+    context.getResult().set(gcMBean.getCollectionTime());
+  }
+ else   if (PlatformMBeanConstants.GARBAGE_COLLECTOR_READ_ATTRIBUTES.contains(name) || PlatformMBeanConstants.GARBAGE_COLLECTOR_METRICS.contains(name)) {
+    throw new IllegalStateException(String.format("Read support for attribute %s was not properly implemented",name));
+  }
+ else {
+    throw unknownAttribute(operation);
+  }
+}

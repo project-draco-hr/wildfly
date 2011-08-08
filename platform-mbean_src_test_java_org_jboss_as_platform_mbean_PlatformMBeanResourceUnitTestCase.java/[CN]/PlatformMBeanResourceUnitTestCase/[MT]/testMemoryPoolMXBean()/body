@@ -1,0 +1,32 @@
+{
+  List<ModelNode> mps=rootWithNamedChildResourceTest("memory-pool");
+  Map<String,MemoryPoolMXBean> mbeans=new HashMap<String,MemoryPoolMXBean>();
+  for (  MemoryPoolMXBean mbean : ManagementFactory.getMemoryPoolMXBeans()) {
+    mbeans.put(PlatformMBeanUtil.escapeMBeanName(mbean.getName()),mbean);
+  }
+  for (  ModelNode node : mps) {
+    DescribedResource describedResource=basicResourceTest("memory-pool",node.asString());
+    MemoryPoolMXBean mbean=mbeans.get(describedResource.resource.get("name").asString());
+    Assert.assertNotNull(mbean);
+    boolean usageSupported=describedResource.resource.get("usage-threshold-supported").asBoolean();
+    Assert.assertEquals(mbean.isUsageThresholdSupported(),usageSupported);
+    boolean collUsageSupported=describedResource.resource.get("collection-usage-threshold-supported").asBoolean();
+    Assert.assertEquals(mbean.isCollectionUsageThresholdSupported(),collUsageSupported);
+    ModelNode op=getOperation("reset-peak-usage","memory-pool",node.asString());
+    Assert.assertFalse(executeOp(op,false).isDefined());
+    op=getOperation("write-attribute","memory-pool",node.asString());
+    op.get("name").set("usage-threshold");
+    op.get("value").set(1024 * 100);
+    ModelNode result=executeOp(op,!usageSupported);
+    if (usageSupported) {
+      Assert.assertEquals(1024 * 100,mbean.getUsageThreshold());
+    }
+    op=getOperation("write-attribute","memory-pool",node.asString());
+    op.get("name").set("collection-usage-threshold");
+    op.get("value").set(1024 * 100);
+    result=executeOp(op,!collUsageSupported);
+    if (collUsageSupported) {
+      Assert.assertEquals(1024 * 100,mbean.getCollectionUsageThreshold());
+    }
+  }
+}

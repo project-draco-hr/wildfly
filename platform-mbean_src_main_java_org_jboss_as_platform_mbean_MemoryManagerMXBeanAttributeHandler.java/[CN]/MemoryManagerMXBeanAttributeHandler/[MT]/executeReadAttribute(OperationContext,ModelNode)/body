@@ -1,0 +1,36 @@
+{
+  final String mmName=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
+  final String name=operation.require(ModelDescriptionConstants.NAME).asString();
+  MemoryManagerMXBean memoryManagerMXBean=null;
+  for (  MemoryManagerMXBean mbean : ManagementFactory.getMemoryManagerMXBeans()) {
+    if (mmName.equals(escapeMBeanName(mbean.getName()))) {
+      memoryManagerMXBean=mbean;
+    }
+  }
+  if (memoryManagerMXBean == null) {
+    throw new OperationFailedException(new ModelNode().set(String.format("No MemoryManagerMXBean with name %s currently exists",mmName)));
+  }
+  if (PlatformMBeanUtil.JVM_MAJOR_VERSION > 6 && PlatformMBeanConstants.OBJECT_NAME.equals(name)) {
+    final String objName=PlatformMBeanUtil.getObjectNameStringWithNameKey(ManagementFactory.MEMORY_MANAGER_MXBEAN_DOMAIN_TYPE,mmName);
+    context.getResult().set(objName);
+  }
+ else   if (ModelDescriptionConstants.NAME.equals(name)) {
+    context.getResult().set(escapeMBeanName(memoryManagerMXBean.getName()));
+  }
+ else   if (PlatformMBeanConstants.VALID.equals(name)) {
+    context.getResult().set(memoryManagerMXBean.isValid());
+  }
+ else   if (PlatformMBeanConstants.MEMORY_POOL_NAMES.equals(name)) {
+    final ModelNode result=context.getResult();
+    result.setEmptyList();
+    for (    String pool : memoryManagerMXBean.getMemoryPoolNames()) {
+      result.add(escapeMBeanName(pool));
+    }
+  }
+ else   if (PlatformMBeanConstants.MEMORY_MANAGER_READ_ATTRIBUTES.contains(name)) {
+    throw new IllegalStateException(String.format("Read support for attribute %s was not properly implemented",name));
+  }
+ else {
+    throw unknownAttribute(operation);
+  }
+}

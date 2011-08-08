@@ -1,0 +1,34 @@
+{
+  try {
+    final long[] ids=getIds(operation);
+    ThreadMXBean mbean=ManagementFactory.getThreadMXBean();
+    ThreadInfo[] infos=null;
+    if (operation.hasDefined(PlatformMBeanConstants.LOCKED_MONITORS)) {
+      lockedValidator.validate(operation);
+      infos=mbean.getThreadInfo(ids,operation.require(PlatformMBeanConstants.LOCKED_MONITORS).asBoolean(),operation.require(PlatformMBeanConstants.LOCKED_SYNCHRONIZERS).asBoolean());
+    }
+ else     if (operation.hasDefined(PlatformMBeanConstants.MAX_DEPTH)) {
+      depthValidator.validate(operation);
+      infos=mbean.getThreadInfo(ids,operation.require(PlatformMBeanConstants.MAX_DEPTH).asInt());
+    }
+ else {
+      infos=mbean.getThreadInfo(ids);
+    }
+    final ModelNode result=context.getResult();
+    if (infos != null) {
+      result.setEmptyList();
+      for (      ThreadInfo info : infos) {
+        if (info != null) {
+          result.add(PlatformMBeanUtil.getDetypedThreadInfo(info,mbean.isThreadCpuTimeSupported()));
+        }
+ else {
+          result.add();
+        }
+      }
+    }
+  }
+ catch (  SecurityException e) {
+    throw new OperationFailedException(new ModelNode().set(e.toString()));
+  }
+  context.completeStep();
+}
