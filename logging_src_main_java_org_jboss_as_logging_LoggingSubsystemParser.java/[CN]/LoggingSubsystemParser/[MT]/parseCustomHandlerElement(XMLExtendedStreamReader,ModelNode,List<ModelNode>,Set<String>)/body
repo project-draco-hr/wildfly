@@ -1,0 +1,83 @@
+{
+  String name=null;
+  String className=null;
+  String moduleName=null;
+  final EnumSet<Attribute> required=EnumSet.of(Attribute.NAME,Attribute.CLASS,Attribute.MODULE);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    requireNoNamespaceAttribute(reader,i);
+    final String value=reader.getAttributeValue(i);
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+    required.remove(attribute);
+switch (attribute) {
+case NAME:
+{
+        name=value;
+        break;
+      }
+case CLASS:
+{
+      className=value;
+      break;
+    }
+case MODULE:
+{
+    moduleName=value;
+    break;
+  }
+default :
+throw unexpectedAttribute(reader,i);
+}
+}
+if (!required.isEmpty()) {
+throw missingRequired(reader,required);
+}
+if (!names.add(name)) {
+throw duplicateNamedElement(reader,name);
+}
+String levelName=null;
+String encoding=null;
+String formatterSpec=null;
+final EnumSet<Element> requiredElem=EnumSet.of(Element.FORMATTER);
+final EnumSet<Element> encountered=EnumSet.noneOf(Element.class);
+while (reader.nextTag() != END_ELEMENT) {
+final Element element=Element.forName(reader.getLocalName());
+if (!encountered.add(element)) {
+throw unexpectedElement(reader);
+}
+requiredElem.remove(element);
+switch (element) {
+case LEVEL:
+{
+levelName=readStringAttributeElement(reader,"name");
+break;
+}
+case ENCODING:
+{
+encoding=readStringAttributeElement(reader,"value");
+break;
+}
+case FORMATTER:
+{
+formatterSpec=parseFormatterElement(reader);
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+if (!requiredElem.isEmpty()) {
+throw missingRequired(reader,required);
+}
+final ModelNode node=new ModelNode();
+node.get(OP).set(ADD);
+node.get(OP_ADDR).set(address).add(CUSTOM_HANDLER,name);
+if (levelName != null) node.get(LEVEL).set(levelName);
+if (encoding != null) node.get(ENCODING).set(encoding);
+if (formatterSpec != null) node.get(FORMATTER).set(formatterSpec);
+node.get(CLASS).set(className);
+node.get(MODULE).set(moduleName);
+list.add(node);
+}
