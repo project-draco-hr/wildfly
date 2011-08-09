@@ -1,0 +1,41 @@
+{
+  if (messageBeanAnnotations.isEmpty())   return;
+  final EjbJarDescription ejbJarDescription=getEjbJarDescription(deploymentUnit);
+  final ServiceName deploymentUnitServiceName=deploymentUnit.getServiceName();
+  for (  final AnnotationInstance messageBeanAnnotation : messageBeanAnnotations) {
+    final AnnotationTarget target=messageBeanAnnotation.target();
+    final ClassInfo beanClassInfo=(ClassInfo)target;
+    if (!assertMDBClassValidity(beanClassInfo)) {
+      continue;
+    }
+    final String ejbName=beanClassInfo.name().local();
+    final AnnotationValue nameValue=messageBeanAnnotation.value("name");
+    final String beanName=nameValue == null || nameValue.asString().isEmpty() ? ejbName : nameValue.asString();
+    final MessageDrivenBeanMetaData beanMetaData=getEnterpriseBeanMetaData(deploymentUnit,beanName,MessageDrivenBeanMetaData.class);
+    final String beanClassName;
+    final String messageListenerInterfaceName;
+    final Properties activationConfigProperties=getActivationConfigProperties(messageBeanAnnotation);
+    if (beanMetaData != null) {
+      beanClassName=override(beanClassInfo.name().toString(),beanMetaData.getEjbClass());
+      final String messagingType=beanMetaData.getMessagingType();
+      messageListenerInterfaceName=messagingType != null ? messagingType : getMessageListenerInterface(messageBeanAnnotation);
+      final ActivationConfigMetaData activationConfigMetaData=beanMetaData.getActivationConfig();
+      if (activationConfigMetaData != null) {
+        final ActivationConfigPropertiesMetaData propertiesMetaData=activationConfigMetaData.getActivationConfigProperties();
+        if (propertiesMetaData != null) {
+          for (          ActivationConfigPropertyMetaData propertyMetaData : propertiesMetaData) {
+            activationConfigProperties.put(propertyMetaData.getKey(),propertyMetaData.getValue());
+          }
+        }
+      }
+    }
+ else {
+      beanClassName=beanClassInfo.name().toString();
+      messageListenerInterfaceName=getMessageListenerInterface(messageBeanAnnotation);
+    }
+    final MessageDrivenComponentDescription beanDescription=new MessageDrivenComponentDescription(beanName,beanClassName,ejbJarDescription,deploymentUnitServiceName,messageListenerInterfaceName,activationConfigProperties);
+    beanDescription.setResourceAdapterName(this.defaultResourceAdapterName);
+    ejbJarDescription.getEEModuleDescription().addComponent(beanDescription);
+  }
+  EjbDeploymentMarker.mark(deploymentUnit);
+}

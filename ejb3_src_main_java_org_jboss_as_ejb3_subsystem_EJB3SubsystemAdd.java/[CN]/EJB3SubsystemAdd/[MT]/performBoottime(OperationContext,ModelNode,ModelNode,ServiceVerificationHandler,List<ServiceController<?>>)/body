@@ -1,14 +1,14 @@
 {
   context.addStep(new AbstractDeploymentChainStep(){
     protected void execute(    DeploymentProcessorTarget processorTarget){
-      final ModelNode timerServiceModel=model.get(CommonAttributes.TIMER_SERVICE);
+      final ModelNode timerServiceModel=model.get(TIMER_SERVICE);
       boolean timerServiceEnabled=false;
       if (timerServiceModel.isDefined()) {
         timerServiceEnabled=true;
-        final ModelNode timerDataSource=timerServiceModel.get(CommonAttributes.TIMER_DATA_STORE_LOCATION);
-        final ModelNode pathNode=timerDataSource.get(CommonAttributes.PATH);
+        final ModelNode timerDataSource=timerServiceModel.get(TIMER_DATA_STORE_LOCATION);
+        final ModelNode pathNode=timerDataSource.get(PATH);
         final String path=pathNode.isDefined() ? pathNode.asString() : null;
-        final ModelNode relativeToNode=timerDataSource.get(CommonAttributes.RELATIVE_TO);
+        final ModelNode relativeToNode=timerDataSource.get(RELATIVE_TO);
         final String relativeTo=relativeToNode.isDefined() ? relativeToNode.asString() : null;
         if (path != null) {
           if (relativeTo != null) {
@@ -18,14 +18,15 @@
             AbsolutePathService.addService(TimerServiceFactoryService.PATH_SERVICE_NAME,path,context.getServiceTarget());
           }
         }
-        final ModelNode coreThreads=timerServiceModel.get(CommonAttributes.THREAD_POOL,CommonAttributes.CORE_THREADS);
+        final ModelNode coreThreads=timerServiceModel.get(THREAD_POOL,CORE_THREADS);
         int threadCount=coreThreads.isDefined() ? coreThreads.asInt() : Runtime.getRuntime().availableProcessors();
         processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_AROUNDTIMEOUT_ANNOTATION,new AroundTimeoutAnnotationParsingProcessor());
         processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_EJB_TIMER_SERVICE,new TimerServiceDeploymentProcessor(threadCount,timerServiceEnabled));
       }
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_TIMEOUT_ANNOTATION,new TimeoutAnnotationProcessor(timerServiceEnabled));
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_DEPLOYMENT,new EjbJarParsingDeploymentUnitProcessor());
-      processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_CREATE_COMPONENT_DESCRIPTIONS,new EJBComponentDescriptionFactory());
+      processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_SESSION_BEAN_CREATE_COMPONENT_DESCRIPTIONS,new SessionBeanComponentDescriptionFactory());
+      processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_MDB_CREATE_COMPONENT_DESCRIPTIONS,new MessageDrivenComponentDescriptionFactory(defaultMDBResourceAdapterName));
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_SESSION_BEAN_DD,new SessionBeanXmlDescriptorProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_CONTEXT_BINDING,new EjbContextJndiBindingProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_TIMERSERVICE_BINDING,new TimerServiceJndiBindingProcessor());
