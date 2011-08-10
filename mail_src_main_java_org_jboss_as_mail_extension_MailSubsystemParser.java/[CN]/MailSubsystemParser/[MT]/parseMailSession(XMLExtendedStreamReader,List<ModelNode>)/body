@@ -1,9 +1,19 @@
 {
   log.info("parsing mail session");
   MailSessionConfig cfg=new MailSessionConfig();
-  String jndiName=ParseUtils.requireAttributes(reader,"jndi-name")[0];
-  log.trace("jndi name: " + jndiName);
-  cfg.setJndiName(jndiName);
+  for (int i=0; i < reader.getAttributeCount(); i++) {
+    Attribute attr=Attribute.forName(reader.getAttributeLocalName(i));
+    String value=reader.getAttributeValue(i);
+    if (attr == Attribute.JNDI_NAME) {
+      String jndiName=value;
+      log.trace("jndi name: " + jndiName);
+      cfg.setJndiName(jndiName);
+    }
+    if (attr == Attribute.DEBUG) {
+      boolean debug=Boolean.parseBoolean(value.trim());
+      cfg.setDebug(debug);
+    }
+  }
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
 case MAIL_1_0:
@@ -14,10 +24,10 @@ case LOGIN:
 {
             for (int i=0; i < reader.getAttributeCount(); i++) {
               String att=reader.getAttributeLocalName(i);
-              if (att.equals("name")) {
+              if (att.equals(Attribute.USERNAME.getLocalName())) {
                 cfg.setUsername(reader.getAttributeValue(i));
               }
- else               if (att.equals("password")) {
+ else               if (att.equals(Attribute.PASSWORD.getLocalName())) {
                 cfg.setPassword(reader.getAttributeValue(i));
               }
             }
@@ -26,19 +36,32 @@ case LOGIN:
           }
 case SMTP_SERVER:
 {
-          String[] attributes=ParseUtils.requireAttributes(reader,"address","port");
-          cfg.setSmtpServerAddress(attributes[0]);
-          cfg.setSmtpServerPort(attributes[1]);
+          String[] attributes=ParseUtils.requireAttributes(reader,Attribute.SERVER_ADDRESS.getLocalName(),Attribute.SERVER_PORT.getLocalName());
+          cfg.setSmtpServer(new MailSessionServer(attributes[0],attributes[1]));
           ParseUtils.requireNoContent(reader);
           break;
         }
-default :
+case POP3_SERVER:
 {
-        reader.handleAny(list);
+        String[] attributes=ParseUtils.requireAttributes(reader,Attribute.SERVER_ADDRESS.getLocalName(),Attribute.SERVER_PORT.getLocalName());
+        cfg.setPop3Server(new MailSessionServer(attributes[0],attributes[1]));
+        ParseUtils.requireNoContent(reader);
         break;
       }
+case IMAP_SERVER:
+{
+      String[] attributes=ParseUtils.requireAttributes(reader,Attribute.SERVER_ADDRESS.getLocalName(),Attribute.SERVER_PORT.getLocalName());
+      cfg.setImapServer(new MailSessionServer(attributes[0],attributes[1]));
+      ParseUtils.requireNoContent(reader);
+      break;
+    }
+default :
+{
+    reader.handleAny(list);
+    break;
   }
-  break;
+}
+break;
 }
 default :
 {
