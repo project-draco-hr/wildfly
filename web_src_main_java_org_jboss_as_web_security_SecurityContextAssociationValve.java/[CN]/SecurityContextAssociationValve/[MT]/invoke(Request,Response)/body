@@ -1,0 +1,68 @@
+{
+  boolean trace=log.isTraceEnabled();
+  Session session=null;
+  Principal caller=request.getPrincipal();
+  JBossGenericPrincipal principal=null;
+  HttpSession hsession=request.getSession(false);
+  if (trace)   log.trace("Begin invoke, caller=" + caller);
+  boolean createdSecurityContext=false;
+  SecurityContext sc=SecurityActions.getSecurityContext();
+  if (sc == null) {
+    createdSecurityContext=true;
+    String securityDomain=SecurityUtil.unprefixSecurityDomain(metaData.getSecurityDomain());
+    if (securityDomain == null)     securityDomain=SecurityConstants.DEFAULT_WEB_APPLICATION_POLICY;
+    sc=SecurityActions.createSecurityContext(securityDomain);
+    SecurityActions.setSecurityContextOnAssociation(sc);
+  }
+  try {
+    Wrapper servlet=null;
+    try {
+      servlet=request.getWrapper();
+      if (servlet != null) {
+        String name=servlet.getName();
+        RunAsIdentityMetaData identity=metaData.getRunAsIdentity(name);
+        RunAsIdentity runAsIdentity=null;
+        if (identity != null) {
+          if (trace)           log.trace(name + ", runAs: " + identity);
+          runAsIdentity=new RunAsIdentity(identity.getRoleName(),identity.getPrincipalName(),identity.getRunAsRoles());
+        }
+        SecurityActions.pushRunAsIdentity(runAsIdentity);
+      }
+      Manager manager=container.getManager();
+      if (manager != null && hsession != null) {
+        try {
+          session=manager.findSession(hsession.getId());
+        }
+ catch (        IOException ignore) {
+        }
+      }
+      if (caller == null || !(caller instanceof JBossGenericPrincipal)) {
+        if (session != null) {
+          principal=(JBossGenericPrincipal)session.getPrincipal();
+        }
+      }
+ else {
+        principal=(JBossGenericPrincipal)caller;
+      }
+      if (principal != null) {
+        if (trace)         log.trace("Restoring principal info from cache");
+        if (createdSecurityContext) {
+          sc.getUtil().createSubjectInfo(principal.getUserPrincipal(),principal.getCredentials(),principal.getSubject());
+        }
+      }
+    }
+ catch (    Throwable e) {
+      log.debug("Failed to determine servlet",e);
+    }
+    getNext().invoke(request,response);
+    if (servlet != null) {
+      SecurityActions.popRunAsIdentity();
+    }
+  }
+  finally {
+    if (trace)     log.trace("End invoke, caller=" + caller);
+    if (createdSecurityContext) {
+      SecurityActions.clearSecurityContext();
+    }
+  }
+}
