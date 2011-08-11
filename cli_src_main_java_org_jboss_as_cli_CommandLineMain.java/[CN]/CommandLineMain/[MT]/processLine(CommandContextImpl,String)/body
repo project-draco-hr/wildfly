@@ -6,12 +6,10 @@
     return;
   }
   if (isOperation(line)) {
-    cmdCtx.resetArgs(line);
-    DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder(cmdCtx.getPrefix());
     ModelNode request;
     try {
-      cmdCtx.getOperationRequestParser().parse(line,builder);
-      request=builder.buildRequest();
+      cmdCtx.resetArgs(line);
+      request=cmdCtx.parsedCmd.toOperationRequest();
     }
  catch (    CommandFormatException e) {
       cmdCtx.printLine(e.getLocalizedMessage());
@@ -19,7 +17,7 @@
     }
     if (cmdCtx.isBatchMode()) {
       StringBuilder op=new StringBuilder();
-      op.append(cmdCtx.getPrefixFormatter().format(builder.getAddress()));
+      op.append(cmdCtx.getPrefixFormatter().format(cmdCtx.parsedCmd.getAddress()));
       op.append(line.substring(line.indexOf(':')));
       DefaultBatchedCommand batchedCmd=new DefaultBatchedCommand(op.toString(),request);
       Batch batch=cmdCtx.getBatchManager().getActiveBatch();
@@ -28,21 +26,17 @@
     }
  else {
       cmdCtx.set("OP_REQ",request);
-      if (builder.getOutputTarget() != null) {
-        cmdCtx.setOutputTarget(builder.getOutputTarget());
-      }
       try {
         cmdCtx.operationHandler.handle(cmdCtx);
       }
   finally {
-        cmdCtx.setOutputTarget(null);
         cmdCtx.set("OP_REQ",null);
       }
     }
   }
  else {
     try {
-      cmdCtx.parseArgs(line);
+      cmdCtx.resetArgs(line);
     }
  catch (    CommandFormatException e1) {
       cmdCtx.printLine(e1.getLocalizedMessage());
@@ -68,20 +62,18 @@
         }
       }
  else {
-        if (cmdCtx.parsedCmd.getOutputTarget() != null) {
-          cmdCtx.setOutputTarget(cmdCtx.parsedCmd.getOutputTarget());
-        }
         try {
           handler.handle(cmdCtx);
         }
  catch (        CommandFormatException e) {
           cmdCtx.printLine(e.getLocalizedMessage());
         }
- finally {
-          cmdCtx.setOutputTarget(null);
-        }
       }
-      cmdCtx.resetArgs(null);
+      try {
+        cmdCtx.resetArgs(null);
+      }
+ catch (      CommandFormatException e) {
+      }
     }
  else {
       cmdCtx.printLine("Unexpected command '" + line + "'. Type 'help' for the list of supported commands.");
