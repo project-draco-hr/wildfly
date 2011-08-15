@@ -3,7 +3,9 @@
     protected void execute(    DeploymentProcessorTarget processorTarget){
       final ModelNode timer=model.get(TIMER_SERVICE);
       boolean timerServiceEnabled=false;
-      if (timer.isDefined() && timer.hasDefined(DEFAULT)) {
+      boolean lite=model.hasDefined(LITE) && model.get(LITE).asBoolean();
+      if (!lite && timer.isDefined() && timer.hasDefined(DEFAULT)) {
+        logger.debug("Configuring timers");
         timerServiceEnabled=true;
         ModelNode timerServiceModel=timer.get(DEFAULT);
         final ModelNode pathNode=timerServiceModel.get(PATH);
@@ -28,7 +30,10 @@
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_TIMEOUT_ANNOTATION,new TimeoutAnnotationProcessor(timerServiceEnabled));
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_DEPLOYMENT,new EjbJarParsingDeploymentUnitProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_SESSION_BEAN_CREATE_COMPONENT_DESCRIPTIONS,new SessionBeanComponentDescriptionFactory());
-      processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_MDB_CREATE_COMPONENT_DESCRIPTIONS,new MessageDrivenComponentDescriptionFactory());
+      if (!lite) {
+        logger.debug("Add support for MDB");
+        processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_MDB_CREATE_COMPONENT_DESCRIPTIONS,new MessageDrivenComponentDescriptionFactory());
+      }
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_SESSION_BEAN_DD,new SessionBeanXmlDescriptorProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_CONTEXT_BINDING,new EjbContextJndiBindingProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_TIMERSERVICE_BINDING,new TimerServiceJndiBindingProcessor());
