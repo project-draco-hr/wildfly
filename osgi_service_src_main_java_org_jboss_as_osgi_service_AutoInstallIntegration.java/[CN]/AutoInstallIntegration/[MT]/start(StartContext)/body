@@ -1,32 +1,17 @@
 {
-  ServiceController<?> controller=context.getController();
-  log.debugf("Starting: %s in mode %s",controller.getName(),controller.getMode());
+  serviceController=context.getController();
+  log.debugf("Starting: %s in mode %s",serviceController.getName(),serviceController.getMode());
   final Map<ServiceName,OSGiModule> pendingServices=new LinkedHashMap<ServiceName,OSGiModule>();
   try {
     final BundleManagerService bundleManager=injectedBundleManager.getValue();
-    final ServiceContainer serviceContainer=context.getController().getServiceContainer();
-    final ServiceTarget serviceTarget=context.getChildTarget();
+    final ServiceContainer serviceContainer=serviceController.getServiceContainer();
+    serviceTarget=context.getChildTarget();
     final File modulesDir=injectedEnvironment.getValue().getModulesDir();
-    final File bundlesDir=new File(modulesDir.getPath() + "/../bundles").getCanonicalFile();
+    bundlesDir=new File(modulesDir.getPath() + "/../bundles").getCanonicalFile();
     if (bundlesDir.isDirectory() == false)     throw new IllegalStateException("Cannot find bundles directory: " + bundlesDir);
+    injectedSubsystemState.getValue().addObserver(this);
     for (    OSGiModule moduleMetaData : injectedSubsystemState.getValue().getModules()) {
-      ServiceName serviceName;
-      ModuleIdentifier identifier=moduleMetaData.getIdentifier();
-      File bundleFile=getRepositoryEntry(bundlesDir,identifier);
-      if (bundleFile != null) {
-        URL url=bundleFile.toURI().toURL();
-        BundleInfo info=BundleInfo.createBundleInfo(url);
-        Deployment dep=DeploymentFactory.createDeployment(info);
-        Integer startLevel=moduleMetaData.getStartLevel();
-        if (startLevel != null)         dep.setStartLevel(startLevel.intValue());
-        serviceName=bundleManager.installBundle(serviceTarget,dep);
-      }
- else {
-        ModuleLoader moduleLoader=Module.getBootModuleLoader();
-        Module module=moduleLoader.loadModule(identifier);
-        OSGiMetaData metadata=getModuleMetadata(module);
-        serviceName=bundleManager.registerModule(serviceTarget,module,metadata);
-      }
+      ServiceName serviceName=installModule(bundleManager,moduleMetaData);
       pendingServices.put(serviceName,moduleMetaData);
     }
     ServiceName servicesInstalled=Services.AUTOINSTALL_PROVIDER.append("INSTALLED");
@@ -42,18 +27,7 @@
       public void start(      StartContext context) throws StartException {
         for (        ServiceName serviceName : pendingServices.keySet()) {
           OSGiModule moduleMetaData=pendingServices.get(serviceName);
-          if (moduleMetaData.getStartLevel() != null) {
-            @SuppressWarnings("unchecked") ServiceController<Bundle> controller=(ServiceController<Bundle>)serviceContainer.getRequiredService(serviceName);
-            Bundle bundle=controller.getValue();
-            StartLevel startLevel=injectedStartLevel.getValue();
-            startLevel.setBundleStartLevel(bundle,moduleMetaData.getStartLevel());
-            try {
-              bundle.start();
-            }
- catch (            BundleException ex) {
-              log.errorf(ex,"Cannot start bundle: %s",bundle);
-            }
-          }
+          startBundle(serviceContainer,serviceName,moduleMetaData);
         }
         log.debugf("Auto bundles bundles started");
       }

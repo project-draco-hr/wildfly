@@ -1,0 +1,51 @@
+{
+  final ServiceName dummyService=ServiceName.of("dummy");
+  final List<OSGiModule> installedModules=new ArrayList<SubsystemState.OSGiModule>();
+  final List<OSGiModule> startedBundles=new ArrayList<SubsystemState.OSGiModule>();
+  AutoInstallIntegration aii=new AutoInstallIntegration(){
+    @Override ServiceName installModule(    BundleManagerService bundleManager,    OSGiModule moduleMetaData){
+      installedModules.add(moduleMetaData);
+      return dummyService;
+    }
+    @Override void startBundle(    ServiceContainer serviceContainer,    ServiceName serviceName,    OSGiModule moduleMetaData){
+      startedBundles.add(moduleMetaData);
+    }
+  }
+;
+  List<OSGiModule> modules=new ArrayList<SubsystemState.OSGiModule>();
+  ModuleIdentifier id=ModuleIdentifier.fromString("abc");
+  OSGiModule module=new OSGiModule(id,null);
+  modules.add(module);
+  SubsystemState state=Mockito.mock(SubsystemState.class);
+  Mockito.when(state.getModules()).thenReturn(modules);
+  aii.injectedSubsystemState.setValue(new ImmediateValue<SubsystemState>(state));
+  aii.injectedBundleManager.setValue(Mockito.mock(BundleManagerService.class));
+  final List<Service<?>> addedServices=new ArrayList<Service<?>>();
+  final ServiceBuilder<Void> builder=Mockito.mock(ServiceBuilder.class);
+  ServiceContainer container=Mockito.mock(ServiceContainer.class);
+  Mockito.when(container.addService((ServiceName)Mockito.any(),(Service<?>)Mockito.any())).thenAnswer(new Answer<ServiceBuilder<Void>>(){
+    @Override public ServiceBuilder<Void> answer(    InvocationOnMock invocation) throws Throwable {
+      addedServices.add((Service<?>)invocation.getArguments()[1]);
+      return builder;
+    }
+  }
+);
+  ServiceController<?> controller=Mockito.mock(ServiceController.class);
+  Mockito.when(controller.getServiceContainer()).thenReturn(container);
+  aii.serviceController=controller;
+  SubsystemState.ChangeEvent event=new SubsystemState.ChangeEvent(SubsystemState.ChangeType.MODULE,false,id.toString());
+  aii.update(null,event);
+  Assert.assertEquals("The new module should have been installed in the system",1,installedModules.size());
+  Assert.assertEquals(module,installedModules.get(0));
+  Assert.assertEquals("The new bundle is not yet started, this is done in a service instead",0,startedBundles.size());
+  Mockito.verify(builder).addDependency(dummyService);
+  Mockito.verify(builder).install();
+  ServiceController innerController=Mockito.mock(ServiceController.class);
+  StartContext context=Mockito.mock(StartContext.class);
+  Mockito.when(context.getController()).thenReturn(innerController);
+  Assert.assertEquals(1,addedServices.size());
+  addedServices.get(0).start(context);
+  Assert.assertEquals("The bundle should have been started",1,startedBundles.size());
+  Assert.assertEquals(module,startedBundles.get(0));
+  Mockito.verify(innerController).setMode(Mode.REMOVE);
+}

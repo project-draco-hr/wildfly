@@ -1,0 +1,33 @@
+{
+  if (arg instanceof SubsystemState.ChangeEvent == false)   return;
+  SubsystemState.ChangeEvent event=(ChangeEvent)arg;
+  if (event.getType() != ChangeType.MODULE)   return;
+  if (!event.isRemoved()) {
+    try {
+      for (      final OSGiModule module : injectedSubsystemState.getValue().getModules()) {
+        if (module.getIdentifier().toString().equals(event.getId())) {
+          final ServiceName serviceName=installModule(injectedBundleManager.getValue(),module);
+          ServiceBuilder<Void> builder=serviceController.getServiceContainer().addService(ServiceName.of(Services.AUTOINSTALL_PROVIDER,"ModuleUpdater","" + updateServiceIdCounter.incrementAndGet()),new AbstractService<Void>(){
+            @Override public void start(            StartContext context) throws StartException {
+              try {
+                startBundle(serviceController.getServiceContainer(),serviceName,module);
+              }
+  finally {
+                context.getController().setMode(Mode.REMOVE);
+              }
+            }
+          }
+);
+          builder.addDependency(serviceName);
+          builder.install();
+          return;
+        }
+      }
+    }
+ catch (    Exception e) {
+      log.errorf(e,"Problem adding module: %s",event.getId());
+      return;
+    }
+    log.errorf("Cannot add module as it was not found: %s",event.getId());
+  }
+}
