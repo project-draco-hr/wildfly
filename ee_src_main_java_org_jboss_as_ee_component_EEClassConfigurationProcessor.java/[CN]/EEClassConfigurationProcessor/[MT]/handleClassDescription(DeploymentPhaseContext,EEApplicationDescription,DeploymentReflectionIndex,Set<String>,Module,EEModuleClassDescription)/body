@@ -1,0 +1,39 @@
+{
+  if (processed.contains(classDescription.getClassName())) {
+    return;
+  }
+  processed.add(classDescription.getClassName());
+  LazyValue<EEModuleClassConfiguration> future=new LazyValue<EEModuleClassConfiguration>(){
+    @Override protected EEModuleClassConfiguration compute(){
+      Class<?> clazz=null;
+      ClassLoader oldCl=SecurityActions.getContextClassLoader();
+      try {
+        SecurityActions.setContextClassLoader(subModule.getClassLoader());
+        try {
+          clazz=Class.forName(classDescription.getClassName(),false,subModule.getClassLoader());
+        }
+ catch (        ClassNotFoundException e) {
+          classDescription.setInvalid("Failed to load class " + classDescription.getClassName() + e.getMessage());
+          logger.debug("Failed to load class " + classDescription.getClassName(),e);
+          return null;
+        }
+        final EEModuleClassConfiguration classConfiguration=new EEModuleClassConfiguration(clazz,classDescription,deploymentReflectionIndex);
+        logger.debug("Configuring EE module class: " + clazz);
+        for (        ClassConfigurator classConfigurator : classDescription.getConfigurators()) {
+          try {
+            classConfigurator.configure(phaseContext,classDescription,classConfiguration);
+          }
+ catch (          DeploymentUnitProcessingException e) {
+            throw new RuntimeException(e);
+          }
+        }
+        return classConfiguration;
+      }
+  finally {
+        SecurityActions.setContextClassLoader(oldCl);
+      }
+    }
+  }
+;
+  applicationDescription.addClass(classDescription.getClassName(),future);
+}

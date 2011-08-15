@@ -11,8 +11,8 @@
     return;
   }
   DeploymentReflectionIndex deploymentReflectionIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
+  final Set<String> processed=new HashSet<String>();
   if (deploymentUnit.getAttachment(org.jboss.as.ee.structure.Attachments.DEPLOYMENT_TYPE) == DeploymentType.EAR) {
-    final Set<String> processed=new HashSet<String>();
     final List<DeploymentUnit> subdeployments=deploymentUnit.getAttachmentList(SUB_DEPLOYMENTS);
     for (    DeploymentUnit subdeployment : subdeployments) {
       processClasses(phaseContext,applicationDescription,deploymentReflectionIndex,subdeployment,processed);
@@ -20,25 +20,10 @@
     processClasses(phaseContext,applicationDescription,deploymentReflectionIndex,deploymentUnit,processed);
   }
  else   if (deploymentUnit.getParent() == null) {
-    if (moduleDescription == null) {
-      return;
-    }
     final Collection<EEModuleClassDescription> classDescriptions=applicationClasses.getClassDescriptions();
     if (classDescriptions != null) {
       for (      EEModuleClassDescription classDescription : classDescriptions) {
-        Class<?> clazz=null;
-        try {
-          clazz=Class.forName(classDescription.getClassName(),false,module.getClassLoader());
-        }
- catch (        ClassNotFoundException e) {
-          throw new DeploymentUnitProcessingException("Failed to load class " + classDescription.getClassName(),e);
-        }
-        final EEModuleClassConfiguration classConfiguration=new EEModuleClassConfiguration(clazz,classDescription,deploymentReflectionIndex);
-        logger.debug("Configuring EE module class: " + clazz);
-        for (        ClassConfigurator classConfigurator : classDescription.getConfigurators()) {
-          classConfigurator.configure(phaseContext,classDescription,classConfiguration);
-        }
-        applicationDescription.addClass(classConfiguration);
+        handleClassDescription(phaseContext,applicationDescription,deploymentReflectionIndex,processed,module,classDescription);
       }
     }
   }
