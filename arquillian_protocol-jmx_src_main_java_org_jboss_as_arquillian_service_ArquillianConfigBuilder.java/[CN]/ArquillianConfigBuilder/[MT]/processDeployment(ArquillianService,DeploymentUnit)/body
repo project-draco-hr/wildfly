@@ -4,12 +4,26 @@
     log.warnf("Cannot find composite annotation index in: %s",depUnit);
     return null;
   }
-  final DotName runWithName=DotName.createSimple(RunWith.class.getName());
+  final DotName runWithName=DotName.createSimple(CLASS_NAME_JUNIT_RUNNER);
   final List<AnnotationInstance> runWithList=compositeIndex.getAnnotations(runWithName);
-  if (runWithList.isEmpty()) {
+  final DotName testNGClassName=DotName.createSimple(CLASS_NAME_TESTNG_RUNNER);
+  final Set<ClassInfo> testNgTests=compositeIndex.getAllKnownSubclasses(testNGClassName);
+  final Set<String> testClasses=new HashSet<String>();
+  for (  AnnotationInstance instance : runWithList) {
+    final AnnotationTarget target=instance.target();
+    if (target instanceof ClassInfo) {
+      final ClassInfo classInfo=(ClassInfo)target;
+      final String testClassName=classInfo.name().toString();
+      testClasses.add(testClassName);
+    }
+  }
+  for (  final ClassInfo classInfo : testNgTests) {
+    testClasses.add(classInfo.name().toString());
+  }
+  if (testClasses.isEmpty()) {
     return null;
   }
-  ArquillianConfig arqConfig=new ArquillianConfig(arqService,depUnit,runWithList);
+  ArquillianConfig arqConfig=new ArquillianConfig(arqService,depUnit,testClasses);
   if (arqService.getServiceContainer().getService(arqConfig.getServiceName()) != null) {
     log.warnf("Arquillian config already registered: %s",arqConfig);
     return null;
