@@ -1,0 +1,29 @@
+{
+  final ModelNode rootResource=context.getRootResource().getChild(PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,EJB3Extension.SUBSYSTEM_NAME)).getModel();
+  final boolean lite=rootResource.hasDefined(EJB3SubsystemModel.LITE) && rootResource.get(EJB3SubsystemModel.LITE).asBoolean();
+  if (!lite) {
+    context.addStep(new AbstractDeploymentChainStep(){
+      protected void execute(      DeploymentProcessorTarget processorTarget){
+        logger.debug("Configuring timers");
+        ModelNode timerServiceModel=model;
+        final ModelNode pathNode=timerServiceModel.get(PATH);
+        final String path=pathNode.isDefined() ? pathNode.asString() : null;
+        final ModelNode relativeToNode=timerServiceModel.get(RELATIVE_TO);
+        final String relativeTo=relativeToNode.isDefined() ? relativeToNode.asString() : null;
+        if (path != null) {
+          if (relativeTo != null) {
+            RelativePathService.addService(TimerServiceFactoryService.PATH_SERVICE_NAME,path,relativeTo,context.getServiceTarget());
+          }
+ else {
+            AbsolutePathService.addService(TimerServiceFactoryService.PATH_SERVICE_NAME,path,context.getServiceTarget());
+          }
+        }
+        int coreThreadCount=timerServiceModel.get(CORE_THREADS).asInt(0);
+        int maxThreadCount=timerServiceModel.get(MAX_THREADS).asInt(Runtime.getRuntime().availableProcessors());
+        processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_AROUNDTIMEOUT_ANNOTATION,new AroundTimeoutAnnotationParsingProcessor());
+        processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_EJB_TIMER_SERVICE,new TimerServiceDeploymentProcessor(coreThreadCount,maxThreadCount,true));
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+}

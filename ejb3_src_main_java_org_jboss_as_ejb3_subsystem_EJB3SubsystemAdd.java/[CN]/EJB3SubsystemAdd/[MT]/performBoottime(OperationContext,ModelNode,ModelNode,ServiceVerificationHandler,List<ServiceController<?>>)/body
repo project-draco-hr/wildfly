@@ -1,31 +1,10 @@
 {
   context.addStep(new AbstractDeploymentChainStep(){
     protected void execute(    DeploymentProcessorTarget processorTarget){
-      final ModelNode timer=model.get(TIMER_SERVICE);
       boolean timerServiceEnabled=false;
       boolean lite=model.hasDefined(LITE) && model.get(LITE).asBoolean();
-      if (!lite && timer.isDefined() && timer.hasDefined(DEFAULT)) {
-        logger.debug("Configuring timers");
+      if (!lite && context.readResource(PathAddress.EMPTY_ADDRESS).hasChild(EJB3SubsystemModel.TIMER_SERVICE_PATH)) {
         timerServiceEnabled=true;
-        ModelNode timerServiceModel=timer.get(DEFAULT);
-        final ModelNode pathNode=timerServiceModel.get(PATH);
-        final String path=pathNode.isDefined() ? pathNode.asString() : null;
-        final ModelNode relativeToNode=timerServiceModel.get(RELATIVE_TO);
-        final String relativeTo=relativeToNode.isDefined() ? relativeToNode.asString() : null;
-        if (path != null) {
-          if (relativeTo != null) {
-            RelativePathService.addService(TimerServiceFactoryService.PATH_SERVICE_NAME,path,relativeTo,context.getServiceTarget());
-          }
- else {
-            AbsolutePathService.addService(TimerServiceFactoryService.PATH_SERVICE_NAME,path,context.getServiceTarget());
-          }
-        }
-        final ModelNode coreThreads=timerServiceModel.get(CORE_THREADS);
-        final ModelNode maxThreads=timerServiceModel.get(MAX_THREADS);
-        int coreThreadCount=coreThreads.isDefined() ? coreThreads.asInt() : 0;
-        int maxThreadCount=maxThreads.isDefined() ? maxThreads.asInt() : Runtime.getRuntime().availableProcessors();
-        processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_AROUNDTIMEOUT_ANNOTATION,new AroundTimeoutAnnotationParsingProcessor());
-        processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_EJB_TIMER_SERVICE,new TimerServiceDeploymentProcessor(coreThreadCount,maxThreadCount,timerServiceEnabled));
       }
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_TIMEOUT_ANNOTATION,new TimeoutAnnotationProcessor(timerServiceEnabled));
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_DEPLOYMENT,new EjbJarParsingDeploymentUnitProcessor());
