@@ -2,17 +2,17 @@
   for (  BindingConfiguration bindingConfiguration : bindings) {
     if (bindingConfiguration.getName().startsWith("java:comp") || !bindingConfiguration.getName().startsWith("java:")) {
       final String bindingName=bindingConfiguration.getName().startsWith("java:comp") ? bindingConfiguration.getName() : "java:comp/env/" + bindingConfiguration.getName();
-      final ServiceName binderServiceName=ContextNames.serviceNameOfEnvEntry(configuration.getApplicationName(),configuration.getModuleName(),configuration.getComponentName(),configuration.getComponentDescription().getNamingMode() == ComponentNamingMode.CREATE,bindingName);
+      final ContextNames.BindInfo bindInfo=ContextNames.bindInfoForEnvEntry(configuration.getApplicationName(),configuration.getModuleName(),configuration.getComponentName(),configuration.getComponentDescription().getNamingMode() == ComponentNamingMode.CREATE,bindingName);
       try {
-        final BinderService service=new BinderService(bindingName,bindingConfiguration.getSource());
-        dependencies.add(binderServiceName);
-        ServiceBuilder<ManagedReferenceFactory> serviceBuilder=serviceTarget.addService(binderServiceName,service);
+        final BinderService service=new BinderService(bindInfo.getBindName(),bindingConfiguration.getSource());
+        dependencies.add(bindInfo.getBinderServiceName());
+        ServiceBuilder<ManagedReferenceFactory> serviceBuilder=serviceTarget.addService(bindInfo.getBinderServiceName(),service);
         bindingConfiguration.getSource().getResourceValue(resolutionContext,serviceBuilder,phaseContext,service.getManagedObjectInjector());
-        serviceBuilder.addDependency(contextServiceName,NamingStore.class,service.getNamingStoreInjector());
+        serviceBuilder.addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,service.getNamingStoreInjector());
         serviceBuilder.install();
       }
  catch (      DuplicateServiceException e) {
-        ServiceController<ManagedReferenceFactory> registered=(ServiceController<ManagedReferenceFactory>)CurrentServiceContainer.getServiceContainer().getService(binderServiceName);
+        ServiceController<ManagedReferenceFactory> registered=(ServiceController<ManagedReferenceFactory>)CurrentServiceContainer.getServiceContainer().getService(bindInfo.getBinderServiceName());
         if (registered == null)         throw e;
         BinderService service=(BinderService)registered.getService();
         if (!service.getSource().equals(bindingConfiguration.getSource()))         throw new IllegalArgumentException("Incompatible conflicting binding at " + bindingName + " source: "+ bindingConfiguration.getSource());
