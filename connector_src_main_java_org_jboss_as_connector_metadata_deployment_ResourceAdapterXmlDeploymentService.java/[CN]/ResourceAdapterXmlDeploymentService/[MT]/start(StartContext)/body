@@ -1,6 +1,5 @@
 {
   try {
-    log.debugf("Starting sevice %s",ConnectorServices.RESOURCE_ADAPTER_XML_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName()));
     String archive=raxml.getArchive();
     Connector cmd=mdr.getValue().getResourceAdapter(deployment);
     IronJacamar ijmd=mdr.getValue().getIronJacamar(deployment);
@@ -18,8 +17,13 @@
       throw new StartException("Failed to start RA deployment [" + deploymentName + "]",t);
     }
     value=new ResourceAdapterDeployment(raxmlDeployment);
-    registry.getValue().registerResourceAdapterDeployment(value);
     managementRepository.getValue().getConnectors().add(value.getDeployment().getConnector());
+    if (raxmlDeployment.getResourceAdapter() != null) {
+      registry.getValue().registerResourceAdapterDeployment(value);
+      ServiceName serviceName=ConnectorServices.getNextValidResourceAdapterServiceName(this.value.getDeployment().getDeploymentName());
+      log.infof("Starting sevice %s",serviceName);
+      context.getChildTarget().addService(serviceName,new ResourceAdapterService(value.getDeployment().getResourceAdapter())).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    }
   }
  catch (  Exception e) {
     throw new StartException(e);
