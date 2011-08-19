@@ -6,6 +6,7 @@
   final boolean recursive=operation.get(RECURSIVE).asBoolean(false);
   final boolean queryRuntime=!recursive && operation.get(INCLUDE_RUNTIME).asBoolean(false);
   final boolean proxies=operation.get(PROXIES).asBoolean(false);
+  final boolean defaults=operation.get(INCLUDE_DEFAULTS).asBoolean(true);
   final Map<String,ModelNode> directAttributes=new HashMap<String,ModelNode>();
   final Map<String,ModelNode> directChildren=new HashMap<String,ModelNode>();
   final Map<String,ModelNode> metrics=queryRuntime ? new HashMap<String,ModelNode>() : Collections.<String,ModelNode>emptyMap();
@@ -21,6 +22,18 @@
     for (    String key : model.keys()) {
       if (!childrenByType.containsKey(key)) {
         directAttributes.put(key,model.get(key));
+      }
+    }
+    if (defaults) {
+      final DescriptionProvider descriptionProvider=registry.getModelDescription(PathAddress.EMPTY_ADDRESS);
+      final Locale locale=getLocale(operation);
+      final ModelNode nodeDescription=descriptionProvider.getModelDescription(locale);
+      if (nodeDescription.isDefined() && nodeDescription.hasDefined(ATTRIBUTES)) {
+        for (        String key : nodeDescription.get(ATTRIBUTES).keys()) {
+          if ((!childrenByType.containsKey(key)) && (!directAttributes.containsKey(key) || !directAttributes.get(key).isDefined()) && nodeDescription.get(ATTRIBUTES).hasDefined(key)&& nodeDescription.get(ATTRIBUTES,key).hasDefined(DEFAULT)) {
+            directAttributes.put(key,nodeDescription.get(ATTRIBUTES,key,DEFAULT));
+          }
+        }
       }
     }
   }

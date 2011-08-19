@@ -1,26 +1,53 @@
 {
-  nameValidator.validate(operation);
+  validator.validate(operation);
   final String attributeName=operation.require(NAME).asString();
+  final boolean defaults=operation.get(INCLUDE_DEFAULTS).asBoolean(true);
   final ModelNode subModel=safeReadModel(context);
-  final AttributeAccess attributeAccess=context.getResourceRegistration().getAttributeAccess(PathAddress.EMPTY_ADDRESS,attributeName);
+  final ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
+  final AttributeAccess attributeAccess=registry.getAttributeAccess(PathAddress.EMPTY_ADDRESS,attributeName);
   if (attributeAccess == null) {
     final Set<String> children=context.getResourceRegistration().getChildNames(PathAddress.EMPTY_ADDRESS);
     if (children.contains(attributeName)) {
       throw new OperationFailedException(new ModelNode().set(String.format("'%s' is a registered child of resource (%s)",attributeName,operation.get(OP_ADDR))));
     }
- else     if (subModel.has(attributeName)) {
+ else     if (subModel.hasDefined(attributeName) || !defaults) {
       final ModelNode result=subModel.get(attributeName);
       context.getResult().set(result);
       context.completeStep();
     }
  else {
-      throw new OperationFailedException(new ModelNode().set(String.format("No known attribute %s",attributeName)));
+      final ModelNode nodeDescription=getNodeDescription(registry,operation);
+      if (nodeDescription.get(ATTRIBUTES).hasDefined(attributeName) && nodeDescription.get(ATTRIBUTES,attributeName).hasDefined(DEFAULT)) {
+        final ModelNode result=nodeDescription.get(ATTRIBUTES,attributeName,DEFAULT);
+        context.getResult().set(result);
+        context.completeStep();
+      }
+ else {
+        final ModelNode result=new ModelNode();
+        context.getResult().set(result);
+        context.completeStep();
+      }
     }
   }
  else   if (attributeAccess.getReadHandler() == null) {
-    final ModelNode result=subModel.get(attributeName);
-    context.getResult().set(result);
-    context.completeStep();
+    if (subModel.hasDefined(attributeName) || !defaults) {
+      final ModelNode result=subModel.get(attributeName);
+      context.getResult().set(result);
+      context.completeStep();
+    }
+ else {
+      final ModelNode nodeDescription=getNodeDescription(registry,operation);
+      if (nodeDescription.get(ATTRIBUTES).hasDefined(attributeName) && nodeDescription.get(ATTRIBUTES,attributeName).hasDefined(DEFAULT)) {
+        final ModelNode result=nodeDescription.get(ATTRIBUTES,attributeName,DEFAULT);
+        context.getResult().set(result);
+        context.completeStep();
+      }
+ else {
+        final ModelNode result=new ModelNode();
+        context.getResult().set(result);
+        context.completeStep();
+      }
+    }
   }
  else {
     OperationStepHandler handler=attributeAccess.getReadHandler();
