@@ -6,14 +6,7 @@
     }
     ++firstCharIndex;
   }
-  final DefaultOperationCallbackHandler parsedCmd=(DefaultOperationCallbackHandler)ctx.getParsedArguments();
-  parsedCmd.reset();
-  try {
-    parsedCmd.parseProperties(buffer);
-  }
- catch (  Exception e) {
-    e.printStackTrace();
-  }
+  final ParsedCommandLine parsedCmd=ctx.getParsedCommandLine();
   Iterable<CommandArgument> allArgs=getAllArguments(ctx);
   if (!allArgs.iterator().hasNext()) {
     return -1;
@@ -23,7 +16,7 @@
       for (      CommandArgument arg : getAllArguments(ctx)) {
         if (arg.canAppearNext(ctx)) {
           if (arg.getIndex() >= 0) {
-            CommandLineCompleter valCompl=arg.getValueCompleter();
+            final CommandLineCompleter valCompl=arg.getValueCompleter();
             if (valCompl != null) {
               valCompl.complete(ctx,"",cursor,candidates);
             }
@@ -37,21 +30,23 @@
           }
         }
       }
-      return buffer.length();
+      return cursor + buffer.length();
     }
   }
  catch (  CommandFormatException e) {
-    e.printStackTrace();
     return -1;
   }
-  int result=buffer.length();
+  int result=cursor + buffer.length();
   String chunk=null;
   CommandLineCompleter valueCompleter=null;
   if (!parsedCmd.endsOnPropertySeparator()) {
     final String argName=parsedCmd.getLastParsedPropertyName();
     final String argValue=parsedCmd.getLastParsedPropertyValue();
     if (argValue != null || parsedCmd.endsOnPropertyValueSeparator()) {
-      result=parsedCmd.getLastSeparatorIndex() + 1;
+      result=parsedCmd.getLastChunkIndex();
+      if (parsedCmd.endsOnPropertyValueSeparator()) {
+        ++result;
+      }
       chunk=argValue;
       if (argName != null) {
         valueCompleter=getValueCompleter(ctx,argName);
@@ -66,10 +61,10 @@
  else {
       chunk=argName;
       if (firstCharIndex == buffer.length()) {
-        result=firstCharIndex;
+        result=cursor + firstCharIndex;
       }
  else {
-        result=parsedCmd.getLastSeparatorIndex() + 1;
+        result=parsedCmd.getLastChunkIndex();
       }
     }
   }

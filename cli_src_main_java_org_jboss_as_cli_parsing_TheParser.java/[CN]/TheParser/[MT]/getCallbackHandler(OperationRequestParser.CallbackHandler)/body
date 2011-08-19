@@ -3,19 +3,30 @@
     private int nameValueSeparator=-1;
     private String name;
     final StringBuilder buffer=new StringBuilder();
+    int bufferStartIndex=0;
+    boolean inValue;
     @Override public void enteredState(    ParsingContext ctx) throws OperationFormatException {
       final String id=ctx.getState().getId();
-      if (id.equals(CommandNameState.ID)) {
-        handler.addressOperationSeparator(ctx.getLocation());
+      if (!inValue) {
+        bufferStartIndex=ctx.getLocation();
       }
- else       if (id.equals(PropertyListState.ID)) {
+      if (id.equals(PropertyListState.ID)) {
         handler.propertyListStart(ctx.getLocation());
       }
  else       if (ArgumentValueState.ID.equals(id)) {
+        inValue=true;
+      }
+ else       if ("ADDR_OP_SEP".equals(id)) {
+        handler.addressOperationSeparator(ctx.getLocation());
+      }
+ else       if (NodeState.ID.equals(id)) {
+        inValue=true;
+      }
+ else       if ("NAME_VALUE_SEPARATOR".equals(id)) {
+        nameValueSeparator=ctx.getLocation();
         if (buffer.length() > 0) {
           name=buffer.toString().trim();
           buffer.setLength(0);
-          nameValueSeparator=ctx.getLocation();
         }
       }
     }
@@ -30,17 +41,17 @@
         if (this.name != null) {
           final String value=buffer.toString().trim();
           if (value.length() > 0) {
-            handler.property(this.name,value,nameValueSeparator);
+            handler.property(this.name,value,bufferStartIndex);
           }
  else {
-            handler.propertyName(this.name);
+            handler.propertyName(bufferStartIndex,this.name);
             if (nameValueSeparator != -1) {
               handler.propertyNameValueSeparator(nameValueSeparator);
             }
           }
         }
  else {
-          handler.propertyName(buffer.toString().trim());
+          handler.propertyName(bufferStartIndex,buffer.toString().trim());
           if (nameValueSeparator != -1) {
             handler.propertyNameValueSeparator(nameValueSeparator);
           }
@@ -54,54 +65,55 @@
       }
  else       if (ArgumentValueState.ID.equals(id)) {
         if (name == null) {
-          handler.property(null,buffer.toString().trim(),-1);
+          handler.property(null,buffer.toString().trim(),bufferStartIndex);
           buffer.setLength(0);
           if (!ctx.isEndOfContent()) {
             handler.propertySeparator(ctx.getLocation());
           }
         }
+        inValue=false;
       }
  else       if (CommandNameState.ID.equals(id)) {
-        handler.operationName(buffer.toString().trim());
+        handler.operationName(bufferStartIndex,buffer.toString().trim());
         buffer.setLength(0);
       }
  else       if (NodeState.ID.equals(id)) {
         char ch=ctx.getCharacter();
         if (buffer.length() == 0) {
           if (ch == '/') {
-            handler.rootNode();
+            handler.rootNode(bufferStartIndex);
             handler.nodeSeparator(ctx.getLocation());
           }
         }
  else {
+          final String value=buffer.toString().trim();
           if (ch == '=') {
-            handler.nodeType(buffer.toString().trim());
+            handler.nodeType(bufferStartIndex,value);
             handler.nodeTypeNameSeparator(ctx.getLocation());
           }
  else           if (ch == ':') {
-            handler.nodeName(buffer.toString().trim());
+            handler.nodeName(bufferStartIndex,value);
           }
  else {
-            final String value=buffer.toString().trim();
             if (".".equals(value)) {
             }
  else             if ("..".equals(value)) {
-              handler.parentNode();
+              handler.parentNode(ctx.getLocation() - 2);
             }
  else             if (".type".equals(value)) {
-              handler.nodeType();
+              handler.nodeType(ctx.getLocation() - 5);
             }
  else {
               if (ch == '/') {
                 if ("".equals(value)) {
-                  handler.rootNode();
+                  handler.rootNode(ctx.getLocation());
                 }
  else {
-                  handler.nodeName(value);
+                  handler.nodeName(bufferStartIndex,value);
                 }
               }
  else {
-                handler.nodeTypeOrName(value);
+                handler.nodeTypeOrName(bufferStartIndex,value);
               }
             }
             if (ch == '/') {
@@ -110,9 +122,10 @@
           }
         }
         buffer.setLength(0);
+        inValue=false;
       }
  else       if (OutputTargetState.ID.equals(id)) {
-        handler.outputTarget(buffer.toString().trim());
+        handler.outputTarget(bufferStartIndex,buffer.toString().trim());
         buffer.setLength(0);
       }
     }
