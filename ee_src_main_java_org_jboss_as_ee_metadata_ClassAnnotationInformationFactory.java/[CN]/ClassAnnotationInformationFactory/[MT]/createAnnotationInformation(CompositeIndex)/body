@@ -1,0 +1,90 @@
+{
+  final List<AnnotationInstance> annotations=new ArrayList<AnnotationInstance>();
+  if (multiAnnotationDotName != null) {
+    for (    AnnotationInstance multiInstance : index.getAnnotations(multiAnnotationDotName)) {
+      annotations.addAll(fromMultiAnnotation(multiInstance));
+    }
+  }
+  final List<AnnotationInstance> simpleAnnotations=index.getAnnotations(annotationDotName);
+  if (simpleAnnotations != null) {
+    annotations.addAll(simpleAnnotations);
+  }
+  final Map<DotName,List<AnnotationInstance>> classLevel=new HashMap<DotName,List<AnnotationInstance>>();
+  final Map<DotName,List<AnnotationInstance>> methodLevel=new HashMap<DotName,List<AnnotationInstance>>();
+  final Map<DotName,List<AnnotationInstance>> fieldLevel=new HashMap<DotName,List<AnnotationInstance>>();
+  for (  AnnotationInstance instance : annotations) {
+    final DotName targetClass=getAnnotationClass(instance.target()).name();
+    if (instance.target() instanceof ClassInfo) {
+      List<AnnotationInstance> data=classLevel.get(targetClass);
+      if (data == null)       classLevel.put(targetClass,data=new ArrayList<AnnotationInstance>(1));
+      data.add(instance);
+    }
+ else     if (instance.target() instanceof MethodInfo) {
+      List<AnnotationInstance> data=methodLevel.get(targetClass);
+      if (data == null)       methodLevel.put(targetClass,data=new ArrayList<AnnotationInstance>(1));
+      data.add(instance);
+    }
+ else     if (instance.target() instanceof FieldInfo) {
+      List<AnnotationInstance> data=fieldLevel.get(targetClass);
+      if (data == null)       fieldLevel.put(targetClass,data=new ArrayList<AnnotationInstance>(1));
+      data.add(instance);
+    }
+ else     if (instance.target() instanceof MethodParameterInfo) {
+    }
+ else {
+      throw new RuntimeException("Unknown AnnotationTarget type: " + instance.target());
+    }
+  }
+  final Map<String,ClassAnnotationInformation<A,T>> ret=new HashMap<String,ClassAnnotationInformation<A,T>>();
+  final Set<DotName> allClasses=new HashSet<DotName>(classLevel.keySet());
+  allClasses.addAll(methodLevel.keySet());
+  allClasses.addAll(fieldLevel.keySet());
+  for (  DotName clazz : allClasses) {
+    final List<AnnotationInstance> classAnnotations=classLevel.get(clazz);
+    final List<T> classData;
+    if (classAnnotations == null) {
+      classData=Collections.emptyList();
+    }
+ else {
+      classData=new ArrayList<T>(classAnnotations.size());
+      for (      AnnotationInstance instance : classAnnotations) {
+        classData.add(fromAnnotation(instance));
+      }
+    }
+    final List<AnnotationInstance> fieldAnnotations=fieldLevel.get(clazz);
+    final Map<String,List<T>> fieldData;
+    if (fieldAnnotations == null) {
+      fieldData=Collections.emptyMap();
+    }
+ else {
+      fieldData=new HashMap<String,List<T>>();
+      for (      AnnotationInstance instance : fieldAnnotations) {
+        final String name=((FieldInfo)instance.target()).name();
+        List<T> data=fieldData.get(name);
+        if (data == null) {
+          fieldData.put(name,data=new ArrayList<T>(1));
+        }
+        data.add(fromAnnotation(instance));
+      }
+    }
+    final List<AnnotationInstance> methodAnnotations=methodLevel.get(clazz);
+    final Map<MethodIdentifier,List<T>> methodData;
+    if (methodAnnotations == null) {
+      methodData=Collections.emptyMap();
+    }
+ else {
+      methodData=new HashMap<MethodIdentifier,List<T>>();
+      for (      AnnotationInstance instance : methodAnnotations) {
+        final MethodIdentifier identifier=getMethodIdentifier(instance.target());
+        List<T> data=methodData.get(identifier);
+        if (data == null) {
+          methodData.put(identifier,data=new ArrayList<T>(1));
+        }
+        data.add(fromAnnotation(instance));
+      }
+    }
+    ClassAnnotationInformation<A,T> information=new ClassAnnotationInformation<A,T>(annotationType,classData,methodData,fieldData);
+    ret.put(clazz.toString(),information);
+  }
+  return ret;
+}
