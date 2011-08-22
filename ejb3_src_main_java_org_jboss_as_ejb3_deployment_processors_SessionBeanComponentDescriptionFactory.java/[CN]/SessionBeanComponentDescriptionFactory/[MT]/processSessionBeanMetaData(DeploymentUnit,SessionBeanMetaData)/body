@@ -1,7 +1,17 @@
 {
   final EjbJarDescription ejbJarDescription=getEjbJarDescription(deploymentUnit);
+  final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
   final String beanName=sessionBean.getName();
-  if (ejbJarDescription.hasComponent(beanName))   return;
+  if (ejbJarDescription.hasComponent(beanName)) {
+    final ComponentDescription description=eeModuleDescription.getComponentByName(beanName);
+    if (description instanceof SessionBeanComponentDescription) {
+      ((SessionBeanComponentDescription)description).setDescriptorData(sessionBean);
+    }
+ else {
+      throw new DeploymentUnitProcessingException("Session bean with name " + beanName + " referenced in ejb-jar.xml could not be created, as existing non session bean component with same name already exists: "+ description);
+    }
+    return;
+  }
   final SessionType sessionType=sessionBean.getSessionType();
   if (sessionType == null) {
     throw new DeploymentUnitProcessingException("Unknown session-type for session bean: " + sessionBean.getName() + " in deployment unit: "+ deploymentUnit);
@@ -22,4 +32,5 @@ default :
 throw new IllegalArgumentException("Unknown session bean type: " + sessionType);
 }
 ejbJarDescription.getEEModuleDescription().addComponent(sessionBeanDescription);
+sessionBeanDescription.setDescriptorData(sessionBean);
 }
