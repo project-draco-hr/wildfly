@@ -7,39 +7,57 @@
   List<ModelNode> securityDomainsUpdates=null;
   final EnumSet<Element> visited=EnumSet.noneOf(Element.class);
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
-switch (Namespace.forUri(reader.getNamespaceURI())) {
-case SECURITY_1_0:
-{
-        final Element element=Element.forName(reader.getLocalName());
-        if (!visited.add(element)) {
-          throw unexpectedElement(reader);
-        }
+    Namespace schemaVer=Namespace.forUri(reader.getNamespaceURI());
+    final Element element=Element.forName(reader.getLocalName());
+    if (!visited.add(element)) {
+      throw unexpectedElement(reader);
+    }
 switch (element) {
 case SECURITY_MANAGEMENT:
 {
-            parseSecurityManagement(reader,subsystem);
-            break;
-          }
-case SUBJECT_FACTORY:
-{
-          parseSubjectFactory(reader,subsystem);
-          break;
-        }
-case SECURITY_DOMAINS:
-{
-        securityDomainsUpdates=parseSecurityDomains(reader,address);
+        parseSecurityManagement(reader,subsystem);
         break;
       }
+case SUBJECT_FACTORY:
+{
+      parseSubjectFactory(reader,subsystem);
+      break;
+    }
+case SECURITY_DOMAINS:
+{
+    securityDomainsUpdates=parseSecurityDomains(reader,address);
+    break;
+  }
 case SECURITY_PROPERTIES:
 {
-      parseSecurityProperties(reader,subsystem);
+  parseSecurityProperties(reader,subsystem);
+  break;
+}
+case VAULT:
+{
+if (schemaVer == Namespace.SECURITY_1_0) throw unexpectedElement(reader);
+final int count=reader.getAttributeCount();
+ModelNode vault=subsystem.get(Constants.VAULT);
+if (count > 1) {
+  throw unexpectedAttribute(reader,count);
+}
+for (int i=0; i < count; i++) {
+  requireNoNamespaceAttribute(reader,i);
+  final String value=reader.getAttributeValue(i);
+  final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case CODE:
+{
+      String code=value;
+      vault.get(CODE).set(code);
       break;
     }
 default :
-{
-    throw unexpectedElement(reader);
-  }
+  throw unexpectedAttribute(reader,i);
 }
+}
+parseVault(reader,vault);
+subsystem.get(Constants.VAULT).set(vault);
 break;
 }
 default :
