@@ -42,24 +42,6 @@
 ;
   operation=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
     @Override public List<String> getAllCandidates(    CommandContext ctx){
-      final boolean writeAttribute;
-      try {
-        writeAttribute=name.isPresent(ctx.getParsedCommandLine());
-      }
- catch (      CommandFormatException e) {
-        return Collections.emptyList();
-      }
-      if (writeAttribute) {
-        Set<String> specified=ctx.getParsedCommandLine().getPropertyNames();
-        final List<String> theProps=new ArrayList<String>();
-        for (        Property prop : getNodeProperties(ctx)) {
-          final String propName="--" + prop.getName();
-          if (!specified.contains(propName) && prop.getValue().has("access-type") && prop.getValue().get("access-type").asString().contains("write")) {
-            theProps.add(propName + "=");
-          }
-        }
-        return theProps;
-      }
       DefaultOperationRequestAddress address=new DefaultOperationRequestAddress();
       if (ctx.isDomainMode()) {
         final String profileName=profile.getValue(ctx.getParsedCommandLine());
@@ -155,7 +137,12 @@
           for (          Property prop : getNodeProperties(ctx)) {
             final ModelNode propDescr=prop.getValue();
             if (propDescr.has("access-type") && "read-write".equals(propDescr.get("access-type").asString())) {
-              nodeProps.add(new ArgumentWithValue(GenericTypeOperationHandler.this,"--" + prop.getName()));
+              if (propDescr.has("type") && ModelType.BOOLEAN == propDescr.get("type").asType()) {
+                nodeProps.add(new ArgumentWithValue(GenericTypeOperationHandler.this,SimpleTabCompleter.BOOLEAN,"--" + prop.getName()));
+              }
+ else {
+                nodeProps.add(new ArgumentWithValue(GenericTypeOperationHandler.this,"--" + prop.getName()));
+              }
             }
           }
         }
@@ -180,7 +167,13 @@
  else {
             opProps=new ArrayList<CommandArgument>();
             for (            Property prop : descr.get("request-properties").asPropertyList()) {
-              opProps.add(new ArgumentWithValue(GenericTypeOperationHandler.this,"--" + prop.getName()));
+              final ModelNode propDescr=prop.getValue();
+              if (propDescr.has("type") && ModelType.BOOLEAN == propDescr.get("type").asType()) {
+                opProps.add(new ArgumentWithValue(GenericTypeOperationHandler.this,SimpleTabCompleter.BOOLEAN,"--" + prop.getName()));
+              }
+ else {
+                opProps.add(new ArgumentWithValue(GenericTypeOperationHandler.this,"--" + prop.getName()));
+              }
             }
           }
           propsByOp.put(op,opProps);
