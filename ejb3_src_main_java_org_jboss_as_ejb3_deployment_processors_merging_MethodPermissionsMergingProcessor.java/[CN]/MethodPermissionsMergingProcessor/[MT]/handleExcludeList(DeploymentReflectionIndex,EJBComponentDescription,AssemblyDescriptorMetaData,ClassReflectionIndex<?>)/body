@@ -1,0 +1,42 @@
+{
+  final ExcludeListMetaData excludeList=assemblyDescriptor.getExcludeListByEjbName(description.getEJBName());
+  if (excludeList == null) {
+    return;
+  }
+  final MethodsMetaData methods=excludeList.getMethods();
+  if (methods == null || methods.isEmpty()) {
+    return;
+  }
+  for (  final MethodMetaData denyAllMethod : methods) {
+    final String methodName=denyAllMethod.getMethodName();
+    final MethodIntf methodIntf=this.getMethodIntf(denyAllMethod.getMethodIntf());
+    if (methodName.equals("*")) {
+      if (methodIntf == null) {
+        description.applyDenyAllOnAllMethodsOfAllViews();
+      }
+ else {
+        description.applyDenyAllOnAllMethodsOfViewType(methodIntf);
+      }
+    }
+ else {
+      final MethodParametersMetaData methodParams=denyAllMethod.getMethodParams();
+      if (methodParams == null || methodParams.isEmpty()) {
+        final Collection<Method> denyAllApplicableMethods=ClassReflectionIndexUtil.findAllMethodsByName(deploymentReflectionIndex,classReflectionIndex,methodName);
+        if (denyAllApplicableMethods.isEmpty()) {
+          logger.warn("No method named: " + methodName + " found on EJB: "+ description.getEJBName()+ " while processing exclude-list element in ejb-jar.xml");
+          continue;
+        }
+        this.applyDenyAll(description,methodIntf,denyAllApplicableMethods);
+      }
+ else {
+        final String[] paramTypes=methodParams.toArray(new String[methodParams.size()]);
+        final Collection<Method> denyAllApplicableMethods=ClassReflectionIndexUtil.findMethods(deploymentReflectionIndex,classReflectionIndex,methodName,paramTypes);
+        if (denyAllApplicableMethods.isEmpty()) {
+          logger.warn("No method named: " + methodName + " with param types: "+ paramTypes+ " found on EJB: "+ description.getEJBName()+ " while processing exclude-list element in ejb-jar.xml");
+          continue;
+        }
+        this.applyDenyAll(description,methodIntf,denyAllApplicableMethods);
+      }
+    }
+  }
+}
