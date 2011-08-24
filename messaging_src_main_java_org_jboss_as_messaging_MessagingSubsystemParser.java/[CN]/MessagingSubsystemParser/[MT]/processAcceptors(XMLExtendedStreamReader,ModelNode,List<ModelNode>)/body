@@ -1,5 +1,4 @@
 {
-  final ModelNode acceptors=new ModelNode();
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
     String name=null;
     String socketBinding=null;
@@ -33,30 +32,33 @@ default :
 if (name == null) {
 ParseUtils.missingRequired(reader,Collections.singleton(Attribute.NAME));
 }
+final ModelNode acceptorAddress=address.clone();
+final ModelNode operation=new ModelNode();
+operation.get(OP).set(ADD);
 final Element element=Element.forName(reader.getLocalName());
 switch (element) {
 case ACCEPTOR:
 {
-final ModelNode acceptor=acceptors.get(name);
-acceptor.get(TYPE).set(TransportConfigType.Generic.toString());
-if (socketBinding != null) acceptor.get(SOCKET_BINDING.getName()).set(socketBinding);
-parseTransportConfigurationParams(reader,acceptor,true);
+acceptorAddress.add(ACCEPTOR,name);
+if (socketBinding != null) operation.get(SOCKET_BINDING.getName()).set(socketBinding);
+parseTransportConfigurationParams(reader,operation,true);
 break;
 }
 case NETTY_ACCEPTOR:
 {
-final ModelNode acceptor=acceptors.get(name);
-acceptor.get(TYPE).set(TransportConfigType.Remote.toString());
-if (socketBinding != null) acceptor.get(SOCKET_BINDING.getName()).set(socketBinding);
-parseTransportConfigurationParams(reader,acceptor,false);
+acceptorAddress.add(REMOTE_ACCEPTOR,name);
+if (socketBinding == null) {
+ParseUtils.missingRequired(reader,Collections.singleton(Attribute.SOCKET_BINDING));
+}
+operation.get(SOCKET_BINDING.getName()).set(socketBinding);
+parseTransportConfigurationParams(reader,operation,false);
 break;
 }
 case IN_VM_ACCEPTOR:
 {
-final ModelNode acceptor=acceptors.get(name);
-acceptor.get(TYPE).set(TransportConfigType.InVM.toString());
-acceptor.get(SERVER_ID.getName()).set(serverId);
-parseTransportConfigurationParams(reader,acceptor,false);
+acceptorAddress.add(IN_VM_ACCEPTOR,name);
+operation.get(SERVER_ID.getName()).set(serverId);
+parseTransportConfigurationParams(reader,operation,false);
 break;
 }
 default :
@@ -64,6 +66,7 @@ default :
 throw ParseUtils.unexpectedElement(reader);
 }
 }
+operation.get(OP_ADDR).set(acceptorAddress);
+updates.add(operation);
 }
-return acceptors;
 }

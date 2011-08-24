@@ -1,5 +1,4 @@
 {
-  final ModelNode connectors=new ModelNode();
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
     String name=null;
     String socketBinding=null;
@@ -33,30 +32,33 @@ default :
 if (name == null) {
 ParseUtils.missingRequired(reader,Collections.singleton(Attribute.NAME));
 }
+final ModelNode connectorAddress=address.clone();
+final ModelNode operation=new ModelNode();
+operation.get(OP).set(ADD);
 final Element element=Element.forName(reader.getLocalName());
 switch (element) {
 case CONNECTOR:
 {
-final ModelNode connector=connectors.get(name);
-connector.get(TYPE).set(TransportConfigType.Generic.toString());
-if (socketBinding != null) connector.get(SOCKET_BINDING.getName()).set(socketBinding);
-parseTransportConfigurationParams(reader,connector,true);
+connectorAddress.add(CONNECTOR,name);
+if (socketBinding != null) operation.get(SOCKET_BINDING.getName()).set(socketBinding);
+parseTransportConfigurationParams(reader,operation,true);
 break;
 }
 case NETTY_CONNECTOR:
 {
-final ModelNode connector=connectors.get(name);
-connector.get(TYPE).set(TransportConfigType.Remote.toString());
-if (socketBinding != null) connector.get(SOCKET_BINDING.getName()).set(socketBinding);
-parseTransportConfigurationParams(reader,connector,false);
+connectorAddress.add(REMOTE_CONNECTOR,name);
+if (socketBinding == null) {
+ParseUtils.missingRequired(reader,Collections.singleton(Attribute.SOCKET_BINDING));
+}
+operation.get(SOCKET_BINDING.getName()).set(socketBinding);
+parseTransportConfigurationParams(reader,operation,false);
 break;
 }
 case IN_VM_CONNECTOR:
 {
-final ModelNode connector=connectors.get(name);
-connector.get(TYPE).set(TransportConfigType.InVM.toString());
-connector.get(SERVER_ID.getName()).set(serverId);
-parseTransportConfigurationParams(reader,connector,false);
+connectorAddress.add(IN_VM_CONNECTOR,name);
+operation.get(SERVER_ID.getName()).set(serverId);
+parseTransportConfigurationParams(reader,operation,false);
 break;
 }
 default :
@@ -64,6 +66,7 @@ default :
 throw ParseUtils.unexpectedElement(reader);
 }
 }
+operation.get(OP_ADDR).set(connectorAddress);
+updates.add(operation);
 }
-return connectors;
 }
