@@ -1,0 +1,47 @@
+{
+  final AtomicReference<Object> primaryKeyReference=(AtomicReference<Object>)context.getContextData().get(this.primaryKeyContextKey);
+  return new AbstractEJBInterceptor(){
+    @Override public Object processInvocation(    final InterceptorContext context) throws Exception {
+      final EntityBeanComponent component=getComponent(context,EntityBeanComponent.class);
+      final Object primaryKey=primaryKeyReference.get();
+      if (primaryKey == null) {
+        throw new NoSuchEJBException("Invocation was not associated with an instance, primary key was null, instance may have been removed");
+      }
+      final EntityBeanComponentInstance instance=component.getCache().get(primaryKey);
+      if (instance.isRemoved()) {
+        throw new NoSuchEJBException("Instance of " + component.getComponentName() + " with primary key "+ primaryKey+ " has been removed");
+      }
+      try {
+        context.putPrivateData(ComponentInstance.class,instance);
+        return context.proceed();
+      }
+ catch (      Exception ex) {
+        if (component.getApplicationException(ex.getClass(),context.getMethod()) != null) {
+          throw ex;
+        }
+        if (ex instanceof ConcurrentAccessTimeoutException || ex instanceof ConcurrentAccessException) {
+          throw ex;
+        }
+        if (ex instanceof RuntimeException || ex instanceof RemoteException) {
+          if (log.isTraceEnabled())           log.trace("Discarding bean " + primaryKey + " because of exception",ex);
+          component.getCache().discard(instance);
+        }
+        throw ex;
+      }
+catch (      final Error e) {
+        if (log.isTraceEnabled())         log.trace("Discarding bean " + primaryKey + " because of error",e);
+        component.getCache().discard(instance);
+        throw e;
+      }
+catch (      final Throwable t) {
+        if (log.isTraceEnabled())         log.trace("Discarding bean " + primaryKey + " because of Throwable",t);
+        component.getCache().discard(instance);
+        throw new RuntimeException(t);
+      }
+ finally {
+        context.putPrivateData(ComponentInstance.class,null);
+      }
+    }
+  }
+;
+}

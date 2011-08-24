@@ -1,0 +1,42 @@
+{
+  final Object existing=context.getContextData().get(EXISTING_ID_CONTEXT_KEY);
+  final AtomicReference<Object> primaryKeyReference=new AtomicReference<Object>();
+  context.getContextData().put(this.primaryKeyContextKey,primaryKeyReference);
+  final Method ejbCreate=(Method)context.getContextData().get(EntityBeanHomeCreateInterceptorFactory.EJB_CREATE_METHOD_KEY);
+  final Method ejbPostCreate=(Method)context.getContextData().get(EntityBeanHomeCreateInterceptorFactory.EJB_POST_CREATE_METHOD_KEY);
+  final Object[] params=(Object[])context.getContextData().get(EntityBeanHomeCreateInterceptorFactory.PARAMETERS_KEY);
+  return new Interceptor(){
+    @Override public Object processInvocation(    final InterceptorContext context) throws Exception {
+      if (existing != null) {
+        primaryKeyReference.set(existing);
+        return context.proceed();
+      }
+      final Component component=context.getPrivateData(Component.class);
+      if (!(component instanceof EntityBeanComponent)) {
+        throw new IllegalStateException("Unexpected component: " + component + " Expected "+ EntityBeanComponent.class);
+      }
+      final EntityBeanComponent entityBeanComponent=(EntityBeanComponent)component;
+      final EntityBeanComponentInstance instance=entityBeanComponent.getPool().get();
+      final Object primaryKey=ejbCreate.invoke(instance.getInstance(),params);
+      instance.associate(primaryKey);
+      ejbPostCreate.invoke(instance.getInstance(),params);
+      primaryKeyReference.set(primaryKey);
+      entityBeanComponent.getCache().create(instance);
+      final TransactionSynchronizationRegistry transactionSynchronizationRegistry=entityBeanComponent.getTransactionSynchronizationRegistry();
+      if (transactionSynchronizationRegistry.getTransactionKey() != null) {
+        transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
+          @Override public void beforeCompletion(){
+          }
+          @Override public void afterCompletion(          final int status){
+            if (status != Status.STATUS_COMMITTED) {
+              entityBeanComponent.getPool().release(instance);
+            }
+          }
+        }
+);
+      }
+      return context.proceed();
+    }
+  }
+;
+}

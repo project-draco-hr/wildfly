@@ -1,0 +1,44 @@
+{
+  final EntityBeanComponent component=getComponent(context,EntityBeanComponent.class);
+  final EntityBeanComponentInstance instance=(EntityBeanComponentInstance)context.getPrivateData(ComponentInstance.class);
+  if (instance.getPrimaryKey() == null) {
+    return context.proceed();
+  }
+  final TransactionSynchronizationRegistry transactionSynchronizationRegistry=component.getTransactionSynchronizationRegistry();
+  if (log.isTraceEnabled()) {
+    log.trace("Trying to acquire lock: " + lock + " for entity bean "+ instance+ " during invocation: "+ context);
+  }
+  if (!reentrant && lock.isHeldByCurrentThread()) {
+    throw new EJBException("Could not re-acquire lock for non-reentrant instance " + component.getComponentName());
+  }
+  lock.lock();
+  if (log.isTraceEnabled()) {
+    log.trace("Acquired lock: " + lock + " for entity bean instance: "+ instance+ " during invocation: "+ context);
+  }
+  Object currentTransactionKey=null;
+  boolean wasTxSyncRegistered=false;
+  try {
+    currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
+    if (transactionKey != null) {
+      if (!transactionKey.equals(currentTransactionKey))       throw new EJBException("Entity Bean " + instance + " is already associated with tx "+ transactionKey+ " (current tx "+ currentTransactionKey+ ")");
+    }
+ else {
+      if (currentTransactionKey != null) {
+        transactionKey=currentTransactionKey;
+        final Synchronization statefulSessionSync=new EntityBeanSynchronization(instance);
+        transactionSynchronizationRegistry.registerInterposedSynchronization(statefulSessionSync);
+        wasTxSyncRegistered=true;
+        if (log.isTraceEnabled()) {
+          log.trace("Registered tx synchronization: " + statefulSessionSync + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
+        }
+      }
+    }
+    return context.proceed();
+  }
+  finally {
+    if (!wasTxSyncRegistered) {
+      instance.store();
+      releaseInstance(instance,true);
+    }
+  }
+}
