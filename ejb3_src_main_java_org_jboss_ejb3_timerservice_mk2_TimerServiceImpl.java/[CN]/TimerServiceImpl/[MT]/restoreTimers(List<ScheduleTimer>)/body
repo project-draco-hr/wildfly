@@ -1,0 +1,41 @@
+{
+  List<TimerImpl> restorableTimers=this.getActiveTimers();
+  final List<ScheduleTimer> newAutoTimers=new LinkedList<ScheduleTimer>(autoTimers);
+  logger.debug("Found " + restorableTimers.size() + " active timers for timedObjectId: "+ this.invoker.getTimedObjectId());
+  for (  final TimerImpl activeTimer : restorableTimers) {
+    if (activeTimer.isAutoTimer()) {
+      boolean found=false;
+      final CalendarTimerEntity entity=(CalendarTimerEntity)activeTimer.getPersistentState();
+      ListIterator<ScheduleTimer> it=newAutoTimers.listIterator();
+      while (it.hasNext()) {
+        ScheduleTimer timer=it.next();
+        final String methodName=timer.getMethod().getName();
+        final String[] params=new String[timer.getMethod().getParameterTypes().length];
+        for (int i=0; i < timer.getMethod().getParameterTypes().length; ++i) {
+          params[i]=timer.getMethod().getParameterTypes()[i].getName();
+        }
+        if (doesTimeoutMethodMatch(entity.getTimeoutMethod(),methodName,params)) {
+          if (this.doesScheduleMatch(entity.getScheduleExpression(),timer.getScheduleExpression())) {
+            it.remove();
+            found=true;
+            break;
+          }
+        }
+      }
+      if (found) {
+        startTimer(activeTimer);
+        logger.debug("Started timer: " + activeTimer);
+        this.persistTimer(activeTimer);
+      }
+ else {
+        this.removeTimer(activeTimer);
+      }
+    }
+    this.startTimer(activeTimer);
+    logger.debug("Started timer: " + activeTimer);
+    this.persistTimer(activeTimer);
+  }
+  for (  ScheduleTimer timer : newAutoTimers) {
+    this.loadAutoTimer(timer.getScheduleExpression(),timer.getTimerConfig(),timer.getMethod());
+  }
+}

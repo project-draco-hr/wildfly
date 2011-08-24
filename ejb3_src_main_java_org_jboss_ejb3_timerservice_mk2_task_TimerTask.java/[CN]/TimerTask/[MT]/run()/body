@@ -1,0 +1,32 @@
+{
+  Date now=new Date();
+  logger.debug("Timer task invoked at: " + now + " for timer "+ this.timer);
+  if (this.timer.isInRetry()) {
+    logger.debug("Timer in retry mode, skipping this scheduled execution at: " + now);
+    return;
+  }
+  if (this.timer.isActive() == false) {
+    logger.debug("Timer is not active, skipping this scheduled execution at: " + now);
+  }
+  this.timer.setPreviousRun(new Date());
+  Date nextTimeout=this.calculateNextTimeout();
+  this.timer.setNextTimeout(nextTimeout);
+  this.timer.setTimerState(TimerState.IN_TIMEOUT);
+  this.timerService.persistTimer(this.timer);
+  try {
+    this.callTimeout();
+  }
+ catch (  Exception e) {
+    logger.error("Error invoking timeout for timer: " + this.timer,e);
+    try {
+      logger.info("Timer: " + this.timer + " will be retried");
+      retryTimeout();
+    }
+ catch (    Exception retryException) {
+      logger.error("Error during retyring timeout for timer: " + timer,e);
+    }
+  }
+ finally {
+    this.postTimeoutProcessing();
+  }
+}

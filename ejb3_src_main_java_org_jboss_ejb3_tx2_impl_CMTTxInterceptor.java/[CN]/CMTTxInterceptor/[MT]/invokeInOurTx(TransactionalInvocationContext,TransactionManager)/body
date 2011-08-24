@@ -1,0 +1,31 @@
+{
+  for (int i=0; i < MAX_RETRIES; i++) {
+    tm.begin();
+    Transaction tx=tm.getTransaction();
+    try {
+      try {
+        return invocation.proceed();
+      }
+ catch (      Throwable t) {
+        handleExceptionInOurTx(invocation,t,tx);
+      }
+ finally {
+        endTransaction(tm,tx);
+      }
+    }
+ catch (    Exception ex) {
+      ApplicationDeadlockException deadlock=ApplicationDeadlockException.isADE(ex);
+      if (deadlock != null) {
+        if (!deadlock.retryable() || i + 1 >= MAX_RETRIES) {
+          throw deadlock;
+        }
+        log.warn(deadlock.getMessage() + " retrying " + (i + 1));
+        Thread.sleep(RANDOM.nextInt(1 + i),RANDOM.nextInt(1000));
+      }
+ else {
+        throw ex;
+      }
+    }
+  }
+  throw new RuntimeException("UNREACHABLE");
+}

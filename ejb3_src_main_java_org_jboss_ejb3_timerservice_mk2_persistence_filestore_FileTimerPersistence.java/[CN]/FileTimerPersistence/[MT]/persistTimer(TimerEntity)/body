@@ -1,0 +1,23 @@
+{
+  final Lock lock=getLock(timerEntity.getTimedObjectId());
+  try {
+    final int status=transactionManager.getStatus();
+    if (status == Status.STATUS_NO_TRANSACTION || status == Status.STATUS_UNKNOWN) {
+      try {
+        lock.lock();
+        Map<String,TimerEntity> map=getTimers(timerEntity.getTimedObjectId());
+        map.put(timerEntity.getId(),timerEntity);
+        writeFile(timerEntity);
+      }
+  finally {
+        lock.unlock();
+      }
+    }
+ else {
+      transactionSynchronizationRegistry.registerInterposedSynchronization(new PersistTransactionSynchronization(timerEntity,lock));
+    }
+  }
+ catch (  SystemException e) {
+    throw new RuntimeException(e);
+  }
+}
