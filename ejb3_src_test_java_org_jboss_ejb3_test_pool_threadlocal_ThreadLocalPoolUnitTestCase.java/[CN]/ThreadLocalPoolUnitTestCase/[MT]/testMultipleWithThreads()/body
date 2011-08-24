@@ -1,0 +1,32 @@
+{
+  final MockFactory factory=new MockFactory();
+  final ThreadLocalPool<MockBean> pool=new ThreadLocalPool<MockBean>(factory);
+  pool.start();
+  Runnable r=new Runnable(){
+    public void run(){
+      for (int i=0; i < 10; i++) {
+        MockBean ctx=pool.get();
+        pool.release(ctx);
+        ctx=null;
+        used++;
+      }
+    }
+  }
+;
+  Thread threads[]=new Thread[20];
+  for (int i=0; i < threads.length; i++) {
+    threads[i]=new Thread(r);
+    threads[i].start();
+  }
+  for (  Thread t : threads) {
+    t.join(1000);
+  }
+  gc();
+  assertEquals(0,pool.getRemoveCount());
+  assertEquals(0,MockBean.getFinalized());
+  pool.stop();
+  gc();
+  assertEquals(20,pool.getRemoveCount());
+  assertEquals(20,MockBean.getFinalized());
+  assertEquals(200,used);
+}

@@ -1,0 +1,37 @@
+{
+  ApplicationException ae=new ApplicationException(){
+    @Override public boolean inherited(){
+      return false;
+    }
+    @Override public boolean rollback(){
+      return false;
+    }
+    @Override public Class<? extends Annotation> annotationType(){
+      return ApplicationException.class;
+    }
+  }
+;
+  StatefulBMTInterceptor statefulBMTInterceptor=new StatefulBMTInterceptor(){
+    @Override protected String getComponentName(){
+      return "appexception-test";
+    }
+    @Override protected TransactionManager getTransactionManager(){
+      return transactionManager;
+    }
+  }
+;
+  TransactionalInvocationContext invocation=mock(TransactionalInvocationContext.class);
+  when(invocation.getApplicationException(SimpleApplicationException.class)).thenReturn(ae);
+  when(invocation.proceed()).thenAnswer(new Answer<Object>(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      throw new SimpleApplicationException();
+    }
+  }
+);
+  try {
+    statefulBMTInterceptor.invoke(invocation);
+  }
+ catch (  SimpleApplicationException sae) {
+    logger.debug("Got the expected " + SimpleApplicationException.class.getName() + " exception: ",sae);
+  }
+}
