@@ -1,0 +1,27 @@
+{
+  context.addStep(new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      final HornetQServer server=getServer(context);
+      if (server != null) {
+        final PathAddress address=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR));
+        final String match=address.getElement(address.size() - 2).getValue();
+        final String roleName=address.getLastElement().getValue();
+        final Set<Role> newRoles=new HashSet<Role>();
+        final Set<Role> roles=server.getSecurityRepository().getMatch(match);
+        for (        final Role role : roles) {
+          if (!roleName.equals(role.getName())) {
+            newRoles.add(role);
+          }
+        }
+        final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
+        final ModelNode subModel=resource.getModel();
+        final Role updatedRole=SecurityRoleAdd.transform(roleName,subModel);
+        newRoles.add(updatedRole);
+        server.getSecurityRepository().addMatch(match,newRoles);
+      }
+      context.completeStep();
+    }
+  }
+,OperationContext.Stage.RUNTIME);
+  return false;
+}
