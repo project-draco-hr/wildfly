@@ -6,6 +6,8 @@
   String auditManagerClassName="default";
   String identityTrustManagerClassName="default";
   String mappingManagerClassName="default";
+  String vaultClass=null;
+  final Map<String,Object> vaultOptions=new HashMap<String,Object>();
   final Resource resource=context.createResource(PathAddress.EMPTY_ADDRESS);
   final ModelNode subModel=resource.getModel();
   Properties securityProperties=null;
@@ -20,8 +22,18 @@
     }
   }
   if (operation.hasDefined(Constants.VAULT)) {
-    subModel.get(Constants.VAULT).set(operation.get(Constants.VAULT));
+    ModelNode vaultNode=operation.get(Constants.VAULT);
+    vaultClass=vaultNode.get(Constants.CODE).asString();
+    List<ModelNode> vaultOptionList=vaultNode.get(Constants.VAULT_OPTION).asList();
+    if (vaultOptionList != null) {
+      for (      ModelNode vaultOptionNode : vaultOptionList) {
+        Property vaultProp=vaultOptionNode.asProperty();
+        vaultOptions.put(vaultProp.getName(),vaultProp.getValue().asString());
+      }
+    }
+    subModel.get(Constants.VAULT).set(vaultNode);
   }
+  final String vaultFQN=vaultClass;
   if (operation.hasDefined(AUTHENTICATION_MANAGER_CLASS_NAME)) {
     authenticationManagerClassName=operation.get(AUTHENTICATION_MANAGER_CLASS_NAME).asString();
     subModel.get(AUTHENTICATION_MANAGER_CLASS_NAME).set(authenticationManagerClassName);
@@ -138,6 +150,10 @@
           Configuration loginConfig=XMLLoginConfigImpl.getInstance();
           final JaasConfigurationService jaasConfigurationService=new JaasConfigurationService(loginConfig);
           target.addService(JaasConfigurationService.SERVICE_NAME,jaasConfigurationService).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install();
+          if (vaultFQN != null || vaultOptions.isEmpty() == false) {
+            final SecurityVaultService vaultService=new SecurityVaultService(vaultFQN,vaultOptions);
+            target.addService(SecurityVaultService.SERVICE_NAME,vaultService).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install();
+          }
           target.addService(SimpleSecurityManagerService.SERVICE_NAME,new SimpleSecurityManagerService()).addListener(verificationHandler).install();
           context.addStep(verificationHandler,OperationContext.Stage.VERIFY);
           if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
