@@ -9,6 +9,7 @@
     }
 ;
   }
+  CallbackHandler realmCallbackHandler=null;
   if (DIGEST_MD5.equals(mechanismName) && digestMd5Supported()) {
     final CallbackHandler realHandler=realm.getCallbackHandler();
     final CallbackHandler realmNameFix=new CallbackHandler(){
@@ -23,28 +24,38 @@
       }
     }
 ;
-    if (serverCallbackHandler == null) {
-      return realmNameFix;
-    }
-    return new CallbackHandler(){
-      public void handle(      Callback[] callbacks) throws IOException, UnsupportedCallbackException {
-        serverCallbackHandler.handle(callbacks);
-        if (handled(callbacks) == false) {
-          realmNameFix.handle(callbacks);
-        }
-      }
-      private boolean handled(      Callback[] callbacks){
-        for (        Callback current : callbacks) {
-          if (current instanceof PasswordCallback) {
-            PasswordCallback pcb=(PasswordCallback)current;
-            char[] password=pcb.getPassword();
-            return (password != null && password.length > 0);
-          }
-        }
-        return false;
-      }
-    }
-;
+    realmCallbackHandler=realmNameFix;
   }
-  return null;
+ else   if (PLAIN.equals(mechanismName) && plainSupported()) {
+    realmCallbackHandler=realm.getCallbackHandler();
+  }
+ else {
+    throw new IllegalStateException("Unsupported Callback '" + mechanismName + "'");
+  }
+  if (serverCallbackHandler == null) {
+    return realmCallbackHandler;
+  }
+  final CallbackHandler wrappedHandler=realmCallbackHandler;
+  return new CallbackHandler(){
+    public void handle(    Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+      serverCallbackHandler.handle(callbacks);
+      if (handled(callbacks) == false) {
+        wrappedHandler.handle(callbacks);
+      }
+    }
+    private boolean handled(    Callback[] callbacks){
+      for (      Callback current : callbacks) {
+        if (current instanceof PasswordCallback) {
+          PasswordCallback pcb=(PasswordCallback)current;
+          char[] password=pcb.getPassword();
+          return (password != null && password.length > 0);
+        }
+ else         if (current instanceof VerifyPasswordCallback) {
+          return ((VerifyPasswordCallback)current).isVerified();
+        }
+      }
+      return false;
+    }
+  }
+;
 }
