@@ -1,0 +1,47 @@
+{
+  if (context.getType() == OperationContext.Type.SERVER) {
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        final ModelNode dynamicLoadProvider=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel().get(CommonAttributes.DYNAMIC_LOAD_PROVIDER);
+        if (!dynamicLoadProvider.isDefined()) {
+          dynamicLoadProvider.get(CommonAttributes.HISTORY).set(9);
+          dynamicLoadProvider.get(CommonAttributes.DECAY).set(2);
+          List<ModelNode> metriclist=Collections.<ModelNode>emptyList();
+          dynamicLoadProvider.get(CommonAttributes.LOAD_METRIC).set(metriclist);
+        }
+        final ModelNode metric=new ModelNode();
+        List<Property> list=operation.asPropertyList();
+        Iterator<Property> it=list.iterator();
+        while (it.hasNext()) {
+          Property prop=it.next();
+          if (prop.getName().equals("property")) {
+            String properties=prop.getValue().asString();
+            ModelNode props=ModelNode.fromString(properties);
+            metric.get("property").set(props);
+          }
+ else {
+            metric.get(prop.getName()).set(prop.getValue().asString());
+          }
+        }
+        replaceMetric(dynamicLoadProvider,metric);
+        context.completeStep();
+      }
+      private void replaceMetric(      ModelNode dynamicLoadProvider,      ModelNode metric){
+        List<ModelNode> list=dynamicLoadProvider.get(CommonAttributes.LOAD_METRIC).asList();
+        List<ModelNode> newlist=Collections.<ModelNode>emptyList();
+        dynamicLoadProvider.get(CommonAttributes.LOAD_METRIC).set(newlist);
+        String classname=metric.get("type").asString();
+        Iterator<ModelNode> it=list.iterator();
+        while (it.hasNext()) {
+          ModelNode node=it.next();
+          if (!node.get("type").asString().equals(classname)) {
+            dynamicLoadProvider.get(CommonAttributes.LOAD_METRIC).add(node);
+          }
+        }
+        dynamicLoadProvider.get(CommonAttributes.LOAD_METRIC).add(metric);
+      }
+    }
+,OperationContext.Stage.MODEL);
+  }
+  context.completeStep();
+}
