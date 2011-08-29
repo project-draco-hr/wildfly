@@ -1,7 +1,34 @@
 {
+  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  final String name=address.getLastElement().getValue();
   ServiceRegistry registry=context.getServiceRegistry(false);
   ServiceController<?> hqService=registry.getService(MessagingServices.JBOSS_MESSAGING);
   if (hqService != null) {
     context.reloadRequired();
+  }
+ else {
+    final ServiceTarget target=context.getServiceTarget();
+    if (model.hasDefined(CommonAttributes.SOCKET_BINDING.getName())) {
+      final GroupBindingService bindingService=new GroupBindingService();
+      target.addService(GroupBindingService.BASE.append(name),bindingService).addDependency(SocketBinding.JBOSS_BINDING_NAME.append(model.get(SOCKET_BINDING).asString()),SocketBinding.class,bindingService.getBindingRef()).install();
+    }
+ else {
+      final ModelNode localAddrNode=CommonAttributes.LOCAL_BIND_ADDRESS.validateResolvedOperation(model);
+      final String localAddress=localAddrNode.isDefined() ? localAddrNode.asString() : null;
+      final String groupAddress=CommonAttributes.GROUP_ADDRESS.validateResolvedOperation(model).asString();
+      final int groupPort=CommonAttributes.GROUP_PORT.validateResolvedOperation(model).asInt();
+      try {
+        final InetAddress inet=localAddress != null ? InetAddress.getByName(localAddress) : InetAddress.getLocalHost();
+        final NetworkInterface intf=NetworkInterface.getByInetAddress(inet);
+        final NetworkInterfaceBinding b=new NetworkInterfaceBinding(Collections.singleton(intf),inet);
+        final InetAddress group=InetAddress.getByName(groupAddress);
+        final SocketBinding socketBinding=new SocketBinding(name,-1,false,group,groupPort,b,null);
+        final GroupBindingService bindingService=new GroupBindingService();
+        target.addService(GroupBindingService.BASE.append(name),bindingService).addInjectionValue(bindingService.getBindingRef(),new ImmediateValue<SocketBinding>(socketBinding)).install();
+      }
+ catch (      Exception e) {
+        throw new OperationFailedException(new ModelNode().set(e.getMessage()));
+      }
+    }
   }
 }

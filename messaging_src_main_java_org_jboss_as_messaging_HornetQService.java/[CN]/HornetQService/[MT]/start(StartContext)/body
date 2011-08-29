@@ -18,6 +18,8 @@
   try {
     Collection<TransportConfiguration> acceptors=configuration.getAcceptorConfigurations();
     Collection<TransportConfiguration> connectors=configuration.getConnectorConfigurations().values();
+    Collection<BroadcastGroupConfiguration> broadcastGroups=configuration.getBroadcastGroupConfigurations();
+    Map<String,DiscoveryGroupConfiguration> discoveryGroups=configuration.getDiscoveryGroupConfigurations();
     if (connectors != null) {
       for (      TransportConfiguration tc : connectors) {
         Object socketRef=tc.getParams().remove(SOCKET_REF);
@@ -44,6 +46,29 @@
           tc.getParams().put(HOST,binding.getSocketAddress().getHostName());
           tc.getParams().put(PORT,"" + binding.getSocketAddress().getPort());
         }
+      }
+    }
+    if (broadcastGroups != null) {
+      final List<BroadcastGroupConfiguration> newConfigs=new ArrayList<BroadcastGroupConfiguration>();
+      for (      final BroadcastGroupConfiguration config : broadcastGroups) {
+        final String name=config.getName();
+        final SocketBinding binding=groupBindings.get(name);
+        if (binding == null) {
+          throw new StartException("Failed to find SocketBinding for broadcast binding: " + name);
+        }
+        newConfigs.add(BroadcastGroupAdd.createBroadcastGroupConfiguration(name,config,binding));
+      }
+    }
+    if (discoveryGroups != null) {
+      configuration.setDiscoveryGroupConfigurations(new HashMap<String,DiscoveryGroupConfiguration>());
+      for (      final Map.Entry<String,DiscoveryGroupConfiguration> entry : discoveryGroups.entrySet()) {
+        final String name=entry.getKey();
+        final SocketBinding binding=groupBindings.get(name);
+        if (binding == null) {
+          throw new StartException("Failed to find SocketBinding for discovery binding: " + entry.getKey());
+        }
+        final DiscoveryGroupConfiguration config=DiscoveryGroupAdd.createDiscoveryGroupConfiguration(name,entry.getValue(),binding);
+        configuration.getDiscoveryGroupConfigurations().put(name,config);
       }
     }
     server=new HornetQServerImpl(configuration,mbeanServer.getOptionalValue(),null);
