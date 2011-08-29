@@ -1,0 +1,117 @@
+{
+  ModelNode connectionDefinitionNode=new ModelNode();
+  String jndiName=null;
+  int attributeSize=reader.getAttributeCount();
+  boolean isXa=Boolean.FALSE;
+  boolean poolDefined=Boolean.FALSE;
+  for (int i=0; i < attributeSize; i++) {
+    CommonConnDef.Attribute attribute=CommonConnDef.Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case ENABLED:
+{
+        final Boolean value=attributeAsBoolean(reader,attribute.getLocalName());
+        if (value != null)         connectionDefinitionNode.get(ENABLED).set(value);
+        break;
+      }
+case JNDI_NAME:
+{
+      jndiName=attributeAsString(reader,attribute.getLocalName());
+      if (jndiName != null && jndiName.trim().length() != 0)       connectionDefinitionNode.get(JNDINAME).set(jndiName);
+      break;
+    }
+case POOL_NAME:
+{
+    final String value=attributeAsString(reader,attribute.getLocalName());
+    if (value != null && value.trim().length() != 0)     connectionDefinitionNode.get(POOL_NAME).set(value);
+    break;
+  }
+case USE_JAVA_CONTEXT:
+{
+  final Boolean value=attributeAsBoolean(reader,attribute.getLocalName());
+  if (value != null)   connectionDefinitionNode.get(USE_JAVA_CONTEXT).set(value);
+  break;
+}
+case CLASS_NAME:
+{
+String className=attributeAsString(reader,attribute.getLocalName());
+if (className != null && className.trim().length() != 0) connectionDefinitionNode.get(CLASS_NAME).set(className);
+break;
+}
+case USE_CCM:
+{
+final Boolean value=attributeAsBoolean(reader,attribute.getLocalName());
+if (value != null) connectionDefinitionNode.get(USE_CCM).set(value);
+break;
+}
+default :
+break;
+}
+}
+if (jndiName == null || jndiName.trim().equals("")) throw new ParserException(bundle.missingJndiName(reader.getLocalName()));
+while (reader.hasNext()) {
+switch (reader.nextTag()) {
+case END_ELEMENT:
+{
+if (ResourceAdapter.Tag.forName(reader.getLocalName()) == ResourceAdapter.Tag.CONNECTION_DEFINITION) {
+operation.get(CONNECTIONDEFINITIONS).add(connectionDefinitionNode);
+return;
+}
+ else {
+if (CommonConnDef.Tag.forName(reader.getLocalName()) == CommonConnDef.Tag.UNKNOWN) {
+throw new ParserException(bundle.unexpectedEndTag(reader.getLocalName()));
+}
+}
+break;
+}
+case START_ELEMENT:
+{
+switch (CommonConnDef.Tag.forName(reader.getLocalName())) {
+case CONFIG_PROPERTY:
+{
+connectionDefinitionNode.get(CONFIG_PROPERTIES,attributeAsString(reader,"name")).set(elementAsString(reader));
+break;
+}
+case SECURITY:
+{
+parseSecuritySettings(reader,connectionDefinitionNode);
+break;
+}
+case TIMEOUT:
+{
+parseTimeOut(reader,isXa,connectionDefinitionNode);
+break;
+}
+case VALIDATION:
+{
+parseValidation(reader,connectionDefinitionNode);
+break;
+}
+case XA_POOL:
+{
+if (poolDefined) throw new ParserException(bundle.multiplePools());
+parseXaPool(reader,connectionDefinitionNode);
+isXa=true;
+poolDefined=true;
+break;
+}
+case POOL:
+{
+if (poolDefined) throw new ParserException(bundle.multiplePools());
+parsePool(reader,connectionDefinitionNode);
+poolDefined=true;
+break;
+}
+case RECOVERY:
+{
+parseRecovery(reader,connectionDefinitionNode);
+break;
+}
+default :
+throw new ParserException(bundle.unexpectedElement(reader.getLocalName()));
+}
+break;
+}
+}
+}
+throw new ParserException(bundle.unexpectedEndOfDocument());
+}
