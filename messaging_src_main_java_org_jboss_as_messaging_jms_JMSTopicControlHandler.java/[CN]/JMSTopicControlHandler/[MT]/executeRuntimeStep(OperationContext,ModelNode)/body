@@ -1,0 +1,76 @@
+{
+  final String operationName=operation.require(ModelDescriptionConstants.OP).asString();
+  final String topicName=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
+  ServiceController<?> hqService=context.getServiceRegistry(false).getService(MessagingServices.JBOSS_MESSAGING);
+  HornetQServer hqServer=HornetQServer.class.cast(hqService.getValue());
+  TopicControl control=TopicControl.class.cast(hqServer.getManagementService().getResource(ResourceNames.JMS_TOPIC + topicName));
+  try {
+    if (LIST_ALL_SUBSCRIPTIONS.equals(operationName)) {
+      String json=control.listAllSubscriptionsAsJSON();
+      ModelNode jsonAsNode=ModelNode.fromJSONString(json);
+      context.getResult().set(convertSubscriptionKeys(jsonAsNode));
+    }
+ else     if (LIST_ALL_SUBSCRIPTIONS_AS_JSON.equals(operationName)) {
+      context.getResult().set(control.listAllSubscriptionsAsJSON());
+    }
+ else     if (LIST_DURABLE_SUBSCRIPTIONS.equals(operationName)) {
+      String json=control.listDurableSubscriptionsAsJSON();
+      ModelNode jsonAsNode=ModelNode.fromJSONString(json);
+      context.getResult().set(convertSubscriptionKeys(jsonAsNode));
+    }
+ else     if (LIST_DURABLE_SUBSCRIPTIONS_AS_JSON.equals(operationName)) {
+      context.getResult().set(control.listDurableSubscriptionsAsJSON());
+    }
+ else     if (LIST_NON_DURABLE_SUBSCRIPTIONS.equals(operationName)) {
+      String json=control.listNonDurableSubscriptionsAsJSON();
+      ModelNode jsonAsNode=ModelNode.fromJSONString(json);
+      context.getResult().set(convertSubscriptionKeys(jsonAsNode));
+    }
+ else     if (LIST_NON_DURABLE_SUBSCRIPTIONS_AS_JSON.equals(operationName)) {
+      context.getResult().set(control.listNonDurableSubscriptionsAsJSON());
+    }
+ else     if (LIST_MESSAGES_FOR_SUBSCRIPTION.equals(operationName)) {
+      listMessagesForSubscriptionValidator.validate(operation);
+      final String queueName=operation.require(QUEUE_NAME.getName()).asString();
+      String json=control.listMessagesForSubscriptionAsJSON(queueName);
+      context.getResult().set(ModelNode.fromJSONString(json));
+    }
+ else     if (LIST_MESSAGES_FOR_SUBSCRIPTION_AS_JSON.equals(operationName)) {
+      final String queueName=operation.require(QUEUE_NAME.getName()).asString();
+      context.getResult().set(control.listMessagesForSubscriptionAsJSON(queueName));
+    }
+ else     if (COUNT_MESSAGES_FOR_SUBSCRIPTION.equals(operationName)) {
+      countMessagesForSubscriptionValidator.validate(operation);
+      String clientId=operation.require(CLIENT_ID.getName()).asString();
+      String subscriptionName=operation.require(SUBSCRIPTION_NAME).asString();
+      String filter=operation.hasDefined(FILTER.getName()) ? operation.get(FILTER.getName()).asString() : null;
+      context.getResult().set(control.countMessagesForSubscription(clientId,subscriptionName,filter));
+    }
+ else     if (DROP_DURABLE_SUBSCRIPTION.equals(operationName)) {
+      dropDurableSubscriptionValidator.validate(operation);
+      String clientId=operation.require(CLIENT_ID.getName()).asString();
+      String subscriptionName=operation.require(SUBSCRIPTION_NAME).asString();
+      control.dropDurableSubscription(clientId,subscriptionName);
+      context.getResult();
+    }
+ else     if (DROP_ALL_SUBSCRIPTIONS.equals(operationName)) {
+      control.dropAllSubscriptions();
+      context.getResult();
+    }
+ else     if (REMOVE_MESSAGES.equals(operationName)) {
+      removeMessagesValidator.validate(operation);
+      String filter=operation.hasDefined(FILTER.getName()) ? operation.get(FILTER.getName()).asString() : null;
+      context.getResult().set(control.removeMessages(filter));
+    }
+ else {
+      throw new IllegalStateException(String.format("Support for operation %s was not properly implemented",operationName));
+    }
+  }
+ catch (  RuntimeException e) {
+    throw e;
+  }
+catch (  Exception e) {
+    context.getFailureDescription().set(e.toString());
+  }
+  context.completeStep();
+}
