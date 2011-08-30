@@ -1,0 +1,76 @@
+{
+  ModelControllerClient client=ctx.getModelControllerClient();
+  if (client == null) {
+    return Collections.emptyList();
+  }
+  ModelNode request;
+  DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder(address);
+  try {
+    builder.setOperationName("read-operation-description");
+    builder.addProperty("name",operationName);
+    request=builder.buildRequest();
+  }
+ catch (  OperationFormatException e1) {
+    throw new IllegalStateException("Failed to build operation",e1);
+  }
+  List<CommandArgument> result;
+  try {
+    ModelNode outcome=client.execute(request);
+    if (!Util.isSuccess(outcome)) {
+      result=Collections.emptyList();
+    }
+ else {
+      outcome.get("request-properties");
+      final List<String> names=Util.getRequestPropertyNames(outcome);
+      result=new ArrayList<CommandArgument>(names.size());
+      for (      final String name : names) {
+        result.add(new CommandArgument(){
+          @Override public String getFullName(){
+            return name;
+          }
+          @Override public String getShortName(){
+            return null;
+          }
+          @Override public int getIndex(){
+            return -1;
+          }
+          @Override public boolean isPresent(          ParsedCommandLine args) throws CommandFormatException {
+            return args.hasProperty(name);
+          }
+          @Override public boolean canAppearNext(          CommandContext ctx) throws CommandFormatException {
+            return !isPresent(ctx.getParsedCommandLine());
+          }
+          @Override public String getValue(          ParsedCommandLine args) throws CommandFormatException {
+            return args.getPropertyValue(name);
+          }
+          @Override public String getValue(          ParsedCommandLine args,          boolean required) throws CommandFormatException {
+            if (!isPresent(args)) {
+              throw new CommandFormatException("Property '" + name + "' is missing required value.");
+            }
+            return args.getPropertyValue(name);
+          }
+          @Override public boolean isValueComplete(          ParsedCommandLine args) throws CommandFormatException {
+            if (!isPresent(args)) {
+              return false;
+            }
+            if (name.equals(args.getLastParsedPropertyName())) {
+              return false;
+            }
+            return true;
+          }
+          @Override public boolean isValueRequired(){
+            return true;
+          }
+          @Override public CommandLineCompleter getValueCompleter(){
+            return null;
+          }
+        }
+);
+      }
+    }
+  }
+ catch (  Exception e) {
+    result=Collections.emptyList();
+  }
+  return result;
+}
