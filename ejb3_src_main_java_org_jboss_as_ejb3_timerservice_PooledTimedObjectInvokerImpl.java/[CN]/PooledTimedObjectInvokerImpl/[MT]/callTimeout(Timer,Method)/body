@@ -1,0 +1,41 @@
+{
+  final EjbComponentInstance instance=acquireInstance();
+  boolean discarded=false;
+  try {
+    instance.invokeTimeoutMethod(timeoutMethod,timer);
+  }
+ catch (  Exception ex) {
+    if (ejbComponent.getApplicationException(ex.getClass(),timeoutMethod) != null) {
+      throw ex;
+    }
+    if (ex instanceof ConcurrentAccessTimeoutException || ex instanceof ConcurrentAccessException) {
+      throw ex;
+    }
+    if (ex instanceof RuntimeException || ex instanceof RemoteException) {
+      discarded=true;
+      if (pool != null) {
+        pool.discard(instance);
+      }
+    }
+    throw ex;
+  }
+catch (  final Error e) {
+    discarded=true;
+    if (pool != null) {
+      pool.discard(instance);
+    }
+    throw e;
+  }
+catch (  final Throwable t) {
+    discarded=true;
+    if (pool != null) {
+      pool.discard(instance);
+    }
+    throw new RuntimeException(t);
+  }
+ finally {
+    if (!discarded) {
+      releaseInstance(instance);
+    }
+  }
+}
