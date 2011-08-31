@@ -2,11 +2,38 @@
   PooledComponent<ComponentInstance> component=getComponent(context,PooledComponent.class);
   ComponentInstance instance=component.getPool().get();
   context.putPrivateData(ComponentInstance.class,instance);
+  boolean discarded=false;
   try {
     return context.proceed();
   }
-  finally {
+ catch (  Exception ex) {
+    final EJBComponent ejbComponent=(EJBComponent)component;
+    if (ejbComponent.getApplicationException(ex.getClass(),context.getMethod()) != null) {
+      throw ex;
+    }
+    if (ex instanceof ConcurrentAccessTimeoutException || ex instanceof ConcurrentAccessException) {
+      throw ex;
+    }
+    if (ex instanceof RuntimeException || ex instanceof RemoteException) {
+      discarded=true;
+      component.getPool().discard(instance);
+    }
+    throw ex;
+  }
+catch (  final Error e) {
+    discarded=true;
+    component.getPool().discard(instance);
+    throw e;
+  }
+catch (  final Throwable t) {
+    discarded=true;
+    component.getPool().discard(instance);
+    throw new RuntimeException(t);
+  }
+ finally {
     context.putPrivateData(ComponentInstance.class,null);
-    component.getPool().release(instance);
+    if (!discarded) {
+      component.getPool().release(instance);
+    }
   }
 }
