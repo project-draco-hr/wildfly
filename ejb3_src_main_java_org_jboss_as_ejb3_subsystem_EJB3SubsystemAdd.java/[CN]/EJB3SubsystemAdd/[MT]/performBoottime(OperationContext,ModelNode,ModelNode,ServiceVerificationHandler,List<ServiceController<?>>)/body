@@ -1,12 +1,13 @@
 {
+  final boolean lite=model.hasDefined(LITE) && model.get(LITE).asBoolean();
   context.addStep(new AbstractDeploymentChainStep(){
     protected void execute(    DeploymentProcessorTarget processorTarget){
-      boolean lite=model.hasDefined(LITE) && model.get(LITE).asBoolean();
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_DEPLOYMENT,new EjbJarParsingDeploymentUnitProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_SESSION_BEAN_CREATE_COMPONENT_DESCRIPTIONS,new SessionBeanComponentDescriptionFactory());
       if (!lite) {
         logger.debug("Add support for MDB");
         processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_MDB_CREATE_COMPONENT_DESCRIPTIONS,new MessageDrivenComponentDescriptionFactory());
+        processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_EJB_ASYNCHRONOUS_MERGE,new AsynchronousMergingProcessor());
       }
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_ANNOTATION_EJB,new EjbAnnotationProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EJB_SESSION_BEAN_DD,new SessionBeanXmlDescriptorProcessor());
@@ -37,7 +38,6 @@
       processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_EJB_ROLES,new DeclareRolesMergingProcessor());
       processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_METHOD_PERMISSIONS,new MethodPermissionsMergingProcessor());
       processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_EJB_STATEFUL_TIMEOUT,new StatefulTimeoutMergingProcessor());
-      processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_EJB_ASYNCHRONOUS_MERGE,new AsynchronousMergingProcessor());
       processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_EJB_SESSION_SYNCHRONIZATION,new SessionSynchronizationMergingProcessor());
       processorTarget.addDeploymentProcessor(Phase.INSTALL,Phase.INSTALL_RESOLVE_EJB_INJECTIONS,new EjbInjectionResolutionProcessor());
       processorTarget.addDeploymentProcessor(Phase.INSTALL,Phase.INSTALL_DEPENDS_ON_ANNOTATION,new EjbDependsOnMergingProcessor());
@@ -60,4 +60,9 @@
   final ServiceTarget serviceTarget=context.getServiceTarget();
   final EJBUtilities utilities=new EJBUtilities();
   newControllers.add(serviceTarget.addService(EJBUtilities.SERVICE_NAME,utilities).addDependency(ConnectorServices.RA_REPOSISTORY_SERVICE,ResourceAdapterRepository.class,utilities.getResourceAdapterRepositoryInjector()).addDependency(ConnectorServices.IRONJACAMAR_MDR,MetadataRepository.class,utilities.getMdrInjector()).addDependency(SimpleSecurityManagerService.SERVICE_NAME,SimpleSecurityManager.class,utilities.getSecurityManagerInjector()).addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,utilities.getTransactionManagerInjector()).addDependency(TxnServices.JBOSS_TXN_SYNCHRONIZATION_REGISTRY,TransactionSynchronizationRegistry.class,utilities.getTransactionSynchronizationRegistryInjector()).addDependency(TxnServices.JBOSS_TXN_USER_TRANSACTION,UserTransaction.class,utilities.getUserTransactionInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+  if (!lite) {
+    final UnboundedQueueThreadPoolService threadPoolService=new UnboundedQueueThreadPoolService(Runtime.getRuntime().availableProcessors(),TimeSpec.DEFAULT_KEEPALIVE);
+    threadPoolService.getThreadFactoryInjector().inject(Executors.defaultThreadFactory());
+    newControllers.add(serviceTarget.addService(org.jboss.as.ejb3.component.session.SessionBeanComponent.ASYNC_EXECUTOR_SERVICE_NAME,threadPoolService).install());
+  }
 }
