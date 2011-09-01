@@ -1,0 +1,45 @@
+{
+  MessageProducer producer=session.createProducer(queue);
+  Message msgA=session.createTextMessage("A");
+  producer.send(msgA);
+  producer.send(session.createTextMessage("B"));
+  producer.send(session.createTextMessage("C"));
+  Set<Integer> priorities=new HashSet<Integer>();
+  ModelNode result=execute(getQueueOperation("list-messages"),true);
+  Assert.assertEquals(3,result.asInt());
+  for (  ModelNode node : result.asList()) {
+    priorities.add(node.get("JMSPriority").asInt());
+  }
+  int newPriority=-1;
+  for (int i=0; i < 10; i++) {
+    if (!priorities.contains(i)) {
+      newPriority=i;
+      break;
+    }
+  }
+  ModelNode op=getQueueOperation("change-message-priority");
+  op.get("message-id").set(msgA.getJMSMessageID());
+  op.get("new-priority").set(newPriority);
+  result=execute(op,true);
+  Assert.assertTrue(result.isDefined());
+  Assert.assertTrue(result.asBoolean());
+  result=execute(getQueueOperation("list-messages"),true);
+  boolean found=false;
+  for (  ModelNode node : result.asList()) {
+    if (msgA.getJMSMessageID().equals(node.get("JMSMessageID").asString())) {
+      Assert.assertEquals(newPriority,node.get("JMSPriority").asInt());
+      found=true;
+      break;
+    }
+  }
+  Assert.assertTrue(found);
+  op=getQueueOperation("change-messages-priority");
+  op.get("new-priority").set(newPriority);
+  result=execute(op,true);
+  Assert.assertTrue(result.isDefined());
+  Assert.assertTrue(result.asInt() > 1 && result.asInt() < 4);
+  result=execute(getQueueOperation("list-messages"),true);
+  for (  ModelNode node : result.asList()) {
+    Assert.assertEquals(newPriority,node.get("JMSPriority").asInt());
+  }
+}

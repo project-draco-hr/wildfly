@@ -1,0 +1,30 @@
+{
+  validator.validate(operation);
+  String jndiName=operation.require(CommonAttributes.JNDI_BINDING).asString();
+  final ModelNode entries=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel().get(CommonAttributes.ENTRIES.getName());
+  for (  ModelNode entry : entries.asList()) {
+    if (jndiName.equals(entry.asString())) {
+      throw new OperationFailedException(new ModelNode().set(String.format("JNDI name %s is already registered",jndiName)));
+    }
+  }
+  entries.add(jndiName);
+  if (context.getType() == OperationContext.Type.SERVER) {
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        ServiceController<?> hqService=context.getServiceRegistry(false).getService(MessagingServices.JBOSS_MESSAGING);
+        if (hqService != null) {
+          HornetQServer hqServer=HornetQServer.class.cast(hqService.getValue());
+          String resourceName=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
+          String jndiName=operation.require(CommonAttributes.JNDI_BINDING).asString();
+          addJndiNameToControl(jndiName,resourceName,hqServer,context);
+        }
+        if (!context.hasFailureDescription()) {
+          context.getResult();
+        }
+        context.completeStep();
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}

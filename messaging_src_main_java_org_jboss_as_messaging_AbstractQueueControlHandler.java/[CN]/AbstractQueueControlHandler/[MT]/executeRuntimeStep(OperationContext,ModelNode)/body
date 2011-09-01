@@ -1,0 +1,128 @@
+{
+  final String operationName=operation.require(ModelDescriptionConstants.OP).asString();
+  final String queueName=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
+  ServiceController<?> hqService=context.getServiceRegistry(false).getService(MessagingServices.JBOSS_MESSAGING);
+  HornetQServer hqServer=HornetQServer.class.cast(hqService.getValue());
+  DelegatingQueueControl<T> control=getQueueControl(hqServer,queueName);
+  try {
+    if (LIST_MESSAGES.equals(operationName)) {
+      singleOptionalFilterValidator.validate(operation);
+      String filter=operation.hasDefined(FILTER.getName()) ? operation.get(FILTER.getName()).asString() : null;
+      String json=control.listMessagesAsJSON(filter);
+      context.getResult().set(ModelNode.fromJSONString(json));
+    }
+ else     if (LIST_MESSAGES_AS_JSON.equals(operationName)) {
+      singleOptionalFilterValidator.validate(operation);
+      String filter=operation.hasDefined(FILTER.getName()) ? operation.get(FILTER.getName()).asString() : null;
+      context.getResult().set(control.listMessagesAsJSON(filter));
+    }
+ else     if (COUNT_MESSAGES.equals(operationName)) {
+      singleOptionalFilterValidator.validate(operation);
+      String filter=operation.hasDefined(FILTER.getName()) ? operation.get(FILTER.getName()).asString() : null;
+      context.getResult().set(control.countMessages(filter));
+    }
+ else     if (REMOVE_MESSAGE.equals(operationName)) {
+      singleMessageIdValidator.validate(operation);
+      ModelNode id=operation.require(MESSAGE_ID);
+      context.getResult().set(control.removeMessage(id));
+    }
+ else     if (REMOVE_MESSAGES.equals(operationName)) {
+      singleOptionalFilterValidator.validate(operation);
+      String filter=operation.hasDefined(FILTER.getName()) ? operation.get(FILTER.getName()).asString() : null;
+      context.getResult().set(control.removeMessages(filter));
+    }
+ else     if (EXPIRE_MESSAGES.equals(operationName)) {
+      singleOptionalFilterValidator.validate(operation);
+      String filter=operation.hasDefined(FILTER.getName()) ? operation.get(FILTER.getName()).asString() : null;
+      context.getResult().set(control.expireMessages(filter));
+    }
+ else     if (EXPIRE_MESSAGE.equals(operationName)) {
+      singleMessageIdValidator.validate(operation);
+      ModelNode id=operation.require(MESSAGE_ID);
+      context.getResult().set(control.expireMessage(id));
+    }
+ else     if (SEND_MESSAGE_TO_DEAD_LETTER_ADDRESS.equals(operationName)) {
+      singleMessageIdValidator.validate(operation);
+      ModelNode id=operation.require(MESSAGE_ID);
+      context.getResult().set(control.sendMessageToDeadLetterAddress(id));
+    }
+ else     if (SEND_MESSAGES_TO_DEAD_LETTER_ADDRESS.equals(operationName)) {
+      singleOptionalFilterValidator.validate(operation);
+      String filter=operation.hasDefined(FILTER.getName()) ? operation.get(FILTER.getName()).asString() : null;
+      context.getResult().set(control.sendMessagesToDeadLetterAddress(filter));
+    }
+ else     if (CHANGE_MESSAGE_PRIORITY.equals(operationName)) {
+      changeMessagePriorityValidator.validate(operation);
+      ModelNode id=operation.require(MESSAGE_ID);
+      int priority=operation.require(NEW_PRIORITY).asInt();
+      context.getResult().set(control.changeMessagePriority(id,priority));
+    }
+ else     if (CHANGE_MESSAGES_PRIORITY.equals(operationName)) {
+      changeMessagesPriorityValidator.validate(operation);
+      String filter=operation.hasDefined(FILTER.getName()) ? operation.get(FILTER.getName()).asString() : null;
+      int priority=operation.require(NEW_PRIORITY).asInt();
+      context.getResult().set(control.changeMessagesPriority(filter,priority));
+    }
+ else     if (MOVE_MESSAGE.equals(operationName)) {
+      moveMessageValidator.validate(operation);
+      ModelNode id=operation.require(MESSAGE_ID);
+      String otherQueue=operation.require(OTHER_QUEUE_NAME).asString();
+      if (operation.hasDefined(REJECT_DUPLICATES)) {
+        boolean reject=operation.get(REJECT_DUPLICATES).asBoolean();
+        context.getResult().set(control.moveMessage(id,otherQueue,reject));
+      }
+ else {
+        context.getResult().set(control.moveMessage(id,otherQueue));
+      }
+    }
+ else     if (MOVE_MESSAGES.equals(operationName)) {
+      moveMessagesValidator.validate(operation);
+      String filter=operation.hasDefined(FILTER.getName()) ? operation.get(FILTER.getName()).asString() : null;
+      String otherQueue=operation.require(OTHER_QUEUE_NAME).asString();
+      if (operation.hasDefined(REJECT_DUPLICATES)) {
+        boolean reject=operation.get(REJECT_DUPLICATES).asBoolean();
+        context.getResult().set(control.moveMessages(filter,otherQueue,reject));
+      }
+ else {
+        context.getResult().set(control.moveMessages(filter,otherQueue));
+      }
+    }
+ else     if (LIST_MESSAGE_COUNTER_AS_JSON.equals(operationName)) {
+      context.getResult().set(control.listMessageCounter());
+    }
+ else     if (LIST_MESSAGE_COUNTER_AS_HTML.equals(operationName)) {
+      context.getResult().set(control.listMessageCounterAsHTML());
+    }
+ else     if (LIST_MESSAGE_COUNTER_HISTORY_AS_JSON.equals(operationName)) {
+      context.getResult().set(control.listMessageCounterHistory());
+    }
+ else     if (LIST_MESSAGE_COUNTER_HISTORY_AS_HTML.equals(operationName)) {
+      context.getResult().set(control.listMessageCounterHistoryAsHTML());
+    }
+ else     if (RESET_MESSAGE_COUNTER.equals(operationName)) {
+      control.resetMessageCounter();
+      context.getResult();
+    }
+ else     if (PAUSE.equals(operationName)) {
+      control.pause();
+      context.getResult();
+    }
+ else     if (RESUME.equals(operationName)) {
+      control.resume();
+      context.getResult();
+    }
+ else     if (LIST_CONSUMERS_AS_JSON.equals(operationName)) {
+      context.getResult().set(control.listConsumersAsJSON());
+    }
+ else {
+      handleAdditonalOperation(operationName,operation,context,control.getDelegate());
+    }
+  }
+ catch (  RuntimeException e) {
+    throw e;
+  }
+catch (  Exception e) {
+    context.getFailureDescription().set(e.toString());
+  }
+  context.completeStep();
+}
