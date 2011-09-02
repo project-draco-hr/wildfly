@@ -1,0 +1,23 @@
+{
+  final HornetQServerResource resource=new HornetQServerResource();
+  context.addResource(PathAddress.EMPTY_ADDRESS,resource);
+  final ModelNode model=resource.getModel();
+  populateModel(operation,model);
+  if (context.getType() == OperationContext.Type.SERVER) {
+    context.addStep(new OperationStepHandler(){
+      public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        final List<ServiceController<?>> controllers=new ArrayList<ServiceController<?>>();
+        final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+        performRuntime(context,resource,verificationHandler,controllers);
+        context.addStep(verificationHandler,OperationContext.Stage.VERIFY);
+        if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
+          for (          ServiceController<?> controller : controllers) {
+            context.removeService(controller.getName());
+          }
+        }
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}
