@@ -1,0 +1,111 @@
+{
+  final String operationName=operation.require(OP).asString();
+  final HornetQServerControl serverControl=getServerControl(context,operation);
+  try {
+    if (READ_ATTRIBUTE_OPERATION.equals(operationName)) {
+      handleReadAttribute(context,operation,serverControl);
+    }
+ else     if (GET_CONNECTORS_AS_JSON.equals(operationName)) {
+      String json=serverControl.getConnectorsAsJSON();
+      context.getResult().set(json);
+    }
+ else     if (RESET_ALL_MESSAGE_COUNTERS.equals(operationName)) {
+      serverControl.resetAllMessageCounters();
+      context.getResult();
+    }
+ else     if (RESET_ALL_MESSAGE_COUNTER_HISTORIES.equals(operationName)) {
+      serverControl.resetAllMessageCounterHistories();
+      context.getResult();
+    }
+ else     if (LIST_PREPARED_TRANSACTIONS.equals(operationName)) {
+      String[] list=serverControl.listPreparedTransactions();
+      reportListOfString(context,list);
+    }
+ else     if (LIST_PREPARED_TRANSACTION_DETAILS_AS_JSON.equals(operationName)) {
+      String json=serverControl.listPreparedTransactionDetailsAsJSON();
+      context.getResult().set(json);
+    }
+ else     if (LIST_PREPARED_TRANSACTION_DETAILS_AS_HTML.equals(operationName)) {
+      String html=serverControl.listPreparedTransactionDetailsAsHTML();
+      context.getResult().set(html);
+    }
+ else     if (LIST_HEURISTIC_COMMITTED_TRANSACTIONS.equals(operationName)) {
+      String[] list=serverControl.listHeuristicCommittedTransactions();
+      reportListOfString(context,list);
+    }
+ else     if (LIST_HEURISTIC_ROLLED_BACK_TRANSACTIONS.equals(operationName)) {
+      String[] list=serverControl.listHeuristicRolledBackTransactions();
+      reportListOfString(context,list);
+    }
+ else     if (COMMIT_PREPARED_TRANSACTION.equals(operationName)) {
+      transactionValidator.validate(operation);
+      String txId=operation.require(TRANSACTION_AS_BASE_64).asString();
+      boolean committed=serverControl.commitPreparedTransaction(txId);
+      context.getResult().set(committed);
+    }
+ else     if (ROLLBACK_PREPARED_TRANSACTION.equals(operationName)) {
+      transactionValidator.validate(operation);
+      String txId=operation.require(TRANSACTION_AS_BASE_64).asString();
+      boolean committed=serverControl.rollbackPreparedTransaction(txId);
+      context.getResult().set(committed);
+    }
+ else     if (LIST_REMOTE_ADDRESSES.equals(operationName)) {
+      optionalIpAddressValidator.validate(operation);
+      ModelNode addr=operation.get(IP_ADDRESS);
+      String[] list=addr.isDefined() ? serverControl.listRemoteAddresses(addr.asString()) : serverControl.listRemoteAddresses();
+      reportListOfString(context,list);
+    }
+ else     if (CLOSE_CONNECTIONS_FOR_ADDRESS.equals(operationName)) {
+      ipAddressValidator.validate(operation);
+      boolean closed=serverControl.closeConnectionsForAddress(operation.require(IP_ADDRESS).asString());
+      context.getResult().set(closed);
+    }
+ else     if (LIST_CONNECTION_IDS.equals(operationName)) {
+      String[] list=serverControl.listConnectionIDs();
+      reportListOfString(context,list);
+    }
+ else     if (LIST_PRODUCERS_INFO_AS_JSON.equals(operationName)) {
+      String json=serverControl.listProducersInfoAsJSON();
+      context.getResult().set(json);
+    }
+ else     if (LIST_SESSIONS.equals(operationName)) {
+      connectionIdValidator.validate(operation);
+      String[] list=serverControl.listSessions(operation.require(CONNECTION_ID).asString());
+      reportListOfString(context,list);
+    }
+ else     if (GET_ROLES.equals(operationName)) {
+      addressValidator.validate(operation);
+      String json=serverControl.getRolesAsJSON(operation.require(ADDRESS_MATCH).asString());
+      ModelNode camelCase=ModelNode.fromJSONString(json);
+      ModelNode converted=CamelCaseUtil.convertSecurityRole(camelCase);
+      context.getResult().set(converted);
+    }
+ else     if (GET_ROLES_AS_JSON.equals(operationName)) {
+      addressValidator.validate(operation);
+      String json=serverControl.getRolesAsJSON(operation.require(ADDRESS_MATCH).asString());
+      ModelNode camelCase=ModelNode.fromJSONString(json);
+      ModelNode converted=CamelCaseUtil.convertSecurityRole(camelCase);
+      json=converted.toJSONString(true);
+      context.getResult().set(json);
+    }
+ else     if (GET_ADDRESS_SETTINGS_AS_JSON.equals(operationName)) {
+      addressValidator.validate(operation);
+      String json=serverControl.getAddressSettingsAsJSON(operation.require(ADDRESS_MATCH).asString());
+      context.getResult().set(json);
+    }
+ else     if (FORCE_FAILOVER.equals(operationName)) {
+      serverControl.forceFailover();
+      context.getResult();
+    }
+ else {
+      throw new IllegalStateException(String.format("Support for operation %s was not properly implemented",operationName));
+    }
+  }
+ catch (  RuntimeException e) {
+    throw e;
+  }
+catch (  Exception e) {
+    context.getFailureDescription().set(e.toString());
+  }
+  context.completeStep();
+}
