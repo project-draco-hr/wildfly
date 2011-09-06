@@ -1,14 +1,20 @@
 {
   boolean restartRequired=false;
-  if (context.getType() == OperationContext.Type.SERVER) {
+  boolean applyToRuntime=context.getType() == OperationContext.Type.SERVER;
+  ModelNode resolvedValue=null;
+  if (applyToRuntime) {
     validateResolvedValue(attributeName,newValue);
-    ModelNode resolvedValue=newValue.isDefined() ? newValue.resolve() : newValue;
+    resolvedValue=newValue.isDefined() ? newValue.resolve() : newValue;
     restartRequired=applyUpdateToRuntime(context,operation,attributeName,resolvedValue,currentValue);
     if (restartRequired) {
       context.reloadRequired();
     }
   }
-  if (context.completeStep() != OperationContext.ResultAction.KEEP && restartRequired) {
-    context.revertReloadRequired();
+  if (context.completeStep() != OperationContext.ResultAction.KEEP && applyToRuntime) {
+    ModelNode valueToRestore=currentValue.isDefined() ? currentValue.resolve() : currentValue;
+    revertUpdateToRuntime(context,operation,attributeName,valueToRestore,resolvedValue);
+    if (restartRequired) {
+      context.revertReloadRequired();
+    }
   }
 }
