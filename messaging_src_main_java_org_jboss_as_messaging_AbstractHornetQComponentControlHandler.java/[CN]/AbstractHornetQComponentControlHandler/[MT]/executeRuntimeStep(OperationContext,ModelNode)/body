@@ -1,10 +1,13 @@
 {
   final String operationName=operation.require(OP).asString();
+  HornetQComponentControl control=null;
+  boolean appliedToRuntime=false;
+  Object handback=null;
   if (READ_ATTRIBUTE_OPERATION.equals(operationName)) {
     readAttributeValidator.validate(operation);
     final String name=operation.require(NAME).asString();
     if (STARTED.equals(name)) {
-      HornetQComponentControl control=getHornetQComponentControl(context,operation,false);
+      control=getHornetQComponentControl(context,operation,false);
       context.getResult().set(control.isStarted());
     }
  else {
@@ -12,9 +15,10 @@
     }
   }
  else   if (START.equals(operationName)) {
-    HornetQComponentControl control=getHornetQComponentControl(context,operation,true);
+    control=getHornetQComponentControl(context,operation,true);
     try {
       control.start();
+      appliedToRuntime=true;
       context.getResult();
     }
  catch (    Exception e) {
@@ -22,9 +26,10 @@
     }
   }
  else   if (STOP.equals(operationName)) {
-    HornetQComponentControl control=getHornetQComponentControl(context,operation,true);
+    control=getHornetQComponentControl(context,operation,true);
     try {
       control.stop();
+      appliedToRuntime=true;
       context.getResult();
     }
  catch (    Exception e) {
@@ -32,7 +37,23 @@
     }
   }
  else {
-    throw new IllegalStateException(String.format("Unknown operation %s",operationName));
+    handback=handleOperation(operationName,context,operation);
+    appliedToRuntime=handback != null;
   }
-  context.completeStep();
+  if (context.completeStep() != OperationContext.ResultAction.KEEP && appliedToRuntime) {
+    try {
+      if (START.equals(operationName)) {
+        control.stop();
+      }
+ else       if (STOP.equals(operationName)) {
+        control.start();
+      }
+ else {
+        handleRevertOperation(operationName,context,operation,handback);
+      }
+    }
+ catch (    Exception e) {
+      log.errorf(e,String.format("%s caught exception attempting to revert operation %s at address %s",getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR))));
+    }
+  }
 }

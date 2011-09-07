@@ -4,6 +4,8 @@
   ServiceController<?> hqService=context.getServiceRegistry(false).getService(MessagingServices.JBOSS_MESSAGING);
   HornetQServer hqServer=HornetQServer.class.cast(hqService.getValue());
   DelegatingQueueControl<T> control=getQueueControl(hqServer,queueName);
+  boolean reversible=false;
+  Object handback=null;
   try {
     if (LIST_MESSAGES.equals(operationName)) {
       singleOptionalFilterValidator.validate(operation);
@@ -105,17 +107,20 @@
     }
  else     if (PAUSE.equals(operationName)) {
       control.pause();
+      reversible=true;
       context.getResult();
     }
  else     if (RESUME.equals(operationName)) {
       control.resume();
+      reversible=true;
       context.getResult();
     }
  else     if (LIST_CONSUMERS_AS_JSON.equals(operationName)) {
       context.getResult().set(control.listConsumersAsJSON());
     }
  else {
-      handleAdditonalOperation(operationName,operation,context,control.getDelegate());
+      handback=handleAdditonalOperation(operationName,operation,context,control.getDelegate());
+      reversible=handback == null;
     }
   }
  catch (  RuntimeException e) {
@@ -124,5 +129,20 @@
 catch (  Exception e) {
     context.getFailureDescription().set(e.toString());
   }
-  context.completeStep();
+  if (context.completeStep() != OperationContext.ResultAction.KEEP && reversible) {
+    try {
+      if (PAUSE.equals(operationName)) {
+        control.resume();
+      }
+ else       if (RESUME.equals(operationName)) {
+        control.pause();
+      }
+ else {
+        revertAdditonalOperation(operationName,operation,context,control.getDelegate(),handback);
+      }
+    }
+ catch (    Exception e) {
+      log.errorf(e,String.format("%s caught exception attempting to revert operation %s at address %s",getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR))));
+    }
+  }
 }
