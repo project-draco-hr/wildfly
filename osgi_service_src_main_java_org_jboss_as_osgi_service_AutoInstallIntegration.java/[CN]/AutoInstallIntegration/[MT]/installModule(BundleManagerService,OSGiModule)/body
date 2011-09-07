@@ -1,18 +1,22 @@
 {
   ModuleIdentifier identifier=moduleMetaData.getIdentifier();
-  File bundleFile=getRepositoryEntry(bundlesDir,identifier);
-  if (bundleFile != null) {
-    URL url=bundleFile.toURI().toURL();
-    BundleInfo info=BundleInfo.createBundleInfo(url);
-    Deployment dep=DeploymentFactory.createDeployment(info);
-    Integer startLevel=moduleMetaData.getStartLevel();
-    if (startLevel != null)     dep.setStartLevel(startLevel.intValue());
-    return bundleManager.installBundle(serviceTarget,dep);
+  Integer startLevel=moduleMetaData.getStartLevel();
+  File modulesFile=getRepositoryEntry(bundlesDir,identifier);
+  if (modulesFile != null) {
+    URL url=modulesFile.toURI().toURL();
+    return installBundleFromURL(bundleManager,url,startLevel);
   }
- else {
-    ModuleLoader moduleLoader=Module.getBootModuleLoader();
-    Module module=moduleLoader.loadModule(identifier);
-    OSGiMetaData metadata=getModuleMetadata(module);
-    return bundleManager.registerModule(serviceTarget,module,metadata);
+  modulesFile=getRepositoryEntry(modulesDir,identifier);
+  if (modulesFile != null) {
+    URL url=modulesFile.toURI().toURL();
+    VirtualFile virtualFile=AbstractVFS.toVirtualFile(url);
+    if (BundleInfo.isValidBundle(virtualFile)) {
+      log.warnf("Found OSGi bundle in modules hirachy: %s",modulesFile);
+      return installBundleFromURL(bundleManager,url,startLevel);
+    }
   }
+  ModuleLoader moduleLoader=Module.getBootModuleLoader();
+  Module module=moduleLoader.loadModule(identifier);
+  OSGiMetaData metadata=getModuleMetadata(module);
+  return bundleManager.registerModule(serviceTarget,module,metadata);
 }
