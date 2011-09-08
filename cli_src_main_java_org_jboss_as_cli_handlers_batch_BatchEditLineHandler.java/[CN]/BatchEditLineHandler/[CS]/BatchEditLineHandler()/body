@@ -1,75 +1,68 @@
 {
   super("batch-edit-line");
-  argCompleter=new CommandLineCompleter(){
+  ln=new ArgumentWithValue(this,0,"--line-number");
+  ln.addCantAppearAfter(helpArg);
+  ArgumentWithValue line=new ArgumentWithValue(this,new CommandLineCompleter(){
     @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
-      final BatchManager batchManager=ctx.getBatchManager();
-      if (!batchManager.isBatchActive()) {
+      final String lnStr=ln.getValue(ctx.getParsedCommandLine());
+      if (lnStr == null) {
         return -1;
       }
-      int nextCharIndex=0;
-      while (nextCharIndex < buffer.length()) {
-        if (!Character.isWhitespace(buffer.charAt(nextCharIndex))) {
-          break;
+      final String originalLine=ctx.getParsedCommandLine().getOriginalLine();
+      boolean skipWS;
+      int wordCount;
+      if (Character.isWhitespace(originalLine.charAt(0))) {
+        skipWS=true;
+        wordCount=0;
+      }
+ else {
+        skipWS=false;
+        wordCount=1;
+      }
+      int cmdStart=1;
+      while (cmdStart < originalLine.length()) {
+        if (skipWS) {
+          if (!Character.isWhitespace(originalLine.charAt(cmdStart))) {
+            skipWS=false;
+            ++wordCount;
+            if (wordCount == 3) {
+              break;
+            }
+          }
         }
-        ++nextCharIndex;
-      }
-      if (nextCharIndex == buffer.length()) {
-        candidates.add("--help");
-        return nextCharIndex;
-      }
-      int nextWsIndex=nextCharIndex + 1;
-      while (nextWsIndex < buffer.length()) {
-        if (Character.isWhitespace(buffer.charAt(nextWsIndex))) {
-          break;
+ else         if (Character.isWhitespace(originalLine.charAt(cmdStart))) {
+          skipWS=true;
         }
-        ++nextWsIndex;
+        ++cmdStart;
       }
-      if (nextWsIndex == buffer.length()) {
+      final String cmd;
+      if (wordCount == 2) {
+        cmd="";
+      }
+ else       if (wordCount != 3) {
         return -1;
       }
-      String lineNumberStr=buffer.substring(nextCharIndex,nextWsIndex);
-      if ("--help".startsWith(lineNumberStr)) {
-        candidates.add("--help");
-        return nextCharIndex;
-      }
-      final int lineNumber;
-      try {
-        lineNumber=Integer.parseInt(lineNumberStr);
-      }
- catch (      NumberFormatException e) {
-        return -1;
-      }
-      final Batch batch=batchManager.getActiveBatch();
-      int batchSize=batch.size();
-      if (lineNumber < 1 || lineNumber > batchSize) {
-        return -1;
-      }
-      nextCharIndex=nextWsIndex + 1;
-      while (nextCharIndex < buffer.length()) {
-        if (!Character.isWhitespace(buffer.charAt(nextCharIndex))) {
-          break;
-        }
-        ++nextCharIndex;
-      }
-      String cmd=buffer.substring(nextCharIndex);
-      if ("--help".startsWith(cmd)) {
-        candidates.add("--help");
+ else {
+        cmd=originalLine.substring(cmdStart);
       }
       int cmdResult=ctx.getDefaultCommandCompleter().complete(ctx,cmd,0,candidates);
-      final String batchedCmd=batch.getCommands().get(lineNumber - 1).getCommand();
-      if (cmd.isEmpty() || batchedCmd.startsWith(cmd)) {
-        if (cmdResult > -1) {
-          candidates.add(batchedCmd.substring(cmdResult).trim());
-        }
- else {
-          candidates.add(batchedCmd);
-        }
-      }
       if (cmdResult < 0) {
-        return candidates.isEmpty() ? -1 : nextCharIndex;
+        return cmdResult;
       }
-      return nextCharIndex + cmdResult;
+      int escapeCorrection=0;
+      int start=originalLine.length() - 1 - buffer.length();
+      while (start - escapeCorrection >= 0) {
+        final char ch=originalLine.charAt(start - escapeCorrection);
+        if (Character.isWhitespace(ch) || ch == '=') {
+          break;
+        }
+        ++escapeCorrection;
+      }
+      return buffer.length() + escapeCorrection - (cmd.length() - cmdResult);
     }
   }
+,Integer.MAX_VALUE,"--line"){
+  }
 ;
+  line.addRequiredPreceding(ln);
 }
