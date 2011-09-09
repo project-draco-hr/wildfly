@@ -1,0 +1,27 @@
+{
+  final Map<String,Object> vaultOptions=new HashMap<String,Object>();
+  String vaultClass=null;
+  if (operation.hasDefined(OP_ADDR)) {
+    ModelNode address=operation.get(OP_ADDR);
+    List<ModelNode> nodes=address.asList();
+    for (    ModelNode node : nodes) {
+      if (node.has(Element.VAULT.getLocalName())) {
+        if (operation.hasDefined(Attribute.CODE.getLocalName())) {
+          vaultClass=operation.get(Attribute.CODE.getLocalName()).asString();
+        }
+        List<ModelNode> vaultOptionList=operation.get(Element.VAULT_OPTION.getLocalName()).asList();
+        if (vaultOptionList != null) {
+          for (          ModelNode vaultOptionNode : vaultOptionList) {
+            Property vaultProp=vaultOptionNode.asProperty();
+            vaultOptions.put(vaultProp.getName(),vaultProp.getValue().asString());
+          }
+        }
+      }
+    }
+  }
+  final String vaultFQN=vaultClass;
+  SecurityVaultService vaultService=new SecurityVaultService(vaultFQN,vaultOptions);
+  final ServiceTarget target=context.getServiceTarget();
+  ServiceBuilder<SecurityVault> builder=target.addService(SecurityVaultService.SERVICE_NAME,vaultService);
+  newControllers.add(builder.addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+}
