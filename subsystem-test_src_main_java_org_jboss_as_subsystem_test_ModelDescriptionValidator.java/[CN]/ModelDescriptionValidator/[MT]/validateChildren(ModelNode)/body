@@ -1,0 +1,36 @@
+{
+  for (  String type : children.keys()) {
+    ModelNode typeNode=children.get(type);
+    for (    String key : typeNode.keys()) {
+      ArbitraryDescriptorValidator validator=VALID_CHILD_TYPE_KEYS.get(key);
+      if (validator == null) {
+        errors.add(new ValidationFailure("Invalid key '" + key + "' found for child type '"+ type+ "'",address));
+      }
+ else {
+        if (typeNode.hasDefined(key)) {
+          String error=validator.validate(typeNode,key);
+          if (error != null) {
+            errors.add(new ValidationFailure(error,address));
+          }
+        }
+ else {
+          errors.add(new ValidationFailure("Empty key '" + key + "' found for child type '"+ type+ "'",address));
+        }
+      }
+    }
+    if (!typeNode.hasDefined(DESCRIPTION)) {
+      errors.add(new ValidationFailure("Missing description for child type '" + type + "'",address));
+    }
+    ModelNode childType=typeNode.get(MODEL_DESCRIPTION);
+    if (!childType.isDefined()) {
+      errors.add(new ValidationFailure("No model description for child '" + type + "'",address));
+      continue;
+    }
+    for (    String child : childType.keys()) {
+      ModelNode childAddress=address.clone();
+      childAddress.add(type,child);
+      ModelDescriptionValidator childValidator=new ModelDescriptionValidator(errors,childAddress,childType.get(child),validationConfiguration);
+      childValidator.validateResource();
+    }
+  }
+}
