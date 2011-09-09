@@ -6,4 +6,27 @@
   nodeRegistration.registerOperationHandler(DESCRIBE,JPADescribeHandler.INSTANCE,JPADescribeHandler.INSTANCE,false,OperationEntry.EntryType.PRIVATE);
   nodeRegistration.registerReadWriteAttribute(CommonAttributes.DEFAULT_DATASOURCE,null,JPADefaultDatasourceWriteHandler.INSTANCE,Storage.CONFIGURATION);
   registration.registerXMLElementWriter(parser);
+  try {
+    PersistenceProviderAdaptor provider=PersistenceProviderAdaptorLoader.loadPersistenceAdapterModule(null);
+    final ManagementAdaptor managementAdaptor=(ManagementAdaptor)provider.getManagementAdaptor();
+    if (managementAdaptor != null) {
+      DescriptionProvider JPA_SUBSYSTEM=new DescriptionProvider(){
+        @Override public ModelNode getModelDescription(        Locale locale){
+          ModelNode subsystem=new ModelNode();
+          subsystem.get(org.jboss.as.controller.descriptions.ModelDescriptionConstants.DESCRIPTION).set("Runtime information about JPA use in the deployment.");
+          subsystem.get(ATTRIBUTES).setEmptyObject();
+          subsystem.get("operations");
+          subsystem.get(CHILDREN,managementAdaptor.getIdentificationLabel(),org.jboss.as.controller.descriptions.ModelDescriptionConstants.DESCRIPTION).set("Runtime information about " + managementAdaptor.getIdentificationLabel() + " use in the deployment.");
+          subsystem.get(CHILDREN,managementAdaptor.getIdentificationLabel(),MIN_OCCURS).set(0);
+          return subsystem;
+        }
+      }
+;
+      final ManagementResourceRegistration jpaSubsystemDeployments=registration.registerDeploymentModel(JPA_SUBSYSTEM);
+      managementAdaptor.register(jpaSubsystemDeployments);
+    }
+  }
+ catch (  ModuleLoadException e) {
+    JPA_LOGGER.errorPreloadingDefaultProviderAdaptor(e);
+  }
 }

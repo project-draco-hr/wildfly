@@ -1,0 +1,25 @@
+{
+  final ModuleLoader moduleLoader=Module.getBootModuleLoader();
+  if (adapterModule == null) {
+    adapterModule=Configuration.ADAPTER_MODULE_DEFAULT;
+  }
+  PersistenceProviderAdaptor persistenceProviderAdaptor=adaptorModules.get(adapterModule);
+  if (persistenceProviderAdaptor == null) {
+    Module module=moduleLoader.loadModule(ModuleIdentifier.fromString(adapterModule));
+    final ServiceLoader<PersistenceProviderAdaptor> serviceLoader=module.loadService(PersistenceProviderAdaptor.class);
+    if (serviceLoader != null) {
+      for (      PersistenceProviderAdaptor adaptor : serviceLoader) {
+        if (persistenceProviderAdaptor != null) {
+          throw MESSAGES.multipleAdapters(adapterModule);
+        }
+        persistenceProviderAdaptor=adaptor;
+        JPA_LOGGER.debugf("loaded persistence provider adapter %s",adapterModule);
+      }
+      if (persistenceProviderAdaptor != null) {
+        persistenceProviderAdaptor.injectJtaManager(JtaManagerImpl.getInstance());
+        adaptorModules.put(adapterModule,persistenceProviderAdaptor);
+      }
+    }
+  }
+  return persistenceProviderAdaptor;
+}
