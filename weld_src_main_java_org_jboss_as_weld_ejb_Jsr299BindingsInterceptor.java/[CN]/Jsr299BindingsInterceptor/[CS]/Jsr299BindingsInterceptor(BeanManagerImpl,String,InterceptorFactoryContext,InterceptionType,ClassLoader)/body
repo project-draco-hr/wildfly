@@ -1,0 +1,31 @@
+{
+  final ClassLoader tccl=SecurityActions.getContextClassLoader();
+  try {
+    SecurityActions.setContextClassLoader(classLoader);
+    this.beanManager=beanManager;
+    this.ejbName=ejbName;
+    this.interceptionType=interceptionType;
+    EjbDescriptor<Object> descriptor=beanManager.getEjbDescriptor(this.ejbName);
+    SessionBean<Object> bean=beanManager.getBean(descriptor);
+    InterceptorInstances instances=(InterceptorInstances)context.getContextData().get(InterceptorInstances.class);
+    if (instances == null) {
+      creationalContext=beanManager.createCreationalContext(bean);
+      interceptorInstances=new HashMap<String,SerializableContextualInstance<Interceptor<Object>,Object>>();
+      InterceptorBindings interceptorBindings=getInterceptorBindings(this.ejbName);
+      if (interceptorBindings != null) {
+        for (        Interceptor<?> interceptor : interceptorBindings.getAllInterceptors()) {
+          addInterceptorInstance((Interceptor<Object>)interceptor,beanManager,interceptorInstances);
+        }
+      }
+      instances=new InterceptorInstances(creationalContext,interceptorInstances);
+      context.getContextData().put(InterceptorInstances.class,instances);
+    }
+ else {
+      creationalContext=instances.creationalContext;
+      interceptorInstances=instances.interceptorInstances;
+    }
+  }
+  finally {
+    SecurityActions.setContextClassLoader(tccl);
+  }
+}
