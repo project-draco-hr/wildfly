@@ -1,7 +1,18 @@
 {
   final SubsystemRegistration subsystem=context.registerSubsystem(SUBSYSTEM_NAME);
-  final ManagementResourceRegistration registration=subsystem.registerSubsystemModel(EeSubsystemProviders.SUBSYSTEM);
-  registration.registerOperationHandler(ADD,EeSubsystemAdd.INSTANCE,EeSubsystemProviders.SUBSYSTEM_ADD,false);
+  final ManagementResourceRegistration registration=subsystem.registerSubsystemModel(new DescriptionProvider(){
+    public ModelNode getModelDescription(    final Locale locale){
+      return EeSubsystemDescriptions.getSubsystemDescription(locale);
+    }
+  }
+);
+  final DefaultEarSubDeploymentsIsolationProcessor isolationProcessor=new DefaultEarSubDeploymentsIsolationProcessor();
+  final GlobalModuleDependencyProcessor moduleDependencyProcessor=new GlobalModuleDependencyProcessor();
+  final EeSubsystemAdd subsystemAdd=new EeSubsystemAdd(isolationProcessor,moduleDependencyProcessor);
+  registration.registerOperationHandler(ADD,subsystemAdd,subsystemAdd,false);
+  registration.registerOperationHandler(REMOVE,EeSubsystemRemove.INSTANCE,EeSubsystemRemove.INSTANCE,false,OperationEntry.EntryType.PUBLIC,EnumSet.of(OperationEntry.Flag.RESTART_ALL_SERVICES));
   registration.registerOperationHandler(DESCRIBE,EESubsystemDescribeHandler.INSTANCE,EESubsystemDescribeHandler.INSTANCE,false,OperationEntry.EntryType.PRIVATE);
+  EeWriteAttributeHandler writeHandler=new EeWriteAttributeHandler(isolationProcessor,moduleDependencyProcessor);
+  writeHandler.registerAttributes(registration);
   subsystem.registerXMLElementWriter(parser);
 }

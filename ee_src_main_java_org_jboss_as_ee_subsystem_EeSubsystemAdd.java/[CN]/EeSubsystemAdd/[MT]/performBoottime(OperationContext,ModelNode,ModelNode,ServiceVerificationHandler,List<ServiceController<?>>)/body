@@ -1,10 +1,12 @@
 {
   final EEJndiViewExtension extension=new EEJndiViewExtension();
   context.getServiceTarget().addService(EEJndiViewExtension.SERVICE_NAME,extension).addDependency(JndiViewExtensionRegistry.SERVICE_NAME,JndiViewExtensionRegistry.class,extension.getRegistryInjector()).addListener(verificationHandler).install();
+  final ModelNode globalModules=GlobalModulesDefinition.INSTANCE.validateResolvedOperation(model);
+  final boolean earSubDeploymentsIsolated=CommonAttributes.EAR_SUBDEPLOYMENTS_ISOLATED.validateResolvedOperation(model).asBoolean();
   context.addStep(new AbstractDeploymentChainStep(){
     protected void execute(    DeploymentProcessorTarget processorTarget){
-      final ModelNode globalModules=operation.get(CommonAttributes.GLOBAL_MODULES);
-      final Boolean earSubDeploymentsIsolated=operation.hasDefined(Element.EAR_SUBDEPLOYMENTS_ISOLATED.getLocalName()) ? operation.get(Element.EAR_SUBDEPLOYMENTS_ISOLATED.getLocalName()).asBoolean() : Boolean.FALSE;
+      moduleDependencyProcessor.setGlobalModules(globalModules);
+      isolationProcessor.setEarSubDeploymentsIsolated(earSubDeploymentsIsolated);
       logger.info("Activating EE subsystem");
       processorTarget.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_EAR_DEPLOYMENT_INIT,new EarInitializationProcessor());
       processorTarget.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_EAR_APP_XML_PARSE,new EarMetaDataParsingProcessor());
@@ -19,10 +21,10 @@
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_INTERCEPTORS_ANNOTATION,new InterceptorsAnnotationParsingProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_LIEFCYCLE_ANNOTATION,new LifecycleAnnotationParsingProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_AROUNDINVOKE_ANNOTATION,new AroundInvokeAnnotationParsingProcessor());
-      processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EAR_SUBDEPLOYMENTS_ISOLATION_DEFAULT,new DefaultEarSubDeploymentsIsolationProcessor(earSubDeploymentsIsolated));
+      processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EAR_SUBDEPLOYMENTS_ISOLATION_DEFAULT,isolationProcessor);
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_DATA_SOURCE_DEFINITION_ANNOTATION,new DataSourceDefinitionAnnotationParser());
       processorTarget.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_MANAGED_BEAN,new JavaEEDependencyProcessor());
-      processorTarget.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_GLOBAL_MODULES,new GlobalModuleDependencyProcessor(globalModules));
+      processorTarget.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_GLOBAL_MODULES,moduleDependencyProcessor);
       processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_VALIDATOR_FACTORY,new BeanValidationFactoryDeployer());
       processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_EAR_DEPENDENCY,new EarDependencyProcessor());
       processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_INITIALIZE_IN_ORDER,new InitalizeInOrderProcessor());
