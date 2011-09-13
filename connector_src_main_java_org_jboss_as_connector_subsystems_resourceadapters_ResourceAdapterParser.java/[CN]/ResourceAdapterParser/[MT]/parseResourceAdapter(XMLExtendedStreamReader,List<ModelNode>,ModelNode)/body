@@ -1,0 +1,93 @@
+{
+  final ModelNode raAddress=parentAddress.clone();
+  final ModelNode operation=new ModelNode();
+  operation.get(OP).set(ADD);
+  String archiveName=null;
+  while (reader.hasNext()) {
+switch (reader.nextTag()) {
+case END_ELEMENT:
+{
+        if (ResourceAdapters.Tag.forName(reader.getLocalName()) == ResourceAdapters.Tag.RESOURCE_ADAPTER) {
+          if (archiveName != null) {
+            raAddress.add(RESOURCEADAPTER_NAME,archiveName);
+            raAddress.protect();
+            operation.get(OP_ADDR).set(raAddress);
+            list.add(operation);
+            return;
+          }
+ else {
+            throw new ParserException(bundle.requiredElementMissing(ARCHIVE.getName(),RESOURCEADAPTER_NAME));
+          }
+        }
+ else {
+          if (ResourceAdapter.Tag.forName(reader.getLocalName()) == ResourceAdapter.Tag.UNKNOWN) {
+            throw new ParserException(bundle.unexpectedEndTag(reader.getLocalName()));
+          }
+        }
+        break;
+      }
+case START_ELEMENT:
+{
+switch (ResourceAdapter.Tag.forName(reader.getLocalName())) {
+case ADMIN_OBJECTS:
+case CONNECTION_DEFINITIONS:
+case BEAN_VALIDATION_GROUPS:
+{
+          break;
+        }
+case ADMIN_OBJECT:
+{
+        parseAdminObjects(reader,operation);
+        break;
+      }
+case CONNECTION_DEFINITION:
+{
+      parseConnectionDefinitions(reader,operation);
+      break;
+    }
+case BEAN_VALIDATION_GROUP:
+{
+    final Location location=reader.getLocation();
+    String value=rawElementText(reader);
+    BEANVALIDATIONGROUPS.parseAndSetParameter(value,operation,location);
+    break;
+  }
+case BOOTSTRAP_CONTEXT:
+{
+  final Location location=reader.getLocation();
+  String value=rawElementText(reader);
+  BOOTSTRAPCONTEXT.parseAndSetParameter(value,operation,location);
+  break;
+}
+case CONFIG_PROPERTY:
+{
+final Location location=reader.getLocation();
+String name=rawAttributeText(reader,"name");
+String value=rawElementText(reader);
+ModelNode node=CONFIG_PROPERTIES.parse(value,location);
+operation.get(CONFIG_PROPERTIES.getName(),name).set(node);
+break;
+}
+case TRANSACTION_SUPPORT:
+{
+final Location location=reader.getLocation();
+String value=rawElementText(reader);
+TRANSACTIONSUPPORT.parseAndSetParameter(value,operation,location);
+break;
+}
+case ARCHIVE:
+{
+final Location location=reader.getLocation();
+archiveName=rawElementText(reader);
+ARCHIVE.parseAndSetParameter(archiveName,operation,location);
+break;
+}
+default :
+throw new ParserException(bundle.unexpectedElement(reader.getLocalName()));
+}
+break;
+}
+}
+}
+throw new ParserException(bundle.unexpectedEndOfDocument());
+}
