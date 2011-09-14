@@ -153,28 +153,23 @@
         fluentHash.rehashRpcTimeout(rehashing.get(ModelKeys.TIMEOUT).asLong());
       }
     }
-    if (cache.hasDefined(ModelKeys.STORE)) {
-      ModelNode store=cache.get(ModelKeys.STORE);
+    String storeKey=this.findStoreKey(cache);
+    if (storeKey != null) {
+      ModelNode store=cache.get(storeKey);
       FluentConfiguration.LoadersConfig fluentStores=fluent.loaders();
       fluentStores.shared(store.hasDefined(ModelKeys.SHARED) ? store.get(ModelKeys.SHARED).asBoolean() : false);
       fluentStores.preload(store.hasDefined(ModelKeys.PRELOAD) ? store.get(ModelKeys.PRELOAD).asBoolean() : false);
       fluentStores.passivation(store.hasDefined(ModelKeys.PASSIVATION) ? store.get(ModelKeys.PASSIVATION).asBoolean() : true);
-      CacheStoreConfig storeConfig=buildCacheStore(name,builder,store);
+      CacheStoreConfig storeConfig=buildCacheStore(name,builder,store,storeKey);
       storeConfig.singletonStore().enabled(store.hasDefined(ModelKeys.SINGLETON) ? store.get(ModelKeys.SINGLETON).asBoolean() : false);
       storeConfig.fetchPersistentState(store.hasDefined(ModelKeys.FETCH_STATE) ? store.get(ModelKeys.FETCH_STATE).asBoolean() : true);
       storeConfig.purgeOnStartup(store.hasDefined(ModelKeys.PURGE) ? store.get(ModelKeys.PURGE).asBoolean() : true);
-      if (store.hasDefined(ModelKeys.PROPERTY) && (storeConfig instanceof AbstractCacheStoreConfig)) {
-        Properties properties=new Properties();
-        for (        Property property : store.get(ModelKeys.PROPERTY).asPropertyList()) {
-          properties.setProperty(property.getName(),property.getValue().asString());
-        }
-        ((AbstractCacheStoreConfig)storeConfig).setProperties(properties);
-      }
       fluentStores.addCacheLoader(storeConfig);
     }
     configurations.put(cacheName,configuration);
     StartMode startMode=cache.hasDefined(ModelKeys.START) ? StartMode.valueOf(cache.get(ModelKeys.START).asString()) : StartMode.LAZY;
-    ServiceBuilder<Cache<Object,Object>> cacheBuilder=new CacheService<Object,Object>(cacheName).build(target,serviceName).addDependency(bindInfo.getBinderServiceName()).setInitialMode(startMode.getMode());
+    CacheService<Object,Object> cacheService=new CacheService<Object,Object>(cacheName);
+    ServiceBuilder<Cache<Object,Object>> cacheBuilder=cacheService.build(target,serviceName).addDependency(bindInfo.getBinderServiceName()).setInitialMode(startMode.getMode());
     if (cacheName.equals(defaultCache)) {
       cacheBuilder.addAliases(CacheService.getServiceName(name,null));
     }
