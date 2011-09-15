@@ -1,0 +1,18 @@
+{
+  final String deployment=model.get(Constants.DEPLOYMENT).asString();
+  final File file=new File(model.get(Constants.FILE).asString());
+  final List<String> parameters=new ArrayList<String>();
+  for (  ModelNode param : model.get(Constants.PARAMETERS).asList()) {
+    parameters.add(param.asString());
+  }
+  context.addStep(new AbstractDeploymentChainStep(){
+    protected void execute(    DeploymentProcessorTarget processorTarget){
+      processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_APPLICATION_CLIENT_MANIFEST,new ApplicationClientManifestProcessor());
+      processorTarget.addDeploymentProcessor(Phase.POST_MODULE,Phase.POST_MODULE_APPLICATION_CLIENT_ACTIVE,new ActiveApplicationClientProcessor(deployment));
+      processorTarget.addDeploymentProcessor(Phase.INSTALL,Phase.INSTALL_APPLICATION_CLIENT,new ApplicationClientStartProcessor(parameters.toArray(EMPTY_STRING)));
+    }
+  }
+,OperationContext.Stage.RUNTIME);
+  final ApplicationClientDeploymentService service=new ApplicationClientDeploymentService(file);
+  newControllers.add(context.getServiceTarget().addService(ApplicationClientDeploymentService.SERVICE_NAME,service).addDependency(Services.JBOSS_SERVER_CONTROLLER,ModelController.class,service.getControllerValue()).install());
+}

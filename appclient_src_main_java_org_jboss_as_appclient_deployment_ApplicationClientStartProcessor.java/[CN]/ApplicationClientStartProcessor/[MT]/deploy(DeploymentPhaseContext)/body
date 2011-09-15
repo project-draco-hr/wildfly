@@ -1,0 +1,20 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final DeploymentUnit topLevel=deploymentUnit.getParent() == null ? deploymentUnit : deploymentUnit.getParent();
+  final DeploymentReflectionIndex deploymentReflectionIndex=deploymentUnit.getAttachment(Attachments.REFLECTION_INDEX);
+  Boolean activate=deploymentUnit.getAttachment(AppClientAttachments.START_APP_CLIENT);
+  if (activate == null || !activate) {
+    return;
+  }
+  final Class<?> mainClass=deploymentUnit.getAttachment(AppClientAttachments.MAIN_CLASS);
+  if (mainClass == null) {
+    throw new RuntimeException("Could not start app client " + deploymentUnit.getName() + " as no main class was found");
+  }
+  ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(mainClass);
+  Method method=index.getMethod(void.class,"main",String[].class);
+  if (method == null) {
+    throw new RuntimeException("Could not start app client " + deploymentUnit.getName() + " as no main main was found on main class "+ mainClass);
+  }
+  final ApplicationClientStartService startService=new ApplicationClientStartService(method,topLevel.getServiceName(),parameters);
+  phaseContext.getServiceTarget().addService(deploymentUnit.getServiceName().append(ApplicationClientStartService.SERVICE_NAME),startService).install();
+}

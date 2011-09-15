@@ -1,0 +1,46 @@
+{
+  SecurityActions.setSystemProperty("log4j.defaultInitOverride","true");
+  new BridgeRepositorySelector().start();
+  StdioContext.install();
+  try {
+    Module.registerURLStreamHandlerFactoryModule(Module.getBootModuleLoader().loadModule(ModuleIdentifier.create("org.jboss.vfs")));
+    final List<String> clientArgs=new ArrayList<String>();
+    ServerEnvironment serverEnvironment=determineEnvironment(args,new Properties(SecurityActions.getSystemProperties()),SecurityActions.getSystemEnvironment(),ServerEnvironment.LaunchType.APPCLIENT,clientArgs);
+    if (serverEnvironment == null) {
+      abort(null);
+    }
+ else     if (clientArgs.isEmpty()) {
+      System.err.println("You must specify the application client to execute");
+      usage();
+      abort(null);
+    }
+ else {
+      final String file=clientArgs.get(0);
+      final List<String> params=clientArgs.subList(1,clientArgs.size());
+      final String deploymentName;
+      final String earPath;
+      int pos=file.lastIndexOf("#");
+      if (pos == -1) {
+        earPath=file;
+        deploymentName=null;
+      }
+ else {
+        deploymentName=file.substring(pos + 1);
+        earPath=file.substring(0,pos);
+      }
+      File realFile=new File(earPath);
+      if (!realFile.exists()) {
+        throw new RuntimeException("Could not locate app client deployment " + realFile.getAbsolutePath());
+      }
+      final Bootstrap bootstrap=Bootstrap.Factory.newInstance();
+      final Bootstrap.Configuration configuration=new Bootstrap.Configuration();
+      configuration.setServerEnvironment(serverEnvironment);
+      configuration.setModuleLoader(Module.getBootModuleLoader());
+      configuration.setConfigurationPersister(new ApplicationClientConfigurationPersister(earPath,deploymentName,params));
+      bootstrap.bootstrap(configuration,Collections.<ServiceActivator>emptyList()).get();
+    }
+  }
+ catch (  Throwable t) {
+    abort(t);
+  }
+}
