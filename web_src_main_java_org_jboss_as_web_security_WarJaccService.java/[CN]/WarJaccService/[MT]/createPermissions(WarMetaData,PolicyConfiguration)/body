@@ -1,0 +1,157 @@
+{
+  JBossWebMetaData webMetaData=metaData.getMergedJBossWebMetaData();
+  HashMap<String,PatternInfo> patternMap=qualifyURLPatterns(webMetaData);
+  log.debug("Qualified url patterns: " + patternMap);
+  List<SecurityConstraintMetaData> constraints=webMetaData.getSecurityConstraints();
+  if (constraints != null) {
+    for (    SecurityConstraintMetaData sc : constraints) {
+      WebResourceCollectionsMetaData resources=sc.getResourceCollections();
+      TransportGuaranteeType transport=sc.getTransportGuarantee();
+      if (sc.isExcluded() || sc.isUnchecked()) {
+        if (resources != null)         for (        WebResourceCollectionMetaData wrc : resources) {
+          List<String> httpMethods=wrc.getHttpMethods();
+          List<String> urlPatterns=wrc.getUrlPatterns();
+          int length=urlPatterns != null ? urlPatterns.size() : 0;
+          for (int n=0; n < length; n++) {
+            String url=urlPatterns.get(n);
+            PatternInfo info=(PatternInfo)patternMap.get(url);
+            if (sc.isExcluded()) {
+              info.addExcludedMethods(httpMethods);
+            }
+          }
+        }
+      }
+ else {
+        if (resources != null)         for (        WebResourceCollectionMetaData wrc : resources) {
+          List<String> httpMethods=wrc.getHttpMethods();
+          List<String> urlPatterns=wrc.getUrlPatterns();
+          int length=urlPatterns != null ? urlPatterns.size() : 0;
+          for (int n=0; n < length; n++) {
+            String url=urlPatterns.get(n);
+            PatternInfo info=(PatternInfo)patternMap.get(url);
+            HashSet<String> mappedRoles=new HashSet<String>();
+            if (sc.getRoleNames() != null)             for (            String role : sc.getRoleNames()) {
+              if (role.equals("*")) {
+                if (webMetaData.isJaccAllStoreRole())                 mappedRoles.add("*");
+ else {
+                  for (                  SecurityRoleMetaData srmd : webMetaData.getSecurityRoles()) {
+                    role=srmd.getRoleName();
+                    mappedRoles.add(role);
+                  }
+                }
+              }
+ else {
+                mappedRoles.add(role);
+              }
+            }
+            info.addRoles(mappedRoles,httpMethods);
+            info.addTransport(transport.name(),httpMethods);
+            if (sc.getAuthConstraint() == null)             info.isMissingAuthConstraint=true;
+          }
+        }
+      }
+    }
+  }
+  for (  PatternInfo info : patternMap.values()) {
+    String qurl=info.getQualifiedPattern();
+    if (info.isOverriden == true) {
+      log.debug("Dropping overriden pattern: " + info);
+      continue;
+    }
+    String[] httpMethods=info.getExcludedMethods();
+    if (httpMethods != null) {
+      WebResourcePermission wrp=new WebResourcePermission(qurl,httpMethods);
+      WebUserDataPermission wudp=new WebUserDataPermission(qurl,httpMethods,null);
+      pc.addToExcludedPolicy(wrp);
+      pc.addToExcludedPolicy(wudp);
+      String excludedString="!" + getCommaSeparatedString(httpMethods);
+      WebResourcePermission wrp1=new WebResourcePermission(info.pattern,excludedString);
+      WebUserDataPermission wudp1=new WebUserDataPermission(info.pattern,excludedString);
+      pc.addToUncheckedPolicy(wrp1);
+      pc.addToUncheckedPolicy(wudp1);
+    }
+    Iterator<Map.Entry<String,Set<String>>> roles=info.getRoleMethods();
+    while (roles.hasNext()) {
+      Map.Entry<String,Set<String>> roleMethods=roles.next();
+      String role=(String)roleMethods.getKey();
+      WebResourcePermission wrp;
+      if ("*".equals(role)) {
+        wrp=new WebResourcePermission(qurl,(String)null);
+      }
+ else {
+        Set<String> methods=roleMethods.getValue();
+        httpMethods=new String[methods.size()];
+        methods.toArray(httpMethods);
+        wrp=new WebResourcePermission(qurl,httpMethods);
+      }
+      pc.addToRole(role,wrp);
+      if (httpMethods != null) {
+        WebResourcePermission wrpUnchecked=new WebResourcePermission(info.pattern,"!" + getCommaSeparatedString(httpMethods));
+        pc.addToUncheckedPolicy(wrpUnchecked);
+      }
+    }
+    String[] missingHttpMethods=info.getMissingMethods();
+    if (missingHttpMethods.length > 0) {
+      WebResourcePermission wrp=new WebResourcePermission(qurl,missingHttpMethods);
+      pc.addToUncheckedPolicy(wrp);
+    }
+ else     pc.addToUncheckedPolicy(new WebResourcePermission(qurl,(String)null));
+    if (info.isMissingAuthConstraint) {
+      pc.addToUncheckedPolicy(new WebResourcePermission(qurl,(String)null));
+    }
+    Iterator<Map.Entry<String,Set<String>>> transportContraints=info.getTransportMethods();
+    while (transportContraints.hasNext()) {
+      Map.Entry<String,Set<String>> transportMethods=transportContraints.next();
+      String transport=transportMethods.getKey();
+      Set<String> methods=transportMethods.getValue();
+      httpMethods=new String[methods.size()];
+      methods.toArray(httpMethods);
+      WebUserDataPermission wudp=new WebUserDataPermission(qurl,httpMethods,transport);
+      pc.addToUncheckedPolicy(wudp);
+      if ("NONE".equals(transport)) {
+        WebUserDataPermission wudp1=new WebUserDataPermission(info.pattern,null);
+        pc.addToUncheckedPolicy(wudp1);
+      }
+ else {
+        if (httpMethods != null) {
+          WebUserDataPermission wudpNonNull=new WebUserDataPermission(info.pattern,"!" + getCommaSeparatedString(httpMethods));
+          pc.addToUncheckedPolicy(wudpNonNull);
+        }
+      }
+    }
+  }
+  JBossServletsMetaData servlets=webMetaData.getServlets();
+  for (  JBossServletMetaData servlet : servlets) {
+    String servletName=servlet.getServletName();
+    SecurityRoleRefsMetaData roleRefs=servlet.getSecurityRoleRefs();
+    Set<String> unreferencedRoles=webMetaData.getSecurityRoleNames();
+    if (roleRefs != null)     for (    SecurityRoleRefMetaData roleRef : roleRefs) {
+      String roleName=roleRef.getRoleLink();
+      WebRoleRefPermission wrrp=new WebRoleRefPermission(servletName,roleRef.getName());
+      pc.addToRole(roleName,wrrp);
+      wrrp=new WebRoleRefPermission(servletName,roleName);
+      pc.addToRole(roleRef.getName(),wrrp);
+      unreferencedRoles.remove(roleName);
+    }
+    if (unreferencedRoles != null)     for (    String unrefRole : unreferencedRoles) {
+      WebRoleRefPermission unrefP=new WebRoleRefPermission(servletName,unrefRole);
+      pc.addToRole(unrefRole,unrefP);
+    }
+  }
+  Set<String> unreferencedRoles=webMetaData.getSecurityRoleNames();
+  if (unreferencedRoles != null)   for (  String unreferencedRole : unreferencedRoles) {
+    WebRoleRefPermission wrrep=new WebRoleRefPermission("",unreferencedRole);
+    pc.addToRole(unreferencedRole,wrrep);
+  }
+  Set<String> servletNames=servlets.keySet();
+  if (servletNames != null)   for (  String servletName : servletNames) {
+    if (unreferencedRoles != null)     for (    String role : unreferencedRoles) {
+      WebRoleRefPermission wrrp=new WebRoleRefPermission(servletName,role);
+      pc.addToRole(role,wrrp);
+    }
+  }
+  if (unreferencedRoles != null)   for (  String role : unreferencedRoles) {
+    WebRoleRefPermission wrrp=new WebRoleRefPermission("",role);
+    pc.addToRole(role,wrrp);
+  }
+}
