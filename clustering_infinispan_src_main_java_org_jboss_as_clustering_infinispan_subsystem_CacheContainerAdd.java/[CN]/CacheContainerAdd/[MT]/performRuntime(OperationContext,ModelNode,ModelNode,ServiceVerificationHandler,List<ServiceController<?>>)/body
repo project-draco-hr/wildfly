@@ -80,6 +80,7 @@
     }
     FluentConfiguration.TransactionConfig fluentTx=fluent.transaction();
     TransactionMode txMode=TransactionMode.NON_XA;
+    LockingMode lockingMode=LockingMode.OPTIMISTIC;
     if (cache.hasDefined(ModelKeys.TRANSACTION)) {
       ModelNode transaction=cache.get(ModelKeys.TRANSACTION);
       if (transaction.hasDefined(ModelKeys.STOP_TIMEOUT)) {
@@ -88,11 +89,16 @@
       if (transaction.hasDefined(ModelKeys.MODE)) {
         txMode=TransactionMode.valueOf(transaction.get(ModelKeys.MODE).asString());
       }
+      if (transaction.hasDefined(ModelKeys.LOCKING)) {
+        lockingMode=LockingMode.valueOf(transaction.get(ModelKeys.LOCKING).asString());
+      }
       if (transaction.hasDefined(ModelKeys.EAGER_LOCKING)) {
         EagerLocking eager=EagerLocking.valueOf(transaction.get(ModelKeys.EAGER_LOCKING).asString());
-        fluentTx.useEagerLocking(eager.isEnabled()).eagerLockSingleNode(eager.isSingleOwner());
+        fluentTx.lockingMode(eager.isEnabled() ? LockingMode.PESSIMISTIC : LockingMode.OPTIMISTIC).eagerLockSingleNode(eager.isSingleOwner());
       }
     }
+    fluentTx.transactionMode(txMode.getMode());
+    fluentTx.lockingMode(lockingMode);
     FluentConfiguration.RecoveryConfig recovery=fluentTx.useSynchronization(!txMode.isXAEnabled()).recovery();
     if (txMode.isRecoveryEnabled()) {
       recovery.syncCommitPhase(true).syncRollbackPhase(true);
@@ -171,6 +177,15 @@
     if (cacheName.equals(defaultCache)) {
       cacheBuilder.addAliases(CacheService.getServiceName(name,null));
     }
+    if (configuration.isTransactionalCache()) {
+      cacheBuilder.addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER);
+      if (configuration.isUseSynchronizationForTransactions()) {
+        cacheBuilder.addDependency(TxnServices.JBOSS_TXN_SYNCHRONIZATION_REGISTRY);
+      }
+      if (configuration.isTransactionRecoveryEnabled()) {
+        cacheBuilder.addDependencies(TxnServices.JBOSS_TXN_ARJUNA_RECOVERY_MANAGER);
+      }
+    }
     if (startMode.getMode() == ServiceController.Mode.ACTIVE) {
       cacheBuilder.addListener(verificationHandler);
     }
@@ -201,9 +216,10 @@
         transportConfig.setMachine(transport.get(ModelKeys.MACHINE).asString());
       }
     }
-    builder.addDependency(ChannelFactoryService.getServiceName(stack),ChannelFactory.class,transportConfig.getChannelFactoryInjector());
-    builder.addDependency(ServerEnvironmentService.SERVICE_NAME,ServerEnvironment.class,transportConfig.getEnvironmentInjector());
+    builder.addDependency(ChannelService.getServiceName(name),Channel.class,transportConfig.getChannelInjector());
     config.setTransport(transportConfig);
+    InjectedValue<ChannelFactory> channelFactory=new InjectedValue<ChannelFactory>();
+    newControllers.add(target.addService(ChannelService.getServiceName(name),new ChannelService(name,channelFactory)).addDependency(ChannelFactoryService.getServiceName(stack),ChannelFactory.class,channelFactory).setInitialMode(ServiceController.Mode.ON_DEMAND).install());
   }
   addExecutorDependency(builder,operation,ModelKeys.LISTENER_EXECUTOR,config.getListenerExecutorInjector());
   addScheduledExecutorDependency(builder,operation,ModelKeys.EVICTION_EXECUTOR,config.getEvictionExecutorInjector());

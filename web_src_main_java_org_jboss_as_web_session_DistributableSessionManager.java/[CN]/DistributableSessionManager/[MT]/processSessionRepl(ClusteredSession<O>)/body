@@ -1,27 +1,32 @@
 {
-  boolean notSession=(this.getReplicationGranularity() != ReplicationGranularity.SESSION);
-  boolean doTx=false;
+  boolean endBatch=false;
   BatchingManager batchingManager=this.distributedCacheManager.getBatchingManager();
   try {
-    if (notSession && batchingManager.isBatchInProgress() == false) {
+    if (!batchingManager.isBatchInProgress()) {
       batchingManager.startBatch();
-      doTx=true;
+      endBatch=true;
     }
     session.processSessionReplication();
   }
  catch (  Exception ex) {
     log.debug("processSessionRepl(): failed with exception",ex);
+    RuntimeException exception=null;
     try {
-      if (notSession)       batchingManager.setBatchRollbackOnly();
+      batchingManager.setBatchRollbackOnly();
     }
- catch (    Exception exn) {
-      log.error("Caught exception rolling back transaction",exn);
+ catch (    RuntimeException e) {
+      exception=e;
     }
-    if (ex instanceof RuntimeException)     throw (RuntimeException)ex;
-    throw new RuntimeException("JBossCacheManager.processSessionRepl(): failed to replicate session.",ex);
+catch (    Exception e) {
+      exception=new RuntimeException("JBossCacheManager.processSessionRepl(): failed to replicate session.",e);
+    }
+    if (exception != null) {
+      log.error("Caught exception rolling back transaction",exception);
+      throw exception;
+    }
   }
  finally {
-    if (doTx) {
+    if (endBatch) {
       batchingManager.endBatch();
     }
   }
