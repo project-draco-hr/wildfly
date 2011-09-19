@@ -1,23 +1,31 @@
 {
   this.log.debug("Creating new WS deployment model for: " + unit);
   final ResourceRoot deploymentRoot=unit.getAttachment(Attachments.DEPLOYMENT_ROOT);
-  final VirtualFile root=deploymentRoot.getRoot();
+  final VirtualFile root=deploymentRoot != null ? deploymentRoot.getRoot() : null;
+  final ClassLoader classLoader;
   final Module module=unit.getAttachment(Attachments.MODULE);
   if (module == null) {
-    throw new DeploymentUnitProcessingException("failed to resolve module for deployment " + deploymentRoot);
-  }
-  final ClassLoader classLoader=module.getClassLoader();
-  final ArchiveDeployment dep=this.newDeployment(unit.getName(),classLoader);
-  try {
-    List<VirtualFile> virtualFiles=root.getChildrenRecursively(WS_FILE_FILTER);
-    final Set<UnifiedVirtualFile> uVirtualFiles=new HashSet<UnifiedVirtualFile>();
-    for (    VirtualFile vf : virtualFiles) {
-      uVirtualFiles.add(new VirtualFileAdaptor(vf));
+    classLoader=unit.getAttachment(CLASSLOADER_KEY);
+    if (classLoader == null) {
+      throw new DeploymentUnitProcessingException("failed to resolve module / classloader for deployment " + unit);
     }
-    dep.setMetadataFiles(new LinkedList<UnifiedVirtualFile>(uVirtualFiles));
   }
- catch (  IOException e) {
-    this.log.warn("Could not load metadata files for deployment root " + root,e);
+ else {
+    classLoader=module.getClassLoader();
+  }
+  final ArchiveDeployment dep=this.newDeployment(unit.getName(),classLoader);
+  if (root != null) {
+    try {
+      List<VirtualFile> virtualFiles=root.getChildrenRecursively(WS_FILE_FILTER);
+      final Set<UnifiedVirtualFile> uVirtualFiles=new HashSet<UnifiedVirtualFile>();
+      for (      VirtualFile vf : virtualFiles) {
+        uVirtualFiles.add(new VirtualFileAdaptor(vf));
+      }
+      dep.setMetadataFiles(new LinkedList<UnifiedVirtualFile>(uVirtualFiles));
+    }
+ catch (    IOException e) {
+      this.log.warn("Could not load metadata files for deployment root " + root,e);
+    }
   }
   if (unit.getParent() != null) {
     final String parentDeploymentName=unit.getParent().getName();
@@ -30,7 +38,12 @@
     final ArchiveDeployment parentDep=this.newDeployment(parentDeploymentName,parentClassLoader);
     dep.setParent(parentDep);
   }
-  dep.setRootFile(new VirtualFileAdaptor(root));
+  if (root != null) {
+    dep.setRootFile(new VirtualFileAdaptor(root));
+  }
+ else {
+    dep.setRootFile(new ResourceLoaderAdapter(classLoader));
+  }
   dep.setRuntimeClassLoader(classLoader);
   dep.setType(deploymentType);
   return dep;
