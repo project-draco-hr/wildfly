@@ -1,0 +1,61 @@
+{
+  try {
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof MarshalledObject && !destination.equals(MarshalledObject.class)) {
+      value=((MarshalledObject)value).get();
+    }
+    if (value instanceof Handle) {
+      value=((Handle)value).getEJBObject();
+    }
+    if (destination.isPrimitive()) {
+      if (value == null)       throw new IllegalStateException("Loaded NULL value for a field of a primitive type.");
+      if ((destination.equals(Byte.TYPE) && value instanceof Byte) || (destination.equals(Short.TYPE) && value instanceof Short) || (destination.equals(Character.TYPE) && value instanceof Character)|| (destination.equals(Boolean.TYPE) && value instanceof Boolean)|| (destination.equals(Integer.TYPE) && value instanceof Integer)|| (destination.equals(Long.TYPE) && value instanceof Long)|| (destination.equals(Float.TYPE) && value instanceof Float)|| (destination.equals(Double.TYPE) && value instanceof Double)) {
+        return value;
+      }
+    }
+    if (destination == java.util.Date.class && value instanceof java.util.Date) {
+      if (value instanceof java.sql.Timestamp) {
+        java.sql.Timestamp ts=(java.sql.Timestamp)value;
+        long temp=ts.getTime();
+        if (temp % 1000 == 0)         temp+=ts.getNanos() / 1000000;
+        return new java.util.Date(temp);
+      }
+ else {
+        return new java.util.Date(((java.util.Date)value).getTime());
+      }
+    }
+    if (destination == java.sql.Time.class && value instanceof java.sql.Time) {
+      return new java.sql.Time(((java.sql.Time)value).getTime());
+    }
+    if (destination == java.sql.Date.class && value instanceof java.sql.Date) {
+      return new java.sql.Date(((java.sql.Date)value).getTime());
+    }
+    if (destination == java.sql.Timestamp.class && value instanceof java.sql.Timestamp) {
+      java.sql.Timestamp orignal=(java.sql.Timestamp)value;
+      java.sql.Timestamp copy=new java.sql.Timestamp(orignal.getTime());
+      copy.setNanos(orignal.getNanos());
+      return copy;
+    }
+    if (value instanceof String && (destination == Character.class || destination == Character.TYPE)) {
+      return new Character(((String)value).charAt(0));
+    }
+    if (destination.isAssignableFrom(value.getClass())) {
+      return value;
+    }
+    if (destination == java.math.BigInteger.class && value.getClass() == java.math.BigDecimal.class) {
+      return ((java.math.BigDecimal)value).toBigInteger();
+    }
+    throw new SQLException("Got a " + value.getClass().getName() + "[cl="+ System.identityHashCode(value.getClass().getClassLoader())+ ", value="+ value+ "] while looking for a "+ destination.getName()+ "[cl="+ System.identityHashCode(destination)+ "]");
+  }
+ catch (  RemoteException e) {
+    throw new SQLException("Unable to load EJBObject back from Handle: " + e);
+  }
+catch (  IOException e) {
+    throw new SQLException("Unable to load to deserialize result: " + e);
+  }
+catch (  ClassNotFoundException e) {
+    throw new SQLException("Unable to load to deserialize result: " + e);
+  }
+}

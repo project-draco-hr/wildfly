@@ -1,0 +1,48 @@
+{
+  return new Iterator(){
+    private final Iterator idIterator=getIdList().iterator();
+    private Object currentId;
+    public boolean hasNext(){
+      verifyIteratorIsValid();
+      try {
+        return idIterator.hasNext();
+      }
+ catch (      ConcurrentModificationException e) {
+        throw new IllegalStateException("Underlying collection has " + "been modified");
+      }
+    }
+    public Object next(){
+      verifyIteratorIsValid();
+      try {
+        currentId=idIterator.next();
+        return cmrField.getRelatedComponent().getEjbLocalObject(currentId);
+      }
+ catch (      ConcurrentModificationException e) {
+        throw new IllegalStateException("Underlying collection has " + "been modified");
+      }
+    }
+    public void remove(){
+      verifyIteratorIsValid();
+      if (readOnly) {
+        throw new EJBException("This collection is a read-only snapshot");
+      }
+      if (cmrField.isReadOnly()) {
+        throw new EJBException("Field is read-only: " + cmrField.getFieldName());
+      }
+      checkForPKChange();
+      try {
+        idIterator.remove();
+        cmrField.destroyRelationLinks(ctx,currentId,false);
+      }
+ catch (      ConcurrentModificationException e) {
+        throw new IllegalStateException("Underlying collection has been modified");
+      }
+    }
+    private void verifyIteratorIsValid(){
+      if (setHandle[0] == null) {
+        throw new IllegalStateException("The iterator of a CMR " + "collection may only be used within the transction in " + "which it was created");
+      }
+    }
+  }
+;
+}

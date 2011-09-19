@@ -1,0 +1,52 @@
+{
+  if (view.deleted == null) {
+    if (log.isTraceEnabled()) {
+      log.trace("no rows to delete");
+    }
+    return;
+  }
+  Connection con=null;
+  PreparedStatement ps=null;
+  try {
+    if (log.isDebugEnabled()) {
+      log.debug("executing : " + deleteSql);
+    }
+    con=ds.getConnection();
+    ps=con.prepareStatement(deleteSql);
+    int batchCount=0;
+    while (view.deleted != null) {
+      RelationKeys keys=view.deleted;
+      int paramInd=1;
+      JDBCCMPFieldBridge2[] keyFields=(JDBCCMPFieldBridge2[])leftField.getTableKeyFields();
+      for (int pkInd=0; pkInd < keyFields.length; ++pkInd) {
+        JDBCCMPFieldBridge2 pkField=keyFields[pkInd];
+        Object fieldValue=pkField.getPrimaryKeyValue(keys.leftKey);
+        paramInd=pkField.setArgumentParameters(ps,paramInd,fieldValue);
+      }
+      keyFields=(JDBCCMPFieldBridge2[])rightField.getTableKeyFields();
+      for (int pkInd=0; pkInd < keyFields.length; ++pkInd) {
+        JDBCCMPFieldBridge2 pkField=keyFields[pkInd];
+        Object fieldValue=pkField.getPrimaryKeyValue(keys.rightKey);
+        paramInd=pkField.setArgumentParameters(ps,paramInd,fieldValue);
+      }
+      ps.addBatch();
+      ++batchCount;
+      keys.dereference();
+    }
+    ps.executeBatch();
+    if (view.deleted != null) {
+      throw new IllegalStateException("There are still rows to delete!");
+    }
+    if (log.isTraceEnabled()) {
+      log.trace("deleted rows: " + batchCount);
+    }
+  }
+ catch (  SQLException e) {
+    log.error("Failed to delete view: " + e.getMessage(),e);
+    throw e;
+  }
+ finally {
+    JDBCUtil.safeClose(ps);
+    JDBCUtil.safeClose(con);
+  }
+}

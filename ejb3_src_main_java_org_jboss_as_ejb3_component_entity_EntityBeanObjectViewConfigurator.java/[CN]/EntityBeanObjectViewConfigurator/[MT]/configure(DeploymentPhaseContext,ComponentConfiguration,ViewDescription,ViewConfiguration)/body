@@ -1,7 +1,6 @@
 {
   final DeploymentReflectionIndex index=context.getDeploymentUnit().getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
-  final Object primaryKeyContextKey=new Object();
-  configuration.addClientPostConstructInterceptor(EntityBeanEjbCreateMethodInterceptorFactory.INSTANCE,InterceptorOrder.ClientPostConstruct.INSTANCE_CREATE);
+  configuration.addClientPostConstructInterceptor(getEjbCreateInterceptorFactory(),InterceptorOrder.ClientPostConstruct.INSTANCE_CREATE);
   configuration.addClientInterceptor(EntityBeanPrimaryKeyInterceptor.Factory.INSTANCE,InterceptorOrder.Client.ASSOCIATING_INTERCEPTOR);
   configuration.addViewInterceptor(EntityBeanAssociatingInterceptorFactory.INSTANCE,InterceptorOrder.View.ASSOCIATING_INTERCEPTOR);
   for (  final Method method : configuration.getProxyFactory().getCachedMethods()) {
@@ -12,7 +11,7 @@
  else     if (method.getName().equals("remove") && method.getParameterTypes().length == 0) {
       configuration.addClientInterceptor(method,ViewDescription.CLIENT_DISPATCHER_INTERCEPTOR_FACTORY,InterceptorOrder.Client.CLIENT_DISPATCHER);
       Method remove=resolveRemoveMethod(componentConfiguration.getComponentClass(),index,componentConfiguration.getComponentName());
-      configuration.addViewInterceptor(method,new EntityBeanRemoveInterceptorFactory(remove),InterceptorOrder.View.COMPONENT_DISPATCHER);
+      configuration.addViewInterceptor(method,getEjbRemoveInterceptorFactory(remove),InterceptorOrder.View.COMPONENT_DISPATCHER);
     }
  else     if (method.getName().equals("isIdentical") && method.getParameterTypes().length == 1 && (method.getParameterTypes()[0] == EJBLocalObject.class || method.getParameterTypes()[0] == EJBObject.class)) {
       configuration.addClientInterceptor(method,ViewDescription.CLIENT_DISPATCHER_INTERCEPTOR_FACTORY,InterceptorOrder.Client.CLIENT_DISPATCHER);
@@ -29,6 +28,16 @@
         }
       }
 );
+    }
+ else     if ((method.getName().equals("hashCode") && method.getParameterTypes().length == 0) || method.getName().equals("equals") && method.getParameterTypes().length == 1 && method.getParameterTypes()[0] == Object.class) {
+      configuration.addClientInterceptor(method,EntityIdentityInterceptorFactory.INSTANCE,InterceptorOrder.Client.EJB_EQUALS_HASHCODE);
+    }
+ else {
+      final ClassReflectionIndex<?> classReflectionIndex=index.getClassIndex(componentConfiguration.getComponentClass());
+      final Method componentMethod=ClassReflectionIndexUtil.findMethod(index,classReflectionIndex,MethodIdentifier.getIdentifierForMethod(method));
+      if (componentMethod == null) {
+        handleNonBeanMethod(componentConfiguration,configuration,index,method);
+      }
     }
   }
 }

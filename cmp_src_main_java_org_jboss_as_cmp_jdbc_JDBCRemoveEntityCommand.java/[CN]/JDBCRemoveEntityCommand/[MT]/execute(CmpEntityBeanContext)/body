@@ -1,0 +1,33 @@
+{
+  if (entity.isRemoved(ctx)) {
+    throw new IllegalStateException("Instance was already removed: id=" + ctx.getPrimaryKey());
+  }
+  entity.setIsBeingRemoved(ctx);
+  Object[] oldRelationsRef=new Object[1];
+  boolean needsSync=entity.removeFromRelations(ctx,oldRelationsRef);
+  if (!syncOnCommitOnly && needsSync) {
+    ctx.getComponent().synchronizeEntitiesWithinTransaction(ctx.getTransaction());
+  }
+  if (!batchCascadeDelete) {
+    if (!entity.isScheduledForBatchCascadeDelete(ctx)) {
+      executeDeleteSQL(ctx);
+    }
+ else {
+      if (log.isTraceEnabled())       log.trace("Instance is scheduled for cascade delete. id=" + ctx.getPrimaryKey());
+    }
+  }
+  if (oldRelationsRef[0] != null) {
+    Map oldRelations=(Map)oldRelationsRef[0];
+    entity.cascadeDelete(ctx,oldRelations);
+  }
+  if (batchCascadeDelete) {
+    if (!entity.isScheduledForBatchCascadeDelete(ctx)) {
+      executeDeleteSQL(ctx);
+    }
+ else {
+      if (log.isTraceEnabled())       log.debug("Instance is scheduled for cascade delete. id=" + ctx.getPrimaryKey());
+    }
+  }
+  manager.getReadAheadCache().removeCachedData(ctx.getPrimaryKey());
+  entity.setRemoved(ctx);
+}

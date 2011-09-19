@@ -1,0 +1,65 @@
+{
+  final Object existing=context.getContextData().get(EntityBeanEjbCreateMethodInterceptorFactory.EXISTING_ID_CONTEXT_KEY);
+  final AtomicReference<Object> primaryKeyReference=new AtomicReference<Object>();
+  context.getContextData().put(EntityBeanComponent.PRIMARY_KEY_CONTEXT_KEY,primaryKeyReference);
+  final Method ejbCreate=(Method)context.getContextData().get(EntityBeanHomeCreateInterceptorFactory.EJB_CREATE_METHOD_KEY);
+  final Method ejbPostCreate=(Method)context.getContextData().get(EntityBeanHomeCreateInterceptorFactory.EJB_POST_CREATE_METHOD_KEY);
+  final Object[] params=(Object[])context.getContextData().get(EntityBeanHomeCreateInterceptorFactory.PARAMETERS_KEY);
+  return new Interceptor(){
+    public Object processInvocation(    final InterceptorContext context) throws Exception {
+      if (existing != null) {
+        primaryKeyReference.set(existing);
+        return context.proceed();
+      }
+      final Component component=context.getPrivateData(Component.class);
+      if (!(component instanceof CmpEntityBeanComponent)) {
+        throw new IllegalStateException("Unexpected component: " + component + " Expected "+ CmpEntityBeanComponent.class);
+      }
+      final CmpEntityBeanComponent entityBeanComponent=(CmpEntityBeanComponent)component;
+      final CmpEntityBeanComponentInstance instance=(CmpEntityBeanComponentInstance)entityBeanComponent.getPool().get();
+      final JDBCEntityPersistenceStore storeManager=entityBeanComponent.getStoreManager();
+      try {
+        storeManager.initEntity(instance.getEntityContext());
+        ejbCreate.invoke(instance.getInstance(),params);
+        final Object primaryKey=storeManager.createEntity(context.getMethod(),context.getParameters(),instance.getEntityContext());
+        instance.associate(primaryKey);
+        entityBeanComponent.getCache().create(instance);
+        storeManager.postCreateEntity(context.getMethod(),context.getParameters(),instance.getEntityContext());
+        ejbPostCreate.invoke(instance.getInstance(),params);
+        primaryKeyReference.set(primaryKey);
+        if (((CmpEntityBeanComponent)component).getStoreManager().getCmpConfig().isInsertAfterEjbPostCreate()) {
+          storeManager.createEntity(context.getMethod(),context.getParameters(),instance.getEntityContext());
+        }
+        final Transaction transaction=entityBeanComponent.getTransactionManager().getTransaction();
+        if (TxUtils.isActive(transaction)) {
+          TransactionEntityMap.NONE.scheduleSync(transaction,instance.getEntityContext());
+        }
+      }
+ catch (      DuplicateKeyException e) {
+        throw e;
+      }
+catch (      Exception e) {
+        throw new EJBException(e);
+      }
+catch (      Throwable t) {
+        final EJBException ex=new EJBException("Failed to create entity - " + component.getComponentClass());
+        ex.initCause(t);
+        throw ex;
+      }
+      final TransactionSynchronizationRegistry transactionSynchronizationRegistry=entityBeanComponent.getTransactionSynchronizationRegistry();
+      if (transactionSynchronizationRegistry.getTransactionKey() != null) {
+        transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
+          public void beforeCompletion(){
+          }
+          public void afterCompletion(          final int status){
+            if (status != Status.STATUS_COMMITTED) {
+            }
+          }
+        }
+);
+      }
+      return context.proceed();
+    }
+  }
+;
+}

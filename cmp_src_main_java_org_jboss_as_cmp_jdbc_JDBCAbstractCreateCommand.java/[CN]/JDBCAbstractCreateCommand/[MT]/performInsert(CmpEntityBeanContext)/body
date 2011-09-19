@@ -1,0 +1,51 @@
+{
+  Connection c=null;
+  PreparedStatement ps=null;
+  boolean throwRuntimeExceptions=entity.getMetaData().getThrowRuntimeExceptions();
+  if (throwRuntimeExceptions) {
+    try {
+      c=entity.getDataSource().getConnection();
+    }
+ catch (    SQLException sqle) {
+      javax.ejb.EJBException ejbe=new javax.ejb.EJBException("Could not get a connection; " + sqle);
+      ejbe.initCause(sqle);
+      throw ejbe;
+    }
+  }
+  try {
+    if (log.isDebugEnabled()) {
+      log.debug("Executing SQL: " + insertSQL);
+    }
+    if (!throwRuntimeExceptions) {
+      c=entity.getDataSource().getConnection();
+    }
+    ps=prepareStatement(c,insertSQL,ctx);
+    int index=1;
+    for (int fieldInd=0; fieldInd < insertFields.length; ++fieldInd) {
+      index=insertFields[fieldInd].setInstanceParameters(ps,index,ctx);
+    }
+    int rowsAffected=executeInsert(index,ps,ctx);
+    if (rowsAffected != 1) {
+      throw new CreateException("Expected one affected row but update returned" + rowsAffected + " for id="+ ctx.getPrimaryKey());
+    }
+  }
+ catch (  SQLException e) {
+    if (exceptionProcessor != null && exceptionProcessor.isDuplicateKey(e)) {
+      log.error("Failed to create instance.",e);
+      throw new CreateException("Integrity constraint violation. Possibly unique key violation or invalid foreign key value.");
+    }
+ else {
+      log.error("Could not create entity",e);
+      CreateException ce=new CreateException("Could not create entity: " + e);
+      ce.initCause(e);
+      throw ce;
+    }
+  }
+ finally {
+    JDBCUtil.safeClose(ps);
+    JDBCUtil.safeClose(c);
+  }
+  for (int fieldInd=0; fieldInd < insertFields.length; ++fieldInd) {
+    insertFields[fieldInd].setClean(ctx);
+  }
+}

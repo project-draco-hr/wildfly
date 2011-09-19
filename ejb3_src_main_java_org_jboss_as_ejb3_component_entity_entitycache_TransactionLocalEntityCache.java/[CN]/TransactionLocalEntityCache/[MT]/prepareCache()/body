@@ -1,15 +1,21 @@
 {
-  if (cache.get() == null) {
-    cache.set(new HashMap<Object,EntityBeanComponentInstance>());
-    if (transactionSynchronizationRegistry.getTransactionKey() != null) {
-      transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
-        @Override public void beforeCompletion(){
-        }
-        @Override public void afterCompletion(        final int status){
-          cache.remove();
-        }
-      }
-);
+  final Object key=transactionSynchronizationRegistry.getTransactionKey();
+  Map<Object,EntityBeanComponentInstance> map=cache.get(key);
+  if (map != null) {
+    return map;
+  }
+  map=Collections.synchronizedMap(new HashMap<Object,EntityBeanComponentInstance>());
+  final Map<Object,EntityBeanComponentInstance> existing=cache.putIfAbsent(key,map);
+  if (existing != null) {
+    map=existing;
+  }
+  transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
+    @Override public void beforeCompletion(){
+    }
+    @Override public void afterCompletion(    final int status){
+      cache.remove(key);
     }
   }
+);
+  return map;
 }

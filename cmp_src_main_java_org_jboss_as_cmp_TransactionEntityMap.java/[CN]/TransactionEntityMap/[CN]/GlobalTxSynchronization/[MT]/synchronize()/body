@@ -1,0 +1,39 @@
+{
+  if (synchronizing || instances.isEmpty()) {
+    return;
+  }
+  synchronizing=true;
+  Thread currentThread=Thread.currentThread();
+  CmpEntityBeanContext context=null;
+  try {
+    for (    CmpEntityBeanContext instance : instances) {
+      if (TxUtils.isRollback(tx)) {
+        return;
+      }
+      context=instance;
+      context.getTxAssociation().invokeEjbStore(currentThread,context);
+    }
+    for (    CmpEntityBeanContext instance : instances) {
+      if (TxUtils.isRollback(tx)) {
+        return;
+      }
+      context=instance;
+      context.getTxAssociation().synchronize(currentThread,tx,context);
+    }
+  }
+ catch (  Exception causeByException) {
+    try {
+      tx.setRollbackOnly();
+    }
+ catch (    Exception e) {
+      log.warn("Exception while trying to rollback tx: " + tx,e);
+    }
+    if (causeByException instanceof EJBException) {
+      throw (EJBException)causeByException;
+    }
+    throw new EJBException("Exception in store of entity:" + ((context == null || context.getPrimaryKey() == null) ? "<null>" : context.getPrimaryKey().toString()),causeByException);
+  }
+ finally {
+    synchronizing=false;
+  }
+}

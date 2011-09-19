@@ -1,0 +1,50 @@
+{
+  if (sql == null) {
+    log.trace("issuePostCreateSQL: sql is null");
+    return;
+  }
+  log.debug("issuePostCreateSQL::sql: " + sql.toString() + " on table "+ table);
+  TransactionManager tm=manager.getComponent().getTransactionManager();
+  Transaction oldTransaction;
+  try {
+    oldTransaction=tm.suspend();
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(COULDNT_SUSPEND + "sending sql command.",e);
+  }
+  String currentCmd="";
+  try {
+    Connection con=null;
+    Statement statement=null;
+    try {
+      con=dataSource.getConnection();
+      statement=con.createStatement();
+      for (int i=0; i < sql.size(); i++) {
+        currentCmd=(String)sql.get(i);
+        currentCmd=replaceTable(currentCmd,table);
+        currentCmd=replaceIndexCounter(currentCmd);
+        log.debug("Executing SQL: " + currentCmd);
+        statement.executeUpdate(currentCmd);
+      }
+    }
+  finally {
+      JDBCUtil.safeClose(statement);
+      JDBCUtil.safeClose(con);
+    }
+  }
+ catch (  Exception e) {
+    log.warn("Issuing sql " + currentCmd + " failed: "+ e.toString());
+    throw new RuntimeException("Error while issuing sql in post-table-create",e);
+  }
+ finally {
+    try {
+      if (oldTransaction != null) {
+        tm.resume(oldTransaction);
+      }
+    }
+ catch (    Exception e) {
+      throw new RuntimeException(COULDNT_REATTACH + "create index");
+    }
+  }
+  log.debug("Issued SQL  " + sql + " successfully.");
+}

@@ -1,0 +1,22 @@
+{
+  super(componentName,componentClassName,ejbJarDescription,deploymentUnitServiceName);
+  getConfigurators().addFirst(new ComponentConfigurator(){
+    public void configure(    final DeploymentPhaseContext context,    final ComponentDescription description,    final ComponentConfiguration configuration) throws DeploymentUnitProcessingException {
+      CmpEntityBeanComponentDescription cmpDescription=(CmpEntityBeanComponentDescription)description;
+      final CmpInstanceReferenceFactory factory=new CmpInstanceReferenceFactory(configuration.getComponentClass(),cmpDescription.getEntityMetaData().getLocalHomeClass(),cmpDescription.getEntityMetaData().getHomeClass(),cmpDescription.getEntityMetaData().getLocalClass(),cmpDescription.getEntityMetaData().getRemoteClass());
+      configuration.getStartDependencies().add(new DependencyConfigurator<ComponentStartService>(){
+        public void configureDependency(        final ServiceBuilder<?> serviceBuilder,        final ComponentStartService service) throws DeploymentUnitProcessingException {
+          serviceBuilder.addDependency(description.getCreateServiceName(),CmpEntityBeanComponent.class,factory.getComponentInjector());
+        }
+      }
+);
+      configuration.setInstanceFactory(factory);
+      final CmpEntityBeanComponentConfiguration cmpConfig=CmpEntityBeanComponentConfiguration.class.cast(configuration);
+      cmpConfig.addRelationInterceptor(getSynchronizationInterceptorFactory(),InterceptorOrder.Component.SYNCHRONIZATION_INTERCEPTOR);
+      cmpConfig.addRelationInterceptor(EntityBeanReentrancyInterceptor.FACTORY,InterceptorOrder.Component.REENTRANCY_INTERCEPTOR);
+      cmpConfig.addRelationInterceptor(EntityInvocationContextInterceptor.FACTORY,InterceptorOrder.ComponentPostConstruct.EJB_SESSION_CONTEXT_INTERCEPTOR);
+      cmpConfig.addRelationInterceptor(CmpEntityBeanJdbcRelationshipInterceptor.FACTORY,InterceptorOrder.Component.CMP_RELATIONSHIP_INTERCEPTOR);
+    }
+  }
+);
+}

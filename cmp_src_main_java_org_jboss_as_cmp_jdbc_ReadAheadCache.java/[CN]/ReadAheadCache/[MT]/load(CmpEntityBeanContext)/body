@@ -1,0 +1,75 @@
+{
+  if (log.isTraceEnabled()) {
+    log.trace("load data:" + " entity=" + manager.getEntityBridge().getEntityName() + " pk="+ ctx.getPrimaryKey());
+  }
+  Map preloadDataMap=getPreloadDataMap(ctx.getPrimaryKey(),false);
+  if (preloadDataMap == null || preloadDataMap.isEmpty()) {
+    if (log.isTraceEnabled()) {
+      log.trace("No preload data found:" + " entity=" + manager.getEntityBridge().getEntityName() + " pk="+ ctx.getPrimaryKey());
+    }
+    return false;
+  }
+  boolean cleanReadAhead=manager.getMetaData().isCleanReadAheadOnLoad();
+  boolean loaded=false;
+  JDBCCMRFieldBridge onlyOneSingleValuedCMR=null;
+  Iterator iter=preloadDataMap.entrySet().iterator();
+  while (iter.hasNext()) {
+    Map.Entry entry=(Map.Entry)iter.next();
+    Object field=entry.getKey();
+    Object value=entry.getValue();
+    if (value == null) {
+      throw new IllegalStateException("Preloaded value not found");
+    }
+    if (cleanReadAhead) {
+      iter.remove();
+    }
+    if (value == NULL_VALUE) {
+      value=null;
+    }
+    if (field instanceof JDBCCMPFieldBridge) {
+      JDBCCMPFieldBridge cmpField=(JDBCCMPFieldBridge)field;
+      if (!cmpField.isLoaded(ctx)) {
+        if (log.isTraceEnabled()) {
+          log.trace("Preloading data:" + " entity=" + manager.getEntityBridge().getEntityName() + " pk="+ ctx.getPrimaryKey()+ " cmpField="+ cmpField.getFieldName());
+        }
+        cmpField.setInstanceValue(ctx,value);
+        cmpField.setClean(ctx);
+        loaded=true;
+      }
+ else {
+        if (log.isTraceEnabled()) {
+          log.trace("CMPField already loaded:" + " entity=" + manager.getEntityBridge().getEntityName() + " pk="+ ctx.getPrimaryKey()+ " cmpField="+ cmpField.getFieldName());
+        }
+      }
+    }
+ else     if (field instanceof JDBCCMRFieldBridge) {
+      JDBCCMRFieldBridge cmrField=(JDBCCMRFieldBridge)field;
+      if (!cmrField.isLoaded(ctx)) {
+        if (log.isTraceEnabled()) {
+          log.trace("Preloading data:" + " entity=" + manager.getEntityBridge().getEntityName() + " pk="+ ctx.getPrimaryKey()+ " cmrField="+ cmrField.getFieldName());
+        }
+        cmrField.load(ctx,(List)value);
+        JDBCStoreManager relatedManager=(JDBCStoreManager)cmrField.getRelatedCMRField().getManager();
+        ReadAheadCache relatedReadAheadCache=relatedManager.getReadAheadCache();
+        relatedReadAheadCache.addFinderResults((List)value,cmrField.getReadAhead());
+        if (!loaded) {
+          if (cmrField.isSingleValued() && onlyOneSingleValuedCMR == null) {
+            onlyOneSingleValuedCMR=cmrField;
+          }
+ else {
+            loaded=true;
+          }
+        }
+      }
+ else {
+        if (log.isTraceEnabled()) {
+          log.trace("CMRField already loaded:" + " entity=" + manager.getEntityBridge().getEntityName() + " pk="+ ctx.getPrimaryKey()+ " cmrField="+ cmrField.getFieldName());
+        }
+      }
+    }
+  }
+  if (cleanReadAhead) {
+    manager.removeEntityTxData(new PreloadKey(ctx.getPrimaryKey()));
+  }
+  return loaded;
+}

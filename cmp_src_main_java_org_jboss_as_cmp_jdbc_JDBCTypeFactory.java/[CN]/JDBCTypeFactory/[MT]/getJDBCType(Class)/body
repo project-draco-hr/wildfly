@@ -1,0 +1,58 @@
+{
+  if (complexTypes.containsKey(javaType)) {
+    return (JDBCTypeComplex)complexTypes.get(javaType);
+  }
+ else {
+    JDBCTypeSimple type=(JDBCTypeSimple)mappedSimpleTypes.get(javaType);
+    if (type == null) {
+      JDBCUserTypeMappingMetaData userTypeMapping=(JDBCUserTypeMappingMetaData)userTypeMappings.get(javaType.getName());
+      Mapper mapper=null;
+      if (userTypeMapping != null) {
+        ClassLoader cl=Thread.currentThread().getContextClassLoader();
+        try {
+          javaType=cl.loadClass(userTypeMapping.getMappedType());
+        }
+ catch (        ClassNotFoundException e) {
+          throw new IllegalStateException("Failed to load mapped type: " + userTypeMapping.getMappedType());
+        }
+        try {
+          mapper=(Mapper)newInstance(userTypeMapping.getMapper());
+        }
+ catch (        Throwable e) {
+          throw new IllegalStateException("Failed to create Mapper instance of " + userTypeMapping.getMapper());
+        }
+      }
+      JDBCMappingMetaData typeMappingMD=typeMapping.getTypeMappingMetaData(javaType);
+      String sqlType=typeMappingMD.getSqlType();
+      int jdbcType=typeMappingMD.getJdbcType();
+      boolean notNull=javaType.isPrimitive();
+      boolean autoIncrement=false;
+      JDBCParameterSetter paramSetter;
+      if (typeMappingMD.getParamSetter() != null) {
+        try {
+          paramSetter=(JDBCParameterSetter)newInstance(typeMappingMD.getParamSetter());
+        }
+ catch (        Throwable e) {
+          throw new IllegalStateException(e.getMessage());
+        }
+      }
+ else {
+        paramSetter=JDBCUtil.getParameterSetter(jdbcType,javaType);
+      }
+      JDBCResultSetReader resultReader;
+      if (typeMappingMD.getResultReader() != null) {
+        try {
+          resultReader=(JDBCResultSetReader)newInstance(typeMappingMD.getResultReader());
+        }
+ catch (        Throwable e) {
+          throw new IllegalStateException(e.getMessage());
+        }
+      }
+ else {
+        resultReader=JDBCUtil.getResultSetReader(jdbcType,javaType);
+      }
+      type=new JDBCTypeSimple(null,javaType,jdbcType,sqlType,notNull,autoIncrement,mapper,paramSetter,resultReader);
+    }
+    return type;
+  }
+}

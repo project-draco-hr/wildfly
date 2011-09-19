@@ -1,0 +1,61 @@
+{
+  String relatedEntityName=metadata.getRelatedRole().getEntity().getName();
+  Catalog catalog=manager.getCatalog();
+  relatedEntity=(JDBCEntityBridge2)catalog.getEntityByEJBName(relatedEntityName);
+  if (relatedEntity == null) {
+    throw new RuntimeException("Related entity not found: " + "entity=" + entity.getEntityName() + ", "+ "cmrField="+ getFieldName()+ ", "+ "relatedEntity="+ relatedEntityName);
+  }
+  JDBCCMRFieldBridge2[] cmrFields=(JDBCCMRFieldBridge2[])relatedEntity.getCMRFields();
+  for (int i=0; i < cmrFields.length; ++i) {
+    JDBCCMRFieldBridge2 cmrField=cmrFields[i];
+    if (metadata.getRelatedRole() == cmrField.getMetaData()) {
+      relatedCMRField=cmrField;
+      break;
+    }
+  }
+  if (relatedCMRField == null) {
+    String message="Related CMR field not found in " + relatedEntity.getEntityName() + " for relationship from ";
+    message+=entity.getEntityName() + ".";
+    if (getFieldName() != null) {
+      message+=getFieldName();
+    }
+ else {
+      message+="<no-field>";
+    }
+    message+=" to ";
+    message+=relatedEntityName + ".";
+    if (metadata.getRelatedRole().getCMRFieldName() != null) {
+      message+=metadata.getRelatedRole().getCMRFieldName();
+    }
+ else {
+      message+="<no-field>";
+    }
+    throw new RuntimeException(message);
+  }
+  relatedComponent=relatedEntity.getComponent();
+  if (metadata.getRelationMetaData().isTableMappingStyle()) {
+    Collection tableKeys=metadata.getKeyFields();
+    List keyFieldsList=new ArrayList(tableKeys.size());
+    Map pkFieldsToFKFields=new HashMap(tableKeys.size());
+    for (Iterator i=tableKeys.iterator(); i.hasNext(); ) {
+      JDBCCMPFieldMetaData cmpFieldMetaData=(JDBCCMPFieldMetaData)i.next();
+      FieldBridge pkField=entity.getFieldByName(cmpFieldMetaData.getFieldName());
+      if (pkField == null) {
+        throw new RuntimeException("Primary key not found for key-field " + cmpFieldMetaData.getFieldName());
+      }
+      pkFieldsToFKFields.put(pkField,new JDBCCMPFieldBridge2(manager,entity,cmpFieldMetaData,-1));
+    }
+    JDBCFieldBridge[] pkFields=entity.getPrimaryKeyFields();
+    for (int i=0; i < pkFields.length; ++i) {
+      Object fkField=pkFieldsToFKFields.get(pkFields[i]);
+      if (fkField == null) {
+        throw new RuntimeException("Primary key " + pkFields[i].getFieldName() + " is not mapped.");
+      }
+      keyFieldsList.add(fkField);
+    }
+    tableKeyFields=(JDBCCMPFieldBridge2[])keyFieldsList.toArray(new JDBCCMPFieldBridge2[keyFieldsList.size()]);
+  }
+ else {
+    initializeForeignKeyFields();
+  }
+}

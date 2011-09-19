@@ -1,0 +1,42 @@
+{
+  StringBuffer sqlBuf=new StringBuffer();
+  mapping.getFunctionSql(new String[]{tableName,fieldName,fieldStructure},sqlBuf);
+  String sql=sqlBuf.toString();
+  if (log.isDebugEnabled())   log.debug("Executing: " + sql);
+  TransactionManager tm=manager.getComponent().getTransactionManager();
+  Transaction oldTransaction;
+  try {
+    oldTransaction=tm.suspend();
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(COULDNT_SUSPEND + " alter table.",e);
+  }
+  try {
+    Connection con=null;
+    Statement statement=null;
+    try {
+      con=dataSource.getConnection();
+      statement=con.createStatement();
+      statement.executeUpdate(sql);
+    }
+  finally {
+      JDBCUtil.safeClose(statement);
+      JDBCUtil.safeClose(con);
+    }
+  }
+ catch (  Exception e) {
+    log.error("Could not alter table " + tableName + ": "+ e.getMessage());
+    throw new RuntimeException("Error while alter table " + tableName + " "+ sql,e);
+  }
+ finally {
+    try {
+      if (oldTransaction != null) {
+        tm.resume(oldTransaction);
+      }
+    }
+ catch (    Exception e) {
+      throw new RuntimeException(COULDNT_REATTACH + "alter table");
+    }
+  }
+  if (log.isDebugEnabled())   log.debug("Table altered successfully.");
+}

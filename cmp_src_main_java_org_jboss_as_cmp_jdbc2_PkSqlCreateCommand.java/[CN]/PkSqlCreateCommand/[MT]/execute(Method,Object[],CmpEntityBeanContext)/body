@@ -1,0 +1,52 @@
+{
+  Object pk;
+  PersistentContext pctx=(PersistentContext)ctx.getPersistenceContext();
+  if (ctx.getPrimaryKey() == null) {
+    Connection con=null;
+    PreparedStatement ps=null;
+    ResultSet rs=null;
+    try {
+      if (log.isDebugEnabled()) {
+        log.debug("executing sql: " + pkSql);
+      }
+      con=entityBridge.getDataSource().getConnection();
+      ps=con.prepareStatement(pkSql);
+      rs=ps.executeQuery();
+      if (!rs.next()) {
+        throw new CreateException("pk-sql " + pkSql + " returned no results!");
+      }
+      pk=pkField.loadArgumentResults(rs,1);
+      pctx.setFieldValue(pkField.getRowIndex(),pk);
+      pk=entityBridge.extractPrimaryKeyFromInstance(ctx);
+    }
+ catch (    SQLException e) {
+      log.error("Failed to execute pk sql. error code: " + e.getErrorCode() + ", sql state: "+ e.getSQLState(),e);
+      throw new CreateException("Failed to execute pk sql: " + e.getMessage() + ", error code: "+ e.getErrorCode()+ ", sql state: "+ e.getSQLState());
+    }
+ finally {
+      JDBCUtil.safeClose(rs);
+      JDBCUtil.safeClose(ps);
+      JDBCUtil.safeClose(con);
+    }
+    if (pk == null) {
+      log.error("Primary key for created instance is null.");
+      throw new CreateException("Primary key for created instance is null.");
+    }
+    pctx.setPk(pk);
+  }
+ else {
+    try {
+      pctx.flush();
+    }
+ catch (    SQLException e) {
+      if ("23000".equals(e.getSQLState())) {
+        throw new DuplicateKeyException("Unique key violation or invalid foreign key value: pk=" + ctx.getPrimaryKey());
+      }
+ else {
+        throw new CreateException("Failed to create instance: pk=" + ctx.getPrimaryKey() + ", state="+ e.getSQLState()+ ", msg="+ e.getMessage());
+      }
+    }
+    pk=ctx.getPrimaryKey();
+  }
+  return pk;
+}

@@ -16,21 +16,23 @@ synchronized (lock) {
         log.trace("Acquired lock: " + lock + " for entity bean instance: "+ instance+ " during invocation: "+ context);
       }
       Object currentTransactionKey=null;
-      boolean wasTxSyncRegistered=false;
       try {
         currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
-        if (currentTransactionKey != null) {
-          final Synchronization statefulSessionSync=new EntityBeanSynchronization(instance);
-          transactionSynchronizationRegistry.registerInterposedSynchronization(statefulSessionSync);
-          wasTxSyncRegistered=true;
-          if (log.isTraceEnabled()) {
-            log.trace("Registered tx synchronization: " + statefulSessionSync + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
+        if (!instance.isSynchronizeRegistered()) {
+          component.getCache().reference(instance);
+          if (currentTransactionKey != null) {
+            final Synchronization entitySynchronization=new EntityBeanSynchronization(instance);
+            transactionSynchronizationRegistry.registerInterposedSynchronization(entitySynchronization);
+            if (log.isTraceEnabled()) {
+              log.trace("Registered tx synchronization: " + entitySynchronization + " for tx: "+ currentTransactionKey+ " associated with entity component instance: "+ instance);
+            }
           }
+          instance.setSynchronizationRegistered(true);
         }
         return context.proceed();
       }
   finally {
-        if (!wasTxSyncRegistered) {
+        if (currentTransactionKey == null) {
           instance.store();
           releaseInstance(instance,true);
         }
