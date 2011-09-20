@@ -1,13 +1,12 @@
 {
-  final Object sessionIdContextKey=new Object();
   view.getConfigurators().add(new ViewConfigurator(){
     @Override public void configure(    DeploymentPhaseContext context,    ComponentConfiguration componentConfiguration,    ViewDescription description,    ViewConfiguration viewConfiguration) throws DeploymentUnitProcessingException {
-      InterceptorFactory sessionIdGeneratingInterceptorFactory=new StatefulComponentSessionIdGeneratingInterceptorFactory(sessionIdContextKey);
-      viewConfiguration.addViewPostConstructInterceptor(sessionIdGeneratingInterceptorFactory,InterceptorOrder.ViewPostConstruct.INSTANCE_CREATE);
-      viewConfiguration.addViewPreDestroyInterceptor(new StatefulComponentInstanceDestroyInterceptorFactory(sessionIdContextKey),InterceptorOrder.ViewPreDestroy.INSTANCE_DESTROY);
+      InterceptorFactory sessionIdGeneratingInterceptorFactory=StatefulComponentSessionIdGeneratingInterceptorFactory.INSTANCE;
+      viewConfiguration.addClientPostConstructInterceptor(sessionIdGeneratingInterceptorFactory,InterceptorOrder.ClientPostConstruct.INSTANCE_CREATE);
+      viewConfiguration.addClientPreDestroyInterceptor(StatefulComponentInstanceDestroyInterceptorFactory.INSTANCE,InterceptorOrder.ClientPreDestroy.INSTANCE_DESTROY);
       for (      Method method : viewConfiguration.getProxyFactory().getCachedMethods()) {
         if ((method.getName().equals("hashCode") && method.getParameterTypes().length == 0) || method.getName().equals("equals") && method.getParameterTypes().length == 1 && method.getParameterTypes()[0] == Object.class) {
-          viewConfiguration.addViewInterceptor(method,new StatefulIdentityInterceptorFactory(sessionIdContextKey),InterceptorOrder.View.SESSION_BEAN_EQUALS_HASHCODE);
+          viewConfiguration.addClientInterceptor(method,StatefulIdentityInterceptorFactory.INSTANCE,InterceptorOrder.View.SESSION_BEAN_EQUALS_HASHCODE);
         }
       }
     }
@@ -15,7 +14,8 @@
 );
   view.getConfigurators().add(new ViewConfigurator(){
     @Override public void configure(    DeploymentPhaseContext context,    ComponentConfiguration componentConfiguration,    ViewDescription description,    ViewConfiguration configuration) throws DeploymentUnitProcessingException {
-      configuration.addViewInterceptor(new StatefulComponentInstanceInterceptorFactory(sessionIdContextKey),InterceptorOrder.View.ASSOCIATING_INTERCEPTOR);
+      configuration.addClientInterceptor(StatefulComponentIdInterceptor.Factory.INSTANCE,InterceptorOrder.Client.ASSOCIATING_INTERCEPTOR);
+      configuration.addViewInterceptor(StatefulComponentInstanceInterceptor.Factory.INSTANCE,InterceptorOrder.View.ASSOCIATING_INTERCEPTOR);
     }
   }
 );

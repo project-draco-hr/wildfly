@@ -1,21 +1,22 @@
 {
   final SimpleInterceptorFactoryContext factoryContext=new SimpleInterceptorFactoryContext();
-  final Map<Method,InterceptorFactory> viewInterceptorFactories=ViewService.this.viewInterceptorFactories;
-  final Map<Method,Interceptor> viewEntryPoints=new IdentityHashMap<Method,Interceptor>(viewInterceptorFactories.size());
   factoryContext.getContextData().put(Component.class,component);
-  factoryContext.getContextData().put(ComponentView.class,this);
+  factoryContext.getContextData().put(ComponentView.class,View.this);
+  factoryContext.getContextData().put(ComponentViewInstance.class,this);
   factoryContext.getContextData().putAll(contextData);
-  final Interceptor postConstructInterceptor=viewPostConstruct.create(factoryContext);
-  for (  Method method : viewInterceptorFactories.keySet()) {
-    viewEntryPoints.put(method,viewInterceptorFactories.get(method).create(factoryContext));
+  final Interceptor clientPostConstructInterceptor=clientPostConstruct.create(factoryContext);
+  final Interceptor clientPreDestroyInterceptor=clientPreDestroy.create(factoryContext);
+  final Map<Method,InterceptorFactory> clientInterceptorFactories=ViewService.this.clientInterceptorFactories;
+  IdentityHashMap<Method,Interceptor> clientEntryPoints=new IdentityHashMap<Method,Interceptor>(clientInterceptorFactories.size());
+  for (  Method method : clientInterceptorFactories.keySet()) {
+    clientEntryPoints.put(method,clientInterceptorFactories.get(method).create(factoryContext));
   }
-  final Interceptor preDestroyInterceptor=viewPreDestroy.create(factoryContext);
-  final ComponentViewInstance instance=new ViewInstance(viewEntryPoints,preDestroyInterceptor);
+  final ComponentViewInstance instance=new ViewInstance(viewInterceptors,clientPreDestroyInterceptor,clientEntryPoints);
   try {
     InterceptorContext context=new InterceptorContext();
     context.putPrivateData(ComponentView.class,this);
     context.putPrivateData(Component.class,component);
-    postConstructInterceptor.processInvocation(context);
+    clientPostConstructInterceptor.processInvocation(context);
   }
  catch (  Exception e) {
     throw new RuntimeException("Failed to instantiate component view",e);
