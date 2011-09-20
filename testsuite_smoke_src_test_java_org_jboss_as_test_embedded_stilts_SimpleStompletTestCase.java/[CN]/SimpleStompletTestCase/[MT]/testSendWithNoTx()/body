@@ -1,0 +1,23 @@
+{
+  StompClient client=new StompClient("stomp://localhost");
+  client.connect();
+  final List<String> outbound=new ArrayList<String>();
+  final CountDownLatch outboundLatch=new CountDownLatch(2);
+  SubscriptionBuilder builder=client.subscribe(DESTINATION_QUEUE_ONE);
+  builder.withMessageHandler(new MessageHandler(){
+    public void handle(    StompMessage message){
+      String content=message.getContentAsString();
+      outbound.add(content);
+      outboundLatch.countDown();
+    }
+  }
+);
+  ClientSubscription subscription=builder.start();
+  client.send(StompMessages.createStompMessage(DESTINATION_QUEUE_ONE,"msg1"));
+  client.send(StompMessages.createStompMessage(DESTINATION_QUEUE_ONE,"msg2"));
+  Assert.assertTrue("No latch timeout",outboundLatch.await(3,TimeUnit.SECONDS));
+  Assert.assertEquals("msg1",outbound.get(0));
+  Assert.assertEquals("msg2",outbound.get(1));
+  subscription.unsubscribe();
+  client.disconnect();
+}
