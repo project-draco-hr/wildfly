@@ -1,0 +1,43 @@
+{
+  Boolean standalone=this.standalone;
+  if (standalone != null) {
+    return standalone;
+  }
+synchronized (this) {
+    if (!failedStandalone) {
+      long end=System.currentTimeMillis() + 10000;
+      String error=null;
+      do {
+        ModelNode op=new ModelNode();
+        op.get(OP).set(READ_ATTRIBUTE_OPERATION);
+        op.get(OP_ADDR).setEmptyList();
+        op.get(NAME).set("launch-type");
+        final ModelNode result=execute(controller,op);
+        error=getFailureDescription(result);
+        if (error != null) {
+          try {
+            Thread.sleep(100);
+          }
+ catch (          InterruptedException e) {
+            failedStandalone=true;
+            break;
+          }
+          continue;
+        }
+        standalone=result.require(RESULT).asString().equals("STANDALONE");
+        error=null;
+        break;
+      }
+ while (System.currentTimeMillis() < end);
+      if (error != null) {
+        failedStandalone=true;
+        throw new IllegalArgumentException(error);
+      }
+      this.standalone=standalone;
+    }
+    if (failedStandalone) {
+      throw new IllegalArgumentException("Was not able to determine if standalone or not");
+    }
+  }
+  return this.standalone;
+}
