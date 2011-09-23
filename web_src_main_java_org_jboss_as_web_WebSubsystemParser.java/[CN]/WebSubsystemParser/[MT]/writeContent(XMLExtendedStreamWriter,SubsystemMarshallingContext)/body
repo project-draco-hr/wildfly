@@ -65,7 +65,14 @@
           writer.writeAttribute(NAME,alias.asString());
         }
       }
-      if (config.hasDefined(ACCESS_LOG)) {
+      ModelNode accessLog;
+      if (config.get(ACCESS_LOG).isDefined() && config.get(ACCESS_LOG).has("configuration")) {
+        accessLog=config.get(ACCESS_LOG).get("configuration");
+      }
+ else {
+        accessLog=config.get(ACCESS_LOG);
+      }
+      if (accessLog.isDefined() && !accessLog.keys().isEmpty()) {
         writer.writeStartElement(Element.ACCESS_LOG.getLocalName());
         final ModelNode accessLog=config.get(ACCESS_LOG);
         writeAttribute(writer,Attribute.PATTERN.getLocalName(),accessLog);
@@ -74,22 +81,35 @@
         writeAttribute(writer,Attribute.PREFIX.getLocalName(),accessLog);
         writeAttribute(writer,Attribute.ROTATE.getLocalName(),accessLog);
         if (accessLog.has(DIRECTORY)) {
-          final ModelNode directory=accessLog.get(DIRECTORY);
-          writer.writeEmptyElement(DIRECTORY);
-          writeAttribute(writer,Attribute.PATH.getLocalName(),directory);
-          writeAttribute(writer,Attribute.RELATIVE_TO.getLocalName(),directory);
+          ModelNode directory;
+          if (accessLog.get(DIRECTORY).has("configuration"))           directory=accessLog.get(DIRECTORY).get("configuration");
+ else           directory=accessLog.get(DIRECTORY);
+          if (directory.isDefined()) {
+            writer.writeStartElement(Element.DIRECTORY.getLocalName());
+            writeAttribute(writer,Attribute.PATH.getLocalName(),directory);
+            writeAttribute(writer,Attribute.RELATIVE_TO.getLocalName(),directory);
+            writer.writeEndElement();
+          }
         }
         writer.writeEndElement();
       }
       if (config.hasDefined(REWRITE)) {
-        for (        final ModelNode rewrite : config.get(REWRITE).asList()) {
+        for (        final ModelNode rewritenode : config.get(REWRITE).asList()) {
+          String name=getAddedRule(rewritenode);
+          ModelNode rewrite;
+          if (rewritenode.hasDefined(name))           rewrite=rewritenode.get(name);
+ else           rewrite=rewritenode;
           writer.writeStartElement(REWRITE);
           writeAttribute(writer,Attribute.PATTERN.getLocalName(),rewrite);
           writeAttribute(writer,Attribute.SUBSTITUTION.getLocalName(),rewrite);
           writeAttribute(writer,Attribute.FLAGS.getLocalName(),rewrite);
           if (rewrite.hasDefined(CONDITION)) {
-            for (            final ModelNode condition : rewrite.get(CONDITION).asList()) {
-              writer.writeEmptyElement(CONDITION);
+            for (            final ModelNode conditionnode : rewrite.get(CONDITION).asList()) {
+              String condname=getAddedConditionName(conditionnode);
+              ModelNode condition;
+              if (conditionnode.hasDefined(condname))               condition=conditionnode.get(condname);
+ else               condition=conditionnode;
+              writer.writeStartElement(CONDITION);
               writeAttribute(writer,Attribute.TEST.getLocalName(),condition);
               writeAttribute(writer,Attribute.PATTERN.getLocalName(),condition);
               writeAttribute(writer,Attribute.FLAGS.getLocalName(),condition);
