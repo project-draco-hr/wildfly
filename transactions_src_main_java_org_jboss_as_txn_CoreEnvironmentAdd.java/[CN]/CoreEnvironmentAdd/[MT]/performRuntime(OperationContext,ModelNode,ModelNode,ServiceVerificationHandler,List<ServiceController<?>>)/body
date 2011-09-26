@@ -1,0 +1,38 @@
+{
+  final String nodeIdentifier=operation.hasDefined(NODE_IDENTIFIER) ? operation.get(NODE_IDENTIFIER).asString() : "1";
+  final ModelNode processId=operation.require(PROCESS_ID);
+  final String varDirPathRef=operation.hasDefined(RELATIVE_TO) ? operation.get(RELATIVE_TO).asString() : "jboss.server.data.dir";
+  final String varDirPath=operation.hasDefined(PATH) ? operation.get(PATH).asString() : "var";
+  final int maxPorts=10;
+  if (ROOT_LOGGER.isDebugEnabled()) {
+    ROOT_LOGGER.debugf("nodeIdentifier=%s\n",nodeIdentifier);
+    ROOT_LOGGER.debugf("varDirPathRef=%s, varDirPath=%s\n",varDirPathRef,varDirPath);
+  }
+  String socketBindingName=null;
+  final CoreEnvironmentService coreEnvironmentService=new CoreEnvironmentService(nodeIdentifier,varDirPath);
+  if (processId.hasDefined(ProcessIdType.UUID.getName())) {
+    UuidProcessId id=new UuidProcessId();
+    coreEnvironmentService.setProcessImplementation(id);
+  }
+ else   if (processId.hasDefined(ProcessIdType.SOCKET.getName())) {
+    coreEnvironmentService.setProcessImplementationClassName(ProcessIdType.SOCKET.getClazz());
+    ModelNode socket=processId.get(ProcessIdType.SOCKET.getName());
+    socketBindingName=socket.require(BINDING).asString();
+    if (socket.hasDefined(SOCKET_PROCESS_ID_MAX_PORTS)) {
+      int ports=socket.get(SOCKET_PROCESS_ID_MAX_PORTS).asInt(maxPorts);
+      coreEnvironmentService.setSocketProcessIdMaxPorts(ports);
+    }
+  }
+ else {
+    UuidProcessId id=new UuidProcessId();
+    coreEnvironmentService.setProcessImplementation(id);
+  }
+  ServiceBuilder<?> coreEnvBuilder=context.getServiceTarget().addService(TxnServices.JBOSS_TXN_CORE_ENVIRONMENT,coreEnvironmentService);
+  if (socketBindingName != null) {
+    ServiceName bindingName=SocketBinding.JBOSS_BINDING_NAME.append(socketBindingName);
+    coreEnvBuilder.addDependency(bindingName,SocketBinding.class,coreEnvironmentService.getSocketProcessBindingInjector());
+  }
+  ServiceController<String> varDirRPS=RelativePathService.addService(INTERNAL_CORE_ENV_VAR_PATH,varDirPath,varDirPathRef,context.getServiceTarget());
+  controllers.add(varDirRPS);
+  controllers.add(coreEnvBuilder.addDependency(varDirRPS.getName(),String.class,coreEnvironmentService.getPathInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+}

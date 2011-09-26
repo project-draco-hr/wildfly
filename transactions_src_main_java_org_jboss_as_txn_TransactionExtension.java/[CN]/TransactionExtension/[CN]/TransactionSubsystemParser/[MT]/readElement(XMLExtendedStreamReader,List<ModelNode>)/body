@@ -2,8 +2,19 @@
   if (reader.getAttributeCount() > 0) {
     throw unexpectedAttribute(reader,0);
   }
-  final ModelNode subsystem=createEmptyAddOperation();
+  final ModelNode address=new ModelNode();
+  address.add(ModelDescriptionConstants.SUBSYSTEM,SUBSYSTEM_NAME);
+  address.protect();
+  final ModelNode subsystem=new ModelNode();
+  subsystem.get(OP).set(ADD);
+  subsystem.get(OP_ADDR).set(address);
   list.add(subsystem);
+  final ModelNode objectStoreNode=address.clone();
+  final ModelNode objectStoreOperation=new ModelNode();
+  objectStoreOperation.get(OP).set(ADD);
+  objectStoreNode.add(OBJECT_STORE,OBJECT_STORE);
+  objectStoreNode.protect();
+  objectStoreOperation.get(OP_ADDR).set(objectStoreNode);
   final EnumSet<Element> required=EnumSet.of(Element.RECOVERY_ENVIRONMENT,Element.CORE_ENVIRONMENT);
   final EnumSet<Element> encountered=EnumSet.noneOf(Element.class);
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
@@ -18,26 +29,22 @@ case TRANSACTIONS_1_0:
 switch (element) {
 case RECOVERY_ENVIRONMENT:
 {
-            final ModelNode model=parseRecoveryEnvironmentElement(reader);
-            subsystem.get(CommonAttributes.RECOVERY_ENVIRONMENT).set(model);
+            parseRecoveryEnvironmentElement(reader,list,address);
             break;
           }
 case CORE_ENVIRONMENT:
 {
-          final ModelNode model=parseCoreEnvironmentElement(reader);
-          subsystem.get(CommonAttributes.CORE_ENVIRONMENT).set(model);
+          parseCoreEnvironmentElement(reader,list,address);
           break;
         }
 case COORDINATOR_ENVIRONMENT:
 {
-        final ModelNode model=parseCoordinatorEnvironmentElement(reader);
-        subsystem.get(CommonAttributes.COORDINATOR_ENVIRONMENT).set(model);
+        parseCoordinatorEnvironmentElement(reader,list,address);
         break;
       }
 case OBJECT_STORE:
 {
-      final ModelNode model=parseObjectStoreEnvironmentElement(reader);
-      subsystem.get(CommonAttributes.OBJECT_STORE).set(model);
+      parseObjectStoreEnvironmentElementAndEnrichOperation(reader,objectStoreOperation);
       break;
     }
 default :
@@ -53,6 +60,7 @@ throw unexpectedElement(reader);
 }
 }
 }
+list.add(objectStoreOperation);
 if (!required.isEmpty()) {
 throw missingRequiredElement(reader,required);
 }
