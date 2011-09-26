@@ -1,0 +1,33 @@
+{
+  final ServiceName authProviderName=RealmAuthenticationProviderService.createName(connectorName);
+  final ServiceName optionMapName=RealmOptionMapService.createName(connectorName);
+  final RealmAuthenticationProviderService raps=new RealmAuthenticationProviderService();
+  ServiceBuilder<?> builder=serviceTarget.addService(authProviderName,raps);
+  if (securityRealmName != null) {
+    builder.addDependency(securityRealmName,SecurityRealm.class,raps.getSecurityRealmInjectedValue());
+  }
+ else {
+    Logger.getLogger("org.jboss.as").warn("No security realm defined for native management service, all access will be unrestricted.");
+  }
+  if (serverCallbackServiceName != null) {
+    builder.addDependency(serverCallbackServiceName,CallbackHandler.class,raps.getServerCallbackValue());
+  }
+  builder.setInitialMode(ON_DEMAND).install();
+  RealmOptionMapService roms=new RealmOptionMapService();
+  serviceTarget.addService(optionMapName,roms).addDependency(authProviderName,RealmAuthenticationProvider.class,roms.getRealmAuthenticationProviderInjectedValue()).setInitialMode(ON_DEMAND).install();
+  if (networkInterfaceBindingName != null) {
+    final InjectedNetworkBindingStreamServerService streamServerService=new InjectedNetworkBindingStreamServerService(port);
+    builder=serviceTarget.addService(serverServiceName(connectorName,port),streamServerService).addDependency(authProviderName,ServerAuthenticationProvider.class,streamServerService.getAuthenticationProviderInjector()).addDependency(optionMapName,OptionMap.class,streamServerService.getOptionMapInjectedValue()).addDependency(endpointName,Endpoint.class,streamServerService.getEndpointInjector()).addDependency(networkInterfaceBindingName,NetworkInterfaceBinding.class,streamServerService.getInterfaceBindingInjector()).setInitialMode(ACTIVE);
+    addController(newControllers,verificationHandler,builder);
+  }
+ else   if (socketBindingName != null) {
+    final InjectedSocketBindingStreamServerService streamServerService=new InjectedSocketBindingStreamServerService();
+    builder=serviceTarget.addService(serverServiceName(connectorName,port),streamServerService).addDependency(authProviderName,ServerAuthenticationProvider.class,streamServerService.getAuthenticationProviderInjector()).addDependency(optionMapName,OptionMap.class,streamServerService.getOptionMapInjectedValue()).addDependency(endpointName,Endpoint.class,streamServerService.getEndpointInjector()).addDependency(socketBindingName,SocketBinding.class,streamServerService.getSocketBindingInjector()).setInitialMode(ACTIVE);
+    addController(newControllers,verificationHandler,builder);
+  }
+ else {
+    final NetworkBindingStreamServerService streamServerService=new NetworkBindingStreamServerService(networkInterfaceBinding,port);
+    builder=serviceTarget.addService(serverServiceName(connectorName,port),streamServerService).addDependency(authProviderName,ServerAuthenticationProvider.class,streamServerService.getAuthenticationProviderInjector()).addDependency(optionMapName,OptionMap.class,streamServerService.getOptionMapInjectedValue()).addDependency(endpointName,Endpoint.class,streamServerService.getEndpointInjector()).setInitialMode(ACTIVE);
+    addController(newControllers,verificationHandler,builder);
+  }
+}

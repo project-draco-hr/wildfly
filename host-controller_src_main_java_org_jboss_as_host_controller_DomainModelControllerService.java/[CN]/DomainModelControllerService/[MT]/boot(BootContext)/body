@@ -1,10 +1,11 @@
 {
+  final ServiceName endpointName=ManagementRemotingServices.MANAGEMENT_ENDPOINT;
   final ServiceTarget serviceTarget=context.getServiceTarget();
   try {
     super.boot(configurationPersister.load());
     NetworkInterfaceBinding nativeManagementInterfaceBinding=getNativeManagementNetworkInterfaceBinding();
     Future<ServerInventory> inventoryFuture=NewServerInventoryService.install(serviceTarget,this,environment,nativeManagementInterfaceBinding,hostControllerInfo.getNativeManagementPort());
-    RemotingServices.installRemotingEndpoint(serviceTarget);
+    ManagementRemotingServices.installManagementRemotingEndpoint(serviceTarget,hostControllerInfo.getLocalHostName());
     if (!hostControllerInfo.isMasterDomainController()) {
       serverInventory=getFuture(inventoryFuture);
       Future<MasterDomainControllerClient> clientFuture=RemoteDomainConnectionService.install(serviceTarget,getValue(),hostControllerInfo.getLocalHostName(),hostControllerInfo.getRemoteDomainControllerHost(),hostControllerInfo.getRemoteDomainControllertPort(),hostControllerInfo.getRemoteDomainControllerSecurityRealm(),remoteFileRepository);
@@ -14,7 +15,7 @@
  else {
       ConfigurationPersister domainPersister=configurationPersister.getDomainPersister();
       super.boot(domainPersister.load());
-      RemotingServices.installChannelServices(serviceTarget,new MasterDomainControllerOperationHandlerService(this,this),DomainModelControllerService.SERVICE_NAME,RemotingServices.DOMAIN_CHANNEL,null,null);
+      ManagementRemotingServices.installManagementChannelServices(serviceTarget,endpointName,new MasterDomainControllerOperationHandlerService(this,this),DomainModelControllerService.SERVICE_NAME,ManagementRemotingServices.DOMAIN_CHANNEL,null,null);
       serverInventory=getFuture(inventoryFuture);
     }
     ServiceName realmSvcName=null;
@@ -22,10 +23,10 @@
     if (nativeSecurityRealm != null) {
       realmSvcName=SecurityRealmService.BASE_SERVICE_NAME.append(nativeSecurityRealm);
     }
-    RemotingServices.installDomainConnectorServices(serviceTarget,nativeManagementInterfaceBinding,hostControllerInfo.getNativeManagementPort(),realmSvcName,null,null);
+    ManagementRemotingServices.installDomainConnectorServices(serviceTarget,endpointName,nativeManagementInterfaceBinding,hostControllerInfo.getNativeManagementPort(),realmSvcName,null,null);
     ServerToHostOperationHandlerFactoryService.install(serviceTarget,NewServerInventoryService.SERVICE_NAME);
-    RemotingServices.installChannelOpenListenerService(serviceTarget,RemotingServices.SERVER_CHANNEL,ServerToHostOperationHandlerFactoryService.SERVICE_NAME,null,null);
-    RemotingServices.installChannelServices(serviceTarget,new ModelControllerClientOperationHandlerFactoryService(),DomainModelControllerService.SERVICE_NAME,RemotingServices.MANAGEMENT_CHANNEL,null,null);
+    ManagementRemotingServices.installManagementChannelOpenListenerService(serviceTarget,endpointName,ManagementRemotingServices.SERVER_CHANNEL,ServerToHostOperationHandlerFactoryService.SERVICE_NAME,null,null);
+    ManagementRemotingServices.installManagementChannelServices(serviceTarget,endpointName,new ModelControllerClientOperationHandlerFactoryService(),DomainModelControllerService.SERVICE_NAME,ManagementRemotingServices.MANAGEMENT_CHANNEL,null,null);
     if (hostControllerInfo.getHttpManagementInterface() != null) {
       installHttpManagementServices(serviceTarget);
     }

@@ -9,6 +9,7 @@
     }
     String name=null;
     String profile=null;
+    Boolean managementSubsystemEndpoint=null;
     final int count=reader.getAttributeCount();
     for (int i=0; i < count; i++) {
       final String value=reader.getAttributeValue(i);
@@ -37,9 +38,17 @@ case PROFILE:
           profile=value;
           break;
         }
+case MANAGEMENT_SUBSYSTEM_ENDPOINT:
+{
+        if (managementSubsystemEndpoint != null) {
+          throw ParseUtils.duplicateAttribute(reader,attribute.getLocalName());
+        }
+        managementSubsystemEndpoint=Boolean.valueOf(value);
+        break;
+      }
 default :
-      throw ParseUtils.unexpectedAttribute(reader,i);
-  }
+    throw ParseUtils.unexpectedAttribute(reader,i);
+}
 }
 }
 if (name == null) {
@@ -54,6 +63,9 @@ final ModelNode group=new ModelNode();
 group.get(OP).set(ADD);
 group.get(OP_ADDR).set(groupAddress);
 group.get(PROFILE).set(profile);
+if (managementSubsystemEndpoint != null) {
+group.get(MANAGEMENT_SUBSYSTEM_ENDPOINT).set(managementSubsystemEndpoint);
+}
 list.add(group);
 boolean sawDeployments=false;
 while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
@@ -62,18 +74,18 @@ final Element element=Element.forName(reader.getLocalName());
 switch (element) {
 case JVM:
 {
-    parseJvm(reader,groupAddress,expectedNs,list,new HashSet<String>());
-    break;
-  }
+  parseJvm(reader,groupAddress,expectedNs,list,new HashSet<String>());
+  break;
+}
 case SOCKET_BINDING_GROUP:
 {
-  parseSocketBindingGroupRef(reader,groupAddress,list);
-  break;
+parseSocketBindingGroupRef(reader,groupAddress,list);
+break;
 }
 case DEPLOYMENTS:
 {
 if (sawDeployments) {
-  throw new XMLStreamException(element.getLocalName() + " already defined",reader.getLocation());
+throw new XMLStreamException(element.getLocalName() + " already defined",reader.getLocation());
 }
 sawDeployments=true;
 parseDeployments(reader,groupAddress,expectedNs,list,true);
