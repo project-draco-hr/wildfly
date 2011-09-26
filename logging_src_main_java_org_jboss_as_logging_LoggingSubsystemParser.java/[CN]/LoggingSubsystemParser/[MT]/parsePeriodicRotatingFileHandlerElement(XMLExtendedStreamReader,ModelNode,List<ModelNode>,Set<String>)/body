@@ -29,12 +29,10 @@ throw missingRequired(reader,required);
 if (!names.add(name)) {
 throw duplicateNamedElement(reader,name);
 }
-String levelName=null;
-String encoding=null;
-String suffix=null;
-ModelNode fileSpec=null;
-boolean append=true;
-String formatterSpec=null;
+final ModelNode node=new ModelNode();
+node.get(OP).set(ADD);
+node.get(OP_ADDR).set(address).add(PERIODIC_ROTATING_FILE_HANDLER,name);
+node.get(AUTOFLUSH.getName()).set(autoflush);
 final EnumSet<Element> requiredElem=EnumSet.of(Element.FILE,Element.SUFFIX);
 final EnumSet<Element> encountered=EnumSet.noneOf(Element.class);
 while (reader.nextTag() != END_ELEMENT) {
@@ -42,36 +40,37 @@ final Element element=Element.forName(reader.getLocalName());
 if (!encountered.add(element)) {
 throw unexpectedElement(reader);
 }
+final Location location=reader.getLocation();
 requiredElem.remove(element);
 switch (element) {
 case LEVEL:
 {
-  levelName=readStringAttributeElement(reader,"name");
+  LEVEL.parseAndSetParameter(readStringAttributeElement(reader,"name"),node,location);
   break;
 }
 case ENCODING:
 {
-encoding=readStringAttributeElement(reader,"value");
+ENCODING.parseAndSetParameter(readStringAttributeElement(reader,"value"),node,location);
 break;
 }
 case FORMATTER:
 {
-formatterSpec=parseFormatterElement(reader);
+FORMATTER.parseAndSetParameter(parseFormatterElement(reader),node,location);
 break;
 }
 case FILE:
 {
-fileSpec=parseFileElement(reader);
+parseFileElement(node.get(FILE.getName()),reader);
 break;
 }
 case APPEND:
 {
-append=Boolean.parseBoolean(readStringAttributeElement(reader,"value"));
+APPEND.parseAndSetParameter(readStringAttributeElement(reader,"value"),node,location);
 break;
 }
 case SUFFIX:
 {
-suffix=readStringAttributeElement(reader,"value");
+SUFFIX.parseAndSetParameter(readStringAttributeElement(reader,"value"),node,location);
 break;
 }
 default :
@@ -83,15 +82,5 @@ throw unexpectedElement(reader);
 if (!requiredElem.isEmpty()) {
 throw missingRequired(reader,requiredElem);
 }
-final ModelNode node=new ModelNode();
-node.get(OP).set(ADD);
-node.get(OP_ADDR).set(address).add(PERIODIC_ROTATING_FILE_HANDLER,name);
-node.get(AUTOFLUSH).set(autoflush);
-if (levelName != null) node.get(LEVEL).set(levelName);
-if (encoding != null) node.get(ENCODING).set(encoding);
-if (formatterSpec != null) node.get(FORMATTER).set(formatterSpec);
-node.get(FILE).set(fileSpec);
-node.get(APPEND).set(append);
-if (suffix != null) node.get(SUFFIX).set(suffix);
 list.add(node);
 }

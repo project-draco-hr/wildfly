@@ -1,0 +1,26 @@
+{
+  final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+  final String name=address.getLastElement().getValue();
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  final T service=createHandlerService(model);
+  final ServiceBuilder<Handler> serviceBuilder=serviceTarget.addService(LogServices.handlerName(name),service);
+  final ModelNode level=LEVEL.validateResolvedOperation(model);
+  final ModelNode encoding=ENCODING.validateResolvedOperation(model);
+  final ModelNode formatter=FORMATTER.validateResolvedOperation(model);
+  if (level.isDefined()) {
+    service.setLevel(Level.parse(level.asString()));
+  }
+  try {
+    if (encoding.isDefined())     service.setEncoding(encoding.asString());
+  }
+ catch (  Throwable t) {
+    throw new OperationFailedException(new ModelNode().set(t.getLocalizedMessage()));
+  }
+  if (formatter.isDefined()) {
+    service.setFormatterSpec(AbstractFormatterSpec.fromModelNode(model));
+  }
+  updateRuntime(context,serviceBuilder,name,service,model);
+  serviceBuilder.addListener(verificationHandler);
+  serviceBuilder.setInitialMode(ServiceController.Mode.ACTIVE);
+  newControllers.add(serviceBuilder.install());
+}

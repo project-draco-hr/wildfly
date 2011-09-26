@@ -29,13 +29,10 @@ throw missingRequired(reader,required);
 if (!names.add(name)) {
 throw duplicateNamedElement(reader,name);
 }
-String levelName=null;
-String encoding=null;
-ModelNode fileSpec=null;
-boolean append=true;
-String rotateSize=null;
-int maxBackupIndex=1;
-String formatterSpec=null;
+final ModelNode node=new ModelNode();
+node.get(OP).set(ADD);
+node.get(OP_ADDR).set(address).add(SIZE_ROTATING_FILE_HANDLER,name);
+node.get(AUTOFLUSH.getName()).set(autoflush);
 final EnumSet<Element> requiredElem=EnumSet.of(Element.FILE);
 final EnumSet<Element> encountered=EnumSet.noneOf(Element.class);
 while (reader.nextTag() != END_ELEMENT) {
@@ -44,45 +41,41 @@ if (!encountered.add(element)) {
 throw unexpectedElement(reader);
 }
 requiredElem.remove(element);
+final Location location=reader.getLocation();
 switch (element) {
 case LEVEL:
 {
-  levelName=readStringAttributeElement(reader,"name");
+  LEVEL.parseAndSetParameter(readStringAttributeElement(reader,"name"),node,location);
   break;
 }
 case ENCODING:
 {
-encoding=readStringAttributeElement(reader,"value");
+ENCODING.parseAndSetParameter(readStringAttributeElement(reader,"value"),node,location);
 break;
 }
 case FORMATTER:
 {
-formatterSpec=parseFormatterElement(reader);
+FORMATTER.parseAndSetParameter(parseFormatterElement(reader),node,location);
 break;
 }
 case FILE:
 {
-fileSpec=parseFileElement(reader);
+parseFileElement(node.get(FILE.getName()),reader);
 break;
 }
 case APPEND:
 {
-append=Boolean.parseBoolean(readStringAttributeElement(reader,"value"));
+APPEND.parseAndSetParameter(readStringAttributeElement(reader,"value"),node,location);
 break;
 }
 case ROTATE_SIZE:
 {
-rotateSize=readStringAttributeElement(reader,"value");
+ROTATE_SIZE.parseAndSetParameter(readStringAttributeElement(reader,"value"),node,location);
 break;
 }
 case MAX_BACKUP_INDEX:
 {
-try {
-maxBackupIndex=Integer.parseInt(readStringAttributeElement(reader,"value"));
-}
- catch (NumberFormatException e) {
-throw new XMLStreamException(e.getMessage(),reader.getLocation(),e);
-}
+MAX_BACKUP_INDEX.parseAndSetParameter(readStringAttributeElement(reader,"value"),node,location);
 break;
 }
 default :
@@ -90,24 +83,6 @@ default :
 throw unexpectedElement(reader);
 }
 }
-}
-if (!requiredElem.isEmpty()) {
-throw missingRequired(reader,requiredElem);
-}
-final ModelNode node=new ModelNode();
-node.get(OP).set(ADD);
-node.get(OP_ADDR).set(address).add(SIZE_ROTATING_FILE_HANDLER,name);
-node.get(AUTOFLUSH).set(autoflush);
-if (levelName != null) node.get(LEVEL).set(levelName);
-if (encoding != null) node.get(ENCODING).set(encoding);
-if (formatterSpec != null) node.get(FORMATTER).set(formatterSpec);
-node.get(FILE).set(fileSpec);
-node.get(APPEND).set(append);
-if (rotateSize != null) {
-node.get(ROTATE_SIZE).set(rotateSize);
-}
-if (maxBackupIndex > 0) {
-node.get(MAX_BACKUP_INDEX).set(maxBackupIndex);
 }
 list.add(node);
 }
