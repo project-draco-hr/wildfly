@@ -1,0 +1,36 @@
+{
+  nameValidator.validate(operation);
+  final String attributeName=operation.require(NAME).asString();
+  final ModelNode newValue=operation.hasDefined(VALUE) ? operation.get(VALUE) : new ModelNode();
+  validateUnresolvedValue(attributeName,newValue);
+  final ModelNode submodel=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel();
+  final ModelNode currentValue=submodel.get(attributeName).clone();
+  submodel.get(attributeName).set(newValue);
+  if (requiresRuntime(context)) {
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        ModelNode resolvedValue=newValue.resolve();
+        validateResolvedValue(attributeName,newValue);
+        HandbackHolder<T> handback=new HandbackHolder<T>();
+        boolean restartRequired=applyUpdateToRuntime(context,operation,attributeName,resolvedValue,currentValue,handback);
+        if (restartRequired) {
+          context.reloadRequired();
+        }
+        if (context.completeStep() != OperationContext.ResultAction.KEEP) {
+          ModelNode valueToRestore=currentValue.resolve();
+          try {
+            revertUpdateToRuntime(context,operation,attributeName,valueToRestore,resolvedValue,handback.handback);
+          }
+ catch (          Exception e) {
+            log.errorf(e,String.format("%s caught exception attempting to revert operation %s at address %s",getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR))));
+          }
+          if (restartRequired) {
+            context.revertReloadRequired();
+          }
+        }
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}
