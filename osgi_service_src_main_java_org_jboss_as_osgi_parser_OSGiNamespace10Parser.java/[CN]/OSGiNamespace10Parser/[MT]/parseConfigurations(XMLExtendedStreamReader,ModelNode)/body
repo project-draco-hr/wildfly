@@ -1,0 +1,63 @@
+{
+  String pid=null;
+  int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    requireNoNamespaceAttribute(reader,i);
+    final String attrValue=reader.getAttributeValue(i);
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case PID:
+{
+        pid=attrValue;
+        break;
+      }
+default :
+    throw unexpectedAttribute(reader,i);
+}
+}
+if (pid == null) throw missingRequired(reader,Collections.singleton(Attribute.PID));
+ModelNode configuration=new ModelNode();
+configuration.get(OP).set(ADD);
+configuration.get(OP_ADDR).set(address).add(Constants.CONFIGURATION,pid);
+List<ModelNode> result=new ArrayList<ModelNode>();
+result.add(configuration);
+ModelNode entries=configuration.get(Constants.ENTRIES);
+while (reader.hasNext() && reader.nextTag() != XMLStreamConstants.END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case OSGI_1_0:
+{
+    final Element element=Element.forName(reader.getLocalName());
+    if (element == Element.PROPERTY) {
+      String name=null;
+      String value=null;
+      count=reader.getAttributeCount();
+      for (int i=0; i < count; i++) {
+        requireNoNamespaceAttribute(reader,i);
+        final String attrValue=reader.getAttributeValue(i);
+        final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+            name=attrValue;
+            if (entries.has(name))             throw new XMLStreamException(MESSAGES.propertyAlreadyExists(name),reader.getLocation());
+            break;
+          }
+default :
+        throw unexpectedAttribute(reader,i);
+    }
+  }
+  if (name == null)   throw missingRequired(reader,Collections.singleton(Attribute.NAME));
+  value=reader.getElementText().trim();
+  entries.get(name).set(value);
+  break;
+}
+ else {
+  throw unexpectedElement(reader);
+}
+}
+default :
+throw unexpectedElement(reader);
+}
+}
+return result;
+}
