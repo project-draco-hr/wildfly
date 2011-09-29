@@ -1,0 +1,82 @@
+{
+  requireNoAttributes(reader);
+  final Set<String> names=new HashSet<String>();
+  while (reader.nextTag() != END_ELEMENT) {
+    requireNamespace(reader,expectedNs);
+    Element deployment=Element.forName(reader.getLocalName());
+    if (Element.DEPLOYMENT != deployment) {
+      throw unexpectedElement(reader);
+    }
+    String uniqueName=null;
+    String runtimeName=null;
+    String startInput=null;
+    final int count=reader.getAttributeCount();
+    for (int i=0; i < count; i++) {
+      final String value=reader.getAttributeValue(i);
+      if (!isNoNamespaceAttribute(reader,i)) {
+        throw unexpectedAttribute(reader,i);
+      }
+ else {
+        final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+            if (!names.add(value)) {
+              throw duplicateNamedElement(reader,value);
+            }
+            uniqueName=value;
+            break;
+          }
+case RUNTIME_NAME:
+{
+          runtimeName=value;
+          break;
+        }
+case ENABLED:
+{
+        if (allowEnabled) {
+          startInput=value;
+          break;
+        }
+ else {
+          throw unexpectedAttribute(reader,i);
+        }
+      }
+default :
+    throw unexpectedAttribute(reader,i);
+}
+}
+}
+if (uniqueName == null) {
+throw missingRequired(reader,Collections.singleton(Attribute.NAME));
+}
+if (runtimeName == null) {
+throw missingRequired(reader,Collections.singleton(Attribute.RUNTIME_NAME));
+}
+final boolean enabled=startInput == null ? true : Boolean.parseBoolean(startInput);
+final ModelNode deploymentAddress=address.clone().add(DEPLOYMENT,uniqueName);
+final ModelNode deploymentAdd=Util.getEmptyOperation(ADD,deploymentAddress);
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+requireNamespace(reader,expectedNs);
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case CONTENT:
+parseContentType(reader,deploymentAdd);
+break;
+case FS_ARCHIVE:
+parseFSBaseType(reader,deploymentAdd,true);
+break;
+case FS_EXPLODED:
+parseFSBaseType(reader,deploymentAdd,false);
+break;
+default :
+throw unexpectedElement(reader);
+}
+}
+deploymentAdd.get(RUNTIME_NAME).set(runtimeName);
+if (allowEnabled) {
+deploymentAdd.get(ENABLED).set(enabled);
+}
+list.add(deploymentAdd);
+}
+}
