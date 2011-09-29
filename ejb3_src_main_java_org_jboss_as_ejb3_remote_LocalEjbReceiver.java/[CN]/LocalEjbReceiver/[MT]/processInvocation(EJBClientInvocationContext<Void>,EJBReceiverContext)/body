@@ -14,7 +14,7 @@
  else {
     parameters=new Object[invocation.getParameters().length];
     for (int i=0; i < parameters.length; ++i) {
-      parameters[i]=clone(method.getParameterTypes()[i],invocation.getParameters()[i]);
+      parameters[i]=clone(method.getParameterTypes()[i],invocation.getParameters()[i],allowPassByReference);
     }
   }
   final InterceptorContext context=new InterceptorContext();
@@ -25,6 +25,10 @@
   context.putPrivateData(Component.class,ejb.getEjbComponent());
   context.putPrivateData(ComponentView.class,view);
   final Object result=view.invoke(context);
-  final Object clonedResult=clone(method.getReturnType(),result);
-  return new ImmediateFuture(clonedResult);
+  if (result instanceof AsyncResult) {
+    final Object futureResult=((Future)result).get();
+    return new AsyncResult<Object>(new AsyncResult<Object>(clone(futureResult.getClass(),futureResult,false)));
+  }
+  final Object clonedResult=clone(method.getReturnType(),result,true);
+  return new AsyncResult<Object>(clonedResult);
 }
