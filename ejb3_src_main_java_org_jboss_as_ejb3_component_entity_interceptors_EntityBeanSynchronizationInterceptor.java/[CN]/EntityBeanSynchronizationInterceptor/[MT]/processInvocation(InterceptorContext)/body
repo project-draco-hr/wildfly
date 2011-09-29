@@ -8,23 +8,16 @@
   if (log.isTraceEnabled()) {
     log.trace("Trying to acquire lock: " + lock + " for entity bean "+ instance+ " during invocation: "+ context);
   }
-  if (!reentrant && lock.isHeldByCurrentThread()) {
-    throw new EJBException("Could not re-acquire lock for non-reentrant instance " + component.getComponentName());
-  }
   lock.lock();
-  if (log.isTraceEnabled()) {
-    log.trace("Acquired lock: " + lock + " for entity bean instance: "+ instance+ " during invocation: "+ context);
-  }
-  Object currentTransactionKey=null;
-  boolean wasTxSyncRegistered=false;
-  try {
-    currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
-    if (transactionKey != null) {
-      if (!transactionKey.equals(currentTransactionKey))       throw new EJBException("Entity Bean " + instance + " is already associated with tx "+ transactionKey+ " (current tx "+ currentTransactionKey+ ")");
+synchronized (lock) {
+    if (log.isTraceEnabled()) {
+      log.trace("Acquired lock: " + lock + " for entity bean instance: "+ instance+ " during invocation: "+ context);
     }
- else {
+    Object currentTransactionKey=null;
+    boolean wasTxSyncRegistered=false;
+    try {
+      currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
       if (currentTransactionKey != null) {
-        transactionKey=currentTransactionKey;
         final Synchronization statefulSessionSync=new EntityBeanSynchronization(instance);
         transactionSynchronizationRegistry.registerInterposedSynchronization(statefulSessionSync);
         wasTxSyncRegistered=true;
@@ -32,13 +25,13 @@
           log.trace("Registered tx synchronization: " + statefulSessionSync + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
         }
       }
+      return context.proceed();
     }
-    return context.proceed();
-  }
   finally {
-    if (!wasTxSyncRegistered) {
-      instance.store();
-      releaseInstance(instance,true);
+      if (!wasTxSyncRegistered) {
+        instance.store();
+        releaseInstance(instance,true);
+      }
     }
   }
 }

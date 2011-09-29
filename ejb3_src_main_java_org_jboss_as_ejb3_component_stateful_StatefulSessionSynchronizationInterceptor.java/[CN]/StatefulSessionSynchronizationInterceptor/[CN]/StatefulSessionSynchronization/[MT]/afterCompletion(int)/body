@@ -1,13 +1,20 @@
 {
-  try {
-    if (log.isTraceEnabled()) {
-      log.trace("After completion callback invoked on Transaction synchronization: " + this + " of stateful component instance: "+ statefulSessionComponentInstance);
+synchronized (threadLock) {
+    try {
+      if (log.isTraceEnabled()) {
+        log.trace("After completion callback invoked on Transaction synchronization: " + this + " of stateful component instance: "+ statefulSessionComponentInstance);
+      }
+      statefulSessionComponentInstance.afterCompletion(status == Status.STATUS_COMMITTED);
     }
-    statefulSessionComponentInstance.afterCompletion(status == Status.STATUS_COMMITTED);
+ catch (    Throwable t) {
+      throw handleThrowableInTxSync(statefulSessionComponentInstance,t);
+    }
+    lock.pushOwner(getLockOwner(statefulSessionComponentInstance.getComponent().getTransactionSynchronizationRegistry()));
+    try {
+      releaseInstance(statefulSessionComponentInstance);
+    }
+  finally {
+      lock.popOwner();
+    }
   }
- catch (  Throwable t) {
-    throw handleThrowableInTxSync(statefulSessionComponentInstance,t);
-  }
-  transactionKey=null;
-  releaseInstance(statefulSessionComponentInstance);
 }
