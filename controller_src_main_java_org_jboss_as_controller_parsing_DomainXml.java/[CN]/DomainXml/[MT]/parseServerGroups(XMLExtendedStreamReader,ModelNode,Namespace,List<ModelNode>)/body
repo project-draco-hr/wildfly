@@ -2,6 +2,11 @@
   requireNoAttributes(reader);
   final Set<String> names=new HashSet<String>();
   while (reader.nextTag() != END_ELEMENT) {
+    requireNamespace(reader,expectedNs);
+    Element serverGroup=Element.forName(reader.getLocalName());
+    if (Element.SERVER_GROUP != serverGroup) {
+      throw unexpectedElement(reader);
+    }
     String name=null;
     String profile=null;
     final int count=reader.getAttributeCount();
@@ -38,10 +43,10 @@ default :
 }
 }
 if (name == null) {
-throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.NAME));
+throw missingRequired(reader,Collections.singleton(Attribute.NAME));
 }
 if (profile == null) {
-throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.PROFILE));
+throw missingRequired(reader,Collections.singleton(Attribute.PROFILE));
 }
 final ModelNode groupAddress=new ModelNode().set(address);
 groupAddress.add(ModelDescriptionConstants.SERVER_GROUP,name);
@@ -52,38 +57,31 @@ group.get(PROFILE).set(profile);
 list.add(group);
 boolean sawDeployments=false;
 while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
-switch (Namespace.forUri(reader.getNamespaceURI())) {
-case DOMAIN_1_0:
-{
-    final Element element=Element.forName(reader.getLocalName());
+requireNamespace(reader,expectedNs);
+final Element element=Element.forName(reader.getLocalName());
 switch (element) {
 case JVM:
 {
-        parseJvm(reader,groupAddress,list,new HashSet<String>());
-        break;
-      }
-case SOCKET_BINDING_GROUP:
-{
-      parseSocketBindingGroupRef(reader,groupAddress,list);
-      break;
-    }
-case DEPLOYMENTS:
-{
-    if (sawDeployments) {
-      throw new XMLStreamException(element.getLocalName() + " already defined",reader.getLocation());
-    }
-    sawDeployments=true;
-    parseDeployments(reader,groupAddress,list,true);
+    parseJvm(reader,groupAddress,expectedNs,list,new HashSet<String>());
     break;
   }
-case SYSTEM_PROPERTIES:
+case SOCKET_BINDING_GROUP:
 {
-  parseSystemProperties(reader,groupAddress,list,false);
+  parseSocketBindingGroupRef(reader,groupAddress,list);
   break;
 }
-default :
-throw ParseUtils.unexpectedElement(reader);
+case DEPLOYMENTS:
+{
+if (sawDeployments) {
+  throw new XMLStreamException(element.getLocalName() + " already defined",reader.getLocation());
 }
+sawDeployments=true;
+parseDeployments(reader,groupAddress,expectedNs,list,true);
+break;
+}
+case SYSTEM_PROPERTIES:
+{
+parseSystemProperties(reader,groupAddress,expectedNs,list,false);
 break;
 }
 default :
