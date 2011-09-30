@@ -11,13 +11,16 @@ synchronized (lock) {
   }
  catch (  InterruptedException e) {
   }
+  boolean respawn=false;
+  int respawnCount=0;
 synchronized (lock) {
     final long endTime=System.currentTimeMillis();
+    processController.processStopped(processName,endTime - startTime);
     state=State.DOWN;
     if (shutdown) {
       processController.removeProcess(processName);
     }
- else     if (isInitial() && exitCode == 99) {
+ else     if (isPrivileged() && exitCode == 99) {
       processController.removeProcess(processName);
       new Thread(new Runnable(){
         public void run(){
@@ -28,10 +31,14 @@ synchronized (lock) {
 ).start();
     }
  else {
-      processController.processStopped(processName,endTime - startTime);
-      if (isInitial()) {
-        doStart(true);
+      if (!stopRequested) {
+        respawn=true;
+        respawnCount=ManagedProcess.this.incrementAndGetRespawnCount();
       }
     }
+    stopRequested=false;
+  }
+  if (respawn) {
+    respawnPolicy.respawn(respawnCount,ManagedProcess.this);
   }
 }
