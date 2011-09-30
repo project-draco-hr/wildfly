@@ -1,12 +1,13 @@
 {
   final EjbDeploymentInformation ejb=findBean(invocation.getAppName(),invocation.getModuleName(),invocation.getDistinctName(),invocation.getBeanName());
+  final EJBComponent ejbComponent=ejb.getEjbComponent();
   final Class<?> viewClass=invocation.getViewClass();
   final ComponentView view=ejb.getView(viewClass.getName());
   if (view == null) {
     throw new RuntimeException("Could not find view " + viewClass + " for ejb "+ ejb.getEjbName());
   }
-  final Method invokedMethod=invocation.getInvokedMethod();
-  final Method method=view.getMethod(invokedMethod.getName(),DescriptorUtils.methodDescriptor(invokedMethod));
+  final Method method=view.getMethod(invocation.getInvokedMethod().getName(),DescriptorUtils.methodDescriptor(invocation.getInvokedMethod()));
+  final boolean async=view.isAsynchronous(method);
   final Object[] parameters;
   if (invocation.getParameters() == null) {
     parameters=EMPTY_OBJECT_ARRAY;
@@ -22,13 +23,29 @@
   context.setMethod(method);
   context.setTarget(invocation.getInvokedProxy());
   context.setContextData(new HashMap<String,Object>());
-  context.putPrivateData(Component.class,ejb.getEjbComponent());
+  context.putPrivateData(Component.class,ejbComponent);
   context.putPrivateData(ComponentView.class,view);
-  final Object result=view.invoke(context);
-  if (result instanceof AsyncResult) {
-    final Object futureResult=((Future)result).get();
-    return new AsyncResult<Object>(new AsyncResult<Object>(clone(futureResult.getClass(),futureResult,false)));
+  if (async) {
+    if (ejbComponent instanceof SessionBeanComponent) {
+      final SessionBeanComponent component=(SessionBeanComponent)ejbComponent;
+      final CancellationFlag flag=new CancellationFlag();
+      final AsyncInvocationTask task=new AsyncInvocationTask(flag){
+        @Override protected Object runInvocation() throws Exception {
+          return view.invoke(context);
+        }
+      }
+;
+      context.putPrivateData(CancellationFlag.class,flag);
+      component.getAsynchronousExecutor().submit(task);
+      return new AsyncResult<Object>(task);
+    }
+ else {
+      throw new RuntimeException("Cannot perform asynchronous local invocation for component that is not a session bean");
+    }
   }
-  final Object clonedResult=clone(method.getReturnType(),result,true);
-  return new AsyncResult<Object>(clonedResult);
+ else {
+    final Object result=view.invoke(context);
+    final Object clonedResult=clone(method.getReturnType(),result,true);
+    return new AsyncResult<Object>(clonedResult);
+  }
 }
