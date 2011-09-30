@@ -1,27 +1,47 @@
 {
-  final ModelNode address=subsystemAddress.clone();
-  address.add(HORNETQ_SERVER,"default");
-  address.protect();
-  final ModelNode operation=new ModelNode();
-  operation.get(OP).set(ADD);
-  operation.get(OP_ADDR).set(address);
-  list.add(operation);
-  EnumSet<Element> seen=EnumSet.noneOf(Element.class);
-  int tag=reader.getEventType();
-  String localName=null;
-  do {
-    tag=reader.nextTag();
-    localName=reader.getLocalName();
-    final Element element=Element.forName(reader.getLocalName());
-    if (!seen.add(element)) {
-      throw ParseUtils.duplicateNamedElement(reader,element.getLocalName());
-    }
+  String hqServerName=null;
+  String elementName=null;
+switch (namespace) {
+case MESSAGING_1_0:
+    requireNoAttributes(reader);
+  elementName=ModelDescriptionConstants.SUBSYSTEM;
+break;
+default :
+{
+final int count=reader.getAttributeCount();
+if (count > 0) {
+  requireSingleAttribute(reader,Attribute.NAME.getLocalName());
+  hqServerName=reader.getAttributeValue(0).trim();
+}
+elementName=CommonAttributes.HORNETQ_SERVER;
+}
+}
+if (hqServerName == null || hqServerName.length() == 0) {
+hqServerName="default";
+}
+final ModelNode address=subsystemAddress.clone();
+address.add(HORNETQ_SERVER,hqServerName);
+address.protect();
+final ModelNode operation=new ModelNode();
+operation.get(OP).set(ADD);
+operation.get(OP_ADDR).set(address);
+list.add(operation);
+EnumSet<Element> seen=EnumSet.noneOf(Element.class);
+int tag=reader.getEventType();
+String localName=null;
+do {
+tag=reader.nextTag();
+localName=reader.getLocalName();
+final Element element=Element.forName(reader.getLocalName());
+if (!seen.add(element)) {
+throw ParseUtils.duplicateNamedElement(reader,element.getLocalName());
+}
 switch (element) {
 case ACCEPTORS:
-      processAcceptors(reader,address,list);
-    break;
+processAcceptors(reader,address,list);
+break;
 case ADDRESS_SETTINGS:
-  processAddressSettings(reader,address,list);
+processAddressSettings(reader,address,list);
 break;
 case BINDINGS_DIRECTORY:
 parseDirectory(reader,CommonAttributes.BINDINGS_DIRECTORY,address,list);
@@ -98,7 +118,15 @@ case THREAD_POOL_MAX_SIZE:
 handleElementText(reader,element,"server",operation);
 break;
 }
+case HORNETQ_SERVER:
+if (namespace == Namespace.MESSAGING_1_0) {
+throw unexpectedEndElement(reader);
+}
+break;
 case SUBSYSTEM:
+if (namespace != Namespace.MESSAGING_1_0) {
+throw unexpectedEndElement(reader);
+}
 break;
 default :
 if (SIMPLE_ROOT_RESOURCE_ELEMENTS.contains(element)) {
@@ -115,5 +143,5 @@ throw ParseUtils.unexpectedElement(reader);
 }
 }
 }
- while (reader.hasNext() && localName.equals(ModelDescriptionConstants.SUBSYSTEM) == false);
+ while (reader.hasNext() && localName.equals(elementName) == false);
 }
