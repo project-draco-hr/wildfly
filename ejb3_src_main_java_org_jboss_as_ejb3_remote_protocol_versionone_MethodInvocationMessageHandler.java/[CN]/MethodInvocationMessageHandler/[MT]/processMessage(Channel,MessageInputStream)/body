@@ -11,12 +11,12 @@
   final String viewClassName=input.readUTF();
   final EjbDeploymentInformation ejbDeploymentInformation=this.findEJB(appName,moduleName,distinctName,beanName);
   if (ejbDeploymentInformation == null) {
-    this.writeNoSuchEJBFailureMessage(channel,appName,moduleName,distinctName,beanName,viewClassName);
+    this.writeNoSuchEJBFailureMessage(channel,invocationId,appName,moduleName,distinctName,beanName,viewClassName);
     return;
   }
   final ComponentView componentView=ejbDeploymentInformation.getView(viewClassName);
   if (componentView == null) {
-    this.writeNoSuchEJBFailureMessage(channel,appName,moduleName,distinctName,beanName,viewClassName);
+    this.writeNoSuchEJBFailureMessage(channel,invocationId,appName,moduleName,distinctName,beanName,viewClassName);
     return;
   }
   final String methodName=input.readUTF();
@@ -33,26 +33,28 @@
     return;
   }
   final RemotingAttachments attachments=this.readAttachments(input);
-  final UnMarshaller unMarshaller=MarshallerFactory.createUnMarshaller(this.marshallingStrategy);
-  final ClassLoader beanClassLoader=ejbDeploymentInformation.getDeploymentClassLoader();
-  unMarshaller.start(input,beanClassLoader);
   final Object[] methodParams=new Object[methodParamTypes.length];
-  for (int i=0; i < methodParamTypes.length; i++) {
-    try {
-      methodParams[i]=unMarshaller.readObject();
+  if (methodParamTypes.length > 0) {
+    final UnMarshaller unMarshaller=MarshallerFactory.createUnMarshaller(this.marshallingStrategy);
+    final ClassLoader beanClassLoader=ejbDeploymentInformation.getDeploymentClassLoader();
+    unMarshaller.start(input,beanClassLoader);
+    for (int i=0; i < methodParamTypes.length; i++) {
+      try {
+        methodParams[i]=unMarshaller.readObject();
+      }
+ catch (      ClassNotFoundException cnfe) {
+        return;
+      }
     }
- catch (    ClassNotFoundException cnfe) {
-      return;
-    }
+    unMarshaller.finish();
   }
-  unMarshaller.finish();
   Object result=null;
   try {
     result=this.invokeMethod(componentView,invokedMethod,methodParams,attachments);
   }
  catch (  Throwable throwable) {
-    logger.error(throwable);
+    logger.error("Error invoking method " + invokedMethod + " on bean named "+ beanName+ " in app: "+ appName+ " module: "+ moduleName+ " distinctname: "+ distinctName,throwable);
     return;
   }
-  this.writeMethodInvocationResponse(channel,invocationId,result);
+  this.writeMethodInvocationResponse(channel,invocationId,result,attachments);
 }
