@@ -5,41 +5,20 @@
     persistenceProviderClassName=Configuration.PROVIDER_CLASS_DEFAULT;
   }
   if (persistenceProviderModule == null) {
-    if (persistenceProviderClassName.equals(Configuration.PROVIDER_CLASS_DEFAULT)) {
-      persistenceProviderModule=Configuration.PROVIDER_MODULE_DEFAULT;
-    }
+    persistenceProviderModule=Configuration.getProviderModuleNameFromProviderClassName(persistenceProviderClassName);
   }
   PersistenceProvider provider=getProviderByName(pu,persistenceProviderModule);
   if (provider == null) {
     if (persistenceProviderModule != null) {
-      final ModuleLoader moduleLoader=Module.getBootModuleLoader();
-      Module module=null;
       try {
-        module=moduleLoader.loadModule(ModuleIdentifier.fromString(persistenceProviderModule));
+        PersistenceProviderLoader.loadProviderModuleByName(persistenceProviderModule);
+        provider=getProviderByName(pu,persistenceProviderModule);
       }
  catch (      ModuleLoadException e) {
         throw MESSAGES.cannotLoadPersistenceProviderModule(e,persistenceProviderModule,persistenceProviderClassName);
       }
-      final ServiceLoader<PersistenceProvider> serviceLoader=module.loadService(PersistenceProvider.class);
-      if (serviceLoader != null) {
-        PersistenceProvider persistenceProvider=null;
-        for (        PersistenceProvider provider1 : serviceLoader) {
-          if (persistenceProviderClassName.equals(provider1.getClass().getName())) {
-            persistenceProvider=provider1;
-          }
-        }
-        if (persistenceProvider == null) {
-          ArrayList<String> providerClasses=new ArrayList<String>();
-          for (          PersistenceProvider provider2 : serviceLoader) {
-            providerClasses.add(provider2.getClass().getName());
-          }
-          throw MESSAGES.incorrectPersistenceProvider(pu.getPersistenceUnitName(),persistenceProviderModule,persistenceProviderClassName,providerClasses);
-        }
-        PersistenceProviderResolverImpl.getInstance().addPersistenceProvider(persistenceProvider);
-      }
     }
   }
-  if (provider == null)   provider=getProviderByName(pu,persistenceProviderModule);
   if (provider == null)   throw MESSAGES.persistenceProviderNotFound(persistenceProviderClassName);
   return provider;
 }
