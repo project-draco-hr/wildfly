@@ -1,0 +1,85 @@
+{
+  requireNoAttributes(reader);
+  final ModelNode address=new ModelNode();
+  address.add(SUBSYSTEM,EJB3Extension.SUBSYSTEM_NAME);
+  address.add(SERVICE,TIMER_SERVICE);
+  final ModelNode timerServiceAdd=new ModelNode();
+  timerServiceAdd.get(OP).set(ADD);
+  timerServiceAdd.get(OP_ADDR).set(address);
+  Integer coreThreads=null;
+  Integer maxThreads=null;
+  String dataStorePath=null;
+  String dataStorePathRelativeTo=null;
+  while (reader.hasNext() && reader.nextTag() != XMLStreamConstants.END_ELEMENT) {
+switch (EJB3SubsystemXMLElement.forName(reader.getLocalName())) {
+case THREAD_POOL:
+{
+        final int count=reader.getAttributeCount();
+        for (int i=0; i < count; i++) {
+          requireNoNamespaceAttribute(reader,i);
+          final Location location=reader.getLocation();
+          final String value=reader.getAttributeValue(i);
+          final EJB3SubsystemXMLAttribute attribute=EJB3SubsystemXMLAttribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case CORE_THREADS:
+            if (coreThreads != null) {
+              throw unexpectedAttribute(reader,i);
+            }
+          TimerServiceResourceDefinition.CORE_THREADS.parseAndSetParameter(value,timerServiceAdd,location);
+        break;
+case MAX_THREADS:
+      if (maxThreads != null) {
+        throw unexpectedAttribute(reader,i);
+      }
+    TimerServiceResourceDefinition.MAX_THREADS.parseAndSetParameter(value,timerServiceAdd,location);
+  break;
+default :
+throw unexpectedAttribute(reader,i);
+}
+}
+requireNoContent(reader);
+break;
+}
+case DATA_STORE:
+{
+final int count=reader.getAttributeCount();
+for (int i=0; i < count; i++) {
+requireNoNamespaceAttribute(reader,i);
+final Location location=reader.getLocation();
+final String value=reader.getAttributeValue(i);
+final EJB3SubsystemXMLAttribute attribute=EJB3SubsystemXMLAttribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case PATH:
+if (dataStorePath != null) {
+throw unexpectedAttribute(reader,i);
+}
+dataStorePath=TimerServiceResourceDefinition.PATH.parse(value,location).asString();
+break;
+case RELATIVE_TO:
+if (dataStorePathRelativeTo != null) {
+throw unexpectedAttribute(reader,i);
+}
+dataStorePathRelativeTo=TimerServiceResourceDefinition.RELATIVE_TO.parse(value,location).asString();
+break;
+default :
+throw unexpectedAttribute(reader,i);
+}
+}
+if (dataStorePath == null) {
+throw missingRequired(reader,Collections.singleton(EJB3SubsystemXMLAttribute.PATH));
+}
+timerServiceAdd.get(PATH).set(dataStorePath);
+if (dataStorePathRelativeTo != null) {
+timerServiceAdd.get(RELATIVE_TO).set(dataStorePathRelativeTo);
+}
+requireNoContent(reader);
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+operations.add(timerServiceAdd);
+}
