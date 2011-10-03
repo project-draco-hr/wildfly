@@ -1,0 +1,58 @@
+{
+  final DataInputStream input=new DataInputStream(messageInputStream);
+  final short invocationId=input.readShort();
+  String appName=input.readUTF();
+  if (appName.isEmpty()) {
+    appName=null;
+  }
+  final String moduleName=input.readUTF();
+  final String distinctName=input.readUTF();
+  final String beanName=input.readUTF();
+  final String viewClassName=input.readUTF();
+  final EjbDeploymentInformation ejbDeploymentInformation=this.findEJB(appName,moduleName,distinctName,beanName);
+  if (ejbDeploymentInformation == null) {
+    this.writeNoSuchEJBFailureMessage(channel,appName,moduleName,distinctName,beanName,viewClassName);
+    return;
+  }
+  final ComponentView componentView=ejbDeploymentInformation.getView(viewClassName);
+  if (componentView == null) {
+    this.writeNoSuchEJBFailureMessage(channel,appName,moduleName,distinctName,beanName,viewClassName);
+    return;
+  }
+  final String methodName=input.readUTF();
+  String[] methodParamTypes=null;
+  final String signature=input.readUTF();
+  if (signature.isEmpty()) {
+    methodParamTypes=new String[0];
+  }
+ else {
+    methodParamTypes=signature.split(String.valueOf(METHOD_PARAM_TYPE_SEPARATOR));
+  }
+  final Method invokedMethod=this.findMethod(componentView,methodName,methodParamTypes);
+  if (invokedMethod == null) {
+    return;
+  }
+  final RemotingAttachments attachments=this.readAttachments(input);
+  final UnMarshaller unMarshaller=MarshallerFactory.createUnMarshaller(this.marshallingStrategy);
+  final ClassLoader beanClassLoader=ejbDeploymentInformation.getDeploymentClassLoader();
+  unMarshaller.start(input,beanClassLoader);
+  final Object[] methodParams=new Object[methodParamTypes.length];
+  for (int i=0; i < methodParamTypes.length; i++) {
+    try {
+      methodParams[i]=unMarshaller.readObject();
+    }
+ catch (    ClassNotFoundException cnfe) {
+      return;
+    }
+  }
+  unMarshaller.finish();
+  Object result=null;
+  try {
+    result=this.invokeMethod(componentView,invokedMethod,methodParams,attachments);
+  }
+ catch (  Throwable throwable) {
+    logger.error(throwable);
+    return;
+  }
+  this.writeMethodInvocationResponse(channel,invocationId,result);
+}
