@@ -14,11 +14,11 @@
     this.writeNoSuchEJBFailureMessage(channel,invocationId,appName,moduleName,distinctName,beanName,viewClassName);
     return;
   }
-  final ComponentView componentView=ejbDeploymentInformation.getView(viewClassName);
-  if (componentView == null) {
+  if (!ejbDeploymentInformation.getViewNames().contains(viewClassName)) {
     this.writeNoSuchEJBFailureMessage(channel,invocationId,appName,moduleName,distinctName,beanName,viewClassName);
     return;
   }
+  final ComponentView componentView=ejbDeploymentInformation.getView(viewClassName);
   final String methodName=input.readUTF();
   String[] methodParamTypes=null;
   final String signature=input.readUTF();
@@ -54,8 +54,13 @@
     result=this.invokeMethod(componentView,invokedMethod,methodParams,attachments);
   }
  catch (  Throwable throwable) {
-    logger.error("Error invoking method " + invokedMethod + " on bean named "+ beanName+ " in app: "+ appName+ " module: "+ moduleName+ " distinctname: "+ distinctName,throwable);
-    return;
+    try {
+      this.writeMethodInvocationFailure(channel,invocationId,throwable,attachments);
+    }
+ catch (    IOException ioe) {
+      logger.error("Error invoking method " + invokedMethod + " on bean named "+ beanName+ " in app: "+ appName+ " module: "+ moduleName+ " distinctname: "+ distinctName,throwable);
+      throw ioe;
+    }
   }
   this.writeMethodInvocationResponse(channel,invocationId,result,attachments);
 }
