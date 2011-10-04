@@ -1,0 +1,23 @@
+{
+  resource=new OSGiRuntimeResource();
+  context.addResource(PathAddress.EMPTY_ADDRESS,resource);
+  populateModel(operation,resource);
+  final ModelNode model=resource.getModel();
+  if (requiresRuntime(context)) {
+    context.addStep(new OperationStepHandler(){
+      public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        final List<ServiceController<?>> controllers=new ArrayList<ServiceController<?>>();
+        final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+        performRuntime(context,operation,model,verificationHandler,controllers);
+        if (requiresRuntimeVerification()) {
+          context.addStep(verificationHandler,OperationContext.Stage.VERIFY);
+        }
+        if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
+          rollbackRuntime(context,operation,model,controllers);
+        }
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}

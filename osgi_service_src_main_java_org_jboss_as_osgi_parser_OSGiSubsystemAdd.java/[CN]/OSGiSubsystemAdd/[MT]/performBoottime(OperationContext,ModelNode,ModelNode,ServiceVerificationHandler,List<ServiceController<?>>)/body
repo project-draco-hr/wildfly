@@ -19,5 +19,27 @@
 ,OperationContext.Stage.RUNTIME);
   ServiceTarget serviceTarget=context.getServiceTarget();
   newControllers.add(SubsystemState.addService(serviceTarget,getActivationMode(operation)));
+  context.addStep(new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      ServiceBuilder<Void> builder=context.getServiceTarget().addService(Services.JBOSGI_BASE_NAME.append("OSGiSubsystem").append("initialize"),new AbstractService<Void>(){
+        @SuppressWarnings("unchecked") @Override public void start(        StartContext context) throws StartException {
+          try {
+            ServiceContainer ctr=context.getController().getServiceContainer();
+            ServiceController<Bundle> sc=(ServiceController<Bundle>)ctr.getRequiredService(Services.SYSTEM_BUNDLE);
+            resource.setBundleContextServiceController(sc);
+          }
+  finally {
+            context.getController().setMode(Mode.REMOVE);
+          }
+        }
+      }
+);
+      builder.addDependency(Services.SYSTEM_BUNDLE);
+      builder.setInitialMode(Mode.PASSIVE);
+      builder.install();
+      context.completeStep();
+    }
+  }
+,OperationContext.Stage.RUNTIME);
   ROOT_LOGGER.debugf("Activated OSGi Subsystem");
 }
