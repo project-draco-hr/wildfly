@@ -1,0 +1,34 @@
+{
+  Request request=(Request)messageInfo.getRequestMessage();
+  Response response=(Response)messageInfo.getResponseMessage();
+  Principal principal;
+  context=request.getContext();
+  X509Certificate[] certs=(X509Certificate[])request.getAttribute(CERTIFICATES_ATTR);
+  if ((certs == null) || (certs.length < 1)) {
+    request.getCoyoteRequest().action(ActionCode.ACTION_REQ_SSL_CERTIFICATE,null);
+    certs=(X509Certificate[])request.getAttribute(CERTIFICATES_ATTR);
+  }
+  if ((certs == null) || (certs.length < 1)) {
+    log.debugf("No certificates included with this request");
+    try {
+      response.sendError(HttpServletResponse.SC_UNAUTHORIZED,sm.getString("authenticator.certificates"));
+    }
+ catch (    IOException e) {
+      log.errorf("Caught Exception: %s",e.getLocalizedMessage());
+    }
+    return (AuthStatus.FAILURE);
+  }
+  principal=context.getRealm().authenticate(certs);
+  if (principal == null) {
+    log.debugf("Realm.authenticate() returned false");
+    try {
+      response.sendError(HttpServletResponse.SC_UNAUTHORIZED,sm.getString("authenticator.unauthorized"));
+    }
+ catch (    IOException e) {
+      log.errorf("Caught Exception: %s",e.getLocalizedMessage());
+    }
+    return (AuthStatus.FAILURE);
+  }
+  registerWithCallbackHandler(principal,principal.getName(),null);
+  return (AuthStatus.SUCCESS);
+}
