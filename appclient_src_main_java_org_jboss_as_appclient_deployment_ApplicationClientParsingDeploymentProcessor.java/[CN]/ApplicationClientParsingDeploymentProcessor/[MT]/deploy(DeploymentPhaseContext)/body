@@ -1,0 +1,36 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (!DeploymentTypeMarker.isType(DeploymentType.APPLICATION_CLIENT,deploymentUnit)) {
+    return;
+  }
+  final VirtualFile deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
+  final VirtualFile appXml=deploymentRoot.getChild(APP_XML);
+  if (appXml.exists()) {
+    InputStream is=null;
+    try {
+      is=appXml.openStream();
+      final XMLInputFactory inputFactory=XMLInputFactory.newInstance();
+      inputFactory.setXMLResolver(NoopXmlResolver.create());
+      XMLStreamReader xmlReader=inputFactory.createXMLStreamReader(is);
+      ApplicationClientMetaData data=new ApplicationClientMetaDataParser().parse(xmlReader);
+      deploymentUnit.putAttachment(AppClientAttachments.APPLICATION_CLIENT_META_DATA,data);
+      DeploymentDescriptorEnvironment environment=new DeploymentDescriptorEnvironment("java:module/env",data.getEnvironmentRefsGroupMetaData());
+      deploymentUnit.putAttachment(org.jboss.as.ee.component.Attachments.MODULE_DEPLOYMENT_DESCRIPTOR_ENVIRONMENT,environment);
+    }
+ catch (    XMLStreamException e) {
+      throw new DeploymentUnitProcessingException("Failed to parse " + appXml + " at ["+ e.getLocation().getLineNumber()+ ","+ e.getLocation().getColumnNumber()+ "]");
+    }
+catch (    IOException e) {
+      throw new DeploymentUnitProcessingException("Failed to parse " + appXml,e);
+    }
+ finally {
+      try {
+        if (is != null) {
+          is.close();
+        }
+      }
+ catch (      IOException e) {
+      }
+    }
+  }
+}
