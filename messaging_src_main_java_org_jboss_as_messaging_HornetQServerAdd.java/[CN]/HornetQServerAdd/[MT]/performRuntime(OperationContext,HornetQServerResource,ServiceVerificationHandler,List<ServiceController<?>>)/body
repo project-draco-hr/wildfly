@@ -5,13 +5,14 @@
       final String serverName=PathAddress.pathAddress(operation.require(OP_ADDR)).getLastElement().getValue();
       final ModelNode model=Resource.Tools.readModel(resource);
       final Configuration configuration=transformConfig(serverName,model);
-      final ServiceName bindingsPath=createDirectoryService(DEFAULT_BINDINGS_DIR,model.get(PATH,BINDINGS_DIRECTORY),serviceTarget,newControllers,verificationHandler);
-      final ServiceName journalPath=createDirectoryService(DEFAULT_JOURNAL_DIR,model.get(PATH,JOURNAL_DIRECTORY),serviceTarget,newControllers,verificationHandler);
-      final ServiceName largeMessagePath=createDirectoryService(DEFAULT_LARGE_MESSSAGE_DIR,model.get(PATH,LARGE_MESSAGES_DIRECTORY),serviceTarget,newControllers,verificationHandler);
-      final ServiceName pagingPath=createDirectoryService(DEFAULT_PAGING_DIR,model.get(PATH,PAGING_DIRECTORY),serviceTarget,newControllers,verificationHandler);
+      final ServiceName bindingsPath=createDirectoryService(DEFAULT_BINDINGS_DIR,model.get(PATH,BINDINGS_DIRECTORY),serviceTarget,operation,newControllers,verificationHandler);
+      final ServiceName journalPath=createDirectoryService(DEFAULT_JOURNAL_DIR,model.get(PATH,JOURNAL_DIRECTORY),serviceTarget,operation,newControllers,verificationHandler);
+      final ServiceName largeMessagePath=createDirectoryService(DEFAULT_LARGE_MESSSAGE_DIR,model.get(PATH,LARGE_MESSAGES_DIRECTORY),serviceTarget,operation,newControllers,verificationHandler);
+      final ServiceName pagingPath=createDirectoryService(DEFAULT_PAGING_DIR,model.get(PATH,PAGING_DIRECTORY),serviceTarget,operation,newControllers,verificationHandler);
       final HornetQService hqService=new HornetQService();
       hqService.setConfiguration(configuration);
-      final ServiceBuilder<HornetQServer> serviceBuilder=serviceTarget.addService(MessagingServices.JBOSS_MESSAGING,hqService).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,hqService.getMBeanServer());
+      ServiceName hqServiceName=MessagingServices.getHornetQServiceName(serverName);
+      final ServiceBuilder<HornetQServer> serviceBuilder=serviceTarget.addService(hqServiceName,hqService).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,hqService.getMBeanServer());
       serviceBuilder.addDependency(bindingsPath,String.class,hqService.getPathInjector(DEFAULT_BINDINGS_DIR));
       serviceBuilder.addDependency(journalPath,String.class,hqService.getPathInjector(DEFAULT_JOURNAL_DIR));
       serviceBuilder.addDependency(largeMessagePath,String.class,hqService.getPathInjector(DEFAULT_LARGE_MESSSAGE_DIR));
@@ -28,14 +29,14 @@
       if (broadcastGroupConfigurations != null) {
         for (        final BroadcastGroupConfiguration config : broadcastGroupConfigurations) {
           final String name=config.getName();
-          final ServiceName groupBinding=GroupBindingService.BROADCAST.append(name);
+          final ServiceName groupBinding=GroupBindingService.getBroadcastBaseServiceName(hqServiceName).append(name);
           serviceBuilder.addDependency(groupBinding,SocketBinding.class,hqService.getGroupBindingInjector("broadcast" + name));
         }
       }
       if (discoveryGroupConfigurations != null) {
         for (        final DiscoveryGroupConfiguration config : discoveryGroupConfigurations.values()) {
           final String name=config.getName();
-          final ServiceName groupBinding=GroupBindingService.DISCOVERY.append(name);
+          final ServiceName groupBinding=GroupBindingService.getDiscoveryBaseServiceName(hqServiceName).append(name);
           serviceBuilder.addDependency(groupBinding,SocketBinding.class,hqService.getGroupBindingInjector("discovery" + name));
         }
       }
@@ -43,7 +44,7 @@
       ServiceController<HornetQServer> hqServerServiceController=serviceBuilder.install();
       resource.setHornetQServerServiceController(hqServerServiceController);
       newControllers.add(hqServerServiceController);
-      newControllers.add(JMSService.addService(serviceTarget,verificationHandler));
+      newControllers.add(JMSService.addService(serviceTarget,hqServiceName,verificationHandler));
       context.completeStep();
     }
   }
