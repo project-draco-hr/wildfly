@@ -1,0 +1,27 @@
+{
+  if (context.getType() == OperationContext.Type.SERVER) {
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        Statistics stats=null;
+        boolean oldSetting=false;
+{
+          final ModelNode value=operation.get(ModelDescriptionConstants.VALUE).resolve();
+          validator.validateResolvedParameter(ModelDescriptionConstants.VALUE,value);
+          final boolean setting=value.asBoolean();
+          final PathAddress address=PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR));
+          final String puName=address.getLastElement().getValue();
+          stats=ManagementUtility.getStatistics(persistenceUnitRegistry,puName);
+          if (stats != null) {
+            oldSetting=stats.isStatisticsEnabled();
+            stats.setStatisticsEnabled(setting);
+          }
+        }
+        if (context.completeStep() != OperationContext.ResultAction.KEEP && stats != null) {
+          stats.setStatisticsEnabled(oldSetting);
+        }
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}
