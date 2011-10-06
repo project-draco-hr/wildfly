@@ -1,29 +1,44 @@
 {
-  thread=new Thread(new Runnable(){
-    @Override public void run(){
-      ClassLoader oldTccl=SecurityActions.getContextClassLoader();
-      try {
-        SecurityActions.setContextClassLoader(classLoader);
-        applicationClientDeploymentServiceInjectedValue.getValue().getDeploymentCompleteLatch().await();
-        NamespaceContextSelector.pushCurrentSelector(namespaceContextSelectorInjectedValue);
-        mainMethod.invoke(null,new Object[]{parameters});
-      }
- catch (      InvocationTargetException e) {
-        logger.error(e.getTargetException(),e.getTargetException());
-      }
-catch (      IllegalAccessException e) {
-        logger.error(e);
-      }
-catch (      InterruptedException e) {
-        logger.error(e);
-      }
+  try {
+    final Endpoint endpoint=Remoting.createEndpoint("endpoint",Executors.newSingleThreadExecutor(),OptionMap.EMPTY);
+    final Xnio xnio=Xnio.getInstance();
+    final Registration registration=endpoint.addConnectionProvider("remote",new RemoteConnectionProviderFactory(xnio),OptionMap.create(Options.SSL_ENABLED,false));
+    final IoFuture<Connection> futureConnection=endpoint.connect(new URI("remote://localhost:9999"),OptionMap.create(Options.SASL_POLICY_NOANONYMOUS,Boolean.FALSE),new AnonymousCallbackHandler());
+    final Connection connection=IoFutureHelper.get(futureConnection,5,TimeUnit.SECONDS);
+    thread=new Thread(new Runnable(){
+      @Override public void run(){
+        ClassLoader oldTccl=SecurityActions.getContextClassLoader();
+        try {
+          SecurityActions.setContextClassLoader(classLoader);
+          EJBClientContext ejbClientContext=EJBClientContext.create();
+          ejbClientContext.registerConnection(connection);
+          applicationClientDeploymentServiceInjectedValue.getValue().getDeploymentCompleteLatch().await();
+          NamespaceContextSelector.pushCurrentSelector(namespaceContextSelectorInjectedValue);
+          mainMethod.invoke(null,new Object[]{parameters});
+        }
+ catch (        InvocationTargetException e) {
+          logger.error(e.getTargetException(),e.getTargetException());
+        }
+catch (        IllegalAccessException e) {
+          logger.error(e);
+        }
+catch (        InterruptedException e) {
+          logger.error(e);
+        }
  finally {
-        SecurityActions.setContextClassLoader(oldTccl);
-        NamespaceContextSelector.popCurrentSelector();
-        CurrentServiceContainer.getServiceContainer().shutdown();
+          SecurityActions.setContextClassLoader(oldTccl);
+          NamespaceContextSelector.popCurrentSelector();
+          CurrentServiceContainer.getServiceContainer().shutdown();
+        }
       }
     }
-  }
 );
-  thread.start();
+    thread.start();
+  }
+ catch (  IOException e) {
+    throw new RuntimeException(e);
+  }
+catch (  URISyntaxException e) {
+    throw new RuntimeException(e);
+  }
 }
