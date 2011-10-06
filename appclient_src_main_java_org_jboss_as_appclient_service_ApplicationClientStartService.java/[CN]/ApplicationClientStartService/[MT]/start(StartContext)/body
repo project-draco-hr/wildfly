@@ -1,6 +1,15 @@
 {
   try {
-    final Endpoint endpoint=Remoting.createEndpoint("endpoint",Executors.newSingleThreadExecutor(),OptionMap.EMPTY);
+    ExecutorService executor=Executors.newFixedThreadPool(1,new ThreadFactory(){
+      @Override public Thread newThread(      final Runnable r){
+        Thread t=new Thread(r);
+        t.setName("App Client Remoting Thread");
+        t.setDaemon(true);
+        return t;
+      }
+    }
+);
+    final Endpoint endpoint=Remoting.createEndpoint("endpoint",executor,OptionMap.EMPTY);
     final Xnio xnio=Xnio.getInstance();
     final Registration registration=endpoint.addConnectionProvider("remote",new RemoteConnectionProviderFactory(xnio),OptionMap.create(Options.SSL_ENABLED,false));
     final IoFuture<Connection> futureConnection=endpoint.connect(new URI("remote://localhost:9999"),OptionMap.create(Options.SASL_POLICY_NOANONYMOUS,Boolean.FALSE),new AnonymousCallbackHandler());
@@ -20,10 +29,10 @@
           logger.error(e.getTargetException(),e.getTargetException());
         }
 catch (        IllegalAccessException e) {
-          logger.error(e);
+          logger.error("IllegalAccessException running app client main",e);
         }
 catch (        InterruptedException e) {
-          logger.error(e);
+          logger.error("InterruptedException running app client main",e);
         }
  finally {
           SecurityActions.setContextClassLoader(oldTccl);
