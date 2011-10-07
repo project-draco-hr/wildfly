@@ -1,16 +1,19 @@
 {
-  final ModelNode objectStore=operation.get(OBJECT_STORE);
-  final String objectStorePathRef=objectStore.hasDefined(RELATIVE_TO) ? objectStore.get(RELATIVE_TO).asString() : "jboss.server.data.dir";
-  final String objectStorePath=objectStore.hasDefined(PATH) ? objectStore.get(PATH).asString() : "tx-object-store";
+  String objectStorePathRef=null;
+  final ModelNode relativePathNode=recoveryEnvModel.get(RELATIVE_TO.getName());
+  if (!relativePathNode.isDefined() || relativePathNode.asString().length() > 0) {
+    objectStorePathRef=RELATIVE_TO.validateResolvedOperation(recoveryEnvModel).asString();
+  }
+  final String objectStorePath=PATH.validateResolvedOperation(recoveryEnvModel).asString();
   if (ROOT_LOGGER.isDebugEnabled()) {
-    ROOT_LOGGER.debugf("objectStorePathRef=%s, objectStorePathRef=%s\n",objectStorePathRef,objectStorePath);
+    ROOT_LOGGER.debugf("objectStorePathRef=%s, objectStorePath=%s\n",objectStorePathRef,objectStorePath);
   }
   ServiceTarget target=context.getServiceTarget();
-  ServiceController<String> objectStoreRPS=RelativePathService.addService(INTERNAL_OBJECTSTORE_PATH,objectStorePath,objectStorePathRef,target);
-  controllers.add(objectStoreRPS);
+  ServiceController<String> objectStorePS=objectStorePathRef != null ? RelativePathService.addService(INTERNAL_OBJECTSTORE_PATH,objectStorePath,objectStorePathRef,target) : AbsolutePathService.addService(INTERNAL_OBJECTSTORE_PATH,objectStorePath,target);
+  controllers.add(objectStorePS);
   final boolean useHornetqJournalStore="true".equals(System.getProperty("usehornetqstore"));
   final ArjunaObjectStoreEnvironmentService objStoreEnvironmentService=new ArjunaObjectStoreEnvironmentService(useHornetqJournalStore);
-  controllers.add(target.addService(TxnServices.JBOSS_TXN_ARJUNA_OBJECTSTORE_ENVIRONMENT,objStoreEnvironmentService).addDependency(objectStoreRPS.getName(),String.class,objStoreEnvironmentService.getPathInjector()).addDependency(TxnServices.JBOSS_TXN_CORE_ENVIRONMENT).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+  controllers.add(target.addService(TxnServices.JBOSS_TXN_ARJUNA_OBJECTSTORE_ENVIRONMENT,objStoreEnvironmentService).addDependency(INTERNAL_OBJECTSTORE_PATH,String.class,objStoreEnvironmentService.getPathInjector()).addDependency(TxnServices.JBOSS_TXN_CORE_ENVIRONMENT).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
   controllers.add(TransactionManagerService.addService(target,verificationHandler));
   controllers.add(UserTransactionService.addService(target,verificationHandler));
   controllers.add(target.addService(TxnServices.JBOSS_TXN_USER_TRANSACTION_REGISTRY,new UserTransactionRegistryService()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
