@@ -1,5 +1,22 @@
 {
-  Dictionary<String,String> oldconfig=getSubsystemState().removeConfiguration(pid);
-  new ConfigurationModifiedService(pid,oldconfig).configurationModified();
+  Dictionary<String,String> oldconfig=getConfiguration(pid);
+  if (oldconfig != null) {
+    ModelNode address=getSubsystemAddress();
+    address.add(new ModelNode().set(ModelConstants.CONFIGURATION,pid));
+    ModelNode op=Util.getEmptyOperation(ModelDescriptionConstants.REMOVE,address);
+    try {
+      ModelNode node=controllerClient.execute(op);
+      ModelNode outcome=node.get(ModelDescriptionConstants.OUTCOME);
+      if (ModelDescriptionConstants.SUCCESS.equals(outcome.asString())) {
+        executor.execute(new ConfigurationModifiedService(pid,oldconfig));
+      }
+ else {
+        ROOT_LOGGER.errorf("Cannot remove configuration for pid: %s -> %s",pid,node);
+      }
+    }
+ catch (    IOException ex) {
+      ROOT_LOGGER.errorf(ex,"Cannot remove configuration for pid: %s",pid);
+    }
+  }
   return oldconfig;
 }
