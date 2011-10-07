@@ -1,0 +1,57 @@
+{
+  final String j2eeType=name.getKeyProperty(Handler.J2EE_TYPE);
+  final String namePart=name.getKeyProperty(Handler.NAME);
+  final String appName=name.getKeyProperty(J2EE_TYPE_J2EE_APPLICATION);
+  final String mainDeployment;
+  final String subDeployment;
+  if (appName == null) {
+    mainDeployment=namePart;
+    subDeployment=null;
+  }
+ else {
+    mainDeployment=appName;
+    subDeployment=namePart;
+  }
+  if (mainDeployment != null) {
+    ModelNode deploymentNode=null;
+    ModelNode deployments=reader.getDeploymentModel();
+    if (deployments.isDefined()) {
+      for (      ModelNode deployment : deployments.asList()) {
+        deployment=deployment.get(RESULT);
+        if (mainDeployment.equals(deployment.get(NAME).asString())) {
+          String actualDeployment=mainDeployment;
+          deploymentNode=deployment;
+          if (!deploymentNode.isDefined()) {
+            break;
+          }
+          if (subDeployment != null) {
+            actualDeployment=subDeployment;
+            deploymentNode=deploymentNode.get(SUBDEPLOYMENT,subDeployment);
+            if (!deploymentNode.isDefined()) {
+              break;
+            }
+          }
+          J2EEDeployedObjectHandler handler;
+          if (j2eeType.equals(J2EE_TYPE_J2EE_APPLICATION) && actualDeployment.endsWith(".ear")) {
+            handler=J2EEApplicationHandler.INSTANCE;
+          }
+ else           if (j2eeType.equals(J2EE_TYPE_APP_CLIENT_MODULE) && actualDeployment.endsWith(".jar")) {
+            handler=AppClientModuleHandler.INSTANCE;
+          }
+ else           if (j2eeType.equals(J2EE_TYPE_EJB_MODULE) && actualDeployment.endsWith(".jar") && (deploymentNode.hasDefined(SUBSYSTEM) && deploymentNode.get(SUBSYSTEM).asString().equals("ejb3"))) {
+            handler=AppClientModuleHandler.INSTANCE;
+          }
+ else           if (j2eeType.equals(J2EE_TYPE_WEB_MODULE) && actualDeployment.endsWith(".war")) {
+            handler=WebModuleHandler.INSTANCE;
+          }
+ else {
+            break;
+          }
+          reader.setDeploymentModel(deploymentNode);
+          return handler;
+        }
+      }
+    }
+  }
+  throw new InstanceNotFoundException("Could not find " + j2eeType);
+}
