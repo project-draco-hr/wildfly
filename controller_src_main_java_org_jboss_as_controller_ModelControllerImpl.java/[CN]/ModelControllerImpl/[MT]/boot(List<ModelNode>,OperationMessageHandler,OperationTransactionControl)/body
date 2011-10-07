@@ -1,10 +1,56 @@
 {
-  OperationContextImpl context=new OperationContextImpl(this,controllerType,EnumSet.noneOf(OperationContextImpl.ContextFlag.class),handler,null,model,control,processState,bootingFlag.get());
-  ModelNode result=context.getResult();
+  final OperationContextImpl context=new OperationContextImpl(this,controllerType,EnumSet.noneOf(OperationContextImpl.ContextFlag.class),handler,null,model,control,processState,bootingFlag.get());
+  final ModelNode result=context.getResult();
   result.setEmptyList();
+  boolean sawExtensionAdd=false;
+  List<ModelNode> postExtensionOps=null;
   for (  ModelNode bootOp : bootList) {
-    final ModelNode response=result.add();
-    context.addStep(response,bootOp,new BootStepHandler(bootOp,response),OperationContext.Stage.MODEL);
+    if (postExtensionOps != null) {
+      postExtensionOps.add(bootOp);
+    }
+ else {
+      final ModelNode response=result.add();
+      final PathAddress address=PathAddress.pathAddress(bootOp.require(ADDRESS));
+      final String operationName=bootOp.require(OP).asString();
+      final OperationStepHandler stepHandler=rootRegistration.getOperationHandler(address,operationName);
+      if (stepHandler == null) {
+        String msg=String.format("No handler for operation %s at address %s",operationName,address);
+        log.error(msg);
+        context.getFailureDescription().set(msg);
+        break;
+      }
+ else       if (stepHandler instanceof ExtensionAddHandler) {
+        context.addStep(response,bootOp,stepHandler,OperationContext.Stage.MODEL);
+        sawExtensionAdd=true;
+      }
+ else       if (!sawExtensionAdd) {
+        context.addStep(response,bootOp,stepHandler,OperationContext.Stage.MODEL);
+      }
+ else {
+        postExtensionOps=new ArrayList<ModelNode>();
+        postExtensionOps.add(bootOp);
+      }
+    }
   }
-  context.completeStep();
+  if (context.completeStep() == OperationContext.ResultAction.KEEP && postExtensionOps != null) {
+    final OperationContextImpl postExtContext=new OperationContextImpl(this,controllerType,EnumSet.noneOf(OperationContextImpl.ContextFlag.class),handler,null,model,control,processState,bootingFlag.get());
+    final ModelNode postExtResult=context.getResult();
+    postExtResult.setEmptyList();
+    for (    ModelNode bootOp : postExtensionOps) {
+      final ModelNode response=postExtResult.add();
+      final PathAddress address=PathAddress.pathAddress(bootOp.require(ADDRESS));
+      final String operationName=bootOp.require(OP).asString();
+      final OperationStepHandler stepHandler=rootRegistration.getOperationHandler(address,operationName);
+      if (stepHandler == null) {
+        String msg=String.format("No handler for operation %s at address %s",operationName,address);
+        log.error(msg);
+        postExtContext.getFailureDescription().set(msg);
+        break;
+      }
+ else {
+        postExtContext.addStep(response,bootOp,stepHandler,OperationContext.Stage.MODEL);
+      }
+    }
+    postExtContext.completeStep();
+  }
 }
