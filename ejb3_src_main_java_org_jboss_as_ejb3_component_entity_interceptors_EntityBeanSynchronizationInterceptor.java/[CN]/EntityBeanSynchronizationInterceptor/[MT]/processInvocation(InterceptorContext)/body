@@ -8,30 +8,36 @@
   if (log.isTraceEnabled()) {
     log.trace("Trying to acquire lock: " + lock + " for entity bean "+ instance+ " during invocation: "+ context);
   }
-  lock.lock();
+  lock.pushOwner(getLockOwner(transactionSynchronizationRegistry));
+  try {
+    lock.lock();
 synchronized (lock) {
-    if (log.isTraceEnabled()) {
-      log.trace("Acquired lock: " + lock + " for entity bean instance: "+ instance+ " during invocation: "+ context);
-    }
-    Object currentTransactionKey=null;
-    boolean wasTxSyncRegistered=false;
-    try {
-      currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
-      if (currentTransactionKey != null) {
-        final Synchronization statefulSessionSync=new EntityBeanSynchronization(instance);
-        transactionSynchronizationRegistry.registerInterposedSynchronization(statefulSessionSync);
-        wasTxSyncRegistered=true;
-        if (log.isTraceEnabled()) {
-          log.trace("Registered tx synchronization: " + statefulSessionSync + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
+      if (log.isTraceEnabled()) {
+        log.trace("Acquired lock: " + lock + " for entity bean instance: "+ instance+ " during invocation: "+ context);
+      }
+      Object currentTransactionKey=null;
+      boolean wasTxSyncRegistered=false;
+      try {
+        currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
+        if (currentTransactionKey != null) {
+          final Synchronization statefulSessionSync=new EntityBeanSynchronization(instance);
+          transactionSynchronizationRegistry.registerInterposedSynchronization(statefulSessionSync);
+          wasTxSyncRegistered=true;
+          if (log.isTraceEnabled()) {
+            log.trace("Registered tx synchronization: " + statefulSessionSync + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
+          }
+        }
+        return context.proceed();
+      }
+  finally {
+        if (!wasTxSyncRegistered) {
+          instance.store();
+          releaseInstance(instance,true);
         }
       }
-      return context.proceed();
     }
+  }
   finally {
-      if (!wasTxSyncRegistered) {
-        instance.store();
-        releaseInstance(instance,true);
-      }
-    }
+    lock.popOwner();
   }
 }
