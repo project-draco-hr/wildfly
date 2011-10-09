@@ -8,12 +8,40 @@
       if (localAnnotations != null) {
         if (!localAnnotations.getClassLevelAnnotations().isEmpty()) {
           localHome=localAnnotations.getClassLevelAnnotations().get(0);
+          if (description.getEjbLocalView() == null) {
+            final Class localHomeClass=module.getClassLoader().loadClass(localHome);
+            final ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(localHomeClass);
+            Class<?> localClass=null;
+            for (            final Method method : index.getMethods()) {
+              if (method.getName().startsWith("create")) {
+                if (localClass != null && localClass != method.getReturnType()) {
+                  throw new DeploymentUnitProcessingException("Could not determine type of corresponding implied EJB 2.x local interface (see EJB 3.1 21.4.5)" + " due to multiple create* methods with different return types on home " + localHomeClass);
+                }
+                localClass=method.getReturnType();
+              }
+            }
+            description.addEjbLocalObjectView(localClass.getName());
+          }
         }
       }
       final ClassAnnotationInformation<RemoteHome,String> remoteAnnotations=clazz.getAnnotationInformation(RemoteHome.class);
       if (remoteAnnotations != null) {
         if (!remoteAnnotations.getClassLevelAnnotations().isEmpty()) {
           home=remoteAnnotations.getClassLevelAnnotations().get(0);
+          if (description.getEjbRemoteView() == null) {
+            final Class homeClass=module.getClassLoader().loadClass(home);
+            final ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(homeClass);
+            Class<?> remote=null;
+            for (            final Method method : index.getMethods()) {
+              if (method.getName().startsWith("create")) {
+                if (remote != null && remote != method.getReturnType()) {
+                  throw new DeploymentUnitProcessingException("Could not determine type of corresponding implied EJB 2.x remote interface (see EJB 3.1 21.4.5)" + " due to multiple create* methods with different return types on home " + homeClass);
+                }
+                remote=method.getReturnType();
+              }
+            }
+            description.addEjbObjectView(remote.getName());
+          }
         }
       }
     }
