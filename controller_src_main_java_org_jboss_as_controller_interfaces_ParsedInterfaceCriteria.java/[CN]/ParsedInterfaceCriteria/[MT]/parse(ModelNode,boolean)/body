@@ -1,66 +1,55 @@
 {
-  ParsedInterfaceCriteria parsed=ParsedInterfaceCriteria.EMPTY;
-  if (criteria.isDefined()) {
-    if (criteria.getType() == ModelType.STRING) {
-      String crit=criteria.asString();
-      if (ANY_ADDRESS.equals(crit)) {
-        parsed=ParsedInterfaceCriteria.ANY;
-      }
- else       if (ANY_IPV4_ADDRESS.equals(crit)) {
-        parsed=ParsedInterfaceCriteria.V4;
-      }
- else       if (ANY_IPV6_ADDRESS.equals(crit)) {
-        parsed=ParsedInterfaceCriteria.V6;
-      }
+  if (model.getType() != ModelType.OBJECT) {
+    return new ParsedInterfaceCriteria(String.format("Illegal interface criteria type %s; must be %s",model.getType(),ModelType.OBJECT));
+  }
+  final ModelNode subModel=model.clone();
+  subModel.remove(ModelDescriptionConstants.OP);
+  subModel.remove(ModelDescriptionConstants.OP_ADDR);
+  final ParsedInterfaceCriteria parsed;
+  if (subModel.hasDefined(ANY_ADDRESS) && subModel.get(ANY_ADDRESS).asBoolean(false)) {
+    parsed=ParsedInterfaceCriteria.ANY;
+  }
+ else   if (subModel.hasDefined(ANY_IPV4_ADDRESS) && subModel.get(ANY_IPV4_ADDRESS).asBoolean(false)) {
+    parsed=ParsedInterfaceCriteria.V4;
+  }
+ else   if (subModel.hasDefined(ANY_IPV6_ADDRESS) && subModel.get(ANY_IPV6_ADDRESS).asBoolean(false)) {
+    parsed=ParsedInterfaceCriteria.V6;
+  }
  else {
-        return new ParsedInterfaceCriteria(String.format("Illegal interface criteria %s; must be %s, %s or %s or a list of criteria elements",crit,ANY_ADDRESS,ANY_IPV4_ADDRESS,ANY_IPV6_ADDRESS));
-      }
-    }
- else     if (criteria.getType() == ModelType.LIST) {
-      try {
-        Set<InterfaceCriteria> criteriaSet=new HashSet<InterfaceCriteria>();
-        List<ModelNode> nodes=criteria.asList();
-        for (        ModelNode node : nodes) {
-          InterfaceCriteria criterion=null;
-          if (node.getType() == ModelType.STRING) {
-            criterion=parseStringCriteria(node);
+    try {
+      final List<Property> nodes=subModel.asPropertyList();
+      final Set<InterfaceCriteria> criteriaSet=new HashSet<InterfaceCriteria>();
+      for (      final Property property : nodes) {
+        final InterfaceCriteria criterion=parseCriteria(property,false);
+        if (criterion == null) {
+          continue;
+        }
+ else         if (criterion instanceof WildcardInetAddressInterfaceCriteria) {
+          if (nodes.size() > 1) {
+            log.warn("Wildcard address detected - will ignore other interface criteria.");
           }
- else           if (node.getType() == ModelType.PROPERTY) {
-            criterion=parsePropertyCriteria(node);
-          }
- else {
-            return new ParsedInterfaceCriteria(String.format("Illegal interface criteria list element type %s; must be %s or %s",node.getType(),ModelType.STRING,ModelType.PROPERTY));
-          }
-          if (criterion instanceof WildcardInetAddressInterfaceCriteria) {
-            if (nodes.size() > 1) {
-              log.warn("Wildcard address detected - will ignore other interface criteria.");
-            }
-            WildcardInetAddressInterfaceCriteria wc=(WildcardInetAddressInterfaceCriteria)criterion;
+          WildcardInetAddressInterfaceCriteria wc=(WildcardInetAddressInterfaceCriteria)criterion;
 switch (wc.getVersion()) {
 case V4:
-              return ParsedInterfaceCriteria.V4;
+            return ParsedInterfaceCriteria.V4;
 case V6:
-            return ParsedInterfaceCriteria.V6;
+          return ParsedInterfaceCriteria.V6;
 default :
-          return ParsedInterfaceCriteria.ANY;
-      }
-    }
- else {
-      criteriaSet.add(criterion);
+        return ParsedInterfaceCriteria.ANY;
     }
   }
-  return new ParsedInterfaceCriteria(criteriaSet);
+ else {
+    criteriaSet.add(criterion);
+  }
+}
+parsed=new ParsedInterfaceCriteria(criteriaSet);
 }
  catch (ParsingException p) {
-  return new ParsedInterfaceCriteria(p.msg);
-}
-}
- else {
-return new ParsedInterfaceCriteria(String.format("Illegal interface criteria type %s; must be %s or %s",criteria.getType(),ModelType.STRING,ModelType.LIST));
+return new ParsedInterfaceCriteria(p.msg);
 }
 }
 if (specified && parsed.getFailureMessage() == null && !parsed.isAnyLocal() && !parsed.isAnyLocalV4() && !parsed.isAnyLocalV6() && parsed.getCriteria().size() == 0) {
-parsed=new ParsedInterfaceCriteria("No interface criteria was provided");
+return new ParsedInterfaceCriteria("No interface criteria was provided");
 }
 return parsed;
 }
