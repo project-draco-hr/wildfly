@@ -1,0 +1,87 @@
+{
+  ModelNode ldapAuthentication=authentication.get(LDAP);
+  String connection=null;
+  String baseDN=null;
+  String recursive=null;
+  String userDN=null;
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (!isNoNamespaceAttribute(reader,i)) {
+      throw unexpectedAttribute(reader,i);
+    }
+ else {
+      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case CONNECTION:
+{
+          connection=value;
+          break;
+        }
+case BASE_DN:
+{
+        baseDN=value;
+        break;
+      }
+case RECURSIVE:
+{
+      recursive=value;
+      break;
+    }
+case USER_DN:
+{
+    userDN=value;
+    break;
+  }
+default :
+{
+  throw unexpectedAttribute(reader,i);
+}
+}
+}
+}
+Set<Attribute> missingAttributes=new HashSet<Attribute>();
+if (connection == null) missingAttributes.add(Attribute.CONNECTION);
+if (baseDN == null) missingAttributes.add(Attribute.BASE_DN);
+if (missingAttributes.size() > 0) throw missingRequired(reader,missingAttributes);
+ldapAuthentication.get(CONNECTION).set(connection);
+ldapAuthentication.get(BASE_DN).set(baseDN);
+if (recursive != null) {
+ldapAuthentication.get(RECURSIVE).set(Boolean.valueOf(recursive));
+}
+if (userDN != null) {
+ldapAuthentication.get(USER_DN).set(userDN);
+}
+boolean choiceFound=false;
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+if (choiceFound) {
+throw unexpectedElement(reader);
+}
+choiceFound=true;
+requireNamespace(reader,expectedNs);
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case ADVANCED_FILTER:
+requireSingleAttribute(reader,Attribute.FILTER.getLocalName());
+String filter=reader.getAttributeValue(0);
+ldapAuthentication.get(ADVANCED_FILTER).set(filter);
+requireNoContent(reader);
+break;
+case USERNAME_FILTER:
+{
+requireSingleAttribute(reader,Attribute.ATTRIBUTE.getLocalName());
+String usernameAttr=reader.getAttributeValue(0);
+ldapAuthentication.get(USERNAME_ATTRIBUTE).set(usernameAttr);
+requireNoContent(reader);
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+if (choiceFound == false) {
+throw missingOneOf(reader,EnumSet.of(Element.ADVANCED_FILTER,Element.USERNAME_FILTER));
+}
+}
