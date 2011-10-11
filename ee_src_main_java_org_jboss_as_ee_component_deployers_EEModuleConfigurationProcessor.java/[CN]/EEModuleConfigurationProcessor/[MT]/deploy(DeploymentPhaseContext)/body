@@ -1,8 +1,8 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
-  final EEApplicationDescription applicationDescription=deploymentUnit.getAttachment(Attachments.EE_APPLICATION_DESCRIPTION);
   final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
+  final DeploymentClassIndex classIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.CLASS_INDEX);
   if (moduleDescription == null) {
     return;
   }
@@ -16,7 +16,13 @@
     for (    ComponentDescription componentDescription : componentDescriptions) {
       if (componentDescription.isInstall()) {
         logger.debug("Configuring component class: " + componentDescription.getComponentClassName() + " named "+ componentDescription.getComponentName());
-        final ComponentConfiguration componentConfiguration=componentDescription.createConfiguration(applicationDescription);
+        final ComponentConfiguration componentConfiguration;
+        try {
+          componentConfiguration=componentDescription.createConfiguration(classIndex.classIndex(componentDescription.getComponentClassName()));
+        }
+ catch (        ClassNotFoundException e) {
+          throw new DeploymentUnitProcessingException("Could not load component class " + componentDescription.getComponentClassName(),e);
+        }
         for (        ComponentConfigurator componentConfigurator : componentDescription.getConfigurators()) {
           if (componentDescription.isInstall()) {
             componentConfigurator.configure(phaseContext,componentDescription,componentConfiguration);

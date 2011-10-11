@@ -4,8 +4,8 @@
   final String applicationName=configuration.getApplicationName();
   final String moduleName=configuration.getModuleName();
   final String componentName=configuration.getComponentName();
-  final ServiceName baseName=configuration.getComponentDescription().getServiceName();
-  final EEApplicationDescription applicationDescription=deploymentUnit.getAttachment(Attachments.EE_APPLICATION_DESCRIPTION);
+  final EEApplicationClasses applicationClasses=deploymentUnit.getAttachment(Attachments.EE_APPLICATION_CLASSES_DESCRIPTION);
+  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
   final ServiceName createServiceName=configuration.getComponentDescription().getCreateServiceName();
   final ServiceName startServiceName=configuration.getComponentDescription().getStartServiceName();
   final BasicComponentCreateService createService=configuration.getComponentCreateServiceFactory().constructService(configuration);
@@ -52,16 +52,22 @@
   }
   if (configuration.getComponentDescription().getNamingMode() == ComponentNamingMode.CREATE) {
     processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,configuration.getComponentDescription().getBindingConfigurations(),dependencies);
-    new ClassDescriptionTraversal(configuration.getModuleClassConfiguration(),applicationDescription){
+    new ClassDescriptionTraversal(configuration.getComponentClass(),applicationClasses){
       @Override protected void handle(      final EEModuleClassConfiguration classConfiguration,      final EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
         processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,classConfiguration.getBindingConfigurations(),dependencies);
       }
     }
 .run();
     for (    InterceptorDescription interceptor : configuration.getComponentDescription().getAllInterceptors()) {
-      final EEModuleClassConfiguration interceptorClass=applicationDescription.getClassConfiguration(interceptor.getInterceptorClassName());
+      final Class<?> interceptorClass;
+      try {
+        interceptorClass=module.getClassLoader().loadClass(interceptor.getInterceptorClassName());
+      }
+ catch (      ClassNotFoundException e) {
+        throw new DeploymentUnitProcessingException("Could not load interceptor class " + interceptor.getInterceptorClassName() + " on component "+ configuration.getComponentClass(),e);
+      }
       if (interceptorClass != null) {
-        new ClassDescriptionTraversal(interceptorClass,applicationDescription){
+        new ClassDescriptionTraversal(interceptorClass,applicationClasses){
           @Override protected void handle(          final EEModuleClassConfiguration classConfiguration,          final EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
             processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,classConfiguration.getBindingConfigurations(),dependencies);
           }

@@ -4,13 +4,13 @@
   final Object instanceKey=BasicComponentInstance.INSTANCE_KEY;
   final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
   final EEApplicationDescription applicationDescription=deploymentUnit.getAttachment(Attachments.EE_APPLICATION_DESCRIPTION);
+  final EEApplicationClasses applicationClasses=deploymentUnit.getAttachment(Attachments.EE_APPLICATION_CLASSES_DESCRIPTION);
   final ProxyMetadataSource proxyReflectionIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.PROXY_REFLECTION_INDEX);
-  final EEModuleClassConfiguration componentClassConfiguration=configuration.getModuleClassConfiguration();
   final Deque<InterceptorFactory> instantiators=new ArrayDeque<InterceptorFactory>();
   final Deque<InterceptorFactory> injectors=new ArrayDeque<InterceptorFactory>();
   final Deque<InterceptorFactory> uninjectors=new ArrayDeque<InterceptorFactory>();
   final Deque<InterceptorFactory> destructors=new ArrayDeque<InterceptorFactory>();
-  final ClassReflectionIndex<?> componentClassIndex=deploymentReflectionIndex.getClassIndex(componentClassConfiguration.getModuleClass());
+  final ClassReflectionIndex<?> componentClassIndex=deploymentReflectionIndex.getClassIndex(configuration.getComponentClass());
   final List<InterceptorFactory> componentUserAroundInvoke=new ArrayList<InterceptorFactory>();
   final List<InterceptorFactory> componentUserAroundTimeout;
   final Map<String,List<InterceptorFactory>> userAroundInvokesByInterceptorClass=new HashMap<String,List<InterceptorFactory>>();
@@ -32,13 +32,13 @@
  else {
     final Constructor<Object> constructor=(Constructor<Object>)componentClassIndex.getConstructor(EMPTY_CLASS_ARRAY);
     if (constructor == null) {
-      throw new DeploymentUnitProcessingException("Could not find default constructor for " + componentClassConfiguration.getModuleClass());
+      throw new DeploymentUnitProcessingException("Could not find default constructor for " + configuration.getComponentClass());
     }
     ValueManagedReferenceFactory factory=new ValueManagedReferenceFactory(new ConstructedValue<Object>(constructor,Collections.<Value<?>>emptyList()));
     instantiators.addFirst(new ManagedReferenceInterceptorFactory(factory,instanceKey));
   }
   destructors.addLast(new ManagedReferenceReleaseInterceptorFactory(instanceKey));
-  new ClassDescriptionTraversal(componentClassConfiguration,applicationDescription){
+  new ClassDescriptionTraversal(configuration.getComponentClass(),applicationClasses){
     @Override public void handle(    EEModuleClassConfiguration classConfiguration,    EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
       for (      final ResourceInjectionConfiguration injectionConfiguration : classConfiguration.getInjectionConfigurations()) {
         final Object valueContextKey=new Object();
@@ -57,16 +57,23 @@
   interceptorWithLifecycleCallbacks.addAll(description.getClassInterceptors());
   for (  final InterceptorDescription interceptorDescription : description.getAllInterceptors()) {
     final String interceptorClassName=interceptorDescription.getInterceptorClassName();
-    final EEModuleClassConfiguration interceptorConfiguration=applicationDescription.getClassConfiguration(interceptorClassName);
-    final Object contextKey=interceptorConfiguration.getModuleClass();
-    if (interceptorConfiguration.getInstantiator() == null) {
-      throw new DeploymentUnitProcessingException("No default constructor for interceptor class " + interceptorClassName + " on component "+ componentClassConfiguration.getModuleClass());
+    final Class<?> interceptorClass;
+    try {
+      interceptorClass=module.getClassLoader().loadClass(interceptorClassName);
     }
-    instantiators.addFirst(new ManagedReferenceInterceptorFactory(interceptorConfiguration.getInstantiator(),contextKey));
+ catch (    ClassNotFoundException e) {
+      throw new DeploymentUnitProcessingException("Could not load interceptor class " + interceptorClassName + " on component "+ configuration.getComponentClass(),e);
+    }
+    final Object contextKey=interceptorClass;
+    final ClassReflectionIndex<?> interceptorIndex=deploymentReflectionIndex.getClassIndex(interceptorClass);
+    final Constructor<?> constructor=interceptorIndex.getConstructor(EMPTY_CLASS_ARRAY);
+    if (constructor == null) {
+      throw new DeploymentUnitProcessingException("No default constructor for interceptor class " + interceptorClassName + " on component "+ configuration.getComponentClass());
+    }
+    instantiators.addFirst(new ManagedReferenceInterceptorFactory(new ValueManagedReferenceFactory(new ConstructedValue(constructor,Collections.<Value<?>>emptyList())),contextKey));
     destructors.addLast(new ManagedReferenceReleaseInterceptorFactory(contextKey));
     final boolean interceptorHasLifecycleCallbacks=interceptorWithLifecycleCallbacks.contains(interceptorDescription);
-    final ClassReflectionIndex<?> interceptorIndex=deploymentReflectionIndex.getClassIndex(interceptorConfiguration.getModuleClass());
-    new ClassDescriptionTraversal(interceptorConfiguration,applicationDescription){
+    new ClassDescriptionTraversal(interceptorClass,applicationClasses){
       @Override public void handle(      EEModuleClassConfiguration interceptorClassConfiguration,      EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
         final ClassReflectionIndex<?> interceptorClassIndex=deploymentReflectionIndex.getClassIndex(interceptorClassConfiguration.getModuleClass());
         for (        final ResourceInjectionConfiguration injectionConfiguration : interceptorClassConfiguration.getInjectionConfigurations()) {
@@ -140,7 +147,7 @@
       userPreDestroy.addAll(userPreDestroyByInterceptorClass.get(interceptorClass.getInterceptorClassName()));
     }
   }
-  new ClassDescriptionTraversal(componentClassConfiguration,applicationDescription){
+  new ClassDescriptionTraversal(configuration.getComponentClass(),applicationClasses){
     @Override public void handle(    EEModuleClassConfiguration configuration,    EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
       final ClassReflectionIndex classReflectionIndex=deploymentReflectionIndex.getClassIndex(configuration.getModuleClass());
       final MethodIdentifier componentPostConstructMethodIdentifier=classDescription.getPostConstructMethod();
@@ -204,7 +211,7 @@
   final List<InterceptorDescription> classInterceptors=description.getClassInterceptors();
   final Map<MethodIdentifier,List<InterceptorDescription>> methodInterceptors=description.getMethodInterceptors();
   if (description.isIntercepted()) {
-    for (    final Method method : componentClassConfiguration.getClassMethods()) {
+    for (    final Method method : configuration.getDefinedComponentMethods()) {
       configuration.addComponentInterceptor(method,Interceptors.getInitialInterceptorFactory(),InterceptorOrder.Component.INITIAL_INTERCEPTOR);
       configuration.addComponentInterceptor(method,new ManagedReferenceMethodInterceptorFactory(instanceKey,method),InterceptorOrder.Component.TERMINAL_INTERCEPTOR);
       if (description.isTimerServiceApplicable()) {
