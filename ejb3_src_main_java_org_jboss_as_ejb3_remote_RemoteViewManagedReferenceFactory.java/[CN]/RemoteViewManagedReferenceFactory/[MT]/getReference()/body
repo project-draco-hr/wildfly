@@ -7,9 +7,20 @@
  catch (  ClassNotFoundException e) {
     throw new RuntimeException("Could not load view class for ejb " + beanName,e);
   }
-  final Object proxy=EJBClient.getProxy(appName,moduleName,distinctName,beanName,viewClass);
+  Locator ejbLocator=null;
   if (stateful) {
-    EJBClient.createSession(proxy);
+    final SessionID sessionID;
+    try {
+      sessionID=EJBClient.createSession(appName,moduleName,beanName,distinctName);
+    }
+ catch (    Exception e) {
+      throw new RuntimeException(e);
+    }
+    ejbLocator=new StatefulEJBLocator(viewClass,appName,moduleName,beanName,distinctName,sessionID);
   }
+ else {
+    ejbLocator=new StatelessEJBLocator(viewClass,appName,moduleName,beanName,distinctName);
+  }
+  final Object proxy=EJBClient.createProxy(ejbLocator);
   return new ValueManagedReference(new ImmediateValue<Object>(proxy));
 }
