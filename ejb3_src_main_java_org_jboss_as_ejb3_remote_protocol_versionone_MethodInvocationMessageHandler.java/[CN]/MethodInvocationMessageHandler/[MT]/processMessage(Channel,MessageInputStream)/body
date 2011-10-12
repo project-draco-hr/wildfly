@@ -48,23 +48,34 @@
   }
   executorService.submit(new Runnable(){
     @Override public void run(){
-      try {
-        Object result=null;
+      if (componentView.isAsynchronous(invokedMethod)) {
         try {
-          result=invokeMethod(componentView,invokedMethod,methodParams,attachments);
+          MethodInvocationMessageHandler.this.writeAsyncMethodNotification(channel,invocationId);
         }
- catch (        Throwable throwable) {
-          try {
-            writeMethodInvocationFailure(channel,invocationId,throwable,attachments);
-          }
- catch (          IOException ioe) {
-            logger.error("Error invoking method " + invokedMethod + " on bean named "+ beanName+ " in app: "+ appName+ " module: "+ moduleName+ " distinctname: "+ distinctName,throwable);
-          }
+ catch (        Throwable t) {
+          logger.warn("Method " + invokedMethod + " was a async method but the client could not be informed about the same. This will mean that the client might block till the method completes",t);
         }
+      }
+      Object result=null;
+      try {
+        result=invokeMethod(componentView,invokedMethod,methodParams,attachments);
+      }
+ catch (      Throwable throwable) {
+        try {
+          writeMethodInvocationFailure(channel,invocationId,throwable,attachments);
+        }
+ catch (        IOException ioe) {
+          logger.error("Error invoking method " + invokedMethod + " on bean named "+ beanName+ " in app: "+ appName+ " module: "+ moduleName+ " distinctname: "+ distinctName,throwable);
+          logger.error("Could not write method invocation failure for method " + invokedMethod + " on bean named "+ beanName+ " in app: "+ appName+ " module: "+ moduleName+ " distinctname: "+ distinctName+ " due to ",ioe);
+          return;
+        }
+      }
+      try {
         writeMethodInvocationResponse(channel,invocationId,result,attachments);
       }
- catch (      IOException e) {
-        logger.error("Error wring response for remote EJB " + componentView,e);
+ catch (      IOException ioe) {
+        logger.error("Could not write method invocation result for method " + invokedMethod + " on bean named "+ beanName+ " in app: "+ appName+ " module: "+ moduleName+ " distinctname: "+ distinctName+ " due to ",ioe);
+        return;
       }
     }
   }
