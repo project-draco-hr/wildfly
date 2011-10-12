@@ -2,6 +2,7 @@
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   final EEApplicationClasses applicationClasses=deploymentUnit.getAttachment(Attachments.EE_APPLICATION_CLASSES_DESCRIPTION);
   final EEModuleConfiguration moduleConfiguration=deploymentUnit.getAttachment(Attachments.EE_MODULE_CONFIGURATION);
+  final DeploymentClassIndex classIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.CLASS_INDEX);
   if (moduleConfiguration == null) {
     return;
   }
@@ -32,9 +33,12 @@
     final Set<Class<?>> classConfigurations=new HashSet<Class<?>>();
     classConfigurations.add(componentConfiguration.getComponentClass());
     for (    final InterceptorDescription interceptor : componentConfiguration.getComponentDescription().getAllInterceptors()) {
-      final EEModuleClassConfiguration interceptorClass=applicationClasses.getClassConfiguration(interceptor.getInterceptorClassName());
-      if (interceptorClass != null) {
+      try {
+        final ClassIndex interceptorClass=classIndex.classIndex(interceptor.getInterceptorClassName());
         classConfigurations.add(interceptorClass.getModuleClass());
+      }
+ catch (      ClassNotFoundException e) {
+        throw new DeploymentUnitProcessingException("Could not load interceptor class",e);
       }
     }
     processClassConfigurations(phaseContext,applicationClasses,moduleConfiguration,deploymentDescriptorBindings,handledClasses,componentConfiguration.getComponentDescription().getNamingMode(),classConfigurations,componentConfiguration.getComponentName(),moduleOwnerName,moduleCount,dependencies);
