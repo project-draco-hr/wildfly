@@ -1,0 +1,56 @@
+{
+  final SimpleInterceptorFactoryContext factoryContext=new SimpleInterceptorFactoryContext();
+  final Component component=componentView.getComponent();
+  factoryContext.getContextData().put(Component.class,component);
+  factoryContext.getContextData().put(ComponentView.class,componentView);
+  factoryContext.getContextData().putAll(contextData);
+  final Interceptor clientPostConstructInterceptor=clientPostConstruct.create(factoryContext);
+  final Interceptor clientPreDestroyInterceptor=clientPreDestroy.create(factoryContext);
+  final Map<Method,InterceptorFactory> clientInterceptorFactories=ViewService.this.clientInterceptorFactories;
+  IdentityHashMap<Method,Interceptor> clientEntryPoints=new IdentityHashMap<Method,Interceptor>(clientInterceptorFactories.size());
+  for (  Method method : clientInterceptorFactories.keySet()) {
+    clientEntryPoints.put(method,clientInterceptorFactories.get(method).create(factoryContext));
+  }
+  final Object proxy;
+  try {
+    proxy=proxyFactory.newInstance(new ProxyInvocationHandler(clientEntryPoints,component,componentView));
+  }
+ catch (  InstantiationException e) {
+    InstantiationError error=new InstantiationError(e.getMessage());
+    Throwable cause=e.getCause();
+    if (cause != null)     error.initCause(cause);
+    throw error;
+  }
+catch (  IllegalAccessException e) {
+    IllegalAccessError error=new IllegalAccessError(e.getMessage());
+    Throwable cause=e.getCause();
+    if (cause != null)     error.initCause(cause);
+    throw error;
+  }
+  try {
+    InterceptorContext context=new InterceptorContext();
+    context.putPrivateData(ComponentView.class,componentView);
+    context.putPrivateData(Component.class,component);
+    clientPostConstructInterceptor.processInvocation(context);
+  }
+ catch (  Exception e) {
+    throw new RuntimeException("Failed to instantiate component view",e);
+  }
+  return new ManagedReference(){
+    @Override public void release(){
+      try {
+        InterceptorContext interceptorContext=new InterceptorContext();
+        interceptorContext.putPrivateData(ComponentView.class,componentView);
+        interceptorContext.putPrivateData(Component.class,component);
+        clientPreDestroyInterceptor.processInvocation(interceptorContext);
+      }
+ catch (      Exception e) {
+        logger.warn("Exception while invoking pre-destroy interceptor for component class: " + component.getComponentClass(),e);
+      }
+    }
+    @Override public Object getInstance(){
+      return proxy;
+    }
+  }
+;
+}
