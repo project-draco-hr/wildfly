@@ -1,2 +1,60 @@
 {
+  step.predecessor=this.activeStep;
+  this.activeStep=step;
+  try {
+    try {
+      ClassLoader oldTccl=SecurityActions.setThreadContextClassLoader(step.handler.getClass());
+      try {
+        step.handler.execute(this,step.operation);
+      }
+  finally {
+        SecurityActions.setThreadContextClassLoader(oldTccl);
+      }
+    }
+ catch (    OperationFailedException ofe) {
+      if (currentStage != Stage.DONE) {
+        step.response.get(FAILURE_DESCRIPTION).set(ofe.getFailureDescription());
+        log.errorf("Operation (%s) failed - address: (%s) - failure description: %s",step.operation.get(OP),step.operation.get(OP_ADDR),step.response.get(FAILURE_DESCRIPTION));
+        completeStep();
+      }
+ else {
+        throw ofe;
+      }
+    }
+  }
+ catch (  Throwable t) {
+    if (t instanceof StackOverflowError) {
+      log.errorf(t,"Operation (%s) failed - address: (%s) -- due to insufficient stack space for the thread used to " + "execute operations. If this error is occurring during server boot, setting " + "system property %s to a value higher than [%d] may resolve this problem.",step.operation.get(OP),step.operation.get(OP_ADDR),AbstractControllerService.BOOT_STACK_SIZE_PROPERTY,AbstractControllerService.DEFAULT_BOOT_STACK_SIZE);
+    }
+ else {
+      log.errorf(t,"Operation (%s) failed - address: (%s)",step.operation.get(OP),step.operation.get(OP_ADDR));
+    }
+    if (currentStage != Stage.DONE) {
+      if (!step.response.hasDefined(FAILURE_DESCRIPTION)) {
+        step.response.get(FAILURE_DESCRIPTION).set("Operation handler failed: " + t);
+      }
+      step.response.get(OUTCOME).set(FAILED);
+      resultAction=getFailedResultAction(t);
+      if (resultAction == ResultAction.ROLLBACK) {
+        step.response.get(ROLLED_BACK).set(true);
+      }
+    }
+ else {
+      report(MessageSeverity.WARN,"Step handler " + step.handler + " failed after completion");
+    }
+  }
+ finally {
+    boolean finalize=true;
+    if (step.rollbackHandler != null) {
+      if (!hasMoreSteps()) {
+        completeStep();
+      }
+ else {
+        finalize=false;
+      }
+    }
+    if (finalize) {
+      step.finalizeStep();
+    }
+  }
 }

@@ -1,0 +1,36 @@
+{
+  OperationContextImpl.this.activeStep=this;
+  try {
+    handleRollback();
+    if (currentStage != null && currentStage != Stage.DONE) {
+      currentStage=currentStage != null ? Stage.DONE : null;
+      if (!response.hasDefined(FAILURE_DESCRIPTION)) {
+        response.get(FAILURE_DESCRIPTION).set("Operation handler failed to complete");
+      }
+      response.get(OUTCOME).set(FAILED);
+      response.get(ROLLED_BACK).set(true);
+      resultAction=getFailedResultAction(null);
+    }
+ else     if (resultAction == ResultAction.ROLLBACK) {
+      response.get(OUTCOME).set(FAILED);
+      response.get(ROLLED_BACK).set(true);
+    }
+ else {
+      response.get(OUTCOME).set(response.hasDefined(FAILURE_DESCRIPTION) ? FAILED : SUCCESS);
+    }
+  }
+  finally {
+    if (OperationContextImpl.this.lockStep == this) {
+      modelController.releaseLock();
+      lockStep=null;
+    }
+    if (OperationContextImpl.this.containerMonitorStep == this) {
+      awaitContainerMonitor();
+      modelController.releaseContainerMonitor();
+      containerMonitorStep=null;
+    }
+    if (predecessor == null) {
+      currentStage=null;
+    }
+  }
+}
