@@ -51,14 +51,19 @@
     log.warnf("Could not connect to remote domain controller %s:%d",host.getHostAddress(),port);
     throw new IllegalStateException(e);
   }
+  SlaveRegistrationError error=null;
   try {
-    final String error=new RegisterModelControllerRequest().executeForResult(executor,ManagementClientChannelStrategy.create(channel));
-    if (error != null) {
-      throw new Exception(error);
-    }
+    error=new RegisterModelControllerRequest().executeForResult(executor,ManagementClientChannelStrategy.create(channel));
   }
  catch (  Exception e) {
     log.warnf("Error retrieving domain model from remote domain controller %s:%d: %s",host.getHostAddress(),port,e.getMessage());
     throw new IllegalStateException(e);
+  }
+  if (error != null) {
+    if (error.getErrorCode() == ErrorCode.HOST_ALREADY_EXISTS) {
+      log.info(error.getErrorMessage() + " - exiting");
+      throw new HostAlreadyExistsException(error.getErrorMessage());
+    }
+    throw new IllegalStateException(error.getErrorMessage());
   }
 }
