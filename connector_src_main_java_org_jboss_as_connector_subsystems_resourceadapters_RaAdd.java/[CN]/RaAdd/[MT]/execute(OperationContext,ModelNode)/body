@@ -9,15 +9,15 @@
       public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
         final ServiceTarget serviceTarget=context.getServiceTarget();
         final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
-        ModifiableResourceAdaptors resourceAdapters=buildResourceAdaptersObject(operation);
-        final ServiceController<?> raService=context.getServiceRegistry(false).getService(ConnectorServices.RESOURCEADAPTERS_SERVICE);
+        ModifiableResourceAdapter resourceAdapter=RaOperationUtil.buildResourceAdaptersObject(operation);
+        final ServiceController<?> resourceAdaptersService=context.getServiceRegistry(false).getService(ConnectorServices.RESOURCEADAPTERS_SERVICE);
         ServiceController<?> controller=null;
-        if (raService == null) {
-          controller=serviceTarget.addService(ConnectorServices.RESOURCEADAPTERS_SERVICE,new ResourceAdaptersService(resourceAdapters)).setInitialMode(Mode.ACTIVE).addListener(verificationHandler).install();
+        if (resourceAdaptersService == null) {
+          controller=serviceTarget.addService(ConnectorServices.RESOURCEADAPTERS_SERVICE,new ResourceAdaptersService()).setInitialMode(Mode.ACTIVE).addListener(verificationHandler).install();
         }
- else {
-          ((ModifiableResourceAdaptors)raService.getValue()).addAllResourceAdapters(resourceAdapters.getResourceAdapters());
-        }
+        ServiceName raServiceName=ServiceName.of(ConnectorServices.RA_SERVICE,archive);
+        ResourceAdapterService raService=new ResourceAdapterService(resourceAdapter);
+        serviceTarget.addService(raServiceName,raService).setInitialMode(Mode.ACTIVE).addDependency(ConnectorServices.RESOURCEADAPTERS_SERVICE,ResourceAdaptersService.ModifiableResourceAdaptors.class,raService.getResourceAdaptersInjector()).addListener(verificationHandler).install();
         context.addStep(verificationHandler,OperationContext.Stage.VERIFY);
         if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
           if (controller != null) {

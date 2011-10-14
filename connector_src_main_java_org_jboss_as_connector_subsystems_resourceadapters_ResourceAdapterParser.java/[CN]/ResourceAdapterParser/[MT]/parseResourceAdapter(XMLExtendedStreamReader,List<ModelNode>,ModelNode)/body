@@ -3,6 +3,11 @@
   final ModelNode operation=new ModelNode();
   operation.get(OP).set(ADD);
   String archiveName=null;
+  HashMap<String,ModelNode> configPropertiesOperations=new HashMap<String,ModelNode>();
+  HashMap<String,ModelNode> connectionDefinitionsOperations=new HashMap<String,ModelNode>();
+  HashMap<String,HashMap<String,ModelNode>> cfConfigPropertiesOperations=new HashMap<String,HashMap<String,ModelNode>>();
+  HashMap<String,ModelNode> adminObjectsOperations=new HashMap<String,ModelNode>();
+  HashMap<String,HashMap<String,ModelNode>> aoConfigPropertiesOperations=new HashMap<String,HashMap<String,ModelNode>>();
   while (reader.hasNext()) {
 switch (reader.nextTag()) {
 case END_ELEMENT:
@@ -13,6 +18,41 @@ case END_ELEMENT:
             raAddress.protect();
             operation.get(OP_ADDR).set(raAddress);
             list.add(operation);
+            for (            Map.Entry<String,ModelNode> entry : configPropertiesOperations.entrySet()) {
+              final ModelNode env=raAddress.clone();
+              env.add(CONFIG_PROPERTIES.getName(),entry.getKey());
+              env.protect();
+              entry.getValue().get(OP_ADDR).set(env);
+              list.add(entry.getValue());
+            }
+            for (            Map.Entry<String,ModelNode> entry : connectionDefinitionsOperations.entrySet()) {
+              final ModelNode env=raAddress.clone();
+              env.add(CONNECTIONDEFINITIONS_NAME,entry.getKey());
+              env.protect();
+              entry.getValue().get(OP_ADDR).set(env);
+              list.add(entry.getValue());
+              for (              Map.Entry<String,ModelNode> configEntry : cfConfigPropertiesOperations.get(entry.getKey()).entrySet()) {
+                final ModelNode configEnv=env.clone();
+                configEnv.add(CONFIG_PROPERTIES.getName(),configEntry.getKey());
+                configEnv.protect();
+                configEntry.getValue().get(OP_ADDR).set(configEnv);
+                list.add(configEntry.getValue());
+              }
+            }
+            for (            Map.Entry<String,ModelNode> entry : adminObjectsOperations.entrySet()) {
+              final ModelNode env=raAddress.clone();
+              env.add(ADMIN_OBJECTS_NAME,entry.getKey());
+              env.protect();
+              entry.getValue().get(OP_ADDR).set(env);
+              list.add(entry.getValue());
+              for (              Map.Entry<String,ModelNode> configEntry : aoConfigPropertiesOperations.get(entry.getKey()).entrySet()) {
+                final ModelNode configEnv=env.clone();
+                configEnv.add(CONFIG_PROPERTIES.getName(),configEntry.getKey());
+                configEnv.protect();
+                configEntry.getValue().get(OP_ADDR).set(configEnv);
+                list.add(configEntry.getValue());
+              }
+            }
             return;
           }
  else {
@@ -37,12 +77,12 @@ case BEAN_VALIDATION_GROUPS:
         }
 case ADMIN_OBJECT:
 {
-        parseAdminObjects(reader,operation);
+        parseAdminObjects(reader,adminObjectsOperations,aoConfigPropertiesOperations);
         break;
       }
 case CONNECTION_DEFINITION:
 {
-      parseConnectionDefinitions(reader,operation);
+      parseConnectionDefinitions(reader,connectionDefinitionsOperations,cfConfigPropertiesOperations);
       break;
     }
 case BEAN_VALIDATION_GROUP:
@@ -61,11 +101,7 @@ case BOOTSTRAP_CONTEXT:
 }
 case CONFIG_PROPERTY:
 {
-final Location location=reader.getLocation();
-String name=rawAttributeText(reader,"name");
-String value=rawElementText(reader);
-ModelNode node=CONFIG_PROPERTIES.parse(value,location);
-operation.get(CONFIG_PROPERTIES.getName(),name).set(node);
+parseConfigProperties(reader,configPropertiesOperations);
 break;
 }
 case TRANSACTION_SUPPORT:

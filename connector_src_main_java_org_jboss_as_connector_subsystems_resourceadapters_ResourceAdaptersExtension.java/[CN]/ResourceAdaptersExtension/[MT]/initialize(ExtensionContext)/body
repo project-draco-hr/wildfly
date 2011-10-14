@@ -1,20 +1,43 @@
 {
   SUBSYSTEM_RA_LOGGER.debugf("Initializing ResourceAdapters Extension");
   final SubsystemRegistration registration=context.registerSubsystem(SUBSYSTEM_NAME);
+  ReloadRequiredWriteAttributeHandler reloadRequiredWriteAttributeHandler=new ReloadRequiredWriteAttributeHandler();
   registration.registerXMLElementWriter(ResourceAdapterSubsystemParser.INSTANCE);
   final ManagementResourceRegistration subsystem=registration.registerSubsystemModel(SUBSYSTEM);
   subsystem.registerOperationHandler(ADD,ResourceAdaptersSubSystemAdd.INSTANCE,SUBSYSTEM_ADD_DESC,false);
-  subsystem.registerOperationHandler(DESCRIBE,ResourceAdaptersSubsystemDescribeHandler.INSTANCE,ResourceAdaptersSubsystemDescribeHandler.INSTANCE,false,OperationEntry.EntryType.PRIVATE);
-  final ManagementResourceRegistration resourceadapter=subsystem.registerSubModel(PathElement.pathElement(RESOURCEADAPTER_NAME),RESOURCEADAPTER_DESC);
+  subsystem.registerOperationHandler(DESCRIBE,GenericSubsystemDescribeHandler.INSTANCE,GenericSubsystemDescribeHandler.INSTANCE,false,OperationEntry.EntryType.PRIVATE);
+  final ManagementResourceRegistration resourceadapter=subsystem.registerSubModel(PathElement.pathElement(RESOURCEADAPTER_NAME),GenericSubsystemDescribeHandler.INSTANCE);
   resourceadapter.registerOperationHandler(ADD,RaAdd.INSTANCE,ADD_RESOURCEADAPTER_DESC,false);
   resourceadapter.registerOperationHandler(REMOVE,RaRemove.INSTANCE,REMOVE_RESOURCEADAPTER_DESC,false);
-  resourceadapter.registerOperationHandler("flush-idle-connection-in-pool",PoolOperations.FlushIdleConnectionInPool.DS_INSTANCE,FLUSH_IDLE_CONNECTION_DESC,false);
+  for (  final String attribute : ResourceAdaptersSubsystemProviders.RESOURCEADAPTER_ATTRIBUTE) {
+    resourceadapter.registerReadWriteAttribute(attribute,null,reloadRequiredWriteAttributeHandler,Storage.CONFIGURATION);
+  }
+  final ManagementResourceRegistration configAdapter=resourceadapter.registerSubModel(PathElement.pathElement(CONFIG_PROPERTIES.getName()),CONFIG_PROPERTIES_DESC);
+  configAdapter.registerOperationHandler(ADD,ConfigPropertyAdd.INSTANCE,ADD_CONFIG_PROPERTIES_DESC,false);
+  configAdapter.registerOperationHandler(REMOVE,ReloadRequiredRemoveStepHandler.INSTANCE,REMOVE_CONFIG_PROPERTIES_DESC,false);
+  final ManagementResourceRegistration connectionDefinition=resourceadapter.registerSubModel(PathElement.pathElement(CONNECTIONDEFINITIONS_NAME),CONNECTION_DEFINITION_DESC);
+  connectionDefinition.registerOperationHandler(ADD,ConnectionDefinitionAdd.INSTANCE,ADD_CONNECTION_DEFINITION_DESC,false);
+  connectionDefinition.registerOperationHandler(REMOVE,ReloadRequiredRemoveStepHandler.INSTANCE,REMOVE_CONNECTION_DEFINITION_DESC,false);
+  connectionDefinition.registerOperationHandler(WRITE_ATTRIBUTE_OPERATION,GlobalOperationHandlers.WRITE_ATTRIBUTE,CommonProviders.WRITE_ATTRIBUTE_PROVIDER,true);
+  final ManagementResourceRegistration configCF=connectionDefinition.registerSubModel(PathElement.pathElement(CONFIG_PROPERTIES.getName()),CONFIG_PROPERTIES_DESC);
+  configCF.registerOperationHandler(ADD,CDConfigPropertyAdd.INSTANCE,ADD_CONFIG_PROPERTIES_DESC,false);
+  configCF.registerOperationHandler(REMOVE,ReloadRequiredRemoveStepHandler.INSTANCE,REMOVE_CONFIG_PROPERTIES_DESC,false);
+  for (  final SimpleAttributeDefinition attribute : ResourceAdaptersSubsystemProviders.CONNECTIONDEFINITIONS_NODEATTRIBUTE) {
+    connectionDefinition.registerReadWriteAttribute(attribute.getName(),null,reloadRequiredWriteAttributeHandler,Storage.CONFIGURATION);
+  }
+  final ManagementResourceRegistration adminObject=resourceadapter.registerSubModel(PathElement.pathElement(ADMIN_OBJECTS_NAME),ADMIN_OBJECT_DESC);
+  adminObject.registerOperationHandler(ADD,AdminObjectAdd.INSTANCE,ADD_ADMIN_OBJECT_DESC,false);
+  adminObject.registerOperationHandler(REMOVE,ReloadRequiredRemoveStepHandler.INSTANCE,REMOVE_ADMIN_OBJECT_DESC,false);
+  final ManagementResourceRegistration configAO=adminObject.registerSubModel(PathElement.pathElement(CONFIG_PROPERTIES.getName()),CONFIG_PROPERTIES_DESC);
+  configAO.registerOperationHandler(ADD,AOConfigPropertyAdd.INSTANCE,ADD_CONFIG_PROPERTIES_DESC,false);
+  configAO.registerOperationHandler(REMOVE,ReloadRequiredRemoveStepHandler.INSTANCE,REMOVE_CONFIG_PROPERTIES_DESC,false);
+  for (  final SimpleAttributeDefinition attribute : ResourceAdaptersSubsystemProviders.ADMIN_OBJECTS_NODEATTRIBUTE) {
+    adminObject.registerReadWriteAttribute(attribute.getName(),null,reloadRequiredWriteAttributeHandler,Storage.CONFIGURATION);
+  }
+  resourceadapter.registerOperationHandler("flush-idle-connection-in-pool",PoolOperations.FlushIdleConnectionInPool.RA_INSTANCE,FLUSH_IDLE_CONNECTION_DESC,false);
   resourceadapter.registerOperationHandler("flush-all-connection-in-pool",PoolOperations.FlushAllConnectionInPool.RA_INSTANCE,FLUSH_ALL_CONNECTION_DESC,false);
   resourceadapter.registerOperationHandler("test-connection-in-pool",PoolOperations.TestConnectionInPool.RA_INSTANCE,TEST_CONNECTION_DESC,false);
   for (  final String attributeName : PoolMetrics.ATTRIBUTES) {
     resourceadapter.registerMetric(attributeName,PoolMetrics.RaPoolMetricsHandler.INSTANCE);
-  }
-  for (  final String attributeName : PoolConfigurationRWHandler.ATTRIBUTES) {
-    resourceadapter.registerReadWriteAttribute(attributeName,PoolConfigurationReadHandler.INSTANCE,RaPoolConfigurationWriteHandler.INSTANCE,Storage.CONFIGURATION);
   }
 }
