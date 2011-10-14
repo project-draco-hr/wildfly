@@ -8,24 +8,26 @@
 switch (header) {
 case HEADER_INVOCATION_REQUEST:
       messageHandler=new MethodInvocationMessageHandler(this.deploymentRepository,this.marshallingStrategy,this.executorService);
-    messageHandler.processMessage(channel,messageInputStream);
-  break;
+    break;
 case HEADER_SESSION_OPEN_REQUEST:
-messageHandler=new SessionOpenRequestHandler(this.deploymentRepository,this.marshallingStrategy,this.executorService);
-messageHandler.processMessage(channel,messageInputStream);
+  messageHandler=new SessionOpenRequestHandler(this.deploymentRepository,this.marshallingStrategy,this.executorService);
+break;
+case HEADER_TX_COMMIT_REQUEST:
+messageHandler=new TransactionRequestHandler(this.transactionsRepository,this.executorService,TransactionRequestHandler.TransactionRequestType.COMMIT,this.marshallingStrategy);
+break;
+case HEADER_TX_ROLLBACK_REQUEST:
+messageHandler=new TransactionRequestHandler(this.transactionsRepository,this.executorService,TransactionRequestHandler.TransactionRequestType.ROLLBACK,this.marshallingStrategy);
 break;
 default :
 logger.warn("Received unsupported message header 0x" + Integer.toHexString(header) + " on channel "+ channel);
+return;
 }
+messageHandler.processMessage(channel,messageInputStream);
 channel.receiveMessage(this);
 }
  catch (IOException e) {
 logger.errorf(e,"Exception on channel %s from message %s",channel,messageInputStream);
-try {
-channel.close();
-}
- catch (IOException e1) {
-}
+IoUtils.safeClose(channel);
 }
  finally {
 IoUtils.safeClose(messageInputStream);

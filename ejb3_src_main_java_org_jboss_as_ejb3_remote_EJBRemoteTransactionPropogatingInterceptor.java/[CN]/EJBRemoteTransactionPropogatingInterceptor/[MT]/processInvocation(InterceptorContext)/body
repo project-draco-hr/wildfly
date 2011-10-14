@@ -1,0 +1,23 @@
+{
+  final RemotingAttachments remotingAttachments=context.getPrivateData(RemotingAttachments.class);
+  final TransactionManager transactionManager=this.ejbRemoteTransactionsRepository.getTransactionManager();
+  Transaction originatingRemoteTx=null;
+  if (remotingAttachments != null) {
+    final byte[] transactionIDBytes=remotingAttachments.getPayloadAttachment(0x0001);
+    if (transactionIDBytes != null) {
+      final TransactionID transactionID=TransactionID.createTransactionID(transactionIDBytes);
+      if (transactionID instanceof UserTransactionID) {
+        this.createOrResumeUserTransaction((UserTransactionID)transactionID);
+      }
+      originatingRemoteTx=transactionManager.getTransaction();
+    }
+  }
+  try {
+    return context.proceed();
+  }
+  finally {
+    if (originatingRemoteTx != null) {
+      transactionManager.suspend();
+    }
+  }
+}
