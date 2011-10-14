@@ -1,25 +1,30 @@
 {
   IllegalStateException ise=null;
   boolean connected=false;
-  long timeout=System.currentTimeMillis() + 5000;
-  while (!connected && System.currentTimeMillis() < timeout) {
+  final long timeout=30000;
+  final long endTime=System.currentTimeMillis() + timeout;
+  int retries=0;
+  while (!connected) {
     try {
       connect();
       connected=true;
+      break;
     }
  catch (    IllegalStateException e) {
+      if (System.currentTimeMillis() > endTime) {
+        throw new IllegalStateException("Could not connect to master in " + retries + "attempts within  "+ timeout+ " ms",e);
+      }
       ise=e;
       try {
-        Thread.sleep(100);
+        ReconnectPolicy.CONNECT.wait(retries);
       }
- catch (      InterruptedException inter) {
-        Thread.currentThread().interrupt();
-        throw new IllegalStateException("Interrupted while trying to connect to master",inter);
+ catch (      InterruptedException ie) {
+        throw new IllegalStateException("Interrupted while trying to connect to master");
       }
     }
-  }
-  if (!connected) {
-    throw (ise != null) ? ise : new IllegalStateException("Could not connect to master within 5000 ms");
+catch (    HostAlreadyExistsException e) {
+      throw new IllegalStateException(e.getMessage());
+    }
   }
   this.connected.set(true);
   registered.set(true);
