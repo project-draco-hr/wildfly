@@ -1,14 +1,23 @@
 {
   if (serverGroup.hasDefined(DEPLOYMENT)) {
+    FileRepository remoteRepository=null;
+    if (domainController.getLocalHostInfo().isMasterDomainController()) {
+      remoteRepository=domainController.getRemoteFileRepository();
+    }
     for (    Property deployment : serverGroup.get(DEPLOYMENT).asPropertyList()) {
       String name=deployment.getName();
       ModelNode details=deployment.getValue();
       ModelNode domainDeployment=domainModel.require(DEPLOYMENT).require(name);
       ModelNode deploymentContent=domainDeployment.require(CONTENT).clone();
-      for (      ModelNode content : deploymentContent.asList()) {
-        if ((content.hasDefined(HASH))) {
-          byte[] hash=content.require(HASH).asBytes();
-          domainController.getFileRepository().getDeploymentFiles(hash);
+      if (remoteRepository != null) {
+        for (        ModelNode content : deploymentContent.asList()) {
+          if ((content.hasDefined(HASH))) {
+            byte[] hash=content.require(HASH).asBytes();
+            File[] files=domainController.getLocalFileRepository().getDeploymentFiles(hash);
+            if (files == null || files.length == 0) {
+              remoteRepository.getDeploymentFiles(hash);
+            }
+          }
         }
       }
       PathAddress addr=PathAddress.pathAddress(PathElement.pathElement(DEPLOYMENT,name));
