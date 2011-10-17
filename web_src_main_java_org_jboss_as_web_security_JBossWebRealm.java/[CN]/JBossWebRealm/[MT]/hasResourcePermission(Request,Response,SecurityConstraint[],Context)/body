@@ -1,0 +1,27 @@
+{
+  boolean authzDecision=true;
+  boolean baseDecision=super.hasResourcePermission(request,response,constraints,context);
+  if (baseDecision && useJBossAuthorization) {
+    SecurityContext sc=SecurityActions.getSecurityContext();
+    Subject caller=sc.getUtil().getSubject();
+    if (caller == null)     caller=getSubjectFromRequestPrincipal(request.getPrincipal());
+    Map<String,Object> contextMap=new HashMap<String,Object>();
+    contextMap.put(ResourceKeys.RESOURCE_PERM_CHECK,Boolean.TRUE);
+    contextMap.put("securityConstraints",constraints);
+    AbstractWebAuthorizationHelper helper=null;
+    try {
+      helper=SecurityHelperFactory.getWebAuthorizationHelper(sc);
+    }
+ catch (    Exception e) {
+      log.error("Exception in obtaining helper",e);
+      return false;
+    }
+    authzDecision=helper.checkResourcePermission(contextMap,request,response,caller,PolicyContext.getContextID(),requestURI(request),getPrincipalRoles(request));
+  }
+  boolean finalDecision=baseDecision && authzDecision;
+  if (log.isTraceEnabled())   log.trace("hasResourcePermission:RealmBase says:" + baseDecision + "::Authz framework says:"+ authzDecision+ ":final="+ finalDecision);
+  if (!finalDecision) {
+    response.sendError(HttpServletResponse.SC_FORBIDDEN,sm.getString("realmBase.forbidden"));
+  }
+  return finalDecision;
+}

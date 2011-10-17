@@ -1,0 +1,41 @@
+{
+  boolean authzDecision=true;
+  boolean baseDecision=super.hasRole(principal,role);
+  if (baseDecision && useJBossAuthorization) {
+    Request request=SecurityContextAssociationValve.getActiveRequest();
+    String servletName=null;
+    Wrapper servlet=request.getWrapper();
+    if (servlet != null) {
+      servletName=getServletName(servlet);
+    }
+    if (servletName == null)     throw new IllegalStateException("servletName is null");
+    String roleName=role;
+    ServletMetaData servletMD=metaData.getServlets().get(servletName);
+    SecurityRoleRefsMetaData roleRefs=null;
+    if (servletMD != null)     roleRefs=servletMD.getSecurityRoleRefs();
+    if (roleRefs != null) {
+      for (      SecurityRoleRefMetaData ref : roleRefs) {
+        if (ref.getRoleLink().equals(role)) {
+          roleName=ref.getName();
+          break;
+        }
+      }
+    }
+    SecurityContext sc=SecurityActions.getSecurityContext();
+    AbstractWebAuthorizationHelper helper=null;
+    try {
+      helper=SecurityHelperFactory.getWebAuthorizationHelper(sc);
+    }
+ catch (    Exception e) {
+      log.error("Error obtaining helper",e);
+    }
+    Subject callerSubject=sc.getUtil().getSubject();
+    if (callerSubject == null) {
+      callerSubject=getSubjectFromRequestPrincipal(principal);
+    }
+    authzDecision=helper.hasRole(roleName,principal,servletName,getPrincipalRoles(principal),PolicyContext.getContextID(),callerSubject,getPrincipalRoles(request));
+  }
+  boolean finalDecision=baseDecision && authzDecision;
+  if (log.isTraceEnabled())   log.trace("hasRole:RealmBase says:" + baseDecision + "::Authz framework says:"+ authzDecision+ ":final="+ finalDecision);
+  return finalDecision;
+}

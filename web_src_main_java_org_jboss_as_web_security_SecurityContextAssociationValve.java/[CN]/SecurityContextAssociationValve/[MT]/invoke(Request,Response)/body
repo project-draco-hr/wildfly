@@ -1,6 +1,7 @@
 {
   final WarMetaData warMetaData=deploymentUnit.getAttachment(WarMetaData.ATTACHMENT_KEY);
   JBossWebMetaData metaData=warMetaData.getMergedJBossWebMetaData();
+  activeRequest.set(request);
   boolean trace=log.isTraceEnabled();
   Session session=null;
   Principal caller=request.getPrincipal();
@@ -42,6 +43,9 @@
         if (session != null) {
           principal=(JBossGenericPrincipal)session.getPrincipal();
         }
+        if (principal == null) {
+          principal=(JBossGenericPrincipal)request.getSessionInternal(false).getNote(Constants.FORM_PRINCIPAL_NOTE);
+        }
       }
  else {
         principal=(JBossGenericPrincipal)caller;
@@ -56,6 +60,7 @@
  catch (    Throwable e) {
       log.debug("Failed to determine servlet",e);
     }
+    PolicyContext.setContextID(deploymentUnit.getName());
     getNext().invoke(request,response);
     if (servlet != null) {
       SecurityActions.popRunAsIdentity();
@@ -64,5 +69,8 @@
   finally {
     if (trace)     log.trace("End invoke, caller=" + caller);
     SecurityActions.clearSecurityContext();
+    SecurityRolesAssociation.setSecurityRoles(null);
+    PolicyContext.setContextID(null);
+    activeRequest.set(null);
   }
 }

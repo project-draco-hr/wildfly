@@ -1,20 +1,25 @@
 {
-  if ((certs == null) || (certs.length < 1))   return (null);
   if (authenticationManager == null)   throw new IllegalStateException("Authentication Manager has not been set");
   if (authorizationManager == null)   throw new IllegalStateException("Authorization Manager has not been set");
   Principal userPrincipal=null;
+  SecurityContext sc=SecurityActions.getSecurityContext();
+  if (sc == null)   throw new IllegalStateException("No SecurityContext found!");
+  Principal caller=sc.getUtil().getUserPrincipal();
+  if (caller == null && username == null && clientDigest == null) {
+    return null;
+  }
   try {
-    userPrincipal=certMapping.toPrincipal(certs);
+    DigestCallbackHandler handler=new DigestCallbackHandler(username,nOnce,nc,cnonce,qop,realm,md5a2);
+    CallbackHandlerPolicyContextHandler.setCallbackHandler(handler);
+    userPrincipal=getPrincipal(username);
     Subject subject=new Subject();
-    boolean isValid=authenticationManager.isValid(userPrincipal,certs,subject);
+    boolean isValid=authenticationManager.isValid(userPrincipal,clientDigest,subject);
     if (isValid) {
       if (log.isTraceEnabled()) {
         log.trace("User: " + userPrincipal + " is authenticated");
       }
-      SecurityContext sc=SecurityActions.getSecurityContext();
-      if (sc == null)       throw new IllegalStateException("No SecurityContext found!");
       userPrincipal=getPrincipal(subject);
-      sc.getUtil().createSubjectInfo(userPrincipal,certs,subject);
+      sc.getUtil().createSubjectInfo(userPrincipal,clientDigest,subject);
       SecurityContextCallbackHandler scb=new SecurityContextCallbackHandler(sc);
       if (mappingManager != null) {
         MappingContext<RoleGroup> mc=mappingManager.getMappingContext(MappingType.ROLE.name());
@@ -37,9 +42,9 @@
  else       rolesAsStringList=mapUserRoles(rolesAsStringList);
       if (authenticationManager instanceof CacheableManager) {
         @SuppressWarnings("unchecked") CacheableManager<?,Principal> cm=(CacheableManager<?,Principal>)authenticationManager;
-        userPrincipal=new JBossGenericPrincipal(this,userPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,certs,cm,subject);
+        userPrincipal=new JBossGenericPrincipal(this,userPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,clientDigest,cm,subject);
       }
- else       userPrincipal=new JBossGenericPrincipal(this,userPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,certs,null,subject);
+ else       userPrincipal=new JBossGenericPrincipal(this,userPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,clientDigest,null,subject);
     }
  else {
       if (log.isTraceEnabled()) {
@@ -49,7 +54,7 @@
     }
   }
  catch (  Exception e) {
-    log.error("Error during authenticate(X509Certificate[])");
+    log.error("Error during authenticate(String,String,String,String,String,String,String,String)");
   }
   if (userPrincipal != null) {
     successAudit(userPrincipal);
