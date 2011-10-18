@@ -1,7 +1,7 @@
 {
   final int attrCount=reader.getAttributeCount();
   BigDecimal count=null;
-  BigDecimal perCpu=null;
+  BigDecimal perCpu=new BigDecimal(0);
   for (int i=0; i < attrCount; i++) {
     requireNoNamespaceAttribute(reader,i);
     final String value=reader.getAttributeValue(i);
@@ -11,6 +11,9 @@ case COUNT:
 {
         try {
           count=new BigDecimal(value);
+          if (count.compareTo(BigDecimal.ZERO) < 0) {
+            throw new XMLStreamException(attribute.getLocalName() + " must be greater than or equal to zero",reader.getLocation());
+          }
         }
  catch (        NumberFormatException e) {
           throw invalidAttributeValue(reader,i);
@@ -21,6 +24,9 @@ case PER_CPU:
 {
       try {
         perCpu=new BigDecimal(value);
+        if (perCpu.compareTo(BigDecimal.ZERO) < 0) {
+          throw new XMLStreamException(attribute.getLocalName() + " must be greater than or equal to zero",reader.getLocation());
+        }
       }
  catch (      NumberFormatException e) {
         throw invalidAttributeValue(reader,i);
@@ -31,21 +37,13 @@ default :
   throw unexpectedAttribute(reader,i);
 }
 }
-if (count == null || perCpu == null) {
-Set<Attribute> missing=new HashSet<Attribute>();
 if (count == null) {
-missing.add(Attribute.COUNT);
+throw missingRequired(reader,EnumSet.of(Attribute.COUNT));
 }
-if (perCpu == null) {
-missing.add(Attribute.PER_CPU);
+ParseUtils.requireNoContent(reader);
+int fullCount=getScaledCount(count,perCpu);
+if (!perCpu.equals(new BigDecimal(0))) {
+log.warn(String.format("The '%s' attribute is no longer supported. The value [%f] of the '%s' attribute " + "is being combined with the value [%f] of the '%s' attribute and the current processor count [%d] " + "to derive a new value of [%d] for '%s'.",Attribute.PER_CPU,count,Attribute.COUNT,perCpu,Attribute.PER_CPU,Runtime.getRuntime().availableProcessors(),fullCount,Attribute.COUNT));
 }
-throw missingRequired(reader,missing);
-}
-if (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
-throw unexpectedElement(reader);
-}
-ModelNode node=new ModelNode();
-node.get(COUNT).set(count);
-node.get(PER_CPU).set(perCpu);
-return node;
+return String.valueOf(fullCount);
 }
