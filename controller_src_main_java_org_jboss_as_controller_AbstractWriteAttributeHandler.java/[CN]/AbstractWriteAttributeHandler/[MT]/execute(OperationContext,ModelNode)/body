@@ -5,11 +5,19 @@
   validateUnresolvedValue(attributeName,newValue);
   final ModelNode submodel=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel();
   final ModelNode currentValue=submodel.get(attributeName).clone();
-  submodel.get(attributeName).set(newValue);
+  final AttributeDefinition attributeDefinition=getAttributeDefinition(attributeName);
+  if (attributeDefinition != null) {
+    final ModelNode syntheticOp=new ModelNode();
+    syntheticOp.get(attributeName).set(newValue);
+    attributeDefinition.validateAndSet(syntheticOp,submodel);
+  }
+ else {
+    submodel.get(attributeName).set(newValue);
+  }
   if (requiresRuntime(context)) {
     context.addStep(new OperationStepHandler(){
       @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
-        ModelNode resolvedValue=newValue.resolve();
+        ModelNode resolvedValue=attributeDefinition != null ? attributeDefinition.validateResolvedOperation(submodel) : newValue.resolve();
         validateResolvedValue(attributeName,newValue);
         HandbackHolder<T> handback=new HandbackHolder<T>();
         boolean restartRequired=applyUpdateToRuntime(context,operation,attributeName,resolvedValue,currentValue,handback);
