@@ -2,7 +2,8 @@
   return new CallbackHandler(){
     public void handle(    Callback[] callbacks) throws IOException, UnsupportedCallbackException {
       List<Callback> toRespondTo=new LinkedList<Callback>();
-      String userName;
+      String userName=null;
+      String realm=null;
       ManagedServer server=null;
       for (      Callback current : callbacks) {
         if (current instanceof AuthorizeCallback) {
@@ -19,7 +20,11 @@
  else         if (current instanceof VerifyPasswordCallback) {
           toRespondTo.add(current);
         }
+ else         if (current instanceof DigestHashCallback) {
+          toRespondTo.add(current);
+        }
  else         if (current instanceof RealmCallback) {
+          realm=((RealmCallback)current).getDefaultText();
         }
  else {
           throw new UnsupportedCallbackException(current);
@@ -28,7 +33,7 @@
       if (server == null) {
         return;
       }
-      String password=new String(server.getAuthKey());
+      final String password=new String(server.getAuthKey());
       for (      Callback current : toRespondTo) {
         if (current instanceof AuthorizeCallback) {
           AuthorizeCallback authorizeCallback=(AuthorizeCallback)current;
@@ -40,6 +45,19 @@
  else         if (current instanceof VerifyPasswordCallback) {
           VerifyPasswordCallback vpc=(VerifyPasswordCallback)current;
           vpc.setVerified(password.equals(vpc.getPassword()));
+        }
+ else         if (current instanceof DigestHashCallback) {
+          DigestHashCallback dhc=(DigestHashCallback)current;
+          try {
+            UsernamePasswordHashUtil uph=new UsernamePasswordHashUtil();
+            if (userName == null || realm == null) {
+              throw new SaslException("Insufficient information to generate hash.");
+            }
+            dhc.setHash(uph.generateHashedURP(userName,realm,password.toCharArray()));
+          }
+ catch (          NoSuchAlgorithmException e) {
+            throw new SaslException("Unable to generate hash",e);
+          }
         }
       }
     }
