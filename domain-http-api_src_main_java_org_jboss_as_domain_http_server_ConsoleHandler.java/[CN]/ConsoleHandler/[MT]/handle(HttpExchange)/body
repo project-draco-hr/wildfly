@@ -18,8 +18,9 @@
  else   if (resource.indexOf(".") == -1) {
     respond404(http);
   }
-  InputStream inputStream=getLoader().getResourceAsStream(resource);
-  if (inputStream != null) {
+  ResourceHandle handle=getResourceHandle(resource);
+  if (handle.getInputStream() != null) {
+    InputStream inputStream=handle.getInputStream();
     final Headers responseHeaders=http.getResponseHeaders();
     responseHeaders.add(CONTENT_TYPE,resolveContentType(path));
     responseHeaders.add(ACCESS_CONTROL_ALLOW_ORIGIN,WILDCARD);
@@ -27,11 +28,13 @@
     if (!skipcache) {
       if (System.currentTimeMillis() > lastExpiryDate) {
         lastExpiryDate=calculateExpiryDate();
-        lastExpiryHeader=DATE_FORMAT.format(new Date(lastExpiryDate));
+        lastExpiryHeader=createDateFormat().format(new Date(lastExpiryDate));
       }
-      responseHeaders.add(LAST_MODIFIED_HEADER,LAST_MODIFIED);
+      responseHeaders.add(CACHE_CONTROL_HEADER,"private, max-age=2678400, must-revalidate");
       responseHeaders.add(EXPIRES_HEADER,lastExpiryHeader);
     }
+    responseHeaders.add(LAST_MODIFIED_HEADER,LAST_MODIFIED);
+    responseHeaders.add(CONTENT_LENGTH_HEADER,String.valueOf(handle.getSize()));
     http.sendResponseHeaders(OK,0);
     OutputStream outputStream=http.getResponseBody();
     fastChannelCopy(inputStream,outputStream);
