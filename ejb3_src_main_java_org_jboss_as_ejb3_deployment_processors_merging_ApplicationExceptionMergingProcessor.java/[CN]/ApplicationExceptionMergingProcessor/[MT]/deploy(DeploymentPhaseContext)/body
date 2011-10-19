@@ -1,0 +1,45 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (!EjbDeploymentMarker.isEjbDeployment(deploymentUnit)) {
+    return;
+  }
+  final List<DeploymentUnit> accessibleSubDeployments=deploymentUnit.getAttachment(Attachments.ACCESSIBLE_SUB_DEPLOYMENTS);
+  final DeploymentClassIndex classIndex=deploymentUnit.getAttachment(Attachments.CLASS_INDEX);
+  final ApplicationExceptions applicationExceptions=new ApplicationExceptions();
+  for (  DeploymentUnit unit : accessibleSubDeployments) {
+    final ApplicationExceptionDescriptions exceptionDescriptions=unit.getAttachment(EjbDeploymentAttachmentKeys.APPLICATION_EXCEPTION_DESCRIPTIONS);
+    if (exceptionDescriptions != null) {
+      for (      Map.Entry<String,org.jboss.as.ejb3.tx.ApplicationExceptionDetails> exception : exceptionDescriptions.getApplicationExceptions().entrySet()) {
+        try {
+          final ClassIndex index=classIndex.classIndex(exception.getKey());
+          applicationExceptions.addApplicationException(index.getModuleClass(),exception.getValue());
+        }
+ catch (        ClassNotFoundException e) {
+          logger.debug("Could not load application exception class",e);
+        }
+      }
+    }
+  }
+  EjbJarMetaData ejbJarMetaData=deploymentUnit.getAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_METADATA);
+  if (ejbJarMetaData != null) {
+    AssemblyDescriptorMetaData assemblyDescriptor=ejbJarMetaData.getAssemblyDescriptor();
+    if (assemblyDescriptor != null) {
+      ApplicationExceptionsMetaData ddAppExceptions=assemblyDescriptor.getApplicationExceptions();
+      if (ddAppExceptions != null && !ddAppExceptions.isEmpty()) {
+        for (        ApplicationExceptionMetaData applicationException : ddAppExceptions) {
+          String exceptionClassName=applicationException.getExceptionClass();
+          try {
+            final ClassIndex index=classIndex.classIndex(exceptionClassName);
+            boolean rollback=applicationException.isRollback();
+            boolean inherited=applicationException.isInherited() == null ? true : applicationException.isInherited();
+            applicationExceptions.addApplicationException(index.getModuleClass(),new ApplicationExceptionDetails(exceptionClassName,inherited,rollback));
+          }
+ catch (          ClassNotFoundException e) {
+            throw new DeploymentUnitProcessingException("Could not load application exception class " + exceptionClassName + " in ejb-jar.xml ",e);
+          }
+        }
+      }
+    }
+  }
+  deploymentUnit.putAttachment(EjbDeploymentAttachmentKeys.APPLICATION_EXCEPTION_DETAILS,applicationExceptions);
+}
