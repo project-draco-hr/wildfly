@@ -15,13 +15,16 @@
  else {
     profile=null;
   }
+  if (nodeProps == null) {
+    getArguments(ctx);
+  }
   for (  String argName : args.getPropertyNames()) {
     if (argName.equals("--profile") || this.name.getFullName().equals(argName)) {
       continue;
     }
-    final String valueString=args.getPropertyValue(argName);
-    if (valueString == null) {
-      continue;
+    final ArgumentWithValue arg=(ArgumentWithValue)nodeProps.get(argName);
+    if (arg == null) {
+      throw new CommandFormatException("Unrecognized argument name '" + argName + "'");
     }
     DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
     if (profile != null) {
@@ -32,32 +35,17 @@
     }
     builder.addNode(type,name);
     builder.setOperationName("write-attribute");
+    final String propName;
     if (argName.charAt(1) == '-') {
-      argName=argName.substring(2);
+      propName=argName.substring(2);
     }
  else {
-      argName=argName.substring(1);
+      propName=argName.substring(1);
     }
-    builder.addProperty("name",argName);
-    if (argName.endsWith("properties")) {
-      ModelNode nodeValue=new ModelNode();
-      String[] props=valueString.split(",");
-      for (      String prop : props) {
-        int equals=prop.indexOf('=');
-        if (equals == -1) {
-          throw new CommandFormatException("Property '" + prop + "' in '"+ valueString+ "' is missing the equals sign.");
-        }
-        String propName=prop.substring(0,equals);
-        if (propName.isEmpty()) {
-          throw new CommandFormatException("Property name is missing for '" + prop + "' in '"+ valueString+ "'");
-        }
-        nodeValue.add(propName,prop.substring(equals + 1));
-      }
-      builder.getModelNode().get("value").set(nodeValue);
-    }
- else {
-      builder.addProperty("value",valueString);
-    }
+    builder.addProperty("name",propName);
+    final String valueString=args.getPropertyValue(argName);
+    ModelNode nodeValue=arg.getValueConverter().fromString(valueString);
+    builder.getModelNode().get("value").set(nodeValue);
     steps.add(builder.buildRequest());
   }
   return composite;

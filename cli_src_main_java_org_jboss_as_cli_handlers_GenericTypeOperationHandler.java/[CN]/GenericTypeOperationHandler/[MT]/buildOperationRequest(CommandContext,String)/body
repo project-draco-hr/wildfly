@@ -14,39 +14,35 @@
   }
   builder.addNode(type,name);
   builder.setOperationName(operation);
+  getArguments(ctx);
+  final Map<String,CommandArgument> argsMap=propsByOp.get(operation);
   for (  String argName : args.getPropertyNames()) {
     if (argName.equals("--profile")) {
       continue;
     }
-    final String valueString=args.getPropertyValue(argName);
-    if (valueString == null) {
-      continue;
-    }
-    if (argName.charAt(1) == '-') {
-      argName=argName.substring(2);
-    }
- else {
-      argName=argName.substring(1);
-    }
-    if (argName.endsWith("properties")) {
-      ModelNode nodeValue=new ModelNode();
-      String[] props=valueString.split(",");
-      for (      String prop : props) {
-        int equals=prop.indexOf('=');
-        if (equals == -1) {
-          throw new CommandFormatException("Property '" + prop + "' in '"+ valueString+ "' is missing the equals sign.");
-        }
-        String propName=prop.substring(0,equals);
-        if (propName.isEmpty()) {
-          throw new CommandFormatException("Property name is missing for '" + prop + "' in '"+ valueString+ "'");
-        }
-        nodeValue.add(propName,prop.substring(equals + 1));
+    if (argsMap == null) {
+      if (argName.equals(this.name.getFullName())) {
+        continue;
       }
-      builder.getModelNode().get(argName).set(nodeValue);
+      throw new CommandFormatException("Command '" + operation + "' is not expected to have arguments other than "+ this.name.getFullName()+ ".");
+    }
+    final ArgumentWithValue arg=(ArgumentWithValue)argsMap.get(argName);
+    if (arg == null) {
+      if (argName.equals(this.name.getFullName())) {
+        continue;
+      }
+      throw new CommandFormatException("Unrecognized argument " + argName + " for command '"+ operation+ "'.");
+    }
+    final String propName;
+    if (argName.charAt(1) == '-') {
+      propName=argName.substring(2);
     }
  else {
-      builder.addProperty(argName,valueString);
+      propName=argName.substring(1);
     }
+    final String valueString=args.getPropertyValue(argName);
+    ModelNode nodeValue=arg.getValueConverter().fromString(valueString);
+    builder.getModelNode().get(propName).set(nodeValue);
   }
   return builder.buildRequest();
 }
