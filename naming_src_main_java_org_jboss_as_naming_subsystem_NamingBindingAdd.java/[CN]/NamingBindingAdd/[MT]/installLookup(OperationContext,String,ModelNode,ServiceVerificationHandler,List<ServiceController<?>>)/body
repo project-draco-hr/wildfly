@@ -1,0 +1,28 @@
+{
+  final String lookup=NamingBindingResourceDefinition.LOOKUP.validateResolvedOperation(model).asString();
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(name);
+  final BinderService binderService=new BinderService(name);
+  binderService.getManagedObjectInjector().inject(new ManagedReferenceFactory(){
+    @Override public ManagedReference getReference(){
+      try {
+        final Object value=new InitialContext().lookup(lookup);
+        return new ValueManagedReference(new ImmediateValue<Object>(value));
+      }
+ catch (      Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+);
+  ServiceBuilder<ManagedReferenceFactory> builder=serviceTarget.addService(bindInfo.getBinderServiceName(),binderService).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector());
+  if (verificationHandler != null) {
+    builder.addListener(verificationHandler);
+  }
+  if (newControllers != null) {
+    newControllers.add(builder.install());
+  }
+ else {
+    builder.install();
+  }
+}
