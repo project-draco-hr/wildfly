@@ -1,38 +1,39 @@
 {
-  final String jndiName=Util.getJndiName(operation);
+  final ModelNode address=operation.require(OP_ADDR);
+  final String dsName=PathAddress.pathAddress(address).getLastElement().getValue();
   final ServiceTarget serviceTarget=context.getServiceTarget();
-  boolean enabled=!operation.hasDefined(ENABLED.getName()) || operation.get(ENABLED.getName()).asBoolean();
+  boolean enabled=false;
   ModelNode node=operation.require(DATASOURCE_DRIVER.getName());
-  AbstractDataSourceService dataSourceService=createDataSourceService(jndiName);
-  final ServiceName dataSourceServiceName=AbstractDataSourceService.SERVICE_NAME_BASE.append(jndiName);
+  AbstractDataSourceService dataSourceService=createDataSourceService(dsName);
+  final ServiceName dataSourceServiceName=AbstractDataSourceService.SERVICE_NAME_BASE.append(dsName);
   final ServiceBuilder<?> dataSourceServiceBuilder=serviceTarget.addService(dataSourceServiceName,dataSourceService).addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,dataSourceService.getTransactionIntegrationInjector()).addDependency(ConnectorServices.MANAGEMENT_REPOSISTORY_SERVICE,ManagementRepository.class,dataSourceService.getmanagementRepositoryInjector()).addDependency(SubjectFactoryService.SERVICE_NAME,SubjectFactory.class,dataSourceService.getSubjectFactoryInjector()).addDependency(ConnectorServices.JDBC_DRIVER_REGISTRY_SERVICE,DriverRegistry.class,dataSourceService.getDriverRegistryInjector()).addDependency(NamingService.SERVICE_NAME);
-  controllers.add(startConfigAndAddDependency(dataSourceServiceBuilder,dataSourceService,jndiName,serviceTarget,operation));
+  controllers.add(startConfigAndAddDependency(dataSourceServiceBuilder,dataSourceService,dsName,serviceTarget,operation));
   final String driverName=node.asString();
   final ServiceName driverServiceName=ServiceName.JBOSS.append("jdbc-driver",driverName.replaceAll("\\.","_"));
   if (driverServiceName != null) {
     dataSourceServiceBuilder.addDependency(driverServiceName,Driver.class,dataSourceService.getDriverInjector());
   }
   final DataSourceReferenceFactoryService referenceFactoryService=new DataSourceReferenceFactoryService();
-  final ServiceName referenceFactoryServiceName=DataSourceReferenceFactoryService.SERVICE_NAME_BASE.append(jndiName);
+  final ServiceName referenceFactoryServiceName=DataSourceReferenceFactoryService.SERVICE_NAME_BASE.append(dsName);
   final ServiceBuilder<?> referenceBuilder=serviceTarget.addService(referenceFactoryServiceName,referenceFactoryService).addDependency(dataSourceServiceName,DataSource.class,referenceFactoryService.getDataSourceInjector());
-  final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndiName);
+  final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(dsName);
   final BinderService binderService=new BinderService(bindInfo.getBindName());
   final ServiceBuilder<?> binderBuilder=serviceTarget.addService(bindInfo.getBinderServiceName(),binderService).addDependency(referenceFactoryServiceName,ManagedReferenceFactory.class,binderService.getManagedObjectInjector()).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addListener(new AbstractServiceListener<Object>(){
     public void transition(    final ServiceController<? extends Object> controller,    final ServiceController.Transition transition){
 switch (transition) {
 case STARTING_to_UP:
 {
-          SUBSYSTEM_DATASOURCES_LOGGER.boundDataSource(jndiName);
+          SUBSYSTEM_DATASOURCES_LOGGER.boundDataSource(dsName);
           break;
         }
 case START_REQUESTED_to_DOWN:
 {
-        SUBSYSTEM_DATASOURCES_LOGGER.unboundDataSource(jndiName);
+        SUBSYSTEM_DATASOURCES_LOGGER.unboundDataSource(dsName);
         break;
       }
 case REMOVING_to_REMOVED:
 {
-      SUBSYSTEM_DATASOURCES_LOGGER.debugf("Removed JDBC Data-source [%s]",jndiName);
+      SUBSYSTEM_DATASOURCES_LOGGER.debugf("Removed JDBC Data-source [%s]",dsName);
       break;
     }
 }

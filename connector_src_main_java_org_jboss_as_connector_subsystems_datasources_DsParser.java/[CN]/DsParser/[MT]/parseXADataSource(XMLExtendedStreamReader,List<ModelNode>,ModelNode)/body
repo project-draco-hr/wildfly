@@ -2,12 +2,14 @@
   String jndiName=null;
   final ModelNode operation=new ModelNode();
   operation.get(OP).set(ADD);
+  boolean enabled=false;
   for (  DataSource.Attribute attribute : DataSource.Attribute.values()) {
 switch (attribute) {
 case ENABLED:
 {
         final Location location=reader.getLocation();
         String value=rawAttributeText(reader,ENABLED.getXmlName());
+        enabled=Boolean.parseBoolean(value);
         ENABLED.parseAndSetParameter(value,operation,location);
         break;
       }
@@ -61,12 +63,20 @@ final ModelNode dsAddress=parentAddress.clone();
 dsAddress.add(XA_DATASOURCE,jndiName);
 dsAddress.protect();
 operation.get(OP_ADDR).set(dsAddress);
+List<ModelNode> xadatasourcePropertiesOperations=new ArrayList<ModelNode>(0);
 while (reader.hasNext()) {
 switch (reader.nextTag()) {
 case END_ELEMENT:
 {
 if (DataSources.Tag.forName(reader.getLocalName()) == DataSources.Tag.XA_DATASOURCE) {
 list.add(operation);
+list.addAll(xadatasourcePropertiesOperations);
+if (enabled) {
+final ModelNode enableOperation=new ModelNode();
+enableOperation.get(OP).set(ENABLE);
+enableOperation.get(OP_ADDR).set(dsAddress);
+list.add(enableOperation);
+}
 return;
 }
  else {
@@ -84,8 +94,14 @@ case XA_DATASOURCE_PROPERTY:
 final Location location=reader.getLocation();
 String name=rawAttributeText(reader,"name");
 String value=rawElementText(reader);
-ModelNode node=XADATASOURCE_PROPERTIES.parse(value,location);
-operation.get(XADATASOURCE_PROPERTIES.getName(),name).set(node);
+final ModelNode configOperation=new ModelNode();
+configOperation.get(OP).set(ADD);
+final ModelNode configAddress=dsAddress.clone();
+configAddress.add(XADATASOURCE_PROPERTIES.getName(),name);
+configAddress.protect();
+configOperation.get(OP_ADDR).set(configAddress);
+XADATASOURCE_PROPERTY_VALUE.parseAndSetParameter(value,configOperation,location);
+xadatasourcePropertiesOperations.add(configOperation);
 break;
 }
 case XA_DATASOURCE_CLASS:
