@@ -1,5 +1,8 @@
 {
   final DeploymentUnit unit=phaseContext.getDeploymentUnit();
+  if (DeploymentTypeMarker.isType(DeploymentType.EAR,unit)) {
+    return;
+  }
   final List<AnnotationInstance> webServiceAnnotations=getAnnotations(unit,WEB_SERVICE_ANNOTATION);
   Map<String,List<AnnotationInstance>> map=new HashMap<String,List<AnnotationInstance>>();
   for (  AnnotationInstance webServiceAnnotation : webServiceAnnotations) {
@@ -18,14 +21,15 @@
   }
   if (!map.isEmpty()) {
     final JMSEndpointsMetaData endpointsMetaData=new JMSEndpointsMetaData();
-    final ResourceRoot deploymentRoot=unit.getAttachment(Attachments.DEPLOYMENT_ROOT);
-    final UnifiedVirtualFile uvf=new VirtualFileAdaptor(deploymentRoot.getRoot());
     final boolean trace=LOG.isTraceEnabled();
     for (    String wsdlLocation : map.keySet()) {
       if (trace) {
         LOG.tracef("Scanning wsdlLocation: %s",wsdlLocation);
       }
       try {
+        final ResourceRoot resourceRoot=getWsdlResourceRoot(unit,wsdlLocation);
+        if (resourceRoot == null)         continue;
+        final UnifiedVirtualFile uvf=new VirtualFileAdaptor(resourceRoot.getRoot());
         URL url=uvf.findChild(wsdlLocation).toURL();
         SOAPAddressWSDLParser parser=new SOAPAddressWSDLParser(url);
         for (        AnnotationInstance ai : map.get(wsdlLocation)) {
