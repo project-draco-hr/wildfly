@@ -1,0 +1,45 @@
+{
+  start(DEPLOYMENT1,CONTAINER1);
+  DefaultHttpClient client=new DefaultHttpClient();
+  String xpc1_create_url="http://127.0.0.1:8080/stateful/count?command=createEmployee";
+  String xpc1_get_url="http://127.0.0.1:8080/stateful/count?command=getEmployee";
+  String xpc2_get_url="http://127.0.0.1:8180/stateful/count?command=getEmployee";
+  String xpc1_getempsecond_url="http://127.0.0.1:8080/stateful/count?command=getSecondBeanEmployee";
+  String xpc2_getempsecond_url="http://127.0.0.1:8180/stateful/count?command=getSecondBeanEmployee";
+  try {
+    System.out.println(new Date() + "create employee entity ");
+    assertCreateEmployee(client,xpc1_create_url);
+    System.out.println(new Date() + "1. about to read entity on node1");
+    assertGetEmployee(client,xpc1_get_url,"1. xpc on node1, node1 should be able to read entity on node1");
+    assertGetSecondEmployee(client,xpc1_getempsecond_url,"1. xpc on node1, node1 should be able to read entity from second bean on node1");
+    start(DEPLOYMENT2,CONTAINER2);
+    System.out.println(new Date() + "2. started node2 + deployed, about to read entity on node1");
+    assertGetEmployee(client,xpc1_get_url,"2. started node2, xpc on node1, node1 should be able to read entity on node1");
+    assertGetSecondEmployee(client,xpc1_getempsecond_url,"2. started node2, xpc on node1, node1 should be able to read entity from second bean on node1");
+    stop(DEPLOYMENT1,CONTAINER1);
+    System.out.println(new Date() + "3. stopped node1 to force failover, about to read entity on node2");
+    assertGetEmployee(client,xpc2_get_url,"3. stopped deployment on node1, xpc should failover to node2, node2 should be able to read entity from xpc");
+    assertGetEmployee(client,xpc2_getempsecond_url,"3. stopped deployment on node1, xpc should failover to node2, node2 should be able to read entity from xpc that is on node2 (second bean)");
+    start(DEPLOYMENT1,CONTAINER1);
+    System.out.println(new Date() + "4. started node1, about to read entity on node2");
+    assertGetEmployee(client,xpc2_get_url,"4. stopped deployment on node1, xpc should failover to node2, node2 should be able to read entity from xpc");
+    assertGetEmployee(client,xpc2_getempsecond_url,"4. stopped deployment on node1, xpc should failover to node2, node2 should be able to read entity from xpc that is on node2 (second bean)");
+    stop(DEPLOYMENT2,CONTAINER2);
+    System.out.println(new Date() + "5. stopped node2, about to read entity on node1");
+    assertGetEmployee(client,xpc1_get_url,"5. stopped deployment on node2, xpc still on node1, node1 should be able to read entity from xpc");
+    assertGetSecondEmployee(client,xpc1_getempsecond_url,"5. stopped deployment on node2, xpc still on node1, node1 should be able to read entity from xpc of second bean");
+    start(DEPLOYMENT2,CONTAINER2);
+    System.out.println(new Date() + "6. started node2, about to read entity on node1");
+    assertGetEmployee(client,xpc1_get_url,"6. xpc still on node1, node1 should be able to read entity from xpc");
+    assertGetSecondEmployee(client,xpc1_getempsecond_url,"6. xpc still on node1, node1 should be able to read entity from xpc of second bean");
+    stop(DEPLOYMENT1,CONTAINER1);
+    System.out.println(new Date() + "7. stopped node1, about to read entity on node2");
+    assertGetEmployee(client,xpc2_get_url,"7. stopped deployment on node1, xpc should failover to node2, node2 should be able to read entity from xpc");
+    assertGetEmployee(client,xpc2_getempsecond_url,"7. stopped deployment on node1, xpc should failover to node2, node2 should be able to read entity from xpc that is on node2 (second bean)");
+  }
+  finally {
+    client.getConnectionManager().shutdown();
+    stop(DEPLOYMENT1,CONTAINER1);
+    stop(DEPLOYMENT2,CONTAINER2);
+  }
+}
