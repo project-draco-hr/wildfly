@@ -1,0 +1,77 @@
+{
+  if (op == null) {
+    if (nodeProps == null) {
+      final List<Property> propList=getNodeProperties(ctx);
+      final Map<String,CommandArgument> argMap=new HashMap<String,CommandArgument>(propList.size());
+      for (int i=0; i < propList.size(); ++i) {
+        final Property prop=propList.get(i);
+        final ModelNode propDescr=prop.getValue();
+        if (propDescr.has("access-type") && "read-write".equals(propDescr.get("access-type").asString())) {
+          ModelType type=null;
+          CommandLineCompleter valueCompleter=null;
+          ArgumentValueConverter valueConverter=ArgumentValueConverter.DEFAULT;
+          if (propDescr.has("type")) {
+            type=propDescr.get("type").asType();
+            if (ModelType.BOOLEAN == type) {
+              valueCompleter=SimpleTabCompleter.BOOLEAN;
+            }
+ else             if (prop.getName().endsWith("properties")) {
+              valueConverter=ArgumentValueConverter.PROPERTIES;
+            }
+ else             if (ModelType.LIST == type) {
+              valueConverter=ArgumentValueConverter.LIST;
+            }
+          }
+          final CommandArgument arg=new ArgumentWithValue(GenericTypeOperationHandler.this,valueCompleter,valueConverter,"--" + prop.getName());
+          argMap.put(arg.getFullName(),arg);
+        }
+      }
+      nodeProps=argMap;
+    }
+    return nodeProps;
+  }
+ else {
+    if (propsByOp == null) {
+      propsByOp=new HashMap<String,Map<String,CommandArgument>>();
+    }
+    Map<String,CommandArgument> opProps=propsByOp.get(op);
+    if (opProps == null) {
+      final ModelNode descr;
+      try {
+        descr=getOperationDescription(ctx,op);
+      }
+ catch (      IOException e1) {
+        return Collections.emptyMap();
+      }
+      if (descr == null || !descr.has("request-properties")) {
+        opProps=Collections.emptyMap();
+      }
+ else {
+        final List<Property> propList=descr.get("request-properties").asPropertyList();
+        opProps=new HashMap<String,CommandArgument>(propList.size());
+        for (        Property prop : propList) {
+          final ModelNode propDescr=prop.getValue();
+          ModelType type=null;
+          CommandLineCompleter valueCompleter=null;
+          ArgumentValueConverter valueConverter=ArgumentValueConverter.DEFAULT;
+          if (propDescr.has("type")) {
+            type=propDescr.get("type").asType();
+            if (ModelType.BOOLEAN == type) {
+              valueCompleter=SimpleTabCompleter.BOOLEAN;
+            }
+ else             if (prop.getName().endsWith("properties")) {
+              valueConverter=ArgumentValueConverter.PROPERTIES;
+            }
+ else             if (ModelType.LIST == type) {
+              valueConverter=ArgumentValueConverter.LIST;
+            }
+          }
+          final CommandArgument arg=new ArgumentWithValue(GenericTypeOperationHandler.this,valueCompleter,valueConverter,"--" + prop.getName());
+          opProps.put(arg.getFullName(),arg);
+        }
+      }
+      propsByOp.put(op,opProps);
+    }
+    return opProps;
+  }
+}
