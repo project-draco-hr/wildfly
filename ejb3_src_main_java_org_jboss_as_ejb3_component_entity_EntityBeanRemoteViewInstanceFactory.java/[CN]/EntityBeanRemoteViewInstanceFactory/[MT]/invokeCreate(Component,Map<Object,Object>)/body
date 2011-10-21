@@ -1,0 +1,42 @@
+{
+  final Method ejbCreate=(Method)contextData.get(EntityBeanHomeCreateInterceptorFactory.EJB_CREATE_METHOD_KEY);
+  if (ejbCreate == null) {
+    throw new IllegalStateException("Entities can not be created.  No create method available.");
+  }
+  final Method ejbPostCreate=(Method)contextData.get(EntityBeanHomeCreateInterceptorFactory.EJB_POST_CREATE_METHOD_KEY);
+  final Object[] params=(Object[])contextData.get(EntityBeanHomeCreateInterceptorFactory.PARAMETERS_KEY);
+  if (!(component instanceof EntityBeanComponent)) {
+    throw new IllegalStateException("Unexpected component: " + component + " Expected "+ EntityBeanComponent.class);
+  }
+  final EntityBeanComponent entityBeanComponent=(EntityBeanComponent)component;
+  final EntityBeanComponentInstance instance=entityBeanComponent.getPool().get();
+  final Object primaryKey;
+  try {
+    primaryKey=invokeEjbCreate(contextData,ejbCreate,instance,params);
+  }
+ catch (  Exception e) {
+    throw new EJBException(e);
+  }
+  instance.associate(primaryKey);
+  entityBeanComponent.getCache().create(instance);
+  try {
+    invokeEjbPostCreate(contextData,ejbPostCreate,instance,params);
+  }
+ catch (  Exception e) {
+    throw new EJBException(e);
+  }
+  final TransactionSynchronizationRegistry transactionSynchronizationRegistry=entityBeanComponent.getTransactionSynchronizationRegistry();
+  if (transactionSynchronizationRegistry.getTransactionKey() != null) {
+    transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
+      @Override public void beforeCompletion(){
+      }
+      @Override public void afterCompletion(      final int status){
+        if (status != Status.STATUS_COMMITTED) {
+          entityBeanComponent.getPool().release(instance);
+        }
+      }
+    }
+);
+  }
+  return primaryKey;
+}
