@@ -13,6 +13,10 @@
     if (proxyPort != null)     connector.setProxyPort(proxyPort);
     if (redirectPort != null)     connector.setRedirectPort(redirectPort);
     if (secure != null)     connector.setSecure(secure);
+    boolean nativeProtocolHandler=false;
+    if (connector.getProtocolHandler() instanceof Http11AprProtocol || connector.getProtocolHandler() instanceof AjpAprProtocol) {
+      nativeProtocolHandler=true;
+    }
     if (executor != null) {
       Method m=connector.getProtocolHandler().getClass().getMethod("setExecutor",Executor.class);
       m.invoke(connector.getProtocolHandler(),executor);
@@ -28,11 +32,17 @@
       }
  catch (      NoSuchMethodException e) {
       }
-      try {
-        Method m=connector.getProtocolHandler().getClass().getMethod("setSendfileSize",Integer.TYPE);
-        m.invoke(connector.getProtocolHandler(),maxConnections);
+      if (nativeProtocolHandler) {
+        try {
+          Method m=connector.getProtocolHandler().getClass().getMethod("setSendfileSize",Integer.TYPE);
+          m.invoke(connector.getProtocolHandler(),maxConnections);
+        }
+ catch (        NoSuchMethodException e) {
+        }
       }
- catch (      NoSuchMethodException e) {
+ else {
+        Method m=connector.getProtocolHandler().getClass().getMethod("setMaxThreads",Integer.TYPE);
+        m.invoke(connector.getProtocolHandler(),maxConnections);
       }
     }
     if (virtualServers != null) {
