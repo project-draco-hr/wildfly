@@ -1,0 +1,39 @@
+{
+  node=peek(node,AUTHENTICATION,JASPI);
+  if (node == null)   return false;
+  JASPIAuthenticationInfo authenticationInfo=new JASPIAuthenticationInfo(securityDomain);
+  Map<String,LoginModuleStackHolder> holders=new HashMap<String,LoginModuleStackHolder>();
+  List<ModelNode> stacks=node.get(LOGIN_MODULE_STACK).asList();
+  for (  ModelNode stack : stacks) {
+    String name=stack.require(NAME).asString();
+    List<ModelNode> nodes=stack.get(LOGIN_MODULES).asList();
+    final LoginModuleStackHolder holder=new LoginModuleStackHolder(name,null);
+    holders.put(name,holder);
+    authenticationInfo.add(holder);
+    for (    ModelNode login : nodes) {
+      processLoginModules(login,new LoginModuleContainer(){
+        public void addAppConfigurationEntry(        AppConfigurationEntry entry){
+          holder.addAppConfigurationEntry(entry);
+        }
+      }
+);
+    }
+  }
+  List<ModelNode> authModules=node.get(AUTH_MODULES).asList();
+  for (  ModelNode authModule : authModules) {
+    String code=extractCode(authModule,ModulesMap.AUTHENTICATION_MAP);
+    String loginStackRef=null;
+    if (authModule.hasDefined(LOGIN_MODULE_STACK_REF))     loginStackRef=authModule.get(LOGIN_MODULE_STACK_REF).asString();
+    Map<String,Object> options=extractOptions(authModule);
+    AuthModuleEntry entry=new AuthModuleEntry(code,options,loginStackRef);
+    if (loginStackRef != null) {
+      if (!holders.containsKey(loginStackRef)) {
+        throw new IllegalArgumentException("auth-module references a login module stack that doesn't exist: " + loginStackRef);
+      }
+      entry.setLoginModuleStackHolder(holders.get(loginStackRef));
+    }
+    authenticationInfo.add(entry);
+  }
+  applicationPolicy.setAuthenticationInfo(authenticationInfo);
+  return true;
+}

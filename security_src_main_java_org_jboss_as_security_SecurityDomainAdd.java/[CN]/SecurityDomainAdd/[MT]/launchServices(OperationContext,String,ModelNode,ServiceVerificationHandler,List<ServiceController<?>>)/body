@@ -1,0 +1,26 @@
+{
+  final ApplicationPolicy applicationPolicy=createApplicationPolicy(securityDomain,model);
+  final JSSESecurityDomain jsseSecurityDomain=createJSSESecurityDomain(securityDomain,model);
+  final String cacheType=getAuthenticationCacheType(model);
+  final SecurityDomainService securityDomainService=new SecurityDomainService(securityDomain,applicationPolicy,jsseSecurityDomain,cacheType);
+  final ServiceTarget target=context.getServiceTarget();
+  final Injector<TransactionManager> transactionManagerInjector=new Injector<TransactionManager>(){
+    public void inject(    final TransactionManager value) throws InjectionException {
+      TransactionManagerLocator.setTransactionManager(value);
+    }
+    public void uninject(){
+    }
+  }
+;
+  ServiceBuilder<SecurityDomainContext> builder=target.addService(SecurityDomainService.SERVICE_NAME.append(securityDomain),securityDomainService).addDependency(SecurityManagementService.SERVICE_NAME,ISecurityManagement.class,securityDomainService.getSecurityManagementInjector()).addDependency(JaasConfigurationService.SERVICE_NAME,Configuration.class,securityDomainService.getConfigurationInjector()).addDependency(ServiceBuilder.DependencyType.OPTIONAL,TransactionManagerService.SERVICE_NAME,TransactionManager.class,transactionManagerInjector);
+  if ("infinispan".equals(cacheType)) {
+    builder.addDependency(EmbeddedCacheManagerService.getServiceName(CACHE_CONTAINER_NAME),EmbeddedCacheManager.class,securityDomainService.getCacheManagerInjector());
+  }
+  if (verificationHandler != null) {
+    builder.addListener(verificationHandler);
+  }
+  ServiceController<SecurityDomainContext> controller=builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+  if (newControllers != null) {
+    newControllers.add(controller);
+  }
+}
