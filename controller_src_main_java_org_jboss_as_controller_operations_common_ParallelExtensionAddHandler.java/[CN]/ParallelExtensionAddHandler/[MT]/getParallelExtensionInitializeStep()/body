@@ -1,0 +1,33 @@
+{
+  return new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      long start=System.currentTimeMillis();
+      final Map<String,Future<OperationFailedException>> futures=new LinkedHashMap<String,Future<OperationFailedException>>();
+      for (      ParsedOp op : extensionAdds) {
+        String module=op.address.getLastElement().getValue();
+        ExtensionAddHandler addHandler=ExtensionAddHandler.class.cast(op.handler);
+        Future<OperationFailedException> future=executor.submit(new ExtensionInitializeTask(module,addHandler));
+        futures.put(module,future);
+      }
+      for (      Map.Entry<String,Future<OperationFailedException>> entry : futures.entrySet()) {
+        try {
+          OperationFailedException ofe=entry.getValue().get();
+          if (ofe != null) {
+            throw ofe;
+          }
+        }
+ catch (        InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new RuntimeException(String.format("Interrupted awaiting initialization of module %s",entry.getKey()));
+        }
+catch (        ExecutionException e) {
+          throw new RuntimeException(String.format("Failed initializing module %s",entry.getKey()),e);
+        }
+      }
+      long elapsed=System.currentTimeMillis() - start;
+      System.out.println("Initialized extensions in " + elapsed + " ms");
+      context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+    }
+  }
+;
+}

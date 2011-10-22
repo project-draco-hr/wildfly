@@ -1,0 +1,38 @@
+{
+  return new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      long start=System.currentTimeMillis();
+      context.getServiceRegistry(true);
+      final Map<String,ParallelBootTransactionControl> transactionControls=new LinkedHashMap<String,ParallelBootTransactionControl>();
+      final CountDownLatch preparedLatch=new CountDownLatch(runtimeOpsBySubsystem.size());
+      final CountDownLatch committedLatch=new CountDownLatch(1);
+      final CountDownLatch completeLatch=new CountDownLatch(runtimeOpsBySubsystem.size());
+      for (      Map.Entry<String,List<ParsedOp>> entry : runtimeOpsBySubsystem.entrySet()) {
+        String subsystemName=entry.getKey();
+        final ParallelBootTransactionControl txControl=new ParallelBootTransactionControl(subsystemName,preparedLatch,committedLatch,completeLatch);
+        transactionControls.put(subsystemName,txControl);
+        ParallelBootTask subsystemTask=new ParallelBootTask(subsystemName,entry.getValue(),context,txControl,null);
+        executor.execute(subsystemTask);
+      }
+      try {
+        preparedLatch.await();
+        checkForSubsystemFailures(context,transactionControls,OperationContext.Stage.RUNTIME);
+      }
+ catch (      InterruptedException e) {
+        context.getFailureDescription().set(new ModelNode().set("Interrupted awaiting subsystem boot operation execution"));
+        Thread.currentThread().interrupt();
+      }
+      long elapsed=System.currentTimeMillis() - start;
+      System.out.println("Ran subsystem runtime operations in " + elapsed + " ms");
+      OperationContext.ResultAction resultAction=context.completeStep();
+      notifySubsystemTransactions(transactionControls,resultAction,committedLatch,OperationContext.Stage.MODEL);
+      try {
+        completeLatch.await();
+      }
+ catch (      InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
+;
+}

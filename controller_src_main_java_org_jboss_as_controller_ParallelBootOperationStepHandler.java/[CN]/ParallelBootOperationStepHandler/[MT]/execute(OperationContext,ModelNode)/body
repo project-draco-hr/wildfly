@@ -1,30 +1,31 @@
 {
   if (context.getType() != OperationContext.Type.SERVER) {
-    throw new IllegalStateException(String.format("%s cannot be used except in a full server boot"));
+    throw new IllegalStateException(String.format("%s cannot be used except in a full server boot",getClass()));
   }
+  long start=System.currentTimeMillis();
   context.getResourceRegistrationForUpdate();
   context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
   context.acquireControllerLock();
-  final Map<String,List<ModelControllerImpl.ParsedOp>> runtimeOpsBySubsystem=new LinkedHashMap<String,List<ModelControllerImpl.ParsedOp>>();
+  final Map<String,List<ParsedOp>> runtimeOpsBySubsystem=new LinkedHashMap<String,List<ParsedOp>>();
   final Map<String,ParallelBootTransactionControl> transactionControls=new LinkedHashMap<String,ParallelBootTransactionControl>();
-  final Executor executor=getExecutor(context);
   final CountDownLatch preparedLatch=new CountDownLatch(opsBySubsystem.size());
   final CountDownLatch committedLatch=new CountDownLatch(1);
   final CountDownLatch completeLatch=new CountDownLatch(opsBySubsystem.size());
-  for (  Map.Entry<String,List<ModelControllerImpl.ParsedOp>> entry : opsBySubsystem.entrySet()) {
-    List<ModelControllerImpl.ParsedOp> subsystemRuntimeOps=new ArrayList<ModelControllerImpl.ParsedOp>();
-    runtimeOpsBySubsystem.put(entry.getKey(),subsystemRuntimeOps);
-    final ParallelBootTransactionControl txControl=new ParallelBootTransactionControl(preparedLatch,committedLatch,completeLatch);
+  for (  Map.Entry<String,List<ParsedOp>> entry : opsBySubsystem.entrySet()) {
+    String subsystemName=entry.getKey();
+    List<ParsedOp> subsystemRuntimeOps=new ArrayList<ParsedOp>();
+    runtimeOpsBySubsystem.put(subsystemName,subsystemRuntimeOps);
+    final ParallelBootTransactionControl txControl=new ParallelBootTransactionControl(subsystemName,preparedLatch,committedLatch,completeLatch);
     transactionControls.put(entry.getKey(),txControl);
-    ParallelBootTask subsystemTask=new ParallelBootTask(entry.getKey(),entry.getValue(),context,txControl,subsystemRuntimeOps);
+    ParallelBootTask subsystemTask=new ParallelBootTask(subsystemName,entry.getValue(),context,txControl,subsystemRuntimeOps);
     executor.execute(subsystemTask);
   }
   try {
     preparedLatch.await();
     checkForSubsystemFailures(context,transactionControls,OperationContext.Stage.MODEL);
-    List<ModelControllerImpl.ParsedOp> loggingOps=runtimeOpsBySubsystem.remove("logging");
+    List<ParsedOp> loggingOps=runtimeOpsBySubsystem.remove("logging");
     if (loggingOps != null) {
-      for (      ModelControllerImpl.ParsedOp loggingOp : loggingOps) {
+      for (      ParsedOp loggingOp : loggingOps) {
         context.addStep(loggingOp.response,loggingOp.operation,loggingOp.handler,OperationContext.Stage.RUNTIME);
       }
     }
@@ -34,6 +35,8 @@
     context.getFailureDescription().set(new ModelNode().set("Interrupted awaiting subsystem boot operation execution"));
     Thread.currentThread().interrupt();
   }
+  long elapsed=System.currentTimeMillis() - start;
+  System.out.println("Ran subsystem model operations in " + elapsed + " ms");
   OperationContext.ResultAction resultAction=context.completeStep();
   notifySubsystemTransactions(transactionControls,resultAction,committedLatch,OperationContext.Stage.RUNTIME);
   try {
