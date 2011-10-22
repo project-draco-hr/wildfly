@@ -1,0 +1,58 @@
+{
+  final Set<String> socketBindings=new HashSet<String>();
+  ModelNode op=Util.getEmptyOperation(ADD,null);
+  String name=null;
+  final EnumSet<Attribute> required=EnumSet.of(Attribute.NAME,Attribute.DEFAULT_INTERFACE);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (!isNoNamespaceAttribute(reader,i)) {
+      throw unexpectedAttribute(reader,i);
+    }
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+        name=value;
+        required.remove(attribute);
+        break;
+      }
+case DEFAULT_INTERFACE:
+{
+      SocketBindingGroupResourceDefinition.DEFAULT_INTERFACE.parseAndSetParameter(value,op,reader.getLocation());
+      required.remove(attribute);
+      break;
+    }
+case PORT_OFFSET:
+{
+    SocketBindingGroupResourceDefinition.PORT_OFFSET.parseAndSetParameter(value,op,reader.getLocation());
+    break;
+  }
+default :
+throw ParseUtils.unexpectedAttribute(reader,i);
+}
+}
+if (!required.isEmpty()) {
+throw missingRequired(reader,required);
+}
+ModelNode groupAddress=address.clone().add(SOCKET_BINDING_GROUP,name);
+op.get(OP_ADDR).set(groupAddress);
+updates.add(op);
+while (reader.nextTag() != END_ELEMENT) {
+requireNamespace(reader,expectedNs);
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case SOCKET_BINDING:
+{
+final String bindingName=parseSocketBinding(reader,interfaces,groupAddress,updates);
+if (socketBindings.contains(bindingName)) {
+  throw new XMLStreamException("socket-binding " + bindingName + " already declared",reader.getLocation());
+}
+socketBindings.add(bindingName);
+break;
+}
+default :
+throw unexpectedElement(reader);
+}
+}
+}
