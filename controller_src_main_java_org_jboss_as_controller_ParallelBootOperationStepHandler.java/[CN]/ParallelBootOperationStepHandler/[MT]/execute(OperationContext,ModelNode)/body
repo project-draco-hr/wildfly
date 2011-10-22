@@ -1,0 +1,45 @@
+{
+  if (context.getType() != OperationContext.Type.SERVER) {
+    throw new IllegalStateException(String.format("%s cannot be used except in a full server boot"));
+  }
+  context.getResourceRegistrationForUpdate();
+  context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
+  context.acquireControllerLock();
+  final Map<String,List<ModelControllerImpl.ParsedOp>> runtimeOpsBySubsystem=new LinkedHashMap<String,List<ModelControllerImpl.ParsedOp>>();
+  final Map<String,ParallelBootTransactionControl> transactionControls=new LinkedHashMap<String,ParallelBootTransactionControl>();
+  final Executor executor=getExecutor(context);
+  final CountDownLatch preparedLatch=new CountDownLatch(opsBySubsystem.size());
+  final CountDownLatch committedLatch=new CountDownLatch(1);
+  final CountDownLatch completeLatch=new CountDownLatch(opsBySubsystem.size());
+  for (  Map.Entry<String,List<ModelControllerImpl.ParsedOp>> entry : opsBySubsystem.entrySet()) {
+    List<ModelControllerImpl.ParsedOp> subsystemRuntimeOps=new ArrayList<ModelControllerImpl.ParsedOp>();
+    runtimeOpsBySubsystem.put(entry.getKey(),subsystemRuntimeOps);
+    final ParallelBootTransactionControl txControl=new ParallelBootTransactionControl(preparedLatch,committedLatch,completeLatch);
+    transactionControls.put(entry.getKey(),txControl);
+    ParallelBootTask subsystemTask=new ParallelBootTask(entry.getKey(),entry.getValue(),context,txControl,subsystemRuntimeOps);
+    executor.execute(subsystemTask);
+  }
+  try {
+    preparedLatch.await();
+    checkForSubsystemFailures(context,transactionControls,OperationContext.Stage.MODEL);
+    List<ModelControllerImpl.ParsedOp> loggingOps=runtimeOpsBySubsystem.remove("logging");
+    if (loggingOps != null) {
+      for (      ModelControllerImpl.ParsedOp loggingOp : loggingOps) {
+        context.addStep(loggingOp.response,loggingOp.operation,loggingOp.handler,OperationContext.Stage.RUNTIME);
+      }
+    }
+    context.addStep(getRuntimeStep(runtimeOpsBySubsystem),OperationContext.Stage.RUNTIME);
+  }
+ catch (  InterruptedException e) {
+    context.getFailureDescription().set(new ModelNode().set("Interrupted awaiting subsystem boot operation execution"));
+    Thread.currentThread().interrupt();
+  }
+  OperationContext.ResultAction resultAction=context.completeStep();
+  notifySubsystemTransactions(transactionControls,resultAction,committedLatch,OperationContext.Stage.RUNTIME);
+  try {
+    completeLatch.await();
+  }
+ catch (  InterruptedException e) {
+    Thread.currentThread().interrupt();
+  }
+}

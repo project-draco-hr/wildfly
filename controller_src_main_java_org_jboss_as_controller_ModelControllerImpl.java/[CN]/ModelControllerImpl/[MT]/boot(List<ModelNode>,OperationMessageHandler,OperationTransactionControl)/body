@@ -4,15 +4,24 @@
   result.setEmptyList();
   boolean sawExtensionAdd=false;
   List<ParsedOp> postExtensionOps=null;
+  ParallelBootOperationStepHandler parallelSubsystemHandler=controllerType == OperationContext.Type.SERVER ? new ParallelBootOperationStepHandler(rootRegistration,processState,result) : null;
+  boolean registeredParallelHandler=false;
   for (  ModelNode bootOp : bootList) {
-    final ParsedOp parsedOp=new ParsedOp(bootOp);
+    final ParsedOp parsedOp=new ParsedOp(bootOp,result.add());
     if (postExtensionOps != null) {
       if (parsedOp.isExtensionAdd()) {
         final OperationStepHandler stepHandler=rootRegistration.getOperationHandler(parsedOp.address,parsedOp.operationName);
         context.addStep(result.add(),bootOp,stepHandler,OperationContext.Stage.MODEL);
       }
  else {
-        postExtensionOps.add(parsedOp);
+        if (parallelSubsystemHandler == null || !parallelSubsystemHandler.addSubsystemOperation(parsedOp)) {
+          postExtensionOps.add(parsedOp);
+        }
+ else         if (!registeredParallelHandler) {
+          ModelNode op=Util.getEmptyOperation("parallel-subsystem-boot",new ModelNode().setEmptyList());
+          postExtensionOps.add(new ParsedOp(op,parallelSubsystemHandler,result.add()));
+          registeredParallelHandler=true;
+        }
       }
     }
  else {
@@ -24,7 +33,7 @@
         break;
       }
  else       if (stepHandler instanceof ExtensionAddHandler) {
-        context.addStep(result.add(),bootOp,stepHandler,OperationContext.Stage.MODEL);
+        context.addStep(parsedOp.response,bootOp,stepHandler,OperationContext.Stage.MODEL);
         sawExtensionAdd=true;
       }
  else       if (!sawExtensionAdd) {
@@ -32,16 +41,21 @@
       }
  else {
         postExtensionOps=new ArrayList<ParsedOp>();
-        postExtensionOps.add(parsedOp);
+        if (parallelSubsystemHandler == null || !parallelSubsystemHandler.addSubsystemOperation(parsedOp)) {
+          postExtensionOps.add(parsedOp);
+        }
+ else         if (!registeredParallelHandler) {
+          ModelNode op=Util.getEmptyOperation("parallel-subsystem-boot",new ModelNode().setEmptyList());
+          postExtensionOps.add(new ParsedOp(op,parallelSubsystemHandler,result.add()));
+          registeredParallelHandler=true;
+        }
       }
     }
   }
   if (context.completeStep() == OperationContext.ResultAction.KEEP && postExtensionOps != null) {
     final OperationContextImpl postExtContext=new OperationContextImpl(this,controllerType,EnumSet.noneOf(OperationContextImpl.ContextFlag.class),handler,null,model,control,processState,bootingFlag.get());
-    final ModelNode postExtResult=new ModelNode().setEmptyList();
-    postExtResult.setEmptyList();
     for (    ParsedOp parsedOp : postExtensionOps) {
-      final OperationStepHandler stepHandler=rootRegistration.getOperationHandler(parsedOp.address,parsedOp.operationName);
+      final OperationStepHandler stepHandler=parsedOp.handler == null ? rootRegistration.getOperationHandler(parsedOp.address,parsedOp.operationName) : parsedOp.handler;
       if (stepHandler == null) {
         String msg=String.format("No handler for operation %s at address %s",parsedOp.operationName,parsedOp.address);
         log.error(msg);
@@ -49,8 +63,7 @@
         break;
       }
  else {
-        final ModelNode response=postExtResult.add();
-        postExtContext.addStep(response,parsedOp.operation,stepHandler,OperationContext.Stage.MODEL);
+        postExtContext.addStep(parsedOp.response,parsedOp.operation,stepHandler,OperationContext.Stage.MODEL);
       }
     }
     postExtContext.completeStep();

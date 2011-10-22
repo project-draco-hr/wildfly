@@ -1,0 +1,35 @@
+{
+  try {
+    OperationContext context=getOperationContext();
+    for (    ModelControllerImpl.ParsedOp op : bootOperations) {
+      final OperationStepHandler osh=op.handler == null ? rootRegistration.getOperationHandler(op.address,op.operationName) : op.handler;
+      context.addStep(op.response,op.operation,osh,executionStage);
+    }
+    context.completeStep();
+  }
+ catch (  Exception e) {
+    log.errorf(e,"Failed executing subsystem %s boot operations",subsystemName);
+    if (!transactionControl.signalled) {
+      ModelNode failure=new ModelNode();
+      failure.get(ModelDescriptionConstants.SUCCESS).set(false);
+      failure.get(ModelDescriptionConstants.FAILURE_DESCRIPTION).set(e.toString());
+      transactionControl.operationFailed(failure);
+    }
+  }
+ finally {
+    if (!transactionControl.signalled) {
+      for (      ModelControllerImpl.ParsedOp op : bootOperations) {
+        if (op.response.hasDefined(ModelDescriptionConstants.SUCCESS) && !op.response.get(ModelDescriptionConstants.SUCCESS).asBoolean()) {
+          transactionControl.operationFailed(op.response);
+          break;
+        }
+      }
+      if (!transactionControl.signalled) {
+        ModelNode failure=new ModelNode();
+        failure.get(ModelDescriptionConstants.SUCCESS).set(false);
+        failure.get(ModelDescriptionConstants.FAILURE_DESCRIPTION).set(String.format("Failed executing subsystem %s boot operations but no individual operation failed",subsystemName));
+      }
+    }
+    transactionControl.operationCompleted(transactionControl.response);
+  }
+}

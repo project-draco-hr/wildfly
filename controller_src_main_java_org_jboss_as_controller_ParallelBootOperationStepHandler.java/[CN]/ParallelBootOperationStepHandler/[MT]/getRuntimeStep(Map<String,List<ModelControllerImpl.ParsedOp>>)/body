@@ -1,0 +1,35 @@
+{
+  return new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      context.getServiceRegistry(true);
+      final Map<String,ParallelBootTransactionControl> transactionControls=new LinkedHashMap<String,ParallelBootTransactionControl>();
+      final Executor executor=getExecutor(context);
+      final CountDownLatch preparedLatch=new CountDownLatch(runtimeOpsBySubsystem.size());
+      final CountDownLatch committedLatch=new CountDownLatch(1);
+      final CountDownLatch completeLatch=new CountDownLatch(runtimeOpsBySubsystem.size());
+      for (      Map.Entry<String,List<ModelControllerImpl.ParsedOp>> entry : runtimeOpsBySubsystem.entrySet()) {
+        final ParallelBootTransactionControl txControl=new ParallelBootTransactionControl(preparedLatch,committedLatch,completeLatch);
+        transactionControls.put(entry.getKey(),txControl);
+        ParallelBootTask subsystemTask=new ParallelBootTask(entry.getKey(),entry.getValue(),context,txControl,null);
+        executor.execute(subsystemTask);
+      }
+      try {
+        preparedLatch.await();
+        checkForSubsystemFailures(context,transactionControls,OperationContext.Stage.RUNTIME);
+      }
+ catch (      InterruptedException e) {
+        context.getFailureDescription().set(new ModelNode().set("Interrupted awaiting subsystem boot operation execution"));
+        Thread.currentThread().interrupt();
+      }
+      OperationContext.ResultAction resultAction=context.completeStep();
+      notifySubsystemTransactions(transactionControls,resultAction,committedLatch,OperationContext.Stage.MODEL);
+      try {
+        completeLatch.await();
+      }
+ catch (      InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
+;
+}
