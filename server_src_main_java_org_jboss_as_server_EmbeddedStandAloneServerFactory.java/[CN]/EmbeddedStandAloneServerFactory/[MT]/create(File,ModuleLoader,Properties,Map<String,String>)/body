@@ -19,13 +19,19 @@
     }
     @Override public void start() throws ServerStartException {
       try {
-        ServerEnvironment serverEnviromment=Main.determineEnvironment(new String[0],systemProps,systemEnv,ServerEnvironment.LaunchType.EMBEDDED);
+        ServerEnvironment serverEnvironment=Main.determineEnvironment(new String[0],systemProps,systemEnv,ServerEnvironment.LaunchType.EMBEDDED);
         Bootstrap bootstrap=Bootstrap.Factory.newInstance();
         Bootstrap.Configuration configuration=new Bootstrap.Configuration();
-        final QName rootElement=new QName(Namespace.CURRENT.getUriString(),"server");
-        final StandaloneXml parser=new StandaloneXml(Module.getBootModuleLoader());
-        configuration.setConfigurationPersister(new TransientConfigurationPersister(serverEnviromment.getServerConfigurationFile(),rootElement,parser,parser));
-        configuration.setServerEnvironment(serverEnviromment);
+        final Bootstrap.ConfigurationPersisterFactory delegate=new Bootstrap.ConfigurationPersisterFactory(){
+          @Override public ExtensibleConfigurationPersister createConfigurationPersister(          ServerEnvironment serverEnvironment,          ExecutorService executorService){
+            final QName rootElement=new QName(Namespace.CURRENT.getUriString(),"server");
+            final StandaloneXml parser=new StandaloneXml(Module.getBootModuleLoader(),executorService);
+            return new TransientConfigurationPersister(serverEnvironment.getServerConfigurationFile(),rootElement,parser,parser);
+          }
+        }
+;
+        configuration.setConfigurationPersisterFactory(new Bootstrap.CachingConfigurationPersisterFactory(delegate));
+        configuration.setServerEnvironment(serverEnvironment);
         configuration.setModuleLoader(moduleLoader);
         Future<ServiceContainer> future=bootstrap.startup(configuration,Collections.<ServiceActivator>emptyList());
         serviceContainer=future.get();

@@ -3,7 +3,7 @@
   requireNoAttributes(reader);
   final Set<String> found=new HashSet<String>();
   final ExtensionParsingContextImpl context=new ExtensionParsingContextImpl(reader.getXMLMapper());
-  final Map<String,Future<XMLStreamException>> loadFutures=new HashMap<String,Future<XMLStreamException>>();
+  final Map<String,Future<XMLStreamException>> loadFutures=bootExecutor != null ? new HashMap<String,Future<XMLStreamException>>() : null;
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
     requireNamespace(reader,expectedNs);
     final Element element=Element.forName(reader.getLocalName());
@@ -14,54 +14,41 @@
     if (!found.add(moduleName)) {
       throw invalidAttributeValue(reader,0);
     }
-    Future<XMLStreamException> future=bootExecutor.submit(new Callable<XMLStreamException>(){
-      @Override public XMLStreamException call() throws Exception {
-        try {
-          final Module module=moduleLoader.loadModule(ModuleIdentifier.fromString(moduleName));
-          boolean initialized=false;
-          for (          final Extension extension : module.loadService(Extension.class)) {
-            ClassLoader oldTccl=SecurityActions.setThreadContextClassLoader(extension.getClass());
-            try {
-              extension.initializeParsers(context);
-            }
-  finally {
-              SecurityActions.setThreadContextClassLoader(oldTccl);
-            }
-            if (!initialized) {
-              initialized=true;
-            }
-          }
-          if (!initialized) {
-            throw new IllegalStateException("No META-INF/services/" + Extension.class.getName() + " found for "+ module.getIdentifier());
-          }
-          return null;
-        }
- catch (        final ModuleLoadException e) {
-          return new XMLStreamException("Failed to load module",e);
+    if (loadFutures != null) {
+      Callable<XMLStreamException> callable=new Callable<XMLStreamException>(){
+        @Override public XMLStreamException call() throws Exception {
+          return loadModule(moduleName,context);
         }
       }
+;
+      Future<XMLStreamException> future=bootExecutor.submit(callable);
+      loadFutures.put(moduleName,future);
     }
-);
-    loadFutures.put(moduleName,future);
-  }
-  for (  Map.Entry<String,Future<XMLStreamException>> entry : loadFutures.entrySet()) {
-    try {
-      XMLStreamException xse=entry.getValue().get();
+ else {
+      XMLStreamException xse=loadModule(moduleName,context);
       if (xse != null) {
         throw xse;
       }
+      addExtensionAddOperation(address,list,moduleName);
     }
- catch (    InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new XMLStreamException(String.format("Interrupted awaiting loading of module %s",entry.getKey()));
+  }
+  if (loadFutures != null) {
+    for (    Map.Entry<String,Future<XMLStreamException>> entry : loadFutures.entrySet()) {
+      try {
+        XMLStreamException xse=entry.getValue().get();
+        if (xse != null) {
+          throw xse;
+        }
+      }
+ catch (      InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new XMLStreamException(String.format("Interrupted awaiting loading of module %s",entry.getKey()));
+      }
+catch (      ExecutionException e) {
+        throw new XMLStreamException(String.format("Failed loading module %s",entry.getKey()),e);
+      }
+      addExtensionAddOperation(address,list,entry.getKey());
     }
-catch (    ExecutionException e) {
-      throw new XMLStreamException(String.format("Failed loading module %s",entry.getKey()),e);
-    }
-    final ModelNode add=new ModelNode();
-    add.get(OP_ADDR).set(address).add(EXTENSION,entry.getKey());
-    add.get(OP).set(ADD);
-    list.add(add);
   }
   long elapsed=System.currentTimeMillis() - start;
   System.out.println("Parsed extensions in " + elapsed + " ms");

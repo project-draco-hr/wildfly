@@ -2,21 +2,27 @@
   final Bootstrap bootstrap=Bootstrap.Factory.newInstance();
   final Bootstrap.Configuration configuration=new Bootstrap.Configuration();
   configuration.setServerEnvironment(providedEnvironment);
-  configuration.setConfigurationPersister(new AbstractConfigurationPersister(new StandaloneXml(configuration.getModuleLoader())){
-    private final PersistenceResource pr=new PersistenceResource(){
-      @Override public void commit(){
-      }
-      @Override public void rollback(){
-      }
-    }
+  final Bootstrap.ConfigurationPersisterFactory delegate=new Bootstrap.ConfigurationPersisterFactory(){
+    @Override public ExtensibleConfigurationPersister createConfigurationPersister(    ServerEnvironment serverEnvironment,    ExecutorService executorService){
+      return new AbstractConfigurationPersister(new StandaloneXml(configuration.getModuleLoader(),executorService)){
+        private final PersistenceResource pr=new PersistenceResource(){
+          @Override public void commit(){
+          }
+          @Override public void rollback(){
+          }
+        }
 ;
-    @Override public PersistenceResource store(    final ModelNode model,    Set<PathAddress> affectedAddresses) throws ConfigurationPersistenceException {
-      return pr;
-    }
-    @Override public List<ModelNode> load() throws ConfigurationPersistenceException {
-      return updates;
+        @Override public PersistenceResource store(        final ModelNode model,        Set<PathAddress> affectedAddresses) throws ConfigurationPersistenceException {
+          return pr;
+        }
+        @Override public List<ModelNode> load() throws ConfigurationPersistenceException {
+          return updates;
+        }
+      }
+;
     }
   }
-);
+;
+  configuration.setConfigurationPersisterFactory(new Bootstrap.CachingConfigurationPersisterFactory(delegate));
   return bootstrap.bootstrap(configuration,startServices);
 }
