@@ -7,11 +7,12 @@
       final CountDownLatch preparedLatch=new CountDownLatch(runtimeOpsBySubsystem.size());
       final CountDownLatch committedLatch=new CountDownLatch(1);
       final CountDownLatch completeLatch=new CountDownLatch(runtimeOpsBySubsystem.size());
+      final Thread controllingThread=Thread.currentThread();
       for (      Map.Entry<String,List<ParsedBootOp>> entry : runtimeOpsBySubsystem.entrySet()) {
         String subsystemName=entry.getKey();
         final ParallelBootTransactionControl txControl=new ParallelBootTransactionControl(subsystemName,preparedLatch,committedLatch,completeLatch);
         transactionControls.put(subsystemName,txControl);
-        ParallelBootTask subsystemTask=new ParallelBootTask(subsystemName,entry.getValue(),context,txControl,null);
+        ParallelBootTask subsystemTask=new ParallelBootTask(subsystemName,entry.getValue(),context,txControl,null,controllingThread);
         executor.execute(subsystemTask);
       }
       try {
@@ -22,8 +23,10 @@
         context.getFailureDescription().set(new ModelNode().set("Interrupted awaiting subsystem boot operation execution"));
         Thread.currentThread().interrupt();
       }
-      long elapsed=System.currentTimeMillis() - start;
-      System.out.println("Ran subsystem runtime operations in " + elapsed + " ms");
+      if (log.isDebugEnabled()) {
+        long elapsed=System.currentTimeMillis() - start;
+        log.debugf("Ran subsystem runtime operations in [%d] ms",elapsed);
+      }
       OperationContext.ResultAction resultAction=context.completeStep();
       notifySubsystemTransactions(transactionControls,resultAction,committedLatch,OperationContext.Stage.MODEL);
       try {
