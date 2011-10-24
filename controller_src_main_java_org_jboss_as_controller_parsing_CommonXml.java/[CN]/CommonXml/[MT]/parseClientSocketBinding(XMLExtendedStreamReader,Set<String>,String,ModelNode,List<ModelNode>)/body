@@ -1,0 +1,84 @@
+{
+  final EnumSet<Attribute> required=EnumSet.of(Attribute.NAME);
+  String clientSocketBindingName=null;
+  final ModelNode clientSocketBindingAddOperation=new ModelNode();
+  clientSocketBindingAddOperation.get(OP).set(ADD);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (!isNoNamespaceAttribute(reader,i)) {
+      throw unexpectedAttribute(reader,i);
+    }
+ else {
+      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+      required.remove(attribute);
+switch (attribute) {
+case NAME:
+{
+          clientSocketBindingName=value;
+          break;
+        }
+case SOURCE_INTERFACE:
+{
+        if (!interfaces.contains(value)) {
+          throw new XMLStreamException("Unknown " + Attribute.SOURCE_INTERFACE.getLocalName() + " "+ value+ " "+ Element.INTERFACE.getLocalName()+ " must be declared in element "+ Element.INTERFACES.getLocalName(),reader.getLocation());
+        }
+        clientSocketBindingAddOperation.get(SOURCE_INTERFACE).set(value);
+        break;
+      }
+case SOURCE_PORT:
+{
+      clientSocketBindingAddOperation.get(SOURCE_PORT).set(parseBoundedIntegerAttribute(reader,i,0,65535,true));
+      break;
+    }
+case FIXED_SOURCE_PORT:
+{
+    clientSocketBindingAddOperation.get(FIXED_SOURCE_PORT).set(parsePossibleExpression(value));
+    break;
+  }
+default :
+throw unexpectedAttribute(reader,i);
+}
+}
+}
+if (!required.isEmpty()) {
+throw missingRequired(reader,required);
+}
+boolean mutuallyExclusiveElementAlreadyFound=false;
+while (reader.hasNext() && reader.nextTag() != XMLStreamConstants.END_ELEMENT) {
+switch (Element.forName(reader.getLocalName())) {
+case LOCAL_DESTINATION:
+{
+if (mutuallyExclusiveElementAlreadyFound) {
+throw new XMLStreamException("A client socket binding: " + clientSocketBindingName + " cannot have both "+ Element.LOCAL_DESTINATION.getLocalName()+ " as well as a "+ Element.REMOTE_DESTINATION.getLocalName()+ " at the same time",reader.getLocation());
+}
+ else {
+mutuallyExclusiveElementAlreadyFound=true;
+}
+this.parseLocalDestinationClientSocketBinding(reader,clientSocketBindingName,clientSocketBindingAddOperation);
+final PathAddress addr=PathAddress.pathAddress(PathElement.pathElement(SOCKET_BINDING_GROUP,socketBindingGroupName),PathElement.pathElement(LOCAL_DESTINATION_CLIENT_SOCKET_BINDING,clientSocketBindingName));
+clientSocketBindingAddOperation.get(OP_ADDR).set(addr.toModelNode());
+break;
+}
+case REMOTE_DESTINATION:
+{
+if (mutuallyExclusiveElementAlreadyFound) {
+throw new XMLStreamException("A client socket binding: " + clientSocketBindingName + " cannot have both "+ Element.LOCAL_DESTINATION.getLocalName()+ " as well as a "+ Element.REMOTE_DESTINATION.getLocalName()+ " at the same time",reader.getLocation());
+}
+ else {
+mutuallyExclusiveElementAlreadyFound=true;
+}
+this.parseRemoteDestinationClientSocketBinding(reader,clientSocketBindingName,clientSocketBindingAddOperation);
+final PathAddress addr=PathAddress.pathAddress(PathElement.pathElement(SOCKET_BINDING_GROUP,socketBindingGroupName),PathElement.pathElement(REMOTE_DESTINATION_CLIENT_SOCKET_BINDING,clientSocketBindingName));
+clientSocketBindingAddOperation.get(OP_ADDR).set(addr.toModelNode());
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+updates.add(clientSocketBindingAddOperation);
+return clientSocketBindingName;
+}

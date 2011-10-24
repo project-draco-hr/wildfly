@@ -1,0 +1,45 @@
+{
+  final boolean restartRequired=requiresRestart();
+  boolean setReload=false;
+  if (context.getType() == OperationContext.Type.SERVER) {
+    if (restartRequired) {
+      context.reloadRequired();
+      setReload=true;
+    }
+ else {
+      context.addStep(new OperationStepHandler(){
+        public void execute(        OperationContext context,        ModelNode operation) throws OperationFailedException {
+          final ModelNode resolvedValue=newValue.isDefined() ? newValue.resolve() : newValue;
+          if (resolvedValueValidator != null) {
+            resolvedValueValidator.validateResolvedParameter(VALUE,resolvedValue);
+          }
+          final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+          final PathElement element=address.getLastElement();
+          final String bindingName=element.getValue();
+          final ModelNode bindingModel=context.readResource(PathAddress.EMPTY_ADDRESS).getModel();
+          final ServiceController<?> controller=context.getServiceRegistry(true).getRequiredService(ClientSocketBinding.CLIENT_SOCKET_BINDING_BASE_SERVICE_NAME.append(bindingName));
+          final ClientSocketBinding binding=controller.getState() == ServiceController.State.UP ? ClientSocketBinding.class.cast(controller.getValue()) : null;
+          final boolean bound=binding != null && binding.isBound();
+          if (binding == null) {
+            handleBindingReinstall(context,bindingName,bindingModel);
+          }
+ else {
+            context.reloadRequired();
+          }
+          if (context.completeStep() != OperationContext.ResultAction.KEEP) {
+            if (binding == null) {
+              revertBindingReinstall(context,bindingName,bindingModel,attributeName,currentValue);
+            }
+ else {
+              context.revertReloadRequired();
+            }
+          }
+        }
+      }
+,OperationContext.Stage.RUNTIME);
+    }
+  }
+  if (context.completeStep() != OperationContext.ResultAction.KEEP && setReload) {
+    context.revertReloadRequired();
+  }
+}

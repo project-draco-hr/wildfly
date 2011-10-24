@@ -1,7 +1,7 @@
 {
-  final Set<String> socketBindings=new HashSet<String>();
+  final Set<String> uniqueBindingNames=new HashSet<String>();
   ModelNode op=Util.getEmptyOperation(ADD,null);
-  String name=null;
+  String socketBindingGroupName=null;
   final EnumSet<Attribute> required=EnumSet.of(Attribute.NAME,Attribute.DEFAULT_INTERFACE);
   final int count=reader.getAttributeCount();
   for (int i=0; i < count; i++) {
@@ -13,7 +13,7 @@
 switch (attribute) {
 case NAME:
 {
-        name=value;
+        socketBindingGroupName=value;
         required.remove(attribute);
         break;
       }
@@ -35,7 +35,7 @@ throw ParseUtils.unexpectedAttribute(reader,i);
 if (!required.isEmpty()) {
 throw missingRequired(reader,required);
 }
-ModelNode groupAddress=address.clone().add(SOCKET_BINDING_GROUP,name);
+ModelNode groupAddress=address.clone().add(SOCKET_BINDING_GROUP,socketBindingGroupName);
 op.get(OP_ADDR).set(groupAddress);
 updates.add(op);
 while (reader.nextTag() != END_ELEMENT) {
@@ -45,10 +45,17 @@ switch (element) {
 case SOCKET_BINDING:
 {
 final String bindingName=parseSocketBinding(reader,interfaces,groupAddress,updates);
-if (socketBindings.contains(bindingName)) {
-  throw new XMLStreamException("socket-binding " + bindingName + " already declared",reader.getLocation());
+if (!uniqueBindingNames.add(bindingName)) {
+  throw new XMLStreamException("A " + Element.SOCKET_BINDING.getLocalName() + " or a "+ Element.CLIENT_SOCKET_BINDING.getLocalName()+ " "+ bindingName+ " has already been declared in "+ Element.SOCKET_BINDING_GROUP+ socketBindingGroupName,reader.getLocation());
 }
-socketBindings.add(bindingName);
+break;
+}
+case CLIENT_SOCKET_BINDING:
+{
+final String bindingName=parseClientSocketBinding(reader,interfaces,socketBindingGroupName,groupAddress,updates);
+if (!uniqueBindingNames.add(bindingName)) {
+throw new XMLStreamException("A " + Element.SOCKET_BINDING.getLocalName() + " or a "+ Element.CLIENT_SOCKET_BINDING.getLocalName()+ " "+ bindingName+ " has already been declared in "+ Element.SOCKET_BINDING_GROUP+ socketBindingGroupName,reader.getLocation());
+}
 break;
 }
 default :
