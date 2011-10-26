@@ -1,0 +1,87 @@
+{
+  final ModelNode address=new ModelNode();
+  address.add(org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM,JCA);
+  address.protect();
+  final ModelNode subsystem=new ModelNode();
+  subsystem.get(OP).set(ADD);
+  subsystem.get(OP_ADDR).set(address);
+  list.add(subsystem);
+  final EnumSet<Element> visited=EnumSet.noneOf(Element.class);
+  final EnumSet<Element> requiredElement=EnumSet.of(Element.DEFAULT_WORKMANAGER);
+  boolean ccmAdded=false;
+  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case JCA_1_1:
+case JCA_1_0:
+{
+        final Element element=Element.forName(reader.getLocalName());
+        if (!visited.add(element)) {
+          throw unexpectedElement(reader);
+        }
+switch (element) {
+case ARCHIVE_VALIDATION:
+{
+            list.add(parseArchiveValidation(reader,address));
+            break;
+          }
+case BEAN_VALIDATION:
+{
+          list.add(parseBeanValidation(reader,address));
+          break;
+        }
+case DEFAULT_WORKMANAGER:
+{
+        parseWorkManager(reader,address,list,subsystem,true);
+        final ModelNode bootstrapContextOperation=new ModelNode();
+        bootstrapContextOperation.get(OP).set(ADD);
+        final ModelNode bootStrapCOntextAddress=address.clone();
+        bootStrapCOntextAddress.add(BOOTSTRAP_CONTEXT,DEFAULT_NAME);
+        bootStrapCOntextAddress.protect();
+        bootstrapContextOperation.get(OP_ADDR).set(bootStrapCOntextAddress);
+        bootstrapContextOperation.get(WORKMANAGER).set(DEFAULT_NAME);
+        bootstrapContextOperation.get(NAME).set(DEFAULT_NAME);
+        list.add(bootstrapContextOperation);
+        requiredElement.remove(Element.DEFAULT_WORKMANAGER);
+        break;
+      }
+case CACHED_CONNECTION_MANAGER:
+{
+      list.add(parseCcm(reader,address));
+      ccmAdded=true;
+      break;
+    }
+case WORKMANAGER:
+{
+    parseWorkManager(reader,address,list,subsystem,false);
+    break;
+  }
+case BOOTSTRAP_CONTEXTS:
+{
+  ModelNode operation=parseBootstrapContexts(reader,address);
+  if (operation != null) {
+    list.add(operation);
+  }
+  break;
+}
+default :
+throw unexpectedElement(reader);
+}
+break;
+}
+default :
+throw unexpectedElement(reader);
+}
+}
+if (!requiredElement.isEmpty()) {
+throw missingRequiredElement(reader,requiredElement);
+}
+if (!ccmAdded) {
+final ModelNode ccmOperation=new ModelNode();
+ccmOperation.get(OP).set(ADD);
+final ModelNode ccmAddress=address.clone();
+ccmAddress.add(CACHED_CONNECTION_MANAGER,CACHED_CONNECTION_MANAGER);
+ccmAddress.protect();
+ccmOperation.get(OP_ADDR).set(ccmAddress);
+list.add(ccmOperation);
+}
+}

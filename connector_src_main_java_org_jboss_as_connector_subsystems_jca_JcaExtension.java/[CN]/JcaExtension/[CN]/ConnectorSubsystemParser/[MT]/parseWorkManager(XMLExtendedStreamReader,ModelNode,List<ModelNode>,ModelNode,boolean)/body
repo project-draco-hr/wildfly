@@ -1,0 +1,58 @@
+{
+  final ModelNode workManagerOperation=new ModelNode();
+  workManagerOperation.get(OP).set(ADD);
+  final int cnt=reader.getAttributeCount();
+  String name=null;
+  for (int i=0; i < cnt; i++) {
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+{
+        final Location location=reader.getLocation();
+        name=rawAttributeText(reader,WorkManagerAdd.WmParameters.NAME.getAttribute().getXmlName());
+        WorkManagerAdd.WmParameters.NAME.getAttribute().parseAndSetParameter(name,workManagerOperation,location);
+        break;
+      }
+default :
+{
+      throw unexpectedAttribute(reader,i);
+    }
+}
+}
+if (name == null) {
+if (defaultWm) {
+  name=DEFAULT_NAME;
+  workManagerOperation.get(NAME).set(name);
+}
+ else {
+  throw new XMLStreamException("name attribute is mandatory for workmanager element");
+}
+}
+final ModelNode workManagerAddress=parentAddress.clone();
+workManagerAddress.add(WORKMANAGER,name);
+workManagerAddress.protect();
+workManagerOperation.get(OP_ADDR).set(workManagerAddress);
+list.add(workManagerOperation);
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case LONG_RUNNING_THREADS:
+{
+    ThreadsParser.getInstance().parseBoundedQueueThreadPool(reader,workManagerAddress,list,WORKMANAGER_LONG_RUNNING,WORKMANAGER_LONG_RUNNING);
+    break;
+  }
+case SHORT_RUNNING_THREADS:
+{
+  ThreadsParser.getInstance().parseBoundedQueueThreadPool(reader,workManagerAddress,list,WORKMANAGER_SHORT_RUNNING,WORKMANAGER_SHORT_RUNNING);
+  break;
+}
+default :
+throw unexpectedElement(reader);
+}
+}
+for (ModelNode op : list) {
+if (op.hasDefined(BLOCKING)) {
+op.get(BLOCKING).set(Boolean.TRUE);
+}
+}
+}
