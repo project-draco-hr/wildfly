@@ -1,0 +1,123 @@
+{
+  res.setContentType("text/xml; charset=utf-8");
+  SOAPMessage soapReq=null;
+  SOAPMessage soapRes=null;
+  try {
+    MessageFactory msgFactory=MessageFactory.newInstance();
+    soapReq=msgFactory.createMessage(null,req.getInputStream());
+    soapRes=msgFactory.createMessage();
+    if (log.isDebugEnabled()) {
+      ByteArrayOutputStream bs=new ByteArrayOutputStream();
+      soapReq.writeTo(bs);
+      log.debug("Request received::" + bs.toString());
+    }
+    SOAPBody soapReqBody=soapReq.getSOAPBody();
+    Iterator it=soapReqBody.getChildElements();
+    Element uddiReq=null;
+    while (uddiReq == null && it.hasNext()) {
+      Object current=it.next();
+      if (current instanceof Element) {
+        uddiReq=(Element)current;
+      }
+    }
+    if (uddiReq == null)     throw new FatalErrorException("A UDDI request was not " + "found in the SOAP message.");
+    String function=uddiReq.getLocalName();
+    if ((function == null) || (function.trim().length() == 0))     throw new FatalErrorException("The name of the UDDI request " + "could not be identified.");
+    IHandler requestHandler=maker.lookup(function);
+    if (requestHandler == null)     throw new UnsupportedException("The UDDI request " + "type specified is unknown: " + function);
+    String generic=uddiReq.getAttribute("generic");
+    if (generic == null)     throw new FatalErrorException("A UDDI generic attribute " + "value was not found for UDDI request: " + function + " (The "+ "'generic' attribute must be present)");
+ else     if (!generic.equals(IRegistry.UDDI_V2_GENERIC))     throw new UnsupportedException("Currently only UDDI v2 " + "requests are supported. The generic attribute value " + "received was: "+ generic);
+    RegistryObject uddiReqObj=requestHandler.unmarshal(uddiReq);
+    if (uddiReqObj == null)     throw new FatalErrorException("Uddi Request is null");
+    RegistryObject uddiResObj=null;
+    RegistryEngine registry=RegistryServlet.getRegistry();
+    if ((registry != null) && (registry.isAvailable()))     uddiResObj=registry.execute(uddiReqObj);
+ else     throw new BusyException("The Registry is currently unavailable.");
+    IHandler responseHandler=maker.lookup(uddiResObj.getClass().getName());
+    if (responseHandler == null)     throw new FatalErrorException("The response object " + "type is unknown: " + uddiResObj.getClass().getName());
+    DocumentBuilder docBuilder=getDocumentBuilder();
+    Document document=docBuilder.newDocument();
+    Element element=document.createElement("temp");
+    responseHandler.marshal(uddiResObj,element);
+    log.debug("Response that will be sent:");
+    log.debug(XMLUtils.toString((Element)element.getFirstChild()));
+    Element el=(Element)element.getFirstChild();
+    soapRes=this.createSOAPMessage(el);
+  }
+ catch (  Exception ex) {
+    String faultCode=null;
+    String faultString=null;
+    String faultActor=null;
+    String errno=null;
+    String errCode=null;
+    String errMsg=null;
+    if (ex instanceof RegistryException) {
+      log.error("RegistryException::",ex);
+      RegistryException rex=(RegistryException)ex;
+      faultCode=rex.getFaultCode();
+      faultString=rex.getFaultString();
+      faultActor=rex.getFaultActor();
+      DispositionReport dispRpt=rex.getDispositionReport();
+      if (dispRpt != null) {
+        Result result=null;
+        ErrInfo errInfo=null;
+        Vector results=dispRpt.getResultVector();
+        if ((results != null) && (!results.isEmpty()))         result=(Result)results.elementAt(0);
+        if (result != null) {
+          errno=String.valueOf(result.getErrno());
+          errInfo=result.getErrInfo();
+          if (errInfo != null) {
+            errCode=errInfo.getErrCode();
+            errMsg=errInfo.getErrMsg();
+          }
+        }
+      }
+    }
+ else {
+      log.error(ex.getMessage(),ex);
+      faultCode="Server";
+      faultString=ex.getMessage();
+      faultActor=null;
+      errno=String.valueOf(Result.E_FATAL_ERROR);
+      errCode=Result.lookupErrCode(Result.E_FATAL_ERROR);
+      errMsg=Result.lookupErrText(Result.E_FATAL_ERROR);
+    }
+    try {
+      SOAPBody soapResBody=soapRes.getSOAPBody();
+      SOAPFault soapFault=soapResBody.addFault();
+      if (faultCode == null)       faultCode="Unavailable";
+      if (faultCode.contains(":") == false) {
+        faultCode=((Node)soapResBody).getPrefix() + ":" + faultCode;
+      }
+      soapFault.setFaultCode(faultCode);
+      soapFault.setFaultString(faultString);
+      soapFault.setFaultActor(faultActor);
+      Detail faultDetail=soapFault.addDetail();
+      SOAPElement dispRpt=faultDetail.addChildElement("dispositionReport","",IRegistry.UDDI_V2_NAMESPACE);
+      dispRpt.setAttribute("generic",IRegistry.UDDI_V2_GENERIC);
+      dispRpt.setAttribute("operator",Config.getOperator());
+      SOAPElement result=dispRpt.addChildElement("result");
+      result.setAttribute("errno",errno);
+      SOAPElement errInfo=result.addChildElement("errInfo");
+      errInfo.setAttribute("errCode",errCode);
+      errInfo.setValue(errMsg);
+    }
+ catch (    Exception e) {
+      log.error("A serious error has occured while assembling the SOAP Fault.",e);
+    }
+  }
+ finally {
+    try {
+      if (log.isDebugEnabled()) {
+        ByteArrayOutputStream bs=new ByteArrayOutputStream();
+        soapRes.writeTo(bs);
+        log.debug("Response being sent::" + bs.toString());
+      }
+      soapRes.writeTo(res.getOutputStream());
+    }
+ catch (    SOAPException sex) {
+      log.error("SOAPException::",sex);
+    }
+  }
+}
