@@ -3,36 +3,17 @@
     throw MESSAGES.alreadyConnected();
   }
   OptionMap map=OptionMap.create(SASL_POLICY_NOANONYMOUS,Boolean.FALSE);
-  IoFuture<Connection> future;
   CallbackHandler actualHandler=handler != null ? handler : new AnonymousCallbackHandler();
   WrapperCallbackHandler wrapperHandler=new WrapperCallbackHandler(actualHandler);
-  future=endpoint.connect(uri,map,wrapperHandler);
-  Status status=future.await(connectTimeout,TimeUnit.MILLISECONDS);
-  while (status == Status.WAITING) {
-    boolean cancel=false;
-    if (wrapperHandler.isInCall()) {
-      status=future.await(connectTimeout,TimeUnit.MILLISECONDS);
-    }
- else     if (wrapperHandler.getCallFinished() > -1) {
-      long timeSinceFinished=System.currentTimeMillis() - wrapperHandler.getCallFinished();
-      if (timeSinceFinished < 0) {
-        timeSinceFinished=0;
-      }
-      if (timeSinceFinished < connectTimeout) {
-        status=future.await(connectTimeout - timeSinceFinished,TimeUnit.MILLISECONDS);
-      }
- else {
-        cancel=true;
-      }
-    }
- else {
-      cancel=true;
-    }
-    if (cancel == true) {
-      future.cancel();
-      throw MESSAGES.couldNotConnect(connectTimeout);
-    }
+  IoFuture<Connection> future=endpoint.connect(uri,map,wrapperHandler);
+  try {
+    this.connection=future.get();
   }
-  this.connection=future.get();
+ catch (  CancellationException e) {
+    throw MESSAGES.connectWasCancelled();
+  }
+catch (  IOException e) {
+    throw MESSAGES.couldNotConnect(uri,e);
+  }
   return connection;
 }
