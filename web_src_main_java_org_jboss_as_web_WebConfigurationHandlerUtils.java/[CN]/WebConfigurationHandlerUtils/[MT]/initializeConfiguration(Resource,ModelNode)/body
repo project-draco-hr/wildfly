@@ -1,24 +1,47 @@
 {
-  resource.registerChild(JSP,Resource.Factory.create());
-  resource.registerChild(RESOURCE,Resource.Factory.create());
-  resource.registerChild(CONTAINER,Resource.Factory.create());
-  final Resource jsp=resource.getChild(JSP);
-  final Resource resources=resource.getChild(RESOURCE);
-  final Resource container=resource.getChild(CONTAINER);
-  for (  final String attribute : operation.get(CONTAINER_CONFIG).keys()) {
-    if (attribute.equals(JSP_CONFIGURATION)) {
-      populateModel(jsp.getModel(),operation.get(CONTAINER_CONFIG,JSP_CONFIGURATION));
-    }
- else     if (attribute.equals(STATIC_RESOURCES)) {
-      populateModel(resources.getModel(),operation.get(CONTAINER_CONFIG,STATIC_RESOURCES));
-    }
- else     if (attribute.equals(MIME_MAPPING)) {
-      container.getModel().get(MIME_MAPPING).set(operation.get(CONTAINER_CONFIG,MIME_MAPPING));
-    }
- else     if (attribute.equals(WELCOME_FILE)) {
-      for (      final ModelNode file : operation.get(CONTAINER_CONFIG,WELCOME_FILE).asList()) {
-        container.getModel().get(WELCOME_FILE).add(file.asString());
+  resource.registerChild(JSPPATH,Resource.Factory.create());
+  resource.registerChild(RESOURCEPATH,Resource.Factory.create());
+  resource.registerChild(CONTAINERPATH,Resource.Factory.create());
+  final Resource jsp=resource.getChild(JSPPATH);
+  final Resource resources=resource.getChild(RESOURCEPATH);
+  final Resource container=resource.getChild(CONTAINERPATH);
+  boolean hasJSP=false;
+  boolean hasStatic=false;
+  if (operation.hasDefined(CONTAINER_CONFIG)) {
+    for (    final String attribute : operation.get(CONTAINER_CONFIG).keys()) {
+      if (attribute.equals(JSP_CONFIGURATION) && operation.get(CONTAINER_CONFIG).hasDefined(JSP_CONFIGURATION)) {
+        hasJSP=true;
+        populateModel(jsp.getModel(),operation.get(CONTAINER_CONFIG,JSP_CONFIGURATION));
+      }
+ else       if (attribute.equals(STATIC_RESOURCES) && operation.get(CONTAINER_CONFIG).hasDefined(STATIC_RESOURCES)) {
+        hasStatic=true;
+        populateModel(resources.getModel(),operation.get(CONTAINER_CONFIG,STATIC_RESOURCES));
+      }
+ else       if (attribute.equals(MIME_MAPPING)) {
+        container.getModel().get(MIME_MAPPING).set(operation.get(CONTAINER_CONFIG,MIME_MAPPING));
+      }
+ else       if (attribute.equals(WELCOME_FILE)) {
+        for (        final ModelNode file : operation.get(CONTAINER_CONFIG,WELCOME_FILE).asList()) {
+          container.getModel().get(WELCOME_FILE).add(file.asString());
+        }
+      }
+ else       if (attribute.equals(CONTAINER)) {
+        final ModelNode cont=operation.get(CONTAINER_CONFIG,Constants.CONTAINER);
+        if (cont.hasDefined(MIME_MAPPING)) {
+          container.getModel().get(MIME_MAPPING).set(cont.get(MIME_MAPPING));
+        }
+        if (cont.hasDefined(WELCOME_FILE)) {
+          for (          final ModelNode file : cont.get(WELCOME_FILE).asList()) {
+            container.getModel().get(WELCOME_FILE).add(file.asString());
+          }
+        }
       }
     }
+  }
+  if (!hasJSP) {
+    jsp.getModel().set(DefaultJspConfig.getDefaultStaticResource());
+  }
+  if (!hasStatic) {
+    resources.getModel().set(DefaultStaticResources.getDefaultStaticResource());
   }
 }
