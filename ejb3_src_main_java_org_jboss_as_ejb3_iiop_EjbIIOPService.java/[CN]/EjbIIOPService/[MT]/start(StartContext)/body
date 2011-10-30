@@ -1,0 +1,79 @@
+{
+  try {
+    final RiverMarshallerFactory factory=new RiverMarshallerFactory();
+    final MarshallingConfiguration configuration=new MarshallingConfiguration();
+    configuration.setClassResolver(ModularClassResolver.getInstance(serviceModuleLoaderInjectedValue.getValue()));
+    this.configuration=configuration;
+    this.factory=factory;
+    final boolean interfaceRepositorySupported=false;
+    final EJBComponent component=ejbComponentInjectedValue.getValue();
+    if (component.getDistinctName() == null || component.getDistinctName().isEmpty()) {
+      name=component.getApplicationName() + "/" + component.getModuleName()+ "/"+ component.getComponentName();
+    }
+ else {
+      name=component.getApplicationName() + "/" + component.getModuleName()+ "/"+ component.getDistinctName()+ "/"+ component.getComponentName();
+    }
+    final ORB orb=this.orb.getValue();
+    if (interfaceRepositorySupported) {
+      iri=new InterfaceRepository(orb,irPoa.getValue(),name);
+      iri.mapClass(remoteView.getValue().getViewClass());
+      iri.mapClass(homeView.getValue().getViewClass());
+      iri.finishBuild();
+      logger.info("CORBA interface repository for " + name + ": "+ orb.object_to_string(iri.getReference()));
+    }
+    final Any secPolicy=orb.create_any();
+    final IORSecurityConfigMetaData securityConfig=null;
+    secPolicy.insert_Value(securityConfig);
+    csiv2Policy=null;
+    boolean sslRequired=false;
+    if (securityConfig != null) {
+      IORTransportConfigMetaData tc=securityConfig.getTransportConfig();
+      sslRequired=tc.getIntegrity() == IORTransportConfigMetaData.INTEGRITY_REQUIRED || tc.getConfidentiality() == IORTransportConfigMetaData.CONFIDENTIALITY_REQUIRED || tc.getEstablishTrustInClient() == IORTransportConfigMetaData.ESTABLISH_TRUST_IN_CLIENT_REQUIRED;
+    }
+    final Any sslPolicyValue=orb.create_any();
+    SSLPolicyValueHelper.insert(sslPolicyValue,(sslRequired) ? SSLPolicyValue.SSL_REQUIRED : SSLPolicyValue.SSL_NOT_REQUIRED);
+    sslPolicy=null;
+    logger.debug("container's SSL policy: " + sslPolicy);
+    poaCurrent=CurrentHelper.narrow(orb.resolve_initial_references("POACurrent"));
+    Policy[] policies={};
+    InterfaceDef homeInterfaceDef=null;
+    if (iri != null) {
+      Repository ir=iri.getReference();
+      homeInterfaceDef=InterfaceDefHelper.narrow(ir.lookup_id(homeRepositoryIds[0]));
+    }
+    homeServantRegistry=poaRegistry.getValue().getRegistryWithPersistentPOAPerServant();
+    final EjbHomeCorbaServant homeServant=new EjbHomeCorbaServant(homeMethodMap,homeRepositoryIds,homeInterfaceDef,orb,homeView.getValue(),deploymentRepository.getValue());
+    homeReferenceFactory=homeServantRegistry.bind(homeServantName(name),homeServant,policies);
+    final org.omg.CORBA.Object corbaRef=homeReferenceFactory.createReference(homeRepositoryIds[0]);
+    ejbHome=(EJBHome)PortableRemoteObject.narrow(corbaRef,EJBHome.class);
+    homeServant.setHomeHandle(new HomeHandleImplIIOP(corbaRef));
+    if (component instanceof EntityBeanComponent) {
+      beanServantRegistry=poaRegistry.getValue().getRegistryWithPersistentPOAPerServant();
+      final EntityBeanComponent entityBeanComponent=(EntityBeanComponent)component;
+      final Class pkClass=entityBeanComponent.getPrimaryKeyClass();
+      ejbMetaData=new EJBMetaDataImplIIOP(entityBeanComponent.getRemoteClass(),entityBeanComponent.getHomeClass(),pkClass,false,false,ejbHome);
+    }
+ else {
+      beanServantRegistry=poaRegistry.getValue().getRegistryWithTransientPOAPerServant();
+      if (component instanceof StatelessSessionComponent) {
+        ejbMetaData=new EJBMetaDataImplIIOP(remoteView.getValue().getViewClass(),homeView.getValue().getViewClass(),null,true,true,ejbHome);
+      }
+ else {
+        ejbMetaData=new EJBMetaDataImplIIOP(remoteView.getValue().getViewClass(),homeView.getValue().getViewClass(),null,true,false,ejbHome);
+      }
+    }
+    InterfaceDef beanInterfaceDef=null;
+    if (iri != null) {
+      final Repository ir=iri.getReference();
+      beanInterfaceDef=InterfaceDefHelper.narrow(ir.lookup_id(beanRepositoryIds[0]));
+    }
+    final EjbObjectCorbaServant beanServant=new EjbObjectCorbaServant(poaCurrent,beanMethodMap,beanRepositoryIds,beanInterfaceDef,orb,remoteView.getValue(),factory,configuration);
+    beanReferenceFactory=beanServantRegistry.bind(beanServantName(name),beanServant,policies);
+    final NamingContextExt corbaContext=corbaNamingContext.getValue();
+    rebind(corbaContext,name,corbaRef);
+    logger.debug("Home IOR for " + component.getComponentName() + " bound to "+ name+ " in CORBA naming service");
+  }
+ catch (  Exception e) {
+    throw new StartException(e);
+  }
+}

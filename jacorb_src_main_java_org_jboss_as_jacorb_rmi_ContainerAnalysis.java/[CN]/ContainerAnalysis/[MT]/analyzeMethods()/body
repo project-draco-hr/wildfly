@@ -1,0 +1,55 @@
+{
+  logger.debug(cls + " analyzeMethods");
+  if (cls.isInterface() && java.rmi.Remote.class.isAssignableFrom(cls))   methods=cls.getMethods();
+ else   methods=cls.getDeclaredMethods();
+  m_flags=new byte[methods.length];
+  mutators=new int[methods.length];
+  for (int i=0; i < methods.length; ++i)   mutators[i]=-1;
+  for (int i=0; i < methods.length; ++i) {
+    logger.debug("analyzeMethods(): method[" + i + "].getName()=\""+ methods[i].getName()+ "\".");
+    if (isAccessor(methods[i]) && (m_flags[i] & M_READ) == 0) {
+      String attrName=attributeReadName(methods[i].getName());
+      Class iReturn=methods[i].getReturnType();
+      for (int j=i + 1; j < methods.length; ++j) {
+        if (isMutator(methods[j]) && (m_flags[j] & M_WRITE) == 0 && attrName.equals(attributeWriteName(methods[j].getName()))) {
+          Class[] jParams=methods[j].getParameterTypes();
+          if (jParams.length == 1 && jParams[0] == iReturn) {
+            m_flags[i]|=M_READ;
+            m_flags[j]|=M_WRITE;
+            mutators[i]=j;
+            break;
+          }
+        }
+      }
+    }
+ else     if (isMutator(methods[i]) && (m_flags[i] & M_WRITE) == 0) {
+      String attrName=attributeWriteName(methods[i].getName());
+      Class[] iParams=methods[i].getParameterTypes();
+      for (int j=i + 1; j < methods.length; ++j) {
+        if (isAccessor(methods[j]) && (m_flags[j] & M_READ) == 0 && attrName.equals(attributeReadName(methods[j].getName()))) {
+          Class jReturn=methods[j].getReturnType();
+          if (iParams.length == 1 && iParams[0] == jReturn) {
+            m_flags[i]|=M_WRITE;
+            m_flags[j]|=M_READ;
+            mutators[j]=i;
+            break;
+          }
+        }
+      }
+    }
+  }
+  for (int i=0; i < methods.length; ++i)   if ((m_flags[i] & (M_READ | M_WRITE)) == 0 && isAccessor(methods[i]))   m_flags[i]|=M_READONLY;
+  for (int i=0; i < methods.length; ++i) {
+    if ((m_flags[i] & (M_READ | M_WRITE | M_READONLY)) == 0) {
+      String iName=methods[i].getName();
+      for (int j=i + 1; j < methods.length; ++j) {
+        if (iName.equals(methods[j].getName())) {
+          m_flags[i]|=M_OVERLOADED;
+          m_flags[j]|=M_OVERLOADED;
+        }
+      }
+    }
+    if (methods[i].getDeclaringClass() != cls)     m_flags[i]|=M_INHERITED;
+  }
+  logger.debug(cls + " analyzeMethods methods=" + methods.length);
+}

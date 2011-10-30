@@ -1,0 +1,40 @@
+{
+  logger.debug("getTypeIDLName " + cls);
+  if (cls.isPrimitive())   return PrimitiveAnalysis.getPrimitiveAnalysis(cls).getIDLName();
+  if (cls.isArray()) {
+    Class componentClass=cls;
+    int sequence=0;
+    while (componentClass.isArray()) {
+      componentClass=componentClass.getComponentType();
+      ++sequence;
+    }
+    String idlName=getTypeIDLName(componentClass);
+    int idx=idlName.lastIndexOf("::");
+    String idlModule=idlName.substring(0,idx + 2);
+    String baseName=idlName.substring(idx + 2);
+    return "::org::omg::boxedRMI" + idlModule + "seq"+ sequence+ "_"+ baseName;
+  }
+  if (cls == java.lang.String.class)   return "::CORBA::WStringValue";
+  if (cls == java.lang.Object.class)   return "::java::lang::_Object";
+  if (cls == java.lang.Class.class)   return "::javax::rmi::CORBA::ClassDesc";
+  if (cls == java.io.Serializable.class)   return "::java::io::Serializable";
+  if (cls == java.io.Externalizable.class)   return "::java::io::Externalizable";
+  if (cls == java.rmi.Remote.class)   return "::java::rmi::Remote";
+  if (cls == org.omg.CORBA.Object.class)   return "::CORBA::Object";
+  if (cls.isInterface() && java.rmi.Remote.class.isAssignableFrom(cls)) {
+    InterfaceAnalysis ia=InterfaceAnalysis.getInterfaceAnalysis(cls);
+    return ia.getIDLModuleName() + "::" + ia.getIDLName();
+  }
+  if (cls.isInterface() && org.omg.CORBA.Object.class.isAssignableFrom(cls) && org.omg.CORBA.portable.IDLEntity.class.isAssignableFrom(cls)) {
+    InterfaceAnalysis ia=InterfaceAnalysis.getInterfaceAnalysis(cls);
+    return ia.getIDLModuleName() + "::" + ia.getIDLName();
+  }
+  if (Throwable.class.isAssignableFrom(cls)) {
+    if (Exception.class.isAssignableFrom(cls) && !RuntimeException.class.isAssignableFrom(cls)) {
+      ExceptionAnalysis ea=ExceptionAnalysis.getExceptionAnalysis(cls);
+      return ea.getIDLModuleName() + "::" + ea.getIDLName();
+    }
+  }
+  ValueAnalysis va=ValueAnalysis.getValueAnalysis(cls);
+  return va.getIDLModuleName() + "::" + va.getIDLName();
+}

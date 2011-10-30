@@ -1,0 +1,48 @@
+{
+  org.omg.CORBA.ORB inOrb=null;
+  String ncIor=null;
+  if (env != null) {
+    inOrb=(org.omg.CORBA.ORB)env.get("java.naming.corba.orb");
+  }
+  String provUrl=null;
+  if (env != null) {
+    provUrl=(String)env.get(javax.naming.Context.PROVIDER_URL);
+  }
+  if (provUrl != null && !isCorbaUrl(provUrl)) {
+    ncIor=getStringifiedIor(provUrl);
+    if (inOrb == null) {
+      inOrb=CorbaUtils.getOrb(null,-1,env);
+      orbTracker=new org.jboss.as.jacorb.naming.jndi.OrbReuseTracker(inOrb);
+    }
+    setOrbAndRootContext(inOrb,ncIor);
+  }
+ else   if (provUrl != null) {
+    String insName=initUsingUrl(inOrb,provUrl,env);
+    if (insName.length() > 0) {
+      _name=parser.nameToCosName(parser.parse(insName));
+      try {
+        org.omg.CORBA.Object obj=_nc.resolve(_name);
+        _nc=NamingContextHelper.narrow(obj);
+        if (_nc == null) {
+          throw new ConfigurationException(insName + " does not name a NamingContext");
+        }
+      }
+ catch (      org.omg.CORBA.BAD_PARAM e) {
+        throw new ConfigurationException(insName + " does not name a NamingContext");
+      }
+catch (      Exception e) {
+        throw org.jboss.as.jacorb.naming.jndi.ExceptionMapper.mapException(e,this,_name);
+      }
+    }
+  }
+ else {
+    if (inOrb == null) {
+      inOrb=CorbaUtils.getOrb(null,-1,env);
+      orbTracker=new org.jboss.as.jacorb.naming.jndi.OrbReuseTracker(inOrb);
+      if (debug) {
+        System.err.println("Getting default ORB: " + inOrb + env);
+      }
+    }
+    setOrbAndRootContext(inOrb,(String)null);
+  }
+}
