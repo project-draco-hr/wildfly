@@ -5,8 +5,14 @@
     final StringBuilder buffer=new StringBuilder();
     int bufferStartIndex=0;
     boolean inValue;
-    @Override public void enteredState(    ParsingContext ctx) throws OperationFormatException {
+    String delegateStateId;
+    ParsingStateCallbackHandler delegate;
+    @Override public void enteredState(    ParsingContext ctx) throws CommandFormatException {
       final String id=ctx.getState().getId();
+      if (delegate != null) {
+        delegate.enteredState(ctx);
+        return;
+      }
       if (!inValue) {
         bufferStartIndex=ctx.getLocation();
       }
@@ -35,9 +41,19 @@
  else       if (id.equals(OperationRequestState.ID)) {
         handler.setFormat(OperationFormat.INSTANCE);
       }
+ else       if (HeaderListState.ID.equals(id)) {
+        handler.headerListStart(ctx.getLocation());
+      }
+ else       if (HeaderValueState.ID.equals(id)) {
+        inValue=true;
+      }
     }
     @Override public void leavingState(    ParsingContext ctx) throws CommandFormatException {
       final String id=ctx.getState().getId();
+      if (delegateStateId != null && !id.equals(delegateStateId)) {
+        delegate.leavingState(ctx);
+        return;
+      }
       if (id.equals(PropertyListState.ID)) {
         if (!ctx.isEndOfContent()) {
           handler.propertyListEnd(ctx.getLocation());
@@ -133,12 +149,42 @@
         buffer.setLength(0);
         inValue=false;
       }
+ else       if (HeaderListState.ID.equals(id)) {
+        if (!ctx.isEndOfContent()) {
+          handler.headerListEnd(ctx.getLocation());
+        }
+      }
+ else       if (HeaderNameState.ID.equals(id)) {
+        final String headerName=buffer.toString().trim();
+        if (!headerName.isEmpty()) {
+          this.name=headerName;
+          delegate=handler.headerName(bufferStartIndex,headerName);
+          if (delegate != null) {
+            delegateStateId=HeaderState.ID;
+          }
+        }
+        buffer.setLength(0);
+      }
+ else       if (HeaderValueState.ID.equals(id)) {
+        handler.header(name,buffer.toString().trim(),bufferStartIndex);
+        buffer.setLength(0);
+        inValue=false;
+      }
+ else       if (HeaderState.ID.equals(id)) {
+        this.name=null;
+        delegate=null;
+        delegateStateId=null;
+      }
  else       if (OutputTargetState.ID.equals(id)) {
         handler.outputTarget(bufferStartIndex,buffer.toString().trim());
         buffer.setLength(0);
       }
     }
-    @Override public void character(    ParsingContext ctx) throws OperationFormatException {
+    @Override public void character(    ParsingContext ctx) throws CommandFormatException {
+      if (delegate != null) {
+        delegate.character(ctx);
+        return;
+      }
       buffer.append(ctx.getCharacter());
     }
   }
