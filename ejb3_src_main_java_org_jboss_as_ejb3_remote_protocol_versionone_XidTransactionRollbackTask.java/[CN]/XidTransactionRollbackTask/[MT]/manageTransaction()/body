@@ -1,5 +1,52 @@
 {
   final Transaction transaction=this.transactionsRepository.removeTransaction(this.xidTransactionID);
   this.resumeTransaction(transaction);
-  this.transactionsRepository.getTransactionManager().rollback();
+  final Xid xid=this.xidTransactionID.getXid();
+  try {
+    SubordinateTransaction subordinateTransaction=SubordinationManager.getTransactionImporter().getImportedTransaction(xid);
+    if (subordinateTransaction == null) {
+      throw new XAException(XAException.XAER_INVAL);
+    }
+    if (subordinateTransaction.activated()) {
+      subordinateTransaction.doRollback();
+      SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+    }
+ else {
+      throw new XAException(XAException.XA_RETRY);
+    }
+  }
+ catch (  XAException ex) {
+    if (ex.errorCode != XAException.XA_RETRY) {
+      SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+    }
+    throw ex;
+  }
+catch (  final HeuristicRollbackException ex) {
+    XAException xaException=new XAException(XAException.XA_HEURRB);
+    xaException.initCause(ex);
+    throw xaException;
+  }
+catch (  HeuristicCommitException ex) {
+    XAException xaException=new XAException(XAException.XA_HEURCOM);
+    xaException.initCause(ex);
+    throw xaException;
+  }
+catch (  HeuristicMixedException ex) {
+    XAException xaException=new XAException(XAException.XA_HEURMIX);
+    xaException.initCause(ex);
+    throw xaException;
+  }
+catch (  final IllegalStateException ex) {
+    SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+    XAException xaException=new XAException(XAException.XAER_NOTA);
+    xaException.initCause(ex);
+    throw xaException;
+  }
+catch (  SystemException ex) {
+    SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+    throw new XAException(XAException.XAER_RMERR);
+  }
+ finally {
+    this.transactionsRepository.getTransactionManager().suspend();
+  }
 }
