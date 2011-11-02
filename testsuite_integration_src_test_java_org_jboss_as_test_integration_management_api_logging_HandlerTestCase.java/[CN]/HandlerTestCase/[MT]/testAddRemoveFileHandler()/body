@@ -1,0 +1,36 @@
+{
+  File logFile=new File(tempDir,"test-fh.log");
+  if (logFile.exists())   assertTrue(logFile.delete());
+  ModelNode op=createOpNode("subsystem=logging/file-handler=test-fh","add");
+  op.get("name").set("test-fh");
+  op.get("level").set("INFO");
+  op.get("file").get("path").set(logFile.getAbsolutePath());
+  executeOperation(op);
+  op=createOpNode("subsystem=logging","root-logger-assign-handler");
+  op.get("name").set("test-fh");
+  executeOperation(op);
+  op=createOpNode("subsystem=logging","read-attribute");
+  op.get("name").set("root-logger");
+  ModelNode rootLogger=executeOperation(op);
+  List<String> loggers=ModelUtil.modelNodeAsStingList(rootLogger.get("handlers"));
+  assertTrue(loggers.contains("test-fh"));
+  String response=HttpRequest.get(url.toString() + "/LoggingServlet",10,TimeUnit.SECONDS);
+  assertTrue(response.contains("Logging servlet."));
+  op=createOpNode("subsystem=logging","root-logger-unassign-handler");
+  op.get("name").set("test-fh");
+  executeOperation(op);
+  op=createOpNode("subsystem=logging","read-attribute");
+  op.get("name").set("root-logger");
+  rootLogger=executeOperation(op);
+  loggers=ModelUtil.modelNodeAsStingList(rootLogger.get("handlers"));
+  assertFalse(loggers.contains("test-fh"));
+  op=createOpNode("subsystem=logging/file-handler=test-fh","remove");
+  executeOperation(op);
+  String log=FileUtils.readFileToString(logFile);
+  assertTrue(log.contains("Logging servlet."));
+  long checksum=FileUtils.checksumCRC32(logFile);
+  response=HttpRequest.get(url.toString() + "/LoggingServlet",10,TimeUnit.SECONDS);
+  assertTrue(response.contains("Logging servlet."));
+  assertEquals(checksum,FileUtils.checksumCRC32(logFile));
+  assertTrue(logFile.delete());
+}
