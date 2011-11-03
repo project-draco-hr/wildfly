@@ -1,0 +1,81 @@
+{
+  final StatelessEJBLocator<RemoteBatch> batchBeanLocator=new StatelessEJBLocator<RemoteBatch>(RemoteBatch.class,APP_NAME,MODULE_NAME,BatchCreationBean.class.getSimpleName(),"");
+  final RemoteBatch batchBean=EJBClient.createProxy(batchBeanLocator);
+  final StatelessEJBLocator<BatchRetriever> batchRetrieverLocator=new StatelessEJBLocator<BatchRetriever>(BatchRetriever.class,APP_NAME,MODULE_NAME,BatchFetchingBean.class.getSimpleName(),"");
+  final BatchRetriever batchRetriever=EJBClient.createProxy(batchRetrieverLocator);
+  final String batchName="Simple Batch";
+  txManager.begin();
+  try {
+    batchBean.createBatch(batchName);
+  }
+ catch (  Exception e) {
+    txManager.rollback();
+    throw e;
+  }
+  txManager.commit();
+  final String step1="Simple step1";
+  txManager.begin();
+  try {
+    batchBean.step1(batchName,step1);
+  }
+ catch (  Exception e) {
+    txManager.rollback();
+    throw e;
+  }
+  txManager.commit();
+  String successFullyCompletedSteps=step1;
+  final Batch batchAfterStep1=batchRetriever.fetchBatch(batchName);
+  Assert.assertNotNull("Batch after step1 was null",batchAfterStep1);
+  Assert.assertEquals("Unexpected steps in batch, after step1",successFullyCompletedSteps,batchAfterStep1.getStepNames());
+  final String appExceptionStep2="App exception Step 2";
+  txManager.begin();
+  try {
+    batchBean.appExceptionFailingStep2(batchName,appExceptionStep2);
+    Assert.fail("Expected a application exception");
+  }
+ catch (  SimpleAppException sae) {
+    txManager.rollback();
+  }
+  final Batch batchAfterAppExceptionStep2=batchRetriever.fetchBatch(batchName);
+  Assert.assertNotNull("Batch after app exception step2 was null",batchAfterAppExceptionStep2);
+  Assert.assertEquals("Unexpected steps in batch, after app exception step2",successFullyCompletedSteps,batchAfterAppExceptionStep2.getStepNames());
+  final String step2="Simple Step 2";
+  txManager.begin();
+  try {
+    batchBean.successfulStep2(batchName,step2);
+  }
+ catch (  Exception e) {
+    txManager.rollback();
+    throw e;
+  }
+  final Batch batchAfterStep2BeforeCommit=batchRetriever.fetchBatch(batchName);
+  Assert.assertNotNull("Batch after step2, before commit was null",batchAfterStep2BeforeCommit);
+  Assert.assertEquals("Unexpected steps in batch, after step2 before commit",successFullyCompletedSteps,batchAfterStep2BeforeCommit.getStepNames());
+  txManager.commit();
+  successFullyCompletedSteps=successFullyCompletedSteps + "," + step2;
+  final Batch batchAfterStep2=batchRetriever.fetchBatch(batchName);
+  Assert.assertNotNull("Batch after step2 was null",batchAfterStep2);
+  Assert.assertEquals("Unexpected steps in batch, after step2",successFullyCompletedSteps,batchAfterStep2.getStepNames());
+  final String step3="Simple Step 3";
+  txManager.begin();
+  batchBean.independentStep3(batchName,step3);
+  txManager.rollback();
+  successFullyCompletedSteps=successFullyCompletedSteps + "," + step3;
+  final Batch batchAfterStep3=batchRetriever.fetchBatch(batchName);
+  Assert.assertNotNull("Batch after step3 was null",batchAfterStep3);
+  Assert.assertEquals("Unexpected steps in batch, after step3",successFullyCompletedSteps,batchAfterStep3.getStepNames());
+  final String step4="Simple Step 4";
+  txManager.begin();
+  batchBean.step4(batchName,step4);
+  final String sysExceptionStep2="Sys exception step2";
+  try {
+    batchBean.systemExceptionFailingStep2(batchName,sysExceptionStep2);
+    Assert.fail("Expected a system exception");
+  }
+ catch (  Exception e) {
+    txManager.rollback();
+  }
+  final Batch batchAfterSysException=batchRetriever.fetchBatch(batchName);
+  Assert.assertNotNull("Batch after system exception was null",batchAfterSysException);
+  Assert.assertEquals("Unexpected steps in batch, after system exception",successFullyCompletedSteps,batchAfterSysException.getStepNames());
+}

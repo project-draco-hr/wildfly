@@ -1,0 +1,21 @@
+{
+  final Transaction transaction=this.transactionsRepository.removeTransaction(this.xidTransactionID);
+  this.resumeTransaction(transaction);
+  final Xid xid=this.xidTransactionID.getXid();
+  try {
+    final SubordinateTransaction subordinateTransaction=SubordinationManager.getTransactionImporter().getImportedTransaction(xid);
+    if (subordinateTransaction == null) {
+      throw new XAException(XAException.XAER_INVAL);
+    }
+    subordinateTransaction.doForget();
+  }
+ catch (  Exception ex) {
+    final XAException xaException=new XAException(XAException.XAER_RMERR);
+    xaException.initCause(ex);
+    throw xaException;
+  }
+ finally {
+    this.transactionsRepository.removeTransaction(this.xidTransactionID);
+    SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+  }
+}

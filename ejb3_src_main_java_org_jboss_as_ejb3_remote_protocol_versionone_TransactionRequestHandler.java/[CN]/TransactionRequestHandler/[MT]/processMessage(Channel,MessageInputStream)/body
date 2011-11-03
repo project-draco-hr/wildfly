@@ -5,16 +5,46 @@
   final byte[] transactionIDBytes=new byte[transactionIDBytesLength];
   input.read(transactionIDBytes);
   final TransactionID transactionID=TransactionID.createTransactionID(transactionIDBytes);
-  final TransactionManagementTask transactionManagementTask;
+  boolean onePhaseCommit=false;
+  if (this.txRequestType == TransactionRequestType.COMMIT) {
+    onePhaseCommit=input.readBoolean();
+  }
+  if (transactionID instanceof UserTransactionID) {
+    final UserTransactionManagementTask userTransactionManagementTask;
 switch (this.txRequestType) {
 case COMMIT:
-    transactionManagementTask=new TransactionCommitTask(this.transactionsRepository,transactionID,channel,invocationId);
-  break;
+      userTransactionManagementTask=new UserTransactionCommitTask(this,this.transactionsRepository,(UserTransactionID)transactionID,channel,invocationId);
+    break;
 case ROLLBACK:
-transactionManagementTask=new TransactionRollbackTask(this.transactionsRepository,transactionID,channel,invocationId);
+  userTransactionManagementTask=new UserTransactionRollbackTask(this,this.transactionsRepository,(UserTransactionID)transactionID,channel,invocationId);
 break;
 default :
 throw new IllegalArgumentException("Unknown transaction request type " + this.txRequestType);
 }
-this.executorService.submit(transactionManagementTask);
+this.executorService.submit(userTransactionManagementTask);
+}
+ else if (transactionID instanceof XidTransactionID) {
+final XidTransactionID xidTransactionID=(XidTransactionID)transactionID;
+final XidTransactionManagementTask xidTransactionManagementTask;
+switch (this.txRequestType) {
+case COMMIT:
+xidTransactionManagementTask=new XidTransactionCommitTask(this,this.transactionsRepository,xidTransactionID,channel,invocationId,onePhaseCommit);
+break;
+case PREPARE:
+xidTransactionManagementTask=new XidTransactionPrepareTask(this,this.transactionsRepository,xidTransactionID,channel,invocationId);
+break;
+case ROLLBACK:
+xidTransactionManagementTask=new XidTransactionRollbackTask(this,this.transactionsRepository,xidTransactionID,channel,invocationId);
+break;
+case FORGET:
+xidTransactionManagementTask=new XidTransactionForgetTask(this,this.transactionsRepository,xidTransactionID,channel,invocationId);
+break;
+case BEFORE_COMPLETION:
+xidTransactionManagementTask=new XidTransactionBeforeCompletionTask(this,this.transactionsRepository,xidTransactionID,channel,invocationId);
+break;
+default :
+throw new IllegalArgumentException("Unknown transaction request type " + this.txRequestType);
+}
+this.executorService.submit(xidTransactionManagementTask);
+}
 }

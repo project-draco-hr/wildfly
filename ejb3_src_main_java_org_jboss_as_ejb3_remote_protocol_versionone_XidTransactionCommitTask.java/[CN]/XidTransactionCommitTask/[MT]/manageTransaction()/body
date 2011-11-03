@@ -1,0 +1,65 @@
+{
+  final Transaction transaction=this.transactionsRepository.removeTransaction(this.xidTransactionID);
+  this.resumeTransaction(transaction);
+  final Xid xid=this.xidTransactionID.getXid();
+  try {
+    final SubordinateTransaction subordinateTransaction=SubordinationManager.getTransactionImporter().getImportedTransaction(xid);
+    if (subordinateTransaction == null) {
+      throw new XAException(XAException.XAER_INVAL);
+    }
+    if (subordinateTransaction.activated()) {
+      if (this.onePhaseCommit) {
+        subordinateTransaction.doOnePhaseCommit();
+      }
+ else {
+        subordinateTransaction.doCommit();
+      }
+      SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+    }
+ else {
+      throw new XAException(XAException.XA_RETRY);
+    }
+  }
+ catch (  RollbackException e) {
+    SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+    final XAException xaException=new XAException(XAException.XA_RBROLLBACK);
+    xaException.initCause(e);
+    throw xaException;
+  }
+catch (  XAException ex) {
+    if (ex.errorCode != XAException.XA_RETRY) {
+      SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+    }
+    throw ex;
+  }
+catch (  HeuristicRollbackException ex) {
+    final XAException xaException=new XAException(XAException.XA_HEURRB);
+    xaException.initCause(ex);
+    throw xaException;
+  }
+catch (  HeuristicMixedException ex) {
+    final XAException xaException=new XAException(XAException.XA_HEURMIX);
+    xaException.initCause(ex);
+    throw xaException;
+  }
+catch (  final HeuristicCommitException ex) {
+    final XAException xaException=new XAException(XAException.XA_HEURCOM);
+    xaException.initCause(ex);
+    throw xaException;
+  }
+catch (  final IllegalStateException ex) {
+    SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+    final XAException xaException=new XAException(XAException.XAER_NOTA);
+    xaException.initCause(ex);
+    throw xaException;
+  }
+catch (  SystemException ex) {
+    SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+    final XAException xaException=new XAException(XAException.XAER_RMERR);
+    xaException.initCause(ex);
+    throw xaException;
+  }
+ finally {
+    this.transactionsRepository.removeTransaction(this.xidTransactionID);
+  }
+}

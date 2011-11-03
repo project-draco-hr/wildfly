@@ -1,0 +1,46 @@
+{
+  final Transaction transaction=this.transactionsRepository.removeTransaction(this.xidTransactionID);
+  this.resumeTransaction(transaction);
+  final Xid xid=this.xidTransactionID.getXid();
+  final SubordinateTransaction subordinateTransaction=SubordinationManager.getTransactionImporter().getImportedTransaction(xid);
+  int result=subordinateTransaction.doPrepare();
+switch (result) {
+case TwoPhaseOutcome.PREPARE_READONLY:
+    SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+  return XAResource.XA_RDONLY;
+case TwoPhaseOutcome.PREPARE_OK:
+return XAResource.XA_OK;
+case TwoPhaseOutcome.PREPARE_NOTOK:
+Exception initCause=null;
+int xaExceptionCode=XAException.XA_RBROLLBACK;
+try {
+subordinateTransaction.doRollback();
+}
+ catch (HeuristicCommitException e) {
+initCause=e;
+xaExceptionCode=XAException.XAER_RMERR;
+}
+catch (HeuristicMixedException e) {
+initCause=e;
+xaExceptionCode=XAException.XAER_RMERR;
+}
+catch (SystemException e) {
+initCause=e;
+xaExceptionCode=XAException.XAER_RMERR;
+}
+catch (final HeuristicRollbackException e) {
+initCause=e;
+xaExceptionCode=XAException.XAER_RMERR;
+}
+SubordinationManager.getTransactionImporter().removeImportedTransaction(xid);
+final XAException xaException=new XAException(xaExceptionCode);
+if (initCause != null) {
+xaException.initCause(initCause);
+}
+throw xaException;
+case TwoPhaseOutcome.INVALID_TRANSACTION:
+throw new XAException(XAException.XAER_NOTA);
+default :
+throw new XAException(XAException.XA_RBOTHER);
+}
+}
