@@ -1,19 +1,29 @@
 {
   ModelNode loginModule=new ModelNode();
-  loginModule.get("code").set("SimpleUsers");
+  loginModule.get("code").set("Simple");
   loginModule.get("flag").set("required");
-  ModelNode moduleOptions=new ModelNode();
-  moduleOptions.add("testUser","testPassword");
-  loginModule.get("module-options").set(moduleOptions);
   ModelNode op=createOpNode("subsystem=security/security-domain=test","add");
   op.get("authentication").add(loginModule);
   executeOperation(op);
   deployer.deploy("secured-servlet");
+  boolean failed=false;
   try {
-    String response=HttpRequest.get(url.toString() + "/SecuredServlet",10,TimeUnit.SECONDS);
+    String response=HttpRequest.get(url.toString() + "/SecurityDomainTestCase/SecuredServlet",10,TimeUnit.SECONDS);
   }
  catch (  Exception e) {
-    e.printStackTrace();
+    assertTrue(e.toString().contains("Status 403"));
+    failed=true;
   }
+  assertTrue(failed);
+  try {
+    String response=HttpRequest.get(url.toString() + "/SecurityDomainTestCase/SecuredServlet","test","test",10,TimeUnit.SECONDS);
+  }
+ catch (  Exception e) {
+    assertFalse(e.toString().contains("Status 403"));
+    throw e;
+  }
+  assertTrue(failed);
   deployer.undeploy("secured-servlet");
+  op=createOpNode("subsystem=security/security-domain=test","remove");
+  executeOperation(op);
 }
