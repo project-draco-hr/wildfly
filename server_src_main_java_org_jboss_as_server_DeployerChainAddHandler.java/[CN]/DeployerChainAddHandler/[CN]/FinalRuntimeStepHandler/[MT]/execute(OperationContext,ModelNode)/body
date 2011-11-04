@@ -1,0 +1,25 @@
+{
+  final EnumMap<Phase,Set<RegisteredProcessor>> deployerMap=DEPLOYERS.get();
+  if (deployerMap == null) {
+    throw new IllegalStateException("No deployers set");
+  }
+  final EnumMap<Phase,List<DeploymentUnitProcessor>> finalDeployers=new EnumMap<Phase,List<DeploymentUnitProcessor>>(Phase.class);
+  final List<DeploymentUnitProcessor> processorList=new ArrayList<DeploymentUnitProcessor>(256);
+  for (  Phase phase : Phase.values()) {
+    processorList.clear();
+    final Set<RegisteredProcessor> processorSet=deployerMap.get(phase);
+    for (    RegisteredProcessor processor : processorSet) {
+      processorList.add(processor.getProcessor());
+    }
+    finalDeployers.put(phase,Arrays.asList(processorList.toArray(new DeploymentUnitProcessor[processorList.size()])));
+  }
+  final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+  DeployerChainsService.addService(context.getServiceTarget(),finalDeployers,verificationHandler);
+  context.addStep(verificationHandler,OperationContext.Stage.VERIFY);
+  context.completeStep(new OperationContext.RollbackHandler(){
+    @Override public void handleRollback(    OperationContext context,    ModelNode operation){
+      context.removeService(Services.JBOSS_DEPLOYMENT_CHAINS);
+    }
+  }
+);
+}
