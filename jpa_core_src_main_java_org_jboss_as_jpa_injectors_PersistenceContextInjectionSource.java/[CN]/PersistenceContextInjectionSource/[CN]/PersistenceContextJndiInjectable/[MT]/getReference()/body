@@ -2,14 +2,12 @@
   PersistenceUnitServiceImpl service=(PersistenceUnitServiceImpl)deploymentUnit.getServiceRegistry().getRequiredService(puServiceName).getValue();
   EntityManagerFactory emf=service.getEntityManagerFactory();
   EntityManager entityManager;
-  boolean isExtended;
+  boolean standardEntityManager=ENTITY_MANAGER_CLASS.equals(injectionTypeName);
   if (type.equals(PersistenceContextType.TRANSACTION)) {
-    isExtended=false;
     entityManager=new TransactionScopedEntityManager(unitName,properties,emf);
     if (JPA_LOGGER.isDebugEnabled())     JPA_LOGGER.debugf("created new TransactionScopedEntityManager for unit name=%s",unitName);
   }
  else {
-    isExtended=true;
     EntityManager entityManager1=SFSBCallStack.findPersistenceContext(unitName,sfsbxpcMap);
     if (entityManager1 == null) {
       entityManager1=emf.createEntityManager(properties);
@@ -23,7 +21,7 @@
     SFSBXPCMap.registerPersistenceContext(entityManager);
     SFSBCallStack.extendedPersistenceContextCreated(unitName,entityManager);
   }
-  if (!ENTITY_MANAGER_CLASS.equals(injectionTypeName)) {
+  if (!standardEntityManager) {
     Class extensionClass;
     try {
       extensionClass=pu.getClassLoader().loadClass(injectionTypeName);
@@ -31,15 +29,26 @@
  catch (    ClassNotFoundException e) {
       throw MESSAGES.cannotLoadFromJpa(e,injectionTypeName);
     }
-    boolean skipAutoCloseAfterUnwrap=skipEntityManagerCloseFor.contains(injectionTypeName);
-    if (!skipAutoCloseAfterUnwrap && !isExtended) {
-      NonTxEmCloser.pushCall();
-    }
     Object targetValueToInject=entityManager.unwrap(extensionClass);
-    if (!skipAutoCloseAfterUnwrap && !isExtended) {
-      NonTxEmCloser.popCall();
+    Class[] targetInterfaces=targetValueToInject.getClass().getInterfaces();
+    Class[] proxyInterfaces=new Class[targetInterfaces.length + 1];
+    boolean alreadyHasInterfaceClass=false;
+    for (int interfaceIndex=0; interfaceIndex < targetInterfaces.length; interfaceIndex++) {
+      Class interfaceClass=targetInterfaces[interfaceIndex];
+      if (interfaceClass.equals(extensionClass)) {
+        proxyInterfaces=targetInterfaces;
+        alreadyHasInterfaceClass=true;
+        break;
+      }
+      proxyInterfaces[1 + interfaceIndex]=interfaceClass;
     }
-    return new ValueManagedReference(new ImmediateValue<Object>(targetValueToInject));
+    if (!alreadyHasInterfaceClass) {
+      proxyInterfaces[0]=extensionClass;
+    }
+    EntityManagerUnwrappedTargetInvocationHandler entityManagerUnwrappedTargetInvocationHandler=new EntityManagerUnwrappedTargetInvocationHandler(entityManager,extensionClass);
+    Object proxyForUnwrappedObject=Proxy.newProxyInstance(extensionClass.getClassLoader(),proxyInterfaces,entityManagerUnwrappedTargetInvocationHandler);
+    if (JPA_LOGGER.isDebugEnabled())     JPA_LOGGER.debugf("injecting entity manager into a '%s' (unit name=%s)",extensionClass.getName(),unitName);
+    return new ValueManagedReference(new ImmediateValue<Object>(proxyForUnwrappedObject));
   }
   return new ValueManagedReference(new ImmediateValue<Object>(entityManager));
 }
