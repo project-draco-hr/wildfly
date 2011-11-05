@@ -1,0 +1,32 @@
+{
+  if (timer == null) {
+    return;
+  }
+  if (!timer.persistent) {
+switch (timer.getState()) {
+case CANCELED:
+case EXPIRED:
+      nonPersistentTimers.remove(timer.getHandle());
+  }
+}
+ else {
+  final TimerEntity timerEntity=timer.getPersistentState();
+  try {
+    persistentWaitingOnTxCompletionTimers.remove(timer.getHandle());
+    if (timerPersistence == null) {
+      logger.warn("Timer persistence is not enabled, persistent timers will not survive JVM restarts");
+      return;
+    }
+    if (timerEntity.getTimerState() == TimerState.EXPIRED || timerEntity.getTimerState() == TimerState.CANCELED) {
+      timerPersistence.removeTimer(timerEntity);
+    }
+ else {
+      timerPersistence.persistTimer(timerEntity);
+    }
+  }
+ catch (  Throwable t) {
+    this.setRollbackOnly();
+    throw new RuntimeException(t);
+  }
+}
+}
