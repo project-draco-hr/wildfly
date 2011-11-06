@@ -1,0 +1,29 @@
+{
+  final String nodeIdentifier=TransactionSubsystemRootResourceDefinition.NODE_IDENTIFIER.validateResolvedOperation(coreEnvModel).asString();
+  final CoreEnvironmentService coreEnvironmentService=new CoreEnvironmentService(nodeIdentifier);
+  String socketBindingName=null;
+  if (TransactionSubsystemRootResourceDefinition.PROCESS_ID_UUID.validateResolvedOperation(coreEnvModel).asBoolean()) {
+    UuidProcessId id=new UuidProcessId();
+    coreEnvironmentService.setProcessImplementation(id);
+  }
+ else {
+    coreEnvironmentService.setProcessImplementationClassName(ProcessIdType.SOCKET.getClazz());
+    socketBindingName=TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_BINDING.validateResolvedOperation(coreEnvModel).asString();
+    int ports=TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_MAX_PORTS.validateResolvedOperation(coreEnvModel).asInt();
+    coreEnvironmentService.setSocketProcessIdMaxPorts(ports);
+  }
+  final String varDirPathRef=TransactionSubsystemRootResourceDefinition.RELATIVE_TO.validateResolvedOperation(coreEnvModel).asString();
+  final String varDirPath=TransactionSubsystemRootResourceDefinition.PATH.validateResolvedOperation(coreEnvModel).asString();
+  if (ROOT_LOGGER.isDebugEnabled()) {
+    ROOT_LOGGER.debugf("nodeIdentifier=%s\n",nodeIdentifier);
+    ROOT_LOGGER.debugf("varDirPathRef=%s, varDirPath=%s\n",varDirPathRef,varDirPath);
+  }
+  ServiceTarget target=context.getServiceTarget();
+  RelativePathService.addService(INTERNAL_CORE_ENV_VAR_PATH,varDirPath,true,varDirPathRef,target,controllers,verificationHandler);
+  final ServiceBuilder<?> coreEnvBuilder=context.getServiceTarget().addService(TxnServices.JBOSS_TXN_CORE_ENVIRONMENT,coreEnvironmentService);
+  if (socketBindingName != null) {
+    ServiceName bindingName=SocketBinding.JBOSS_BINDING_NAME.append(socketBindingName);
+    coreEnvBuilder.addDependency(bindingName,SocketBinding.class,coreEnvironmentService.getSocketProcessBindingInjector());
+  }
+  controllers.add(coreEnvBuilder.addDependency(INTERNAL_CORE_ENV_VAR_PATH,String.class,coreEnvironmentService.getPathInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+}

@@ -2,7 +2,8 @@
   final StatefulSessionComponent component=getComponent(context,StatefulSessionComponent.class);
   final StatefulSessionComponentInstance instance=getComponentInstance(context);
   final TransactionSynchronizationRegistry transactionSynchronizationRegistry=component.getTransactionSynchronizationRegistry();
-  lock.pushOwner(getLockOwner(transactionSynchronizationRegistry));
+  final Object lockOwner=getLockOwner(transactionSynchronizationRegistry);
+  lock.pushOwner(lockOwner);
   try {
     final AccessTimeoutDetails timeout=component.getAccessTimeout(context.getMethod());
     if (log.isTraceEnabled()) {
@@ -21,9 +22,9 @@ synchronized (threadLock) {
       try {
         if (!synchronizationRegistered) {
           currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
-          int status=transactionSynchronizationRegistry.getTransactionStatus();
+          final int status=transactionSynchronizationRegistry.getTransactionStatus();
           if (currentTransactionKey != null && status != Status.STATUS_COMMITTED) {
-            final Synchronization statefulSessionSync=new StatefulSessionSynchronization(instance);
+            final Synchronization statefulSessionSync=new StatefulSessionSynchronization(instance,lockOwner);
             transactionSynchronizationRegistry.registerInterposedSynchronization(statefulSessionSync);
             wasTxSyncRegistered=true;
             if (log.isTraceEnabled()) {
