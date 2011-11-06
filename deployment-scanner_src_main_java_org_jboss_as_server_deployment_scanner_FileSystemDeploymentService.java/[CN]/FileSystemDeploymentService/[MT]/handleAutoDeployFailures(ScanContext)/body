@@ -18,10 +18,10 @@
       }
       if (now - status.timestamp > maxNoProgress) {
         if (!status.warned) {
-          String suffix=deployed.containsKey(deploymentName) ? " A previous version of this content was deployed and remains deployed." : "";
-          String msg=String.format("Deployment content %s appears to be incomplete and is not progressing toward " + "completion. This content cannot be auto-deployed.%s",incompleteFile,suffix,DO_DEPLOY,SKIP_DEPLOY);
+          String suffix=deployed.containsKey(deploymentName) ? MESSAGES.previousContentDeployed() : "";
+          String msg=MESSAGES.deploymentContentIncomplete(incompleteFile,suffix);
           writeFailedMarker(incompleteFile,new ModelNode().set(msg),status.timestamp);
-          log.error(msg);
+          ROOT_LOGGER.error(msg);
           status.warned=true;
           warnLogged=true;
           result=ScanStatus.ABORT;
@@ -31,7 +31,7 @@
  else {
         boolean newIncomplete=incompleteDeployments.put(incompleteFile,status) == null;
         if (newIncomplete || logAll) {
-          log.infof("Scan found incompletely copied file content for deployment %s. Deployment changes will not be " + "processed until all content is complete.",entry.getKey().getPath());
+          ROOT_LOGGER.incompleteContent(entry.getKey().getPath());
         }
         if (newIncomplete) {
           File pending=new File(incompleteFile.getParentFile(),deploymentName + PENDING);
@@ -55,9 +55,9 @@
       if (nonscannableLogged.add(nonScannable) || logAll) {
         NonScannableStatus nonScannableStatus=entry.getValue();
         NonScannableZipException e=nonScannableStatus.exception;
-        String msg=String.format("File %s was configured for auto-deploy but could not be safely auto-deployed. The reason the file " + "could not be auto-deployed was: %s.  To enable deployment of this file create a file called %s%s",fileName,e.getLocalizedMessage(),fileName,DO_DEPLOY);
+        String msg=MESSAGES.unsafeAutoDeploy(e.getLocalizedMessage(),fileName,DO_DEPLOY);
         writeFailedMarker(nonScannable,new ModelNode().set(msg),nonScannableStatus.timestamp);
-        log.error(msg);
+        ROOT_LOGGER.error(msg);
         warnLogged=true;
         result=ScanStatus.ABORT;
       }
@@ -71,7 +71,7 @@
     for (    File f : scanContext.incompleteFiles.keySet()) {
       allProblems.add(f.getName());
     }
-    log.warnf("Scan found content configured for auto-deploy that could not be safely auto-deployed. See details above. " + "Deployment changes will not be processed until all problematic content is either removed or whether to " + "deploy the content or not is indicated via a %s or %s marker file. Problematic deployments are %s",DO_DEPLOY,SKIP_DEPLOY,allProblems);
+    ROOT_LOGGER.unsafeAutoDeploy(DO_DEPLOY,SKIP_DEPLOY,allProblems);
   }
   return result;
 }

@@ -9,31 +9,31 @@
   boolean scheduleRescan=false;
   try {
     if (scanEnabled) {
-      log.tracef("Scanning directory %s for deployment content changes",deploymentDir.getAbsolutePath());
+      ROOT_LOGGER.tracef("Scanning directory %s for deployment content changes",deploymentDir.getAbsolutePath());
       ScanContext scanContext=new ScanContext();
       scanDirectory(deploymentDir,relativePath,scanContext);
       ignoredMissingDeployments.retainAll(scanContext.ignoredMissingDeployments);
       for (      String deploymentName : scanContext.ignoredMissingDeployments) {
         if (ignoredMissingDeployments.add(deploymentName)) {
-          log.warnf("Deployment of '%s' requested, but the deployment is not present",deploymentName);
+          ROOT_LOGGER.deploymentNotFound(deploymentName);
         }
       }
       noticeLogged.retainAll(scanContext.nonDeployable);
       for (      String fileName : scanContext.nonDeployable) {
         if (noticeLogged.add(fileName)) {
-          log.infof("Found %s in deployment directory. To trigger deployment create a file called %s%s",fileName,fileName,DO_DEPLOY);
+          ROOT_LOGGER.deploymentTriggered(fileName,DO_DEPLOY);
         }
       }
       illegalDirLogged.retainAll(scanContext.illegalDir);
       for (      String fileName : scanContext.illegalDir) {
         if (illegalDirLogged.add(fileName)) {
-          log.errorf("The deployment scanner found a directory named %s that was not inside a directory whose " + "name ends with .ear, .jar, .rar, .sar or .war. This is likely the result of unzipping an " + "archive directly inside the %s directory, which is a user error. "+ "The %s directory will not be scanned for deployments, but it is possible that the scanner may"+ "find other files from the unzipped archive and attempt to deploy them, leading to errors.",fileName,deploymentDir.getAbsolutePath(),fileName);
+          ROOT_LOGGER.invalidExplodedDeploymentDirectory(fileName,deploymentDir.getAbsolutePath());
         }
       }
       prematureExplodedContentDeletionLogged.retainAll(scanContext.prematureExplodedDeletions);
       for (      String fileName : scanContext.prematureExplodedDeletions) {
         if (prematureExplodedContentDeletionLogged.add(fileName)) {
-          log.warnf("The deployment scanner found that the content for exploded deployment %s has been " + "deleted, but auto-deploy/undeploy for exploded deployments is not enabled and the %s " + "marker file for this deployment has not been removed. As a result, the deployment is "+ "not being undeployed, but resources needed by the deployment may have been deleted "+ "and application errors may occur. Deleting the %s marker file to trigger undeploy is recommended.",fileName,fileName + DEPLOYED,fileName + DEPLOYED);
+          ROOT_LOGGER.explodedDeploymentContentDeleted(fileName,DEPLOYED);
         }
       }
       ScanStatus status=handleAutoDeployFailures(scanContext);
@@ -53,8 +53,8 @@
         for (        ScannerTask task : scannerTasks) {
           task.recordInProgress();
           final ModelNode update=task.getUpdate();
-          if (log.isDebugEnabled()) {
-            log.debugf("Deployment scan of [%s] found update action [%s]",deploymentDir,update);
+          if (ROOT_LOGGER.isDebugEnabled()) {
+            ROOT_LOGGER.debugf("Deployment scan of [%s] found update action [%s]",deploymentDir,update);
           }
           updates.add(update);
         }
@@ -70,14 +70,14 @@
             futureResults.cancel(true);
             final ModelNode failure=new ModelNode();
             failure.get(OUTCOME).set(FAILED);
-            failure.get(FAILURE_DESCRIPTION).set("Did not receive a response to the deployment operation within " + "the allowed timeout period [" + deploymentTimeout + " seconds]. Check the server configuration"+ "file and the server logs to find more about the status of the deployment.");
+            failure.get(FAILURE_DESCRIPTION).set(MESSAGES.deploymentTimeout(deploymentTimeout));
             for (            ScannerTask task : scannerTasks) {
               task.handleFailureResult(failure);
             }
             break;
           }
 catch (          Exception e) {
-            log.error("File system deployment service failed",e);
+            ROOT_LOGGER.fileSystemDeploymentFailed(e);
             futureResults.cancel(true);
             final ModelNode failure=new ModelNode();
             failure.get(OUTCOME).set(FAILED);
@@ -109,7 +109,7 @@ catch (          Exception e) {
           scannerTasks=retryTasks;
         }
       }
-      log.tracef("Scan complete");
+      ROOT_LOGGER.tracef("Scan complete");
     }
   }
   finally {
