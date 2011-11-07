@@ -1,18 +1,18 @@
 {
-  try {
-    final Endpoint endpoint=Remoting.createEndpoint("endpoint",OptionMap.EMPTY);
-    try {
-      endpoint.addConnectionProvider("remote",new RemoteConnectionProviderFactory(),OptionMap.create(Options.SSL_ENABLED,Boolean.FALSE));
-      final IoFuture<Connection> futureConnection=endpoint.connect(new URI(hostUrl),OptionMap.create(Options.SASL_POLICY_NOANONYMOUS,Boolean.FALSE),new AnonymousCallbackHandler());
-      final Connection connection=IoFutureHelper.get(futureConnection,5L,TimeUnit.SECONDS);
+  thread=new Thread(new Runnable(){
+    @Override public void run(){
       try {
-        thread=new Thread(new Runnable(){
-          @Override public void run(){
-            ClassLoader oldTccl=SecurityActions.getContextClassLoader();
+        final Endpoint endpoint=Remoting.createEndpoint("endpoint",OptionMap.EMPTY);
+        endpoint.addConnectionProvider("remote",new RemoteConnectionProviderFactory(),OptionMap.create(Options.SSL_ENABLED,Boolean.FALSE));
+        final IoFuture<Connection> futureConnection=endpoint.connect(new URI(hostUrl),OptionMap.create(Options.SASL_POLICY_NOANONYMOUS,Boolean.FALSE),new AnonymousCallbackHandler());
+        final Connection connection=IoFutureHelper.get(futureConnection,5L,TimeUnit.SECONDS);
+        try {
+          try {
+            final ClassLoader oldTccl=SecurityActions.getContextClassLoader();
             try {
               try {
                 SecurityActions.setContextClassLoader(classLoader);
-                EJBClientContext ejbClientContext=EJBClientContext.create();
+                final EJBClientContext ejbClientContext=EJBClientContext.create();
                 ejbClientContext.registerConnection(connection);
                 applicationClientDeploymentServiceInjectedValue.getValue().getDeploymentCompleteLatch().await();
                 try {
@@ -41,22 +41,22 @@ catch (              InterruptedException e) {
               CurrentServiceContainer.getServiceContainer().shutdown();
             }
           }
+  finally {
+            connection.close();
+          }
         }
+  finally {
+          endpoint.close();
+        }
+      }
+ catch (      IOException e) {
+        throw new RuntimeException(e);
+      }
+catch (      URISyntaxException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
 );
-        thread.start();
-      }
-  finally {
-        connection.close();
-      }
-    }
-  finally {
-      endpoint.close();
-    }
-  }
- catch (  IOException e) {
-    throw new RuntimeException(e);
-  }
-catch (  URISyntaxException e) {
-    throw new RuntimeException(e);
-  }
+  thread.start();
 }
