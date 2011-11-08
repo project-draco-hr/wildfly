@@ -1,0 +1,77 @@
+{
+  ServiceName socketBindingServiceName=null;
+  ServiceName secureSocketBindingServiceName=null;
+  ServiceName interfaceSvcName=null;
+  int port=-1;
+  int securePort=-1;
+  final ModelNode interfaceModelNode=validateResolvedModel(INTERFACE,context,model);
+  if (interfaceModelNode.isDefined()) {
+    String interfaceName=interfaceModelNode.asString();
+    interfaceSvcName=NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(interfaceName);
+    final ModelNode portNode=HTTP_PORT.resolveModelAttribute(context,model);
+    port=portNode.isDefined() ? portNode.asInt() : -1;
+    final ModelNode securePortNode=HTTPS_PORT.resolveModelAttribute(context,model);
+    securePort=securePortNode.isDefined() ? securePortNode.asInt() : -1;
+    StringBuilder sb=new StringBuilder();
+    sb.append("Creating http management service using network interface (").append(interfaceName).append(")");
+    if (port > -1) {
+      sb.append(" port (").append(port).append(")");
+    }
+    if (securePort > -1) {
+      sb.append(" securePort (").append(securePort).append(")");
+    }
+    Logger.getLogger("org.jboss.as").info(sb.toString());
+  }
+ else {
+    final ModelNode socketBindingNode=SOCKET_BINDING.resolveModelAttribute(context,model);
+    if (socketBindingNode.isDefined()) {
+      final String bindingName=socketBindingNode.asString();
+      socketBindingServiceName=SocketBinding.JBOSS_BINDING_NAME.append(bindingName);
+    }
+    final ModelNode secureSocketBindingNode=SECURE_SOCKET_BINDING.resolveModelAttribute(context,model);
+    if (secureSocketBindingNode.isDefined()) {
+      final String bindingName=secureSocketBindingNode.asString();
+      secureSocketBindingServiceName=SocketBinding.JBOSS_BINDING_NAME.append(bindingName);
+    }
+    StringBuilder sb=new StringBuilder();
+    sb.append("Creating http management service using ");
+    if (socketBindingServiceName != null) {
+      sb.append(" socket-binding (").append(socketBindingServiceName.getSimpleName()).append(")");
+    }
+    if (secureSocketBindingServiceName != null) {
+      sb.append(" secure-socket-binding (").append(secureSocketBindingServiceName.getSimpleName()).append(")");
+    }
+    Logger.getLogger("org.jboss.as").info(sb.toString());
+  }
+  ServiceName realmSvcName=null;
+  final ModelNode realmNode=SECURITY_REALM.resolveModelAttribute(context,model);
+  if (realmNode.isDefined()) {
+    realmSvcName=SecurityRealmService.BASE_SERVICE_NAME.append(realmNode.asString());
+  }
+ else {
+    Logger.getLogger("org.jboss.as").warn("No security realm has been defined for the http management service; all access will be unrestricted.");
+  }
+  final HttpManagementService service=new HttpManagementService();
+  ServiceBuilder<HttpManagement> builder=serviceTarget.addService(HttpManagementService.SERVICE_NAME,service).addDependency(Services.JBOSS_SERVER_CONTROLLER,ModelController.class,service.getModelControllerInjector()).addDependency(AbstractPathService.pathNameOf(ServerEnvironment.SERVER_TEMP_DIR),String.class,service.getTempDirInjector()).addDependency(SocketBindingManagerImpl.SOCKET_BINDING_MANAGER,SocketBindingManager.class,service.getSocketBindingManagerInjector()).addInjection(service.getExecutorServiceInjector(),Executors.newCachedThreadPool(new JBossThreadFactory(new ThreadGroup("HttpManagementService-threads"),Boolean.FALSE,null,"%G - %t",null,null,AccessController.getContext())));
+  if (interfaceSvcName != null) {
+    builder.addDependency(interfaceSvcName,NetworkInterfaceBinding.class,service.getInterfaceInjector()).addInjection(service.getPortInjector(),port).addInjection(service.getSecurePortInjector(),securePort);
+  }
+ else {
+    if (socketBindingServiceName != null) {
+      builder.addDependency(socketBindingServiceName,SocketBinding.class,service.getSocketBindingInjector());
+    }
+    if (secureSocketBindingServiceName != null) {
+      builder.addDependency(secureSocketBindingServiceName,SocketBinding.class,service.getSecureSocketBindingInjector());
+    }
+  }
+  if (realmSvcName != null) {
+    builder.addDependency(realmSvcName,SecurityRealmService.class,service.getSecurityRealmInjector());
+  }
+  if (verificationHandler != null) {
+    builder.addListener(verificationHandler);
+  }
+  ServiceController<?> controller=builder.install();
+  if (newControllers != null) {
+    newControllers.add(controller);
+  }
+}

@@ -2,6 +2,11 @@
   final QName rootElement=new QName(Namespace.CURRENT.getUriString(),"host");
   final HostXml parser=new HostXml(Module.getBootModuleLoader(),null);
   final XmlConfigurationPersister persister=new XmlConfigurationPersister(file,rootElement,parser,parser);
+  for (  Namespace namespace : Namespace.values()) {
+    if (namespace != Namespace.CURRENT) {
+      persister.registerAdditionalRootElement(new QName(namespace.getUriString(),"host"),parser);
+    }
+  }
   final List<ModelNode> ops=persister.load();
   final ModelNode model=new ModelNode();
   final ModelController controller=createController(model,new Setup(){
@@ -25,12 +30,8 @@
       securityRealm.registerOperationHandler(SecurityRealmAddHandler.OPERATION_NAME,SecurityRealmAddHandler.INSTANCE,SecurityRealmAddHandler.INSTANCE,false);
       ManagementResourceRegistration connection=management.registerSubModel(PathElement.pathElement(OUTBOUND_CONNECTION),CommonProviders.MANAGEMENT_OUTBOUND_CONNECTION_PROVIDER);
       connection.registerOperationHandler(ConnectionAddHandler.OPERATION_NAME,ConnectionAddHandler.INSTANCE,ConnectionAddHandler.INSTANCE,false);
-      ManagementResourceRegistration managementNative=management.registerSubModel(PathElement.pathElement(MANAGEMENT_INTERFACE,NATIVE_INTERFACE),CommonProviders.NATIVE_MANAGEMENT_PROVIDER);
-      NativeManagementAddHandler nmah=new NativeManagementAddHandler(hostControllerInfo);
-      managementNative.registerOperationHandler(NativeManagementAddHandler.OPERATION_NAME,nmah,nmah,false);
-      ManagementResourceRegistration managementHttp=management.registerSubModel(PathElement.pathElement(MANAGEMENT_INTERFACE,HTTP_INTERFACE),CommonProviders.HTTP_MANAGEMENT_PROVIDER);
-      HttpManagementAddHandler httpAddHandler=HttpManagementAddHandler.getInstance(hostControllerInfo);
-      managementHttp.registerOperationHandler(HttpManagementAddHandler.OPERATION_NAME,httpAddHandler,httpAddHandler,false);
+      management.registerSubModel(new NativeManagementResourceDefinition(hostControllerInfo));
+      management.registerSubModel(new HttpManagementResourceDefinition(hostControllerInfo,null));
       ManagementResourceRegistration extensions=hostRegistration.registerSubModel(PathElement.pathElement(EXTENSION),CommonProviders.EXTENSION_PROVIDER);
       ExtensionContext extensionContext=new ExtensionContextImpl(hostRegistration,null,persister,ExtensionContext.ProcessType.STANDALONE_SERVER);
       ExtensionAddHandler addExtensionHandler=new ExtensionAddHandler(extensionContext);

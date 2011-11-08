@@ -1,27 +1,65 @@
 {
   final ModelController modelController=modelControllerValue.getValue();
   final ExecutorService executorService=executorServiceValue.getValue();
-  final NetworkInterfaceBinding interfaceBinding=interfaceBindingValue.getValue();
-  modelControllerClient=modelController.createClient(executorService);
-  final int port=portValue.getOptionalValue();
-  InetSocketAddress bindAddress=null;
-  if (port > 0) {
-    bindAddress=new InetSocketAddress(interfaceBinding.getAddress(),port);
-  }
-  final int securePort=securePortValue.getOptionalValue();
-  InetSocketAddress secureBindAddress=null;
-  if (securePort > 0) {
-    secureBindAddress=new InetSocketAddress(interfaceBinding.getAddress(),securePort);
-  }
+  final ModelControllerClient modelControllerClient=modelController.createClient(executorService);
+  socketBindingManager=injectedSocketBindingManager.getOptionalValue();
   final SecurityRealmService securityRealmService=securityRealmServiceValue.getOptionalValue();
+  InetSocketAddress bindAddress=null;
+  InetSocketAddress secureBindAddress=null;
+  SocketBinding basicBinding=injectedSocketBindingValue.getOptionalValue();
+  SocketBinding secureBinding=injectedSecureSocketBindingValue.getOptionalValue();
+  final NetworkInterfaceBinding interfaceBinding=interfaceBindingValue.getOptionalValue();
+  if (interfaceBinding != null) {
+    useUnmanagedBindings=true;
+    final int port=portValue.getOptionalValue();
+    if (port > 0) {
+      bindAddress=new InetSocketAddress(interfaceBinding.getAddress(),port);
+    }
+    final int securePort=securePortValue.getOptionalValue();
+    if (securePort > 0) {
+      secureBindAddress=new InetSocketAddress(interfaceBinding.getAddress(),securePort);
+    }
+  }
+ else {
+    if (basicBinding != null) {
+      bindAddress=basicBinding.getSocketAddress();
+    }
+    if (secureBinding != null) {
+      secureBindAddress=secureBinding.getSocketAddress();
+    }
+  }
   try {
     serverManagement=ManagementHttpServer.create(bindAddress,secureBindAddress,50,modelControllerClient,executorService,securityRealmService);
     serverManagement.start();
+    if (socketBindingManager != null) {
+      if (useUnmanagedBindings) {
+        SocketBindingManager.UnnamedBindingRegistry registry=socketBindingManager.getUnnamedRegistry();
+        if (bindAddress != null) {
+          basicManagedBinding=ManagedBinding.Factory.createSimpleManagedBinding("management-http",bindAddress,null);
+          registry.registerBinding(basicManagedBinding);
+        }
+        if (secureBindAddress != null) {
+          secureManagedBinding=ManagedBinding.Factory.createSimpleManagedBinding("management-https",secureBindAddress,null);
+          registry.registerBinding(secureManagedBinding);
+        }
+      }
+ else {
+        SocketBindingManager.NamedManagedBindingRegistry registry=socketBindingManager.getNamedRegistry();
+        if (basicBinding != null) {
+          basicManagedBinding=ManagedBinding.Factory.createSimpleManagedBinding(basicBinding);
+          registry.registerBinding(basicManagedBinding);
+        }
+        if (secureBinding != null) {
+          secureManagedBinding=ManagedBinding.Factory.createSimpleManagedBinding(secureBinding);
+          registry.registerBinding(secureManagedBinding);
+        }
+      }
+    }
   }
  catch (  BindException e) {
     final StringBuilder sb=new StringBuilder().append(e.getMessage());
-    if (port > 0)     sb.append(" ").append(bindAddress);
-    if (securePort > 0)     sb.append(" ").append(secureBindAddress);
+    if (bindAddress != null)     sb.append(" ").append(bindAddress);
+    if (secureBindAddress != null)     sb.append(" ").append(secureBindAddress);
     throw new StartException(sb.toString(),e);
   }
 catch (  Exception e) {

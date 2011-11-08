@@ -1,11 +1,9 @@
 {
-  final ServiceName endpointName=ManagementRemotingServices.MANAGEMENT_ENDPOINT;
   final ServiceTarget serviceTarget=context.getServiceTarget();
   try {
     super.boot(hostControllerConfigurationPersister.load());
-    NetworkInterfaceBinding nativeManagementInterfaceBinding=getNativeManagementNetworkInterfaceBinding();
-    Future<ServerInventory> inventoryFuture=NewServerInventoryService.install(serviceTarget,this,environment,nativeManagementInterfaceBinding,hostControllerInfo.getNativeManagementPort());
-    ManagementRemotingServices.installManagementRemotingEndpoint(serviceTarget,hostControllerInfo.getLocalHostName());
+    Future<ServerInventory> inventoryFuture=ServerInventoryService.install(serviceTarget,this,environment,hostControllerInfo.getNativeManagementInterface(),hostControllerInfo.getNativeManagementPort());
+    ManagementRemotingServices.installRemotingEndpoint(serviceTarget,ManagementRemotingServices.MANAGEMENT_ENDPOINT,hostControllerInfo.getLocalHostName(),EndpointService.EndpointType.MANAGEMENT,null,null);
     if (!hostControllerInfo.isMasterDomainController()) {
       serverInventory=getFuture(inventoryFuture);
       Future<MasterDomainControllerClient> clientFuture=RemoteDomainConnectionService.install(serviceTarget,getValue(),hostControllerInfo.getLocalHostName(),hostControllerInfo.getRemoteDomainControllerHost(),hostControllerInfo.getRemoteDomainControllertPort(),hostControllerInfo.getRemoteDomainControllerSecurityRealm(),remoteFileRepository);
@@ -21,20 +19,13 @@
  else {
       ConfigurationPersister domainPersister=hostControllerConfigurationPersister.getDomainPersister();
       super.boot(domainPersister.load());
-      ManagementRemotingServices.installManagementChannelServices(serviceTarget,endpointName,new MasterDomainControllerOperationHandlerService(this,this),DomainModelControllerService.SERVICE_NAME,ManagementRemotingServices.DOMAIN_CHANNEL,null,null);
+      ManagementRemotingServices.installManagementChannelServices(serviceTarget,ManagementRemotingServices.MANAGEMENT_ENDPOINT,new MasterDomainControllerOperationHandlerService(this,this),DomainModelControllerService.SERVICE_NAME,ManagementRemotingServices.DOMAIN_CHANNEL,null,null);
       serverInventory=getFuture(inventoryFuture);
     }
-    ServiceName realmSvcName=null;
-    String nativeSecurityRealm=hostControllerInfo.getNativeManagementSecurityRealm();
-    if (nativeSecurityRealm != null) {
-      realmSvcName=SecurityRealmService.BASE_SERVICE_NAME.append(nativeSecurityRealm);
-    }
-    ManagementRemotingServices.installDomainConnectorServices(serviceTarget,endpointName,nativeManagementInterfaceBinding,hostControllerInfo.getNativeManagementPort(),realmSvcName,null,null);
-    ServerToHostOperationHandlerFactoryService.install(serviceTarget,NewServerInventoryService.SERVICE_NAME);
-    ManagementRemotingServices.installManagementChannelOpenListenerService(serviceTarget,endpointName,ManagementRemotingServices.SERVER_CHANNEL,ServerToHostOperationHandlerFactoryService.SERVICE_NAME,null,null);
-    ManagementRemotingServices.installManagementChannelServices(serviceTarget,endpointName,new ModelControllerClientOperationHandlerFactoryService(),DomainModelControllerService.SERVICE_NAME,ManagementRemotingServices.MANAGEMENT_CHANNEL,null,null);
+    NativeManagementAddHandler.installNativeManagementServices(serviceTarget,hostControllerInfo,null,null);
+    ServerToHostOperationHandlerFactoryService.install(serviceTarget,ServerInventoryService.SERVICE_NAME);
     if (hostControllerInfo.getHttpManagementInterface() != null) {
-      installHttpManagementServices(serviceTarget);
+      HttpManagementAddHandler.installHttpManagementServices(serviceTarget,hostControllerInfo,environment,null);
     }
     startServers();
   }
