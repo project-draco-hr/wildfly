@@ -1,0 +1,97 @@
+{
+  Collection<ComponentConfiguration> configurations=metaData.getComponentConfigurations();
+  if (configurations != null) {
+    for (    ComponentConfiguration configuration : configurations) {
+      ComponentDescription componentDescription=configuration.getComponentDescription();
+      if (componentDescription instanceof EJBComponentDescription) {
+        EJBComponentDescription component=EJBComponentDescription.class.cast(componentDescription);
+        String ejbClassName=component.getEJBClassName();
+        String ejbName=component.getEJBName();
+        boolean denyOnAllViews=true;
+        boolean permitOnAllViews=true;
+        List<EJBMethodPermission> permissions=new ArrayList<EJBMethodPermission>();
+        List<EJBMethodPermission> uncheckedPermissions=new ArrayList<EJBMethodPermission>();
+        for (        ViewDescription view : component.getViews()) {
+          String viewClassName=view.getViewClassName();
+          if (!component.isDenyAllApplicableToClass(viewClassName,ejbClassName)) {
+            denyOnAllViews=false;
+          }
+ else {
+            EJBViewDescription ejbView=EJBViewDescription.class.cast(view);
+            MethodInterfaceType type=getMethodInterfaceType(ejbView.getMethodIntf());
+            EJBMethodPermission p=new EJBMethodPermission(ejbName,null,type.name(),null);
+            permissions.add(p);
+          }
+          if (!component.isPermitAllApplicableToClass(viewClassName,ejbClassName)) {
+            permitOnAllViews=false;
+          }
+ else {
+            EJBViewDescription ejbView=EJBViewDescription.class.cast(view);
+            MethodInterfaceType type=getMethodInterfaceType(ejbView.getMethodIntf());
+            EJBMethodPermission p=new EJBMethodPermission(ejbName,null,type.name(),null);
+            uncheckedPermissions.add(p);
+          }
+          Set<String> roles=component.getRolesAllowedForClass(viewClassName,ejbClassName);
+          for (          String role : roles) {
+            policyConfiguration.addToRole(role,new EJBMethodPermission(ejbName,null,null,null));
+          }
+          Collection<EJBMethodIdentifier> methods=component.getDenyAllMethodsForView(viewClassName);
+          for (          EJBMethodIdentifier method : methods) {
+            MethodIdentifier identifier=method.getMethodIdentifier();
+            EJBViewDescription ejbView=EJBViewDescription.class.cast(view);
+            MethodInterfaceType type=getMethodInterfaceType(ejbView.getMethodIntf());
+            EJBMethodPermission p=new EJBMethodPermission(ejbName,identifier.getName(),type.name(),identifier.getParameterTypes());
+            policyConfiguration.addToExcludedPolicy(p);
+          }
+          methods=component.getPermitAllMethodsForView(viewClassName);
+          for (          EJBMethodIdentifier method : methods) {
+            MethodIdentifier identifier=method.getMethodIdentifier();
+            EJBViewDescription ejbView=EJBViewDescription.class.cast(view);
+            MethodInterfaceType type=getMethodInterfaceType(ejbView.getMethodIntf());
+            EJBMethodPermission p=new EJBMethodPermission(ejbName,identifier.getName(),type.name(),identifier.getParameterTypes());
+            policyConfiguration.addToUncheckedPolicy(p);
+          }
+          Map<EJBMethodIdentifier,Set<String>> rolesMap=component.getRolesAllowed(viewClassName);
+          for (          Entry<EJBMethodIdentifier,Set<String>> entry : rolesMap.entrySet()) {
+            MethodIdentifier identifier=entry.getKey().getMethodIdentifier();
+            EJBViewDescription ejbView=EJBViewDescription.class.cast(view);
+            MethodInterfaceType type=getMethodInterfaceType(ejbView.getMethodIntf());
+            for (            String role : entry.getValue()) {
+              EJBMethodPermission p=new EJBMethodPermission(ejbName,identifier.getName(),type.name(),identifier.getParameterTypes());
+              policyConfiguration.addToRole(role,p);
+            }
+          }
+        }
+        if (denyOnAllViews) {
+          permissions=new ArrayList<EJBMethodPermission>();
+          permissions.add(new EJBMethodPermission(ejbName,null,null,null));
+        }
+        for (        EJBMethodPermission ejbMethodPermission : permissions) {
+          policyConfiguration.addToExcludedPolicy(ejbMethodPermission);
+        }
+        if (permitOnAllViews) {
+          uncheckedPermissions=new ArrayList<EJBMethodPermission>();
+          uncheckedPermissions.add(new EJBMethodPermission(ejbName,null,null,null));
+        }
+        for (        EJBMethodPermission ejbMethodPermission : uncheckedPermissions) {
+          policyConfiguration.addToUncheckedPolicy(ejbMethodPermission);
+        }
+        Map<String,Collection<String>> securityRoles=component.getSecurityRoleLinks();
+        for (        Entry<String,Collection<String>> entry : securityRoles.entrySet()) {
+          String roleName=entry.getKey();
+          for (          String roleLink : entry.getValue()) {
+            EJBRoleRefPermission p=new EJBRoleRefPermission(ejbName,roleName);
+            policyConfiguration.addToRole(roleLink,p);
+          }
+        }
+        if (component instanceof SessionBeanComponentDescription) {
+          SessionBeanComponentDescription session=SessionBeanComponentDescription.class.cast(component);
+          if (session.isStateful()) {
+            EJBMethodPermission p=new EJBMethodPermission(ejbName,"getEJBObject","Home",null);
+            policyConfiguration.addToUncheckedPolicy(p);
+          }
+        }
+      }
+    }
+  }
+}

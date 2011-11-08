@@ -13,15 +13,27 @@
       helper=SecurityHelperFactory.getWebAuthorizationHelper(sc);
     }
  catch (    Exception e) {
-      log.error("Exception in obtaining helper",e);
+      log.errorf("Exception in obtaining helper",e);
       return false;
     }
     authzDecision=helper.checkResourcePermission(contextMap,request,response,caller,PolicyContext.getContextID(),requestURI(request),getPrincipalRoles(request));
   }
   boolean finalDecision=baseDecision && authzDecision;
-  if (log.isTraceEnabled())   log.trace("hasResourcePermission:RealmBase says:" + baseDecision + "::Authz framework says:"+ authzDecision+ ":final="+ finalDecision);
+  log.tracef("hasResourcePermission:RealmBase says:" + baseDecision + "::Authz framework says:"+ authzDecision+ ":final="+ finalDecision);
   if (!finalDecision) {
+    if (!disableAudit) {
+      Map<String,Object> entries=new HashMap<String,Object>();
+      entries.put("Step","hasResourcePermission");
+      failureAudit(request.getUserPrincipal(),entries);
+    }
     response.sendError(HttpServletResponse.SC_FORBIDDEN,sm.getString("realmBase.forbidden"));
+  }
+ else {
+    if (!disableAudit) {
+      Map<String,Object> entries=new HashMap<String,Object>();
+      entries.put("Step","hasResourcePermission");
+      successAudit(request.getUserPrincipal(),entries);
+    }
   }
   return finalDecision;
 }
