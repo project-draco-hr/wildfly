@@ -4,7 +4,7 @@
   }
   long start=System.currentTimeMillis();
   context.getResourceRegistrationForUpdate();
-  context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
+  final Resource rootResource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
   context.acquireControllerLock();
   final Map<String,List<ParsedBootOp>> runtimeOpsBySubsystem=new LinkedHashMap<String,List<ParsedBootOp>>();
   final Map<String,ParallelBootTransactionControl> transactionControls=new LinkedHashMap<String,ParallelBootTransactionControl>();
@@ -29,6 +29,16 @@
       for (      ParsedBootOp loggingOp : loggingOps) {
         context.addStep(loggingOp.response,loggingOp.operation,loggingOp.handler,OperationContext.Stage.RUNTIME);
       }
+    }
+    final Map<String,Resource> subsystemResources=new LinkedHashMap<String,Resource>();
+    for (    String subsystemName : opsBySubsystem.keySet()) {
+      final Resource resource=rootResource.removeChild(PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,subsystemName));
+      if (resource != null) {
+        subsystemResources.put(subsystemName,resource);
+      }
+    }
+    for (    Map.Entry<String,Resource> entry : subsystemResources.entrySet()) {
+      rootResource.registerChild(PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,entry.getKey()),entry.getValue());
     }
     context.addStep(getRuntimeStep(runtimeOpsBySubsystem),OperationContext.Stage.RUNTIME);
   }
