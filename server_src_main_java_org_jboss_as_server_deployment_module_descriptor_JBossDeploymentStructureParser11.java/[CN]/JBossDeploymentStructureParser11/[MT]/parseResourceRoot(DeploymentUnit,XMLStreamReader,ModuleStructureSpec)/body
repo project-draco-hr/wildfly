@@ -1,6 +1,7 @@
 {
   String name=null;
   String path=null;
+  boolean usePhysicalCodeSource=false;
   final Set<Attribute> required=EnumSet.of(Attribute.PATH);
   final int count=reader.getAttributeCount();
   for (int i=0; i < count; i++) {
@@ -12,6 +13,9 @@ case NAME:
     break;
 case PATH:
   path=reader.getAttributeValue(i);
+break;
+case USE_PHYSICAL_CODE_SOURCE:
+usePhysicalCodeSource=Boolean.parseBoolean(reader.getAttributeValue(i));
 break;
 default :
 throw unexpectedContent(reader);
@@ -32,19 +36,20 @@ throw new XMLStreamException("External resource roots not supported, resource ro
 }
  else {
 try {
-  final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
-  final VirtualFile deploymentRootFile=deploymentRoot.getRoot();
-  VirtualFile child=deploymentRootFile.getChild(path);
-  final Closeable closable=child.isFile() ? VFS.mountZip(child,child,TempFileProviderService.provider()) : null;
-  final MountHandle mountHandle=new MountHandle(closable);
-  ResourceRoot resourceRoot=new ResourceRoot(name,child,mountHandle);
-  for (  FilterSpecification filter : resourceFilters) {
-    resourceRoot.getExportFilters().add(filter);
-  }
-  specBuilder.addResourceRoot(resourceRoot);
+final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+deploymentRoot.setUsePhysicalCodeSource(usePhysicalCodeSource);
+final VirtualFile deploymentRootFile=deploymentRoot.getRoot();
+VirtualFile child=deploymentRootFile.getChild(path);
+final Closeable closable=child.isFile() ? VFS.mountZip(child,child,TempFileProviderService.provider()) : null;
+final MountHandle mountHandle=new MountHandle(closable);
+ResourceRoot resourceRoot=new ResourceRoot(name,child,mountHandle);
+for (FilterSpecification filter : resourceFilters) {
+resourceRoot.getExportFilters().add(filter);
+}
+specBuilder.addResourceRoot(resourceRoot);
 }
  catch (IOException e) {
-  throw new XMLStreamException(e);
+throw new XMLStreamException(e);
 }
 }
 return;
