@@ -23,13 +23,23 @@
     if (result.getEarSubDeploymentsIsolated() != null) {
       moduleSpec.setSubDeploymentModulesIsolated(result.getEarSubDeploymentsIsolated());
     }
-    if (result.getRootDeploymentSpecification() != null) {
-      moduleSpec.addUserDependencies(result.getRootDeploymentSpecification().getModuleDependencies());
-      moduleSpec.addExclusions(result.getRootDeploymentSpecification().getExclusions());
-      for (      final ResourceRoot additionalResourceRoot : result.getRootDeploymentSpecification().getResourceRoots()) {
-        deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,additionalResourceRoot);
+    final ModuleStructureSpec rootDeploymentSpecification=result.getRootDeploymentSpecification();
+    if (rootDeploymentSpecification != null) {
+      final Map<VirtualFile,ResourceRoot> resourceRoots=resourceRoots(deploymentUnit);
+      moduleSpec.addUserDependencies(rootDeploymentSpecification.getModuleDependencies());
+      moduleSpec.addExclusions(rootDeploymentSpecification.getExclusions());
+      moduleSpec.addAliases(rootDeploymentSpecification.getAliases());
+      moduleSpec.addModuleSystemDependencies(rootDeploymentSpecification.getSytemDependencies());
+      for (      final ResourceRoot additionalResourceRoot : rootDeploymentSpecification.getResourceRoots()) {
+        final ResourceRoot existingRoot=resourceRoots.get(additionalResourceRoot.getRoot());
+        if (existingRoot != null) {
+          existingRoot.merge(additionalResourceRoot);
+        }
+ else {
+          deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,additionalResourceRoot);
+        }
       }
-      for (      final String classFileTransformer : result.getRootDeploymentSpecification().getClassFileTransformers()) {
+      for (      final String classFileTransformer : rootDeploymentSpecification.getClassFileTransformers()) {
         moduleSpec.addClassFileTransformer(classFileTransformer);
       }
     }
@@ -48,10 +58,19 @@
       }
       final DeploymentUnit subDeployment=subDeploymentMap.get(path);
       final ModuleSpecification subModuleSpec=subDeployment.getAttachment(Attachments.MODULE_SPECIFICATION);
+      final Map<VirtualFile,ResourceRoot> resourceRoots=resourceRoots(subDeployment);
       subModuleSpec.addUserDependencies(spec.getModuleDependencies());
       subModuleSpec.addExclusions(spec.getExclusions());
+      subModuleSpec.addAliases(spec.getAliases());
+      subModuleSpec.addModuleSystemDependencies(spec.getSytemDependencies());
       for (      final ResourceRoot additionalResourceRoot : spec.getResourceRoots()) {
-        subDeployment.addToAttachmentList(Attachments.RESOURCE_ROOTS,additionalResourceRoot);
+        final ResourceRoot existingRoot=resourceRoots.get(additionalResourceRoot.getRoot());
+        if (existingRoot != null) {
+          existingRoot.merge(additionalResourceRoot);
+        }
+ else {
+          subDeployment.addToAttachmentList(Attachments.RESOURCE_ROOTS,additionalResourceRoot);
+        }
       }
       for (      final String classFileTransformer : spec.getClassFileTransformers()) {
         subModuleSpec.addClassFileTransformer(classFileTransformer);
