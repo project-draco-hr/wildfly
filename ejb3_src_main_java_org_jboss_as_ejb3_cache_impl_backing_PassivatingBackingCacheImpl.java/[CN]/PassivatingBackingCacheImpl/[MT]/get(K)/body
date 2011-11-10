@@ -1,0 +1,26 @@
+{
+  this.trace("get(%s)",key);
+  boolean valid=false;
+  while (!valid) {
+    E entry=store.get(key);
+    if (entry == null)     return null;
+    entry.lock();
+    try {
+      valid=entry.isValid();
+      if (valid) {
+        if (isClustered()) {
+          passivationManager.postReplicate(entry);
+        }
+        passivationManager.postActivate(entry);
+        entry.setPrePassivated(false);
+        entry.setInUse(true);
+        this.cancelExpirationPassivation(key);
+        return entry;
+      }
+    }
+  finally {
+      entry.unlock();
+    }
+  }
+  return null;
+}

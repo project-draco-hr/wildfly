@@ -1,0 +1,28 @@
+{
+  Cache<?,?> groupCache=this.groupCache.getValue();
+  EmbeddedCacheManager container=groupCache.getCacheManager();
+  Configuration configuration=new Configuration();
+  if (this.maxSize > 0) {
+    configuration.fluent().eviction().strategy(EvictionStrategy.LRU).maxEntries(this.maxSize);
+  }
+  for (  CacheLoaderConfig loader : groupCache.getConfiguration().getCacheLoaders()) {
+    CacheLoaderConfig config=loader.clone();
+    if (config instanceof FileCacheStoreConfig) {
+      FileCacheStoreConfig fileConfig=(FileCacheStoreConfig)config;
+      fileConfig.path(fileConfig.getPath() + File.separatorChar + beanName);
+    }
+    configuration.fluent().loaders().addCacheLoader(config);
+  }
+  groupCache.getCacheManager().defineConfiguration(beanName,groupCache.getName(),configuration);
+  Cache<MarshalledValue<K,MarshallingContext>,MarshalledValue<E,MarshallingContext>> cache=container.<MarshalledValue<K,MarshallingContext>,MarshalledValue<E,MarshallingContext>>getCache(beanName).getAdvancedCache().with(this.getClass().getClassLoader());
+  MarshallingContext context=new MarshallingContext(this.factory,passivationManager.getMarshallingConfiguration());
+  MarshalledValueFactory<MarshallingContext> keyFactory=new HashableMarshalledValueFactory(context);
+  MarshalledValueFactory<MarshallingContext> valueFactory=new SimpleMarshalledValueFactory(context);
+  LockKeyFactory<K,MarshallingContext> lockKeyFactory=new LockKeyFactory<K,MarshallingContext>(){
+    @Override public Serializable createLockKey(    MarshalledValue<K,MarshallingContext> key){
+      return new AbstractMap.SimpleImmutableEntry<MarshalledValue<K,MarshallingContext>,String>(key,beanName);
+    }
+  }
+;
+  return new InfinispanBackingCacheEntryStore<K,V,E,MarshallingContext>(cache,this.invoker,this.passivateEventsOnReplicate ? passivationManager : null,timeout,this,true,keyFactory,valueFactory,context,this.lockManager.getValue(),lockKeyFactory);
+}

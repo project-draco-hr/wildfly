@@ -5,7 +5,7 @@
   Configuration configurationDefaults=defaults.getDefaultConfiguration(mode);
   configuration=configurationDefaults.clone();
   configuration.applyOverrides(overrides);
-  if (configuration.isTransactionalCache() && configurationHelper.getTransactionManager() == null) {
+  if (configuration.isTransactionalCache() && !configuration.isInvocationBatchingEnabled() && configurationHelper.getTransactionManager() == null) {
     throw new StartException("Missing dependency: transaction manager required");
   }
   if (configuration.isUseSynchronizationForTransactions() && configurationHelper.getTransactionSynchronizationRegistry() == null) {
@@ -13,17 +13,20 @@
   }
   FluentConfiguration.TransactionConfig tx=configuration.fluent().transaction();
   if (configuration.isTransactionalCache()) {
-    Value<TransactionManager> txManager=this.configurationHelper.getTransactionManager();
-    if (txManager != null) {
-      tx.transactionManagerLookup(new TransactionManagerProvider(txManager));
+    if (configuration.isInvocationBatchingEnabled()) {
+      tx.transactionManagerLookup(new TransactionManagerProvider(new ImmediateValue<TransactionManager>(BatchModeTransactionManager.getInstance())));
     }
-    if (configuration.isUseSynchronizationForTransactions()) {
-      Value<TransactionSynchronizationRegistry> txSyncRegistry=this.configurationHelper.getTransactionSynchronizationRegistry();
-      if (txSyncRegistry != null) {
-        tx.transactionSynchronizationRegistryLookup(new TransactionSynchronizationRegistryProvider(txSyncRegistry));
+ else {
+      Value<TransactionManager> tm=this.configurationHelper.getTransactionManager();
+      if (tm != null) {
+        tx.transactionManagerLookup(new TransactionManagerProvider(tm));
       }
-    }
-    if (configuration.isTransactionRecoveryEnabled()) {
+      if (configuration.isUseSynchronizationForTransactions()) {
+        Value<TransactionSynchronizationRegistry> txSyncRegistry=this.configurationHelper.getTransactionSynchronizationRegistry();
+        if (txSyncRegistry != null) {
+          tx.transactionSynchronizationRegistryLookup(new TransactionSynchronizationRegistryProvider(txSyncRegistry));
+        }
+      }
     }
   }
   if (this.template != null) {

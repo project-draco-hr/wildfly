@@ -1,0 +1,24 @@
+{
+  this.trace("release(%s)",key);
+  E entry=store.get(key);
+  if (entry == null) {
+    EjbLogger.ROOT_LOGGER.cacheEntryNotFound(key);
+    return null;
+  }
+  entry.lock();
+  try {
+    entry.setInUse(false);
+    boolean modified=entry.isModified();
+    if (modified) {
+      if (isClustered()) {
+        passivationManager.preReplicate(entry);
+      }
+    }
+    store.update(entry,modified);
+    this.scheduleExpirationPassivation(key);
+    return entry;
+  }
+  finally {
+    entry.unlock();
+  }
+}
