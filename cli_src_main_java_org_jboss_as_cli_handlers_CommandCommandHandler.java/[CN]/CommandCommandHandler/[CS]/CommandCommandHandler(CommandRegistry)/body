@@ -2,39 +2,9 @@
   super("command",true);
   this.cmdRegistry=cmdRegistry;
   action.addCantAppearAfter(helpArg);
-  profile=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
-    @Override public List<String> getAllCandidates(    CommandContext ctx){
-      return Util.getNodeNames(ctx.getModelControllerClient(),null,"profile");
-    }
-  }
-),"--profile"){
-    @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
-      if (!ctx.isDomainMode()) {
-        return false;
-      }
-      final String actionName=action.getValue(ctx.getParsedCommandLine());
-      if (actionName == null || !"add".equals(actionName)) {
-        return false;
-      }
-      return super.canAppearNext(ctx);
-    }
-  }
-;
-  profile.addCantAppearAfter(helpArg);
   nodePath=new ArgumentWithValue(this,new CommandLineCompleter(){
     @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
       int offset=0;
-      if (ctx.isDomainMode()) {
-        final String profileName=profile.getValue(ctx.getParsedCommandLine());
-        if (profileName == null) {
-          return -1;
-        }
-        StringBuilder buf=new StringBuilder();
-        buf.append("profile=").append(profileName).append('/');
-        offset=buf.length();
-        buf.append(buffer);
-        buffer=buf.toString();
-      }
       int result=OperationRequestCompleter.ARG_VALUE_COMPLETER.complete(ctx,buffer,cursor + offset,candidates) - offset;
       if (result < 0) {
         return result;
@@ -44,9 +14,6 @@
   }
 ,"--node-type"){
     @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
-      if (ctx.isDomainMode() && !profile.isValueComplete(ctx.getParsedCommandLine())) {
-        return false;
-      }
       return "add".equals(action.getValue(ctx.getParsedCommandLine())) && super.canAppearNext(ctx);
     }
   }
@@ -109,6 +76,9 @@
       final String actionStr=action.getValue(args);
       if (actionStr == null) {
         return false;
+      }
+      if ("add".equals(actionStr)) {
+        return nodePath.isValueComplete(args);
       }
       if ("remove".equals(actionStr)) {
         return true;
