@@ -1,0 +1,55 @@
+{
+  final Resource resource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
+  final ModelNode originalModel=resource.getModel().clone();
+  final ModelNode model=resource.getModel();
+  updateModel(operation,model);
+  if (requiresRuntime(context)) {
+    context.addStep(new OperationStepHandler(){
+      public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        final List<ServiceController<?>> controllers=new ArrayList<ServiceController<?>>();
+        final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+        final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+        final String name=address.getLastElement().getValue();
+        final ServiceRegistry serviceRegistry=context.getServiceRegistry(false);
+        @SuppressWarnings("unchecked") final ServiceController<Handler> controller=(ServiceController<Handler>)serviceRegistry.getService(LogServices.handlerName(name));
+        if (controller != null) {
+          @SuppressWarnings("unchecked") final T handler=(T)controller.getValue();
+          final ModelNode level=LEVEL.resolveModelAttribute(context,model);
+          final ModelNode formatter=FORMATTER.resolveModelAttribute(context,model);
+          final ModelNode encoding=ENCODING.resolveModelAttribute(context,model);
+          if (level.isDefined()) {
+            handler.setLevel(java.util.logging.Level.parse(level.asString()));
+          }
+          if (formatter.isDefined()) {
+            AbstractFormatterSpec.fromModelNode(context,model).apply(handler);
+          }
+          if (encoding.isDefined()) {
+            try {
+              handler.setEncoding(encoding.asString());
+            }
+ catch (            UnsupportedEncodingException e) {
+              throw new OperationFailedException(e,new ModelNode().set(MESSAGES.failedToSetHandlerEncoding()));
+            }
+          }
+          final boolean restartRequired=applyUpdateToRuntime(context,name,model,originalModel,handler);
+          if (restartRequired) {
+            context.reloadRequired();
+          }
+          if (context.completeStep() != OperationContext.ResultAction.KEEP) {
+            try {
+              revertUpdateToRuntime(context,name,model,originalModel,handler);
+            }
+ catch (            Exception e) {
+              ROOT_LOGGER.errorRevertingOperation(e,getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)));
+            }
+            if (restartRequired) {
+              context.revertReloadRequired();
+            }
+          }
+        }
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}
