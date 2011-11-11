@@ -36,10 +36,10 @@
       DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
       ModelNode result;
       builder=new DefaultOperationRequestBuilder();
-      builder.setOperationName("full-replace-deployment");
+      builder.setOperationName(Util.FULL_REPLACE_DEPLOYMENT);
       builder.addProperty("name",name);
       if (runtimeName != null) {
-        builder.addProperty("runtime-name",runtimeName);
+        builder.addProperty(Util.RUNTIME_NAME,runtimeName);
       }
       FileInputStream is=null;
       try {
@@ -47,7 +47,7 @@
         ModelNode request=builder.buildRequest();
         OperationBuilder op=new OperationBuilder(request);
         op.addInputStream(is);
-        request.get("content").get(0).get("input-stream-index").set(0);
+        request.get(Util.CONTENT).get(0).get(Util.INPUT_STREAM_INDEX).set(0);
         result=client.execute(op.build());
       }
  catch (      Exception e) {
@@ -69,22 +69,67 @@
     return;
   }
  else {
-    DefaultOperationRequestBuilder builder;
-    ModelNode result;
-    if (f != null) {
-      builder=new DefaultOperationRequestBuilder();
-      builder.setOperationName("add");
-      builder.addNode("deployment",name);
-      if (runtimeName != null) {
-        builder.addProperty("runtime-name",runtimeName);
+    ModelNode deployRequest=null;
+    if (!disabled.isPresent(args)) {
+      if (ctx.isDomainMode()) {
+        final List<String> serverGroups;
+        if (ctx.isDomainMode()) {
+          if (allServerGroups.isPresent(args)) {
+            serverGroups=Util.getServerGroups(client);
+          }
+ else {
+            String serverGroupsStr=this.serverGroups.getValue(args);
+            if (serverGroupsStr == null) {
+              final StringBuilder buf=new StringBuilder();
+              buf.append("One of ");
+              if (f != null) {
+                buf.append(disabled.getFullName()).append(", ");
+              }
+              buf.append("--all-server-groups or --server-groups is missing.");
+              ctx.printLine(buf.toString());
+              return;
+            }
+            serverGroups=Arrays.asList(serverGroupsStr.split(","));
+          }
+          if (serverGroups.isEmpty()) {
+            ctx.printLine("No server group is available.");
+            return;
+          }
+        }
+ else {
+          serverGroups=null;
+        }
+        deployRequest=new ModelNode();
+        deployRequest.get(Util.OPERATION).set(Util.COMPOSITE);
+        deployRequest.get(Util.ADDRESS).setEmptyList();
+        ModelNode steps=deployRequest.get(Util.STEPS);
+        for (        String serverGroup : serverGroups) {
+          steps.add(Util.configureDeploymentOperation(Util.ADD,name,serverGroup));
+        }
+        for (        String serverGroup : serverGroups) {
+          steps.add(Util.configureDeploymentOperation(Util.DEPLOY,name,serverGroup));
+        }
       }
+ else {
+        deployRequest=new ModelNode();
+        deployRequest.get(Util.OPERATION).set(Util.DEPLOY);
+        deployRequest.get(Util.ADDRESS,Util.DEPLOYMENT).set(name);
+      }
+    }
+    if (f != null) {
+      ModelNode request=new ModelNode();
+      request.get(Util.OPERATION).set(Util.ADD);
+      request.get(Util.ADDRESS,Util.DEPLOYMENT).set(name);
+      if (runtimeName != null) {
+        request.get(Util.RUNTIME_NAME).set(runtimeName);
+      }
+      ModelNode result;
       FileInputStream is=null;
       try {
         is=new FileInputStream(f);
-        ModelNode request=builder.buildRequest();
         OperationBuilder op=new OperationBuilder(request);
         op.addInputStream(is);
-        request.get("content").get(0).get("input-stream-index").set(0);
+        request.get(Util.CONTENT).get(0).get(Util.INPUT_STREAM_INDEX).set(0);
         result=client.execute(op.build());
       }
  catch (      Exception e) {
@@ -99,55 +144,10 @@
         return;
       }
     }
-    if (!disabled.isPresent(args)) {
-      final ModelNode request;
-      if (ctx.isDomainMode()) {
-        final List<String> serverGroups;
-        if (ctx.isDomainMode()) {
-          if (allServerGroups.isPresent(args)) {
-            serverGroups=Util.getServerGroups(client);
-          }
- else {
-            String serverGroupsStr=this.serverGroups.getValue(args);
-            if (serverGroupsStr == null) {
-              ctx.printLine("Either --all-server-groups or --server-groups must be specified.");
-              return;
-            }
-            serverGroups=Arrays.asList(serverGroupsStr.split(","));
-          }
-          if (serverGroups.isEmpty()) {
-            ctx.printLine("No server group is available.");
-            return;
-          }
-        }
- else {
-          serverGroups=null;
-        }
-        request=new ModelNode();
-        request.get("operation").set("composite");
-        request.get("address").setEmptyList();
-        ModelNode steps=request.get("steps");
-        for (        String serverGroup : serverGroups) {
-          steps.add(Util.configureDeploymentOperation("add",name,serverGroup));
-        }
-        for (        String serverGroup : serverGroups) {
-          steps.add(Util.configureDeploymentOperation("deploy",name,serverGroup));
-        }
-      }
- else {
-        builder=new DefaultOperationRequestBuilder();
-        builder.setOperationName("deploy");
-        builder.addNode("deployment",name);
-        try {
-          request=builder.buildRequest();
-        }
- catch (        Exception e) {
-          ctx.printLine("Failed to deploy: " + e.getLocalizedMessage());
-          return;
-        }
-      }
+    if (deployRequest != null) {
+      ModelNode result;
       try {
-        result=client.execute(request);
+        result=client.execute(deployRequest);
       }
  catch (      Exception e) {
         ctx.printLine("Failed to deploy: " + e.getLocalizedMessage());
