@@ -1,0 +1,40 @@
+{
+  final List<BindingConfiguration> bindings=new ArrayList<BindingConfiguration>();
+  final MessageDestinationReferencesMetaData messageDestinationReferences=environment.getEnvironment().getMessageDestinationReferences();
+  if (messageDestinationReferences == null) {
+    return bindings;
+  }
+  for (  final MessageDestinationReferenceMetaData messageRef : messageDestinationReferences) {
+    final String name;
+    if (messageRef.getName().startsWith("java:")) {
+      name=messageRef.getName();
+    }
+ else {
+      name=environment.getDefaultContext() + messageRef.getName();
+    }
+    Class<?> classType=null;
+    if (messageRef.getType() != null) {
+      try {
+        classType=classLoader.loadClass(messageRef.getType());
+      }
+ catch (      ClassNotFoundException e) {
+        throw new DeploymentUnitProcessingException("Could not load " + messageRef.getType() + " referenced in env-entry ",e);
+      }
+    }
+    LookupInjectionSource injectionSource=new LookupInjectionSource(name);
+    classType=processInjectionTargets(moduleDescription,componentDescription,applicationClasses,injectionSource,classLoader,deploymentReflectionIndex,messageRef,classType);
+    final BindingConfiguration bindingConfiguration;
+    if (!isEmpty(messageRef.getLookupName())) {
+      bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(messageRef.getLookupName()));
+      bindings.add(bindingConfiguration);
+    }
+ else     if (!isEmpty(messageRef.getMappedName())) {
+      bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(messageRef.getMappedName()));
+      bindings.add(bindingConfiguration);
+    }
+ else {
+      logger.warn("Could not resolve message-destination-ref " + name);
+    }
+  }
+  return bindings;
+}
