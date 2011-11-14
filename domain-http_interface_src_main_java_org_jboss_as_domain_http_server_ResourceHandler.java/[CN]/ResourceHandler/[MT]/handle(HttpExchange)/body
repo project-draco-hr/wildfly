@@ -1,0 +1,47 @@
+{
+  final URI uri=http.getRequestURI();
+  final String requestMethod=http.getRequestMethod();
+  if (!GET.equals(requestMethod)) {
+    http.sendResponseHeaders(METHOD_NOT_ALLOWED,-1);
+    return;
+  }
+  String path=uri.getPath();
+  String resource=path.substring(context.length(),path.length());
+  if (resource.startsWith("/"))   resource=resource.substring(1);
+  if (resource.equals("")) {
+    Headers responseHeaders=http.getResponseHeaders();
+    responseHeaders.add(LOCATION,context + defaultResource);
+    http.sendResponseHeaders(MOVED_PERMENANTLY,0);
+    http.close();
+    return;
+  }
+ else   if (resource.indexOf(".") == -1) {
+    respond404(http);
+  }
+  ResourceHandle handle=getResourceHandle(resource);
+  if (handle.getInputStream() != null) {
+    InputStream inputStream=handle.getInputStream();
+    final Headers responseHeaders=http.getResponseHeaders();
+    responseHeaders.add(CONTENT_TYPE,resolveContentType(path));
+    boolean skipcache=resource.endsWith(NOCACHE_JS);
+    if (!skipcache) {
+      if (System.currentTimeMillis() > lastExpiryDate) {
+        lastExpiryDate=calculateExpiryDate();
+        lastExpiryHeader=createDateFormat().format(new Date(lastExpiryDate));
+      }
+      responseHeaders.add(CACHE_CONTROL_HEADER,"private, max-age=2678400, must-revalidate");
+      responseHeaders.add(EXPIRES_HEADER,lastExpiryHeader);
+    }
+    responseHeaders.add(LAST_MODIFIED_HEADER,LAST_MODIFIED);
+    responseHeaders.add(CONTENT_LENGTH_HEADER,String.valueOf(handle.getSize()));
+    http.sendResponseHeaders(OK,0);
+    OutputStream outputStream=http.getResponseBody();
+    fastChannelCopy(inputStream,outputStream);
+    outputStream.flush();
+    safeClose(outputStream);
+    safeClose(inputStream);
+  }
+ else {
+    respond404(http);
+  }
+}
