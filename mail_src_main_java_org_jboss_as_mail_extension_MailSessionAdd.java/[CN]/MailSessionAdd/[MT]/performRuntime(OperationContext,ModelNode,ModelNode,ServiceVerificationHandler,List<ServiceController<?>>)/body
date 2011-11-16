@@ -1,9 +1,13 @@
 {
   final String jndiName=Util.getJndiName(operation);
   final ServiceTarget serviceTarget=context.getServiceTarget();
-  final MailSessionService service=createMailSessionService(context,operation);
+  final MailSessionConfig config=Util.from(context,operation);
+  final MailSessionService service=new MailSessionService(config);
   final ServiceName serviceName=SERVICE_NAME_BASE.append(jndiName);
   final ServiceBuilder<?> mailSessionBuilder=serviceTarget.addService(serviceName,service);
+  addOutboundSocketDependency(service,mailSessionBuilder,config.getImapServer());
+  addOutboundSocketDependency(service,mailSessionBuilder,config.getPop3Server());
+  addOutboundSocketDependency(service,mailSessionBuilder,config.getSmtpServer());
   final ManagedReferenceFactory valueManagedReferenceFactory=new ManagedReferenceFactory(){
     @Override public ManagedReference getReference(){
       return new ValueManagedReference(new ImmediateValue<Object>(service.getValue()));
@@ -17,17 +21,17 @@
 switch (transition) {
 case STARTING_to_UP:
 {
-          log.infof("Bound mail session [%s]",jndiName);
+          MailLogger.ROOT_LOGGER.boundMailSession(jndiName);
           break;
         }
 case START_REQUESTED_to_DOWN:
 {
-        log.infof("Unbound mail session [%s]",jndiName);
+        MailLogger.ROOT_LOGGER.unboundMailSession(jndiName);
         break;
       }
 case REMOVING_to_REMOVED:
 {
-      log.debugf("Removed mail session [%s]",jndiName);
+      MailLogger.ROOT_LOGGER.removedMailSession(jndiName);
       break;
     }
 }
