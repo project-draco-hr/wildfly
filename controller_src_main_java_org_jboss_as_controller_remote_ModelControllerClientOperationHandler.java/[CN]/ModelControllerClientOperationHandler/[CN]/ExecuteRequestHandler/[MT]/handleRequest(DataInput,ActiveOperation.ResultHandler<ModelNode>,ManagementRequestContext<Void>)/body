@@ -1,0 +1,25 @@
+{
+  final ModelNode operation=new ModelNode();
+  ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_OPERATION);
+  operation.readExternal(input);
+  ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_INPUTSTREAMS_LENGTH);
+  final int attachmentsLength=input.readInt();
+  context.executeAsync(new ManagementRequestContext.AsyncTask<Void>(){
+    @Override public void execute(    final ManagementRequestContext<Void> context) throws Exception {
+      final ManagementResponseHeader response=ManagementResponseHeader.create(context.getRequestHeader());
+      final ModelNode result=doExecute(operation,attachmentsLength,context);
+      final FlushableDataOutput output=context.writeMessage(response);
+      try {
+        output.write(ModelControllerProtocol.PARAM_RESPONSE);
+        result.writeExternal(output);
+        output.writeByte(ManagementProtocol.RESPONSE_END);
+        output.close();
+      }
+  finally {
+        StreamUtils.safeClose(output);
+      }
+      resultHandler.done(result);
+    }
+  }
+);
+}

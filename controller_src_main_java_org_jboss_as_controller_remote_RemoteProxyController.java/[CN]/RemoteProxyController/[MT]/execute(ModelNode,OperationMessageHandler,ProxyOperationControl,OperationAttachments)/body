@@ -1,43 +1,12 @@
 {
-  final int batchId=ManagementBatchIdManager.DEFAULT.createBatchId();
-  final CountDownLatch prepareOrFailedLatch=new CountDownLatch(1);
-  final AtomicBoolean failed=new AtomicBoolean(false);
-  ExecuteRequest request=new ExecuteRequest(batchId,getOperationForProxy(operation),handler,new ProxyOperationControl(){
-    @Override public void operationPrepared(    OperationTransaction transaction,    ModelNode result){
-      control.operationPrepared(transaction,result);
-      prepareOrFailedLatch.countDown();
-    }
-    @Override public void operationFailed(    ModelNode response){
-      control.operationFailed(response);
-      failed.set(true);
-      prepareOrFailedLatch.countDown();
-    }
-    @Override public void operationCompleted(    ModelNode response){
-      control.operationCompleted(response);
-    }
-  }
-,attachments){
-    @Override protected void setError(    Exception e){
-      super.setError(e);
-      if (failed.compareAndSet(false,true)) {
-        control.operationFailed(new ModelNode().get(OUTCOME).set(FAILED));
-      }
-      prepareOrFailedLatch.countDown();
-    }
-  }
-;
+  final ModelNode operation=getOperationForProxy(original);
+  final ExecuteRequestContext context=new ExecuteRequestContext(operation,attachments,handler,control);
   try {
-    request.executeForResult(executorService,getChannelStrategy());
-    prepareOrFailedLatch.await();
+    final ActiveOperation<Void,RemoteProxyController.ExecuteRequestContext> support=super.registerActiveOperation(context,context);
+    super.executeRequest(new ExecuteRequest(),channel,support);
+    context.awaitPreparedOrFailed();
   }
  catch (  Exception e) {
-    e.printStackTrace();
-    try {
-      ManagementBatchIdManager.DEFAULT.freeBatchId(batchId);
-    }
- catch (    Exception ignore) {
-    }
-    activeRequests.remove(batchId);
     throw new RuntimeException(e);
   }
 }

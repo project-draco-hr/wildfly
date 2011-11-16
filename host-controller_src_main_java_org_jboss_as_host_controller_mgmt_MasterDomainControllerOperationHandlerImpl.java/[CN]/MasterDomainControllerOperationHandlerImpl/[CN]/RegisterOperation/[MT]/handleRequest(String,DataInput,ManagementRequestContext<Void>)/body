@@ -1,0 +1,48 @@
+{
+  context.executeAsync(new ManagementRequestContext.AsyncTask<Void>(){
+    @Override public void execute(    final ManagementRequestContext<Void> context) throws Exception {
+      try {
+        final ManagementChannel mgmtChannel=new ManagementChannel(hostId,context.getChannel());
+        registry.registerChannel(hostId,mgmtChannel,new ProxyCreatedCallback(){
+          @Override public void proxyCreated(          final ManagementMessageHandler handler){
+            proxyHandler=handler;
+            mgmtChannel.addCloseHandler(new CloseHandler<Channel>(){
+              @Override public void handleClose(              Channel closed,              IOException exception){
+                handler.shutdown();
+              }
+            }
+);
+          }
+        }
+);
+        final ModelNode op=new ModelNode();
+        op.get(OP).set(ReadMasterDomainModelHandler.OPERATION_NAME);
+        op.get(OP_ADDR).setEmptyList();
+        op.get(HOST).set(hostId);
+        final ModelNode result=MasterDomainControllerOperationHandlerImpl.this.controller.execute(op,OperationMessageHandler.logging,OperationTransactionControl.COMMIT,null);
+        if (result.hasDefined(FAILURE_DESCRIPTION)) {
+          error=result.get(FAILURE_DESCRIPTION).asString();
+        }
+      }
+ catch (      Exception e) {
+        e.printStackTrace();
+        error=SlaveRegistrationError.formatHostAlreadyExists(e.getMessage());
+      }
+      final FlushableDataOutput output=writeGenericResponseHeader(context);
+      try {
+        if (error != null) {
+          output.write(DomainControllerProtocol.PARAM_ERROR);
+          output.writeUTF(SlaveRegistrationError.parse(error).toString());
+        }
+ else {
+          output.write(DomainControllerProtocol.PARAM_OK);
+        }
+        output.close();
+      }
+  finally {
+        StreamUtils.safeClose(output);
+      }
+    }
+  }
+);
+}

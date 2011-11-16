@@ -1,9 +1,7 @@
 {
   final byte[] firstBytes=new byte[]{1,2,3,4,5,6,7,8,9,10};
   final byte[] secondBytes=new byte[]{10,9,8,7,6,5,4,3,2,1};
-  ManagementChannel serverChannel=channels.getServerChannel();
-  ManagementChannel clientChannel=channels.getClientChannel();
-  clientChannel.startReceiving();
+  final byte[] thirdBytes=new byte[]{1};
   final CountDownLatch executeLatch=new CountDownLatch(1);
   final AtomicInteger size=new AtomicInteger();
   final AtomicReference<byte[]> firstResult=new AtomicReference<byte[]>();
@@ -45,11 +43,12 @@
     }
   }
 ;
-  ModelControllerClientOperationHandler operationHandler=new ModelControllerClientOperationHandler(channels.getExecutorService(),controller);
-  serverChannel.setOperationHandler(operationHandler);
-  ModelControllerClient client=new ExistingChannelModelControllerClient(channels.getClientChannel());
+  handler.setDelegate(new ModelControllerClientOperationHandler(controller,channels.getExecutorService()));
+  ManagementChannel clientChannel=channels.getClientChannel();
+  ExistingChannelModelControllerClient client=new ExistingChannelModelControllerClient(clientChannel);
+  clientChannel.setReceiver(ManagementChannelReceiver.createDelegating(client));
+  clientChannel.startReceiving();
   try {
-    clientChannel.setOperationHandler((ManagementOperationHandler)client);
     ModelNode operation=new ModelNode();
     operation.get("test").set("123");
     ModelNode op=new ModelNode();
@@ -57,13 +56,13 @@
     OperationBuilder builder=new OperationBuilder(op);
     builder.addInputStream(new ByteArrayInputStream(firstBytes));
     builder.addInputStream(new ByteArrayInputStream(secondBytes));
-    builder.addInputStream(null);
+    builder.addInputStream(new ByteArrayInputStream(thirdBytes));
     client.execute(builder.build());
     executeLatch.await();
     assertEquals(3,size.get());
     assertArrays(firstBytes,firstResult.get());
     assertArrays(secondBytes,secondResult.get());
-    assertArrays(new byte[0],thirdResult.get());
+    assertArrays(new byte[]{1},thirdResult.get());
   }
   finally {
     IoUtils.safeClose(client);

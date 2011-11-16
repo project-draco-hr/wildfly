@@ -1,18 +1,22 @@
 {
+  TransactionalModelControllerOperationHandler operationHandler=new TransactionalModelControllerOperationHandler(proxiedController,Executors.newCachedThreadPool());
   try {
     channels=new RemoteChannelPairSetup();
-    channels.setupRemoting();
+    channels.setupRemoting(operationHandler);
     channels.startChannels();
   }
  catch (  Exception e) {
     throw new RuntimeException(e);
   }
-  ManagementChannel serverChannel=channels.getServerChannel();
-  ManagementChannel clientChannel=channels.getClientChannel();
+  final ManagementChannel clientChannel=channels.getClientChannel();
+  final RemoteProxyController proxyController=RemoteProxyController.create(channels.getExecutorService(),proxyNodeAddress,ProxyOperationAddressTranslator.SERVER,channels.getClientChannel());
+  clientChannel.setReceiver(proxyController);
+  clientChannel.addCloseHandler(new CloseHandler<Channel>(){
+    @Override public void handleClose(    Channel closed,    IOException exception){
+      proxyController.shutdown();
+    }
+  }
+);
   clientChannel.startReceiving();
-  TransactionalModelControllerOperationHandler operationHandler=new TransactionalModelControllerOperationHandler(channels.getExecutorService(),proxiedController);
-  serverChannel.setOperationHandler(operationHandler);
-  RemoteProxyController proxyController=RemoteProxyController.create(channels.getExecutorService(),proxyNodeAddress,ProxyOperationAddressTranslator.SERVER,channels.getClientChannel());
-  clientChannel.setOperationHandler(proxyController);
   return proxyController;
 }

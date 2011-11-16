@@ -1,9 +1,19 @@
 {
-  hcChannel.getValue().setOperationHandler(new TransactionalModelControllerOperationHandler(executor,controller.getValue()));
+  final ManagementChannel channel=hcChannel.getValue();
+  final HostControllerServerHandler handler=new HostControllerServerHandler(controller.getValue(),executor);
+  channel.setReceiver(handler);
+  channel.addCloseHandler(new CloseHandler<Channel>(){
+    @Override public void handleClose(    final Channel closed,    final IOException exception){
+      handler.shutdown();
+    }
+  }
+);
+  context.asynchronous();
   try {
-    new ServerRegisterRequest().executeForResult(executor,ManagementClientChannelStrategy.create(hcChannel.getValue()));
+    handler.executeRegistrationRequest(channel,new ServerRegisterRequest(),context);
   }
  catch (  Exception e) {
     throw new StartException("Failed to send registration message to host controller",e);
   }
+  channel.startReceiving();
 }

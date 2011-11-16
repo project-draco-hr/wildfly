@@ -1,33 +1,28 @@
 {
   if (bytes == null) {
-    new ManagementRequest<Void>(batchId){
-      @Override protected byte getRequestCode(){
+    final ActiveOperation<T,A> support=AbstractModelControllerOperationHandler.this.getActiveOperation(batchId);
+    AbstractModelControllerOperationHandler.this.executeRequest(new AbstractManagementRequest<T,A>(){
+      @Override public byte getOperationType(){
         return ModelControllerProtocol.GET_INPUTSTREAM_REQUEST;
       }
-      @Override protected void writeRequest(      int protocolVersion,      FlushableDataOutput output) throws IOException {
+      @Override protected void sendRequest(      ActiveOperation.ResultHandler<T> resultHandler,      ManagementRequestContext<A> context,      FlushableDataOutput output) throws IOException {
         output.write(ModelControllerProtocol.PARAM_INPUTSTREAM_INDEX);
         output.writeInt(index);
       }
-      @Override protected ManagementResponseHandler<Void> getResponseHandler(){
-        return new ManagementResponseHandler<Void>(){
-          protected Void readResponse(          DataInput input) throws IOException {
+      @Override public void handleRequest(      DataInput input,      ActiveOperation.ResultHandler<T> resultHandler,      ManagementRequestContext<A> context) throws IOException {
 synchronized (ProxiedInputStream.this) {
-              ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_INPUTSTREAM_LENGTH);
-              final int size=input.readInt();
-              ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_INPUTSTREAM_CONTENTS);
-              final byte[] buf=new byte[size];
-              for (int i=0; i < size; i++) {
-                buf[i]=input.readByte();
-              }
-              bytes=buf;
-              ProxiedInputStream.this.notifyAll();
-            }
-            return null;
+          ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_INPUTSTREAM_LENGTH);
+          final int size=input.readInt();
+          ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_INPUTSTREAM_CONTENTS);
+          final byte[] buf=new byte[size];
+          for (int i=0; i < size; i++) {
+            buf[i]=input.readByte();
           }
+          bytes=buf;
+          ProxiedInputStream.this.notifyAll();
         }
-;
       }
     }
-.execute(executorService,getChannelStrategy(channel));
+,channel,support);
   }
 }
