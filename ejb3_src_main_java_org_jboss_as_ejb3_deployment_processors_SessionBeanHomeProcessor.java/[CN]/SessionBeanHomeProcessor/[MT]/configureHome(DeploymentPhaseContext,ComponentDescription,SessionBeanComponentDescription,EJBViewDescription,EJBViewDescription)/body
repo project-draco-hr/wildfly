@@ -1,12 +1,10 @@
 {
   homeView.getConfigurators().add(new ViewConfigurator(){
     @Override public void configure(    final DeploymentPhaseContext context,    final ComponentConfiguration componentConfiguration,    final ViewDescription description,    final ViewConfiguration configuration) throws DeploymentUnitProcessingException {
-      final DeploymentReflectionIndex reflectionIndex=phaseContext.getDeploymentUnit().getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
       configuration.addClientPostConstructInterceptor(org.jboss.invocation.Interceptors.getTerminalInterceptorFactory(),InterceptorOrder.ClientPostConstruct.TERMINAL_INTERCEPTOR);
       configuration.addClientPreDestroyInterceptor(org.jboss.invocation.Interceptors.getTerminalInterceptorFactory(),InterceptorOrder.ClientPreDestroy.TERMINAL_INTERCEPTOR);
       final DeploymentClassIndex classIndex=phaseContext.getDeploymentUnit().getAttachment(Attachments.CLASS_INDEX);
-      final ClassReflectionIndex<?> index=reflectionIndex.getClassIndex(configuration.getViewClass());
-      for (      Method method : index.getMethods()) {
+      for (      Method method : configuration.getProxyFactory().getCachedMethods()) {
         if (method.getName().startsWith("create")) {
           if (ejbObjectView == null) {
             throw new RuntimeException(componentDescription.getComponentName() + " does not have a EJB 2.x local interface");
@@ -21,7 +19,7 @@
           }
 );
           configuration.addClientInterceptor(method,ViewDescription.CLIENT_DISPATCHER_INTERCEPTOR_FACTORY,InterceptorOrder.Client.CLIENT_DISPATCHER);
-          configuration.addViewInterceptor(method,factory,InterceptorOrder.View.HOME_CREATE_INTERCEPTOR);
+          configuration.addViewInterceptor(method,factory,InterceptorOrder.View.HOME_METHOD_INTERCEPTOR);
         }
  else         if (method.getName().equals("getEJBMetaData") && method.getParameterTypes().length == 0) {
           final Class<?> ejbObjectClass;
@@ -39,7 +37,15 @@
           }
 );
           configuration.addClientInterceptor(method,ViewDescription.CLIENT_DISPATCHER_INTERCEPTOR_FACTORY,InterceptorOrder.Client.CLIENT_DISPATCHER);
-          configuration.addViewInterceptor(method,factory,InterceptorOrder.View.HOME_CREATE_INTERCEPTOR);
+          configuration.addViewInterceptor(method,factory,InterceptorOrder.View.HOME_METHOD_INTERCEPTOR);
+        }
+ else         if (method.getName().equals("remove") && method.getParameterTypes().length == 1 && method.getParameterTypes()[0] == Object.class) {
+          configuration.addClientInterceptor(method,ViewDescription.CLIENT_DISPATCHER_INTERCEPTOR_FACTORY,InterceptorOrder.Client.CLIENT_DISPATCHER);
+          configuration.addViewInterceptor(method,InvalidRemoveExceptionMethodInterceptor.FACTORY,InterceptorOrder.View.INVALID_METHOD_EXCEPTION);
+        }
+ else         if (method.getName().equals("remove") && method.getParameterTypes().length == 1 && method.getParameterTypes()[0] == Handle.class) {
+          configuration.addClientInterceptor(method,ViewDescription.CLIENT_DISPATCHER_INTERCEPTOR_FACTORY,InterceptorOrder.Client.CLIENT_DISPATCHER);
+          configuration.addViewInterceptor(method,HomeRemoveInterceptor.FACTORY,InterceptorOrder.View.HOME_METHOD_INTERCEPTOR);
         }
       }
     }
