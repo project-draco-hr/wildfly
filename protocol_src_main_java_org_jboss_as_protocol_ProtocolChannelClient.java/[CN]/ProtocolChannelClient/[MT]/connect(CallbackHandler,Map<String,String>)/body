@@ -1,0 +1,27 @@
+{
+  if (connection != null) {
+    throw MESSAGES.alreadyConnected();
+  }
+  Builder builder=OptionMap.builder();
+  builder.set(SASL_POLICY_NOANONYMOUS,Boolean.FALSE);
+  if (saslOptions != null) {
+    List<Property> tempProperties=new ArrayList<Property>(saslOptions.size());
+    for (    String currentKey : saslOptions.keySet()) {
+      tempProperties.add(Property.of(currentKey,saslOptions.get(currentKey)));
+    }
+    builder.set(Options.SASL_PROPERTIES,Sequence.of(tempProperties));
+  }
+  CallbackHandler actualHandler=handler != null ? handler : new AnonymousCallbackHandler();
+  WrapperCallbackHandler wrapperHandler=new WrapperCallbackHandler(actualHandler);
+  IoFuture<Connection> future=endpoint.connect(uri,builder.getMap(),wrapperHandler);
+  try {
+    this.connection=future.get();
+  }
+ catch (  CancellationException e) {
+    throw MESSAGES.connectWasCancelled();
+  }
+catch (  IOException e) {
+    throw MESSAGES.couldNotConnect(uri,e);
+  }
+  return connection;
+}

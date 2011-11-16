@@ -6,24 +6,32 @@
     port=defaultControllerPort;
   }
   try {
-    CallbackHandler cbh=new AuthenticationCallbackHandler();
-    ModelControllerClient newClient=ModelControllerClient.Factory.create(host,port,cbh);
-    if (this.client != null) {
-      disconnectController();
-    }
-    client=newClient;
-    this.controllerHost=host;
-    this.controllerPort=port;
-    List<String> nodeTypes=Util.getNodeTypes(newClient,new DefaultOperationRequestAddress());
-    if (!nodeTypes.isEmpty()) {
-      domainMode=nodeTypes.contains("server-group");
-    }
- else {
-      printLine("The controller is not available at " + host + ":"+ port);
-      disconnectController();
-    }
-  }
- catch (  UnknownHostException e) {
-    printLine("Failed to resolve host '" + host + "': "+ e.getLocalizedMessage());
-  }
+    ModelControllerClient newClient=null;
+    CallbackHandler cbh=new AuthenticationCallbackHandler(username,password);
+    ModelControllerClient tempClient=ModelControllerClient.Factory.create(host,port,cbh);
+switch (initialConnection(tempClient)) {
+case SUCCESS:
+      newClient=tempClient;
+    break;
+case CONNECTION_FAILURE:
+  printLine("The controller is not available at " + host + ":"+ port);
+break;
+case AUTHENTICATION_FAILURE:
+printLine("Unable to authenticate against controller at " + host + ":"+ port);
+break;
+}
+if (newClient != null) {
+if (this.client != null) {
+disconnectController();
+}
+client=newClient;
+this.controllerHost=host;
+this.controllerPort=port;
+List<String> nodeTypes=Util.getNodeTypes(newClient,new DefaultOperationRequestAddress());
+domainMode=nodeTypes.contains("server-group");
+}
+}
+ catch (UnknownHostException e) {
+printLine("Failed to resolve host '" + host + "': "+ e.getLocalizedMessage());
+}
 }
