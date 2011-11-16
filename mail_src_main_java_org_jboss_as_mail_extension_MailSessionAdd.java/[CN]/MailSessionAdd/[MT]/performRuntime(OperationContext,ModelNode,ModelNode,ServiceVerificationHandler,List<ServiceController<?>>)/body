@@ -1,10 +1,15 @@
 {
   final String jndiName=Util.getJndiName(operation);
   final ServiceTarget serviceTarget=context.getServiceTarget();
-  MailSessionService service=createMailSessionService(context,operation);
+  final MailSessionService service=createMailSessionService(context,operation);
   final ServiceName serviceName=SERVICE_NAME_BASE.append(jndiName);
   final ServiceBuilder<?> mailSessionBuilder=serviceTarget.addService(serviceName,service);
-  ValueManagedReferenceFactory valueManagedReferenceFactory=new ValueManagedReferenceFactory(service);
+  final ManagedReferenceFactory valueManagedReferenceFactory=new ManagedReferenceFactory(){
+    @Override public ManagedReference getReference(){
+      return new ValueManagedReference(new ImmediateValue<Object>(service.getValue()));
+    }
+  }
+;
   final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndiName);
   final BinderService binderService=new BinderService(bindInfo.getBindName());
   final ServiceBuilder<?> binderBuilder=serviceTarget.addService(bindInfo.getBinderServiceName(),binderService).addInjection(binderService.getManagedObjectInjector(),valueManagedReferenceFactory).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addListener(new AbstractServiceListener<Object>(){
