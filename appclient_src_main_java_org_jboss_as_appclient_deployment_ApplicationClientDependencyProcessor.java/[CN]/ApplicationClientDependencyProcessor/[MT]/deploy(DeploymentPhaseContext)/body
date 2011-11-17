@@ -3,8 +3,20 @@
   final ModuleSpecification moduleSpecification=deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
   final ModuleLoader loader=deploymentUnit.getAttachment(Attachments.SERVICE_MODULE_LOADER);
   moduleSpecification.addSystemDependency(new ModuleDependency(loader,CORBA_ID,false,true,true));
-  Boolean activate=deploymentUnit.getAttachment(AppClientAttachments.START_APP_CLIENT);
-  if (activate == null || !activate) {
-    return;
+  final Set<ModuleIdentifier> moduleIdentifiers=new HashSet<ModuleIdentifier>();
+  final DeploymentUnit top=deploymentUnit.getParent() == null ? deploymentUnit : deploymentUnit.getParent();
+  moduleIdentifiers.add(top.getAttachment(Attachments.MODULE_IDENTIFIER));
+  for (  final DeploymentUnit module : top.getAttachmentList(Attachments.SUB_DEPLOYMENTS)) {
+    moduleIdentifiers.add(module.getAttachment(Attachments.MODULE_IDENTIFIER));
+  }
+  final ListIterator<ModuleDependency> iterator=moduleSpecification.getMutableUserDependencies().listIterator();
+  while (iterator.hasNext()) {
+    final ModuleDependency dep=iterator.next();
+    final ModuleIdentifier identifier=dep.getIdentifier();
+    if (identifier.getName().startsWith(ServiceModuleLoader.MODULE_PREFIX) && !identifier.getName().startsWith(ExtensionIndexService.MODULE_PREFIX)) {
+      if (!moduleIdentifiers.contains(identifier)) {
+        iterator.remove();
+      }
+    }
   }
 }
