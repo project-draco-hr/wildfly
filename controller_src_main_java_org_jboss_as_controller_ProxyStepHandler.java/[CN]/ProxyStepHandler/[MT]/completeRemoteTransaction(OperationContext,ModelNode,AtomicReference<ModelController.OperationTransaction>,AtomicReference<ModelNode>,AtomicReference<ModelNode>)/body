@@ -1,0 +1,50 @@
+{
+  boolean txCompleted=false;
+  try {
+    ModelNode preparedResponse=preparedResultRef.get();
+    ModelNode preparedResult=preparedResponse.get(RESULT);
+    if (preparedResponse.hasDefined(FAILURE_DESCRIPTION)) {
+      context.getFailureDescription().set(preparedResponse.get(FAILURE_DESCRIPTION));
+      if (preparedResult.isDefined()) {
+        context.getResult().set(preparedResult);
+      }
+    }
+ else {
+      context.getResult().set(preparedResult);
+    }
+    OperationContext.ResultAction resultAction=context.completeStep();
+    ModelController.OperationTransaction tx=txRef.get();
+    try {
+      if (resultAction == OperationContext.ResultAction.KEEP) {
+        tx.commit();
+      }
+ else {
+        tx.rollback();
+      }
+    }
+  finally {
+      txCompleted=true;
+    }
+    ModelNode finalResponse=finalResultRef.get();
+    if (finalResponse != null) {
+      ModelNode finalResult=finalResponse.get(RESULT);
+      if (finalResponse.hasDefined(FAILURE_DESCRIPTION)) {
+        context.getFailureDescription().set(finalResponse.get(FAILURE_DESCRIPTION));
+        if (finalResult.isDefined()) {
+          context.getResult().set(finalResult);
+        }
+      }
+ else {
+        context.getResult().set(finalResult);
+      }
+    }
+ else {
+      ControllerLogger.SERVER_MANAGEMENT_LOGGER.noFinalProxyOutcomeReceived(operation.get(OP),operation.get(OP_ADDR),proxyController.getProxyNodeAddress().toModelNode());
+    }
+  }
+  finally {
+    if (!txCompleted && txRef.get() != null) {
+      txRef.get().rollback();
+    }
+  }
+}
