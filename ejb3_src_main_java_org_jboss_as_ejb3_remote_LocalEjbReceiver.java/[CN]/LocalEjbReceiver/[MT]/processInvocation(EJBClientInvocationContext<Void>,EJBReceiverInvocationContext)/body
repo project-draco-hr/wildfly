@@ -7,6 +7,9 @@
   if (view == null) {
     throw new RuntimeException("Could not find view " + viewClass + " for ejb "+ ejb.getEjbName());
   }
+  final ClonerConfiguration paramConfig=new ClonerConfiguration();
+  paramConfig.setClassCloner(new ClassLoaderClassCloner(ejb.getDeploymentClassLoader()));
+  final ObjectCloner parameterCloner=ObjectCloners.getSerializingObjectClonerFactory().createCloner(paramConfig);
   final Method method=view.getMethod(invocation.getInvokedMethod().getName(),DescriptorUtils.methodDescriptor(invocation.getInvokedMethod()));
   final boolean async=view.isAsynchronous(method);
   final Object[] parameters;
@@ -16,7 +19,7 @@
  else {
     parameters=new Object[invocation.getParameters().length];
     for (int i=0; i < parameters.length; ++i) {
-      parameters[i]=clone(method.getParameterTypes()[i],invocation.getInvokedProxy().getClass().getClassLoader(),invocation.getParameters()[i],allowPassByReference);
+      parameters[i]=clone(method.getParameterTypes()[i],parameterCloner,invocation.getParameters()[i],allowPassByReference);
     }
   }
   final InterceptorContext context=new InterceptorContext();
@@ -34,6 +37,9 @@
     final Object primaryKey=((EntityEJBLocator)locator).getPrimaryKey();
     context.putPrivateData(EntityBeanComponent.PRIMARY_KEY_CONTEXT_KEY,primaryKey);
   }
+  final ClonerConfiguration config=new ClonerConfiguration();
+  config.setClassCloner(new ClassLoaderClassCloner(invocation.getInvokedProxy().getClass().getClassLoader()));
+  final ObjectCloner resultCloner=ObjectCloners.getSerializingObjectClonerFactory().createCloner(config);
   if (async) {
     if (ejbComponent instanceof SessionBeanComponent) {
       final SessionBeanComponent component=(SessionBeanComponent)ejbComponent;
@@ -58,9 +64,9 @@
       result=view.invoke(context);
     }
  catch (    Exception e) {
-      throw (Exception)clone(invocation.getInvokedProxy().getClass().getClassLoader(),e);
+      throw (Exception)clone(resultCloner,e);
     }
-    final Object clonedResult=clone(invocation.getInvokedMethod().getReturnType(),invocation.getInvokedProxy().getClass().getClassLoader(),result,allowPassByReference);
+    final Object clonedResult=clone(invocation.getInvokedMethod().getReturnType(),resultCloner,result,allowPassByReference);
     receiverContext.resultReady(new ImmediateResultProducer(clonedResult));
   }
 }
