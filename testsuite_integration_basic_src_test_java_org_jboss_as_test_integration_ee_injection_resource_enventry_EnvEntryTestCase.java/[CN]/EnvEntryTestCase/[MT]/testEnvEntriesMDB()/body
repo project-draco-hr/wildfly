@@ -1,0 +1,24 @@
+{
+  ConnectionFactory factory=(ConnectionFactory)ctx.lookup("ConnectionFactory");
+  Connection con=factory.createConnection();
+  try {
+    Destination dest=(Destination)ctx.lookup("java:jboss/queue/testEnvEntry");
+    Session session=con.createSession(false,Session.AUTO_ACKNOWLEDGE);
+    MessageProducer producer=session.createProducer(dest);
+    Queue replyQueue=session.createTemporaryQueue();
+    MessageConsumer consumer=session.createConsumer(replyQueue);
+    con.start();
+    TextMessage msg=session.createTextMessage();
+    msg.setJMSReplyTo(replyQueue);
+    msg.setText("This is message one");
+    producer.send(msg);
+    MapMessage replyMsg=(MapMessage)consumer.receive(5000);
+    Assert.assertNotNull(replyMsg);
+    Assert.assertEquals(16,replyMsg.getInt("maxExceptions"));
+    Assert.assertEquals(12,replyMsg.getInt("numExceptions"));
+    Assert.assertEquals(7,replyMsg.getInt("minExceptions"));
+  }
+  finally {
+    con.close();
+  }
+}
