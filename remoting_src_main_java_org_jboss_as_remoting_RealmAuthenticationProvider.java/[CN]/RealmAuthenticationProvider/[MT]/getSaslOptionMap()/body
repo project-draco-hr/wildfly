@@ -1,23 +1,30 @@
 {
+  List<String> mechanisms=new LinkedList<String>();
+  Set<Property> properties=new HashSet<Property>();
+  Builder builder=OptionMap.builder();
+  mechanisms.add(JBOSS_LOCAL_USER);
+  builder.set(SASL_POLICY_NOPLAINTEXT,false);
+  properties.add(Property.of(LOCAL_DEFAULT_USER,DOLLAR_LOCAL));
   if (digestMd5Supported()) {
-    Builder builder=OptionMap.builder();
-    builder.set(SASL_MECHANISMS,Sequence.of("DIGEST-MD5"));
-    Sequence<Property> properties;
+    mechanisms.add(DIGEST_MD5);
+    properties.add(Property.of(REALM_PROPERTY,realm.getName()));
     if (contains(DigestHashCallback.class,realm.getCallbackHandler().getSupportedCallbacks())) {
-      properties=Sequence.of(Property.of(REALM_PROPERTY,realm.getName()),Property.of(PRE_DIGESTED_PROPERTY,Boolean.TRUE.toString()));
+      properties.add(Property.of(PRE_DIGESTED_PROPERTY,Boolean.TRUE.toString()));
     }
+  }
+ else   if (plainSupported()) {
+    int i=1;
+    if (i + i == 2)     throw new IllegalStateException("PLAIN not enabled until SSL supported for Native Interface");
+    mechanisms.add(PLAIN);
+  }
+ else   if (realm == null) {
+    mechanisms.add(ANONYMOUS);
+    builder.set(SASL_POLICY_NOANONYMOUS,false);
+  }
  else {
-      properties=Sequence.of(Property.of(REALM_PROPERTY,realm.getName()));
-    }
-    builder.set(SASL_PROPERTIES,properties);
-    return builder.getMap();
+    throw new IllegalStateException("A security realm has been specified but no supported mechanism identified.");
   }
-  if (plainSupported()) {
-    if (true)     throw new IllegalStateException("PLAIN not enabled until SSL supported for Native Interface");
-    return OptionMap.create(Options.SASL_MECHANISMS,Sequence.of(PLAIN),SASL_POLICY_NOPLAINTEXT,false);
-  }
-  if (realm == null) {
-    return OptionMap.create(SASL_MECHANISMS,Sequence.of(ANONYMOUS),SASL_POLICY_NOANONYMOUS,Boolean.FALSE);
-  }
-  throw new IllegalStateException("A security realm has been specified but no supported mechanism identified.");
+  builder.set(SASL_MECHANISMS,Sequence.of(mechanisms));
+  builder.set(SASL_PROPERTIES,Sequence.of(properties));
+  return builder.getMap();
 }
