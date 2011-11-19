@@ -9,22 +9,30 @@
     if (element != Element.PERMISSION_ELEMENT_NAME) {
       break;
     }
+    final Set<Attribute> required=EnumSet.of(Attribute.ROLES_ATTR_NAME,Attribute.TYPE_ATTR_NAME);
     List<String> roles=null;
-    String type=null;
+    AttributeDefinition perm=null;
     final int count=reader.getAttributeCount();
     for (int i=0; i < count; i++) {
       requireNoNamespaceAttribute(reader,i);
       final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+      required.remove(attribute);
 switch (attribute) {
 case ROLES_ATTR_NAME:
         roles=reader.getListAttributeValue(i);
       break;
 case TYPE_ATTR_NAME:
-    type=reader.getAttributeValue(i);
-  break;
+    perm=SecurityRoleAdd.ROLE_ATTRIBUTES_BY_XML_NAME.get(reader.getAttributeValue(i));
+  if (perm == null) {
+    throw ControllerMessages.MESSAGES.invalidAttributeValue(reader.getAttributeValue(i),reader.getAttributeName(i),SecurityRoleAdd.ROLE_ATTRIBUTES_BY_XML_NAME.keySet(),reader.getLocation());
+  }
+break;
 default :
 throw ParseUtils.unexpectedAttribute(reader,i);
 }
+}
+if (!required.isEmpty()) {
+throw missingRequired(reader,required);
 }
 for (String role : roles) {
 role=role.trim();
@@ -33,11 +41,7 @@ if (perms == null) {
 perms=new HashSet<AttributeDefinition>();
 permsByRole.put(role,perms);
 }
-for (AttributeDefinition perm : SecurityRoleAdd.ROLE_ATTRIBUTES) {
-if (perm.getXmlName().equals(type)) {
 perms.add(perm);
-}
-}
 }
 reader.discardRemainder();
 }
