@@ -1,0 +1,107 @@
+{
+  super(ctx,"undeploy",true);
+  final DefaultOperationRequestAddress requiredAddress=new DefaultOperationRequestAddress();
+  requiredAddress.toNodeType(Util.DEPLOYMENT);
+  addRequiredPath(requiredAddress);
+  l=new ArgumentWithoutValue(this,"-l");
+  l.setExclusive(true);
+  name=new ArgumentWithValue(this,new CommandLineCompleter(){
+    @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
+      int nextCharIndex=0;
+      while (nextCharIndex < buffer.length()) {
+        if (!Character.isWhitespace(buffer.charAt(nextCharIndex))) {
+          break;
+        }
+        ++nextCharIndex;
+      }
+      if (ctx.getModelControllerClient() != null) {
+        List<String> deployments=Util.getDeployments(ctx.getModelControllerClient());
+        if (deployments.isEmpty()) {
+          return -1;
+        }
+        String opBuffer=buffer.substring(nextCharIndex).trim();
+        if (opBuffer.isEmpty()) {
+          candidates.addAll(deployments);
+        }
+ else {
+          for (          String name : deployments) {
+            if (name.startsWith(opBuffer)) {
+              candidates.add(name);
+            }
+          }
+          Collections.sort(candidates);
+        }
+        return nextCharIndex;
+      }
+ else {
+        return -1;
+      }
+    }
+  }
+,0,"--name");
+  name.addCantAppearAfter(l);
+  allRelevantServerGroups=new ArgumentWithoutValue(this,"--all-relevant-server-groups"){
+    @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
+      if (!ctx.isDomainMode()) {
+        return false;
+      }
+      return super.canAppearNext(ctx);
+    }
+  }
+;
+  allRelevantServerGroups.addRequiredPreceding(name);
+  serverGroups=new ArgumentWithValue(this,new CommandLineCompleter(){
+    @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
+      if (buffer.isEmpty()) {
+        candidates.addAll(Util.getServerGroups(ctx.getModelControllerClient()));
+        Collections.sort(candidates);
+        return 0;
+      }
+      final List<String> allGroups;
+      allGroups=Util.getServerGroups(ctx.getModelControllerClient());
+      final String[] groups=buffer.split(",+");
+      final String chunk;
+      final int lastGroupIndex;
+      if (buffer.charAt(buffer.length() - 1) == ',') {
+        lastGroupIndex=groups.length;
+        chunk=null;
+      }
+ else {
+        lastGroupIndex=groups.length - 1;
+        chunk=groups[groups.length - 1];
+      }
+      for (int i=0; i < lastGroupIndex; ++i) {
+        allGroups.remove(groups[i]);
+      }
+      final int result;
+      if (chunk == null) {
+        candidates.addAll(allGroups);
+        result=buffer.length();
+      }
+ else {
+        for (        String group : allGroups) {
+          if (group.startsWith(chunk)) {
+            candidates.add(group);
+          }
+        }
+        result=buffer.lastIndexOf(',') + 1;
+      }
+      Collections.sort(candidates);
+      return result;
+    }
+  }
+,"--server-groups"){
+    @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
+      if (!ctx.isDomainMode()) {
+        return false;
+      }
+      return super.canAppearNext(ctx);
+    }
+  }
+;
+  serverGroups.addRequiredPreceding(name);
+  serverGroups.addCantAppearAfter(allRelevantServerGroups);
+  allRelevantServerGroups.addCantAppearAfter(serverGroups);
+  keepContent=new ArgumentWithoutValue(this,"--keep-content");
+  keepContent.addRequiredPreceding(name);
+}

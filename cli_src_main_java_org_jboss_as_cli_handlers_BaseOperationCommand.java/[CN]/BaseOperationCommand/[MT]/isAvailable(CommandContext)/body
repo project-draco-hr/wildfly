@@ -5,25 +5,42 @@
   if (requiredAddress == null) {
     return true;
   }
+  if (dependsOnProfile && ctx.isDomainMode()) {
+    return true;
+  }
+  if (addressAvailable != null) {
+    return addressAvailable.booleanValue();
+  }
   ModelControllerClient client=ctx.getModelControllerClient();
   if (client == null) {
     return false;
-  }
-  if (ctx.isDomainMode()) {
-    return true;
   }
   ModelNode request=new ModelNode();
   ModelNode address=request.get(Util.ADDRESS);
   for (  OperationRequestAddress.Node node : requiredAddress) {
     address.add(node.getType(),node.getName());
   }
-  request.get(Util.OPERATION).set(Util.VALIDATE_ADDRESS);
-  ModelNode result;
-  try {
-    result=ctx.getModelControllerClient().execute(request);
+  if (requiredType == null) {
+    request.get(Util.OPERATION).set(Util.VALIDATE_ADDRESS);
+    ModelNode result;
+    try {
+      result=ctx.getModelControllerClient().execute(request);
+    }
+ catch (    IOException e) {
+      return false;
+    }
+    addressAvailable=Util.isSuccess(result);
   }
- catch (  IOException e) {
-    return false;
+ else {
+    request.get(Util.OPERATION).set(Util.READ_CHILDREN_TYPES);
+    ModelNode result;
+    try {
+      result=ctx.getModelControllerClient().execute(request);
+    }
+ catch (    IOException e) {
+      return false;
+    }
+    addressAvailable=Util.listContains(result,requiredType);
   }
-  return Util.isSuccess(result);
+  return addressAvailable;
 }
