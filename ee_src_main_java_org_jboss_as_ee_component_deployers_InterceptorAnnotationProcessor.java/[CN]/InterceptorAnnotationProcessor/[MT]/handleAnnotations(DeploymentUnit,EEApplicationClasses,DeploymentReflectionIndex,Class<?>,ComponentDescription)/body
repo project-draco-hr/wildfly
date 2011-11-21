@@ -1,0 +1,35 @@
+{
+  final List<Class> heirachy=new ArrayList<Class>();
+  Class c=componentClass;
+  while (c != Object.class && c != null) {
+    heirachy.add(c);
+    c=c.getSuperclass();
+  }
+  Collections.reverse(heirachy);
+  final RuntimeAnnotationInformation<Boolean> excludeDefaultInterceptors=MethodAnnotationAggregator.runtimeAnnotationInformation(componentClass,applicationClasses,deploymentReflectionIndex,ExcludeDefaultInterceptors.class);
+  if (excludeDefaultInterceptors.getClassAnnotations().containsKey(componentClass.getName())) {
+    description.setExcludeDefaultInterceptors(true);
+  }
+  for (  final Map.Entry<Method,List<Boolean>> entry : excludeDefaultInterceptors.getMethodAnnotations().entrySet()) {
+    description.excludeDefaultInterceptors(MethodIdentifier.getIdentifierForMethod(entry.getKey()));
+  }
+  final RuntimeAnnotationInformation<Boolean> excludeClassInterceptors=MethodAnnotationAggregator.runtimeAnnotationInformation(componentClass,applicationClasses,deploymentReflectionIndex,ExcludeClassInterceptors.class);
+  for (  final Map.Entry<Method,List<Boolean>> entry : excludeClassInterceptors.getMethodAnnotations().entrySet()) {
+    description.excludeClassInterceptors(MethodIdentifier.getIdentifierForMethod(entry.getKey()));
+  }
+  final RuntimeAnnotationInformation<String[]> interceptors=MethodAnnotationAggregator.runtimeAnnotationInformation(componentClass,applicationClasses,deploymentReflectionIndex,Interceptors.class);
+  for (  final Class<?> clazz : heirachy) {
+    final List<String[]> classInterceptors=interceptors.getClassAnnotations().get(clazz.getName());
+    if (classInterceptors != null) {
+      for (      final String interceptor : classInterceptors.get(0)) {
+        description.addClassInterceptor(new InterceptorDescription(interceptor));
+      }
+    }
+  }
+  for (  final Map.Entry<Method,List<String[]>> entry : interceptors.getMethodAnnotations().entrySet()) {
+    final MethodIdentifier method=MethodIdentifier.getIdentifierForMethod(entry.getKey());
+    for (    final String interceptor : entry.getValue().get(0)) {
+      description.addMethodInterceptor(method,new InterceptorDescription(interceptor));
+    }
+  }
+}

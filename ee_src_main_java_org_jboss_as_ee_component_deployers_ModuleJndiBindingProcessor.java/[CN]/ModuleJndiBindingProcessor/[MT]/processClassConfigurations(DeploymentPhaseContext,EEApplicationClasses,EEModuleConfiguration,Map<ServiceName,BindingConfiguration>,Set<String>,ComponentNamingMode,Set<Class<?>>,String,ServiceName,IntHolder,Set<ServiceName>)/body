@@ -12,19 +12,21 @@
           return;
         }
         handledClasses.add(classDescription.getClassName());
-        final Set<BindingConfiguration> classLevelBindings=new HashSet<BindingConfiguration>(classDescription.getBindingConfigurations());
-        for (        BindingConfiguration binding : classLevelBindings) {
-          final String bindingName=binding.getName();
-          final boolean compBinding=bindingName.startsWith("java:comp") || !bindingName.startsWith("java:");
-          if (namingMode == ComponentNamingMode.CREATE && compBinding) {
-            continue;
+        if (!MetadataCompleteMarker.isMetadataComplete(phaseContext.getDeploymentUnit())) {
+          final Set<BindingConfiguration> classLevelBindings=new HashSet<BindingConfiguration>(classDescription.getBindingConfigurations());
+          for (          BindingConfiguration binding : classLevelBindings) {
+            final String bindingName=binding.getName();
+            final boolean compBinding=bindingName.startsWith("java:comp") || !bindingName.startsWith("java:");
+            if (namingMode == ComponentNamingMode.CREATE && compBinding) {
+              continue;
+            }
+            final ContextNames.BindInfo bindInfo=ContextNames.bindInfoForEnvEntry(moduleConfiguration.getApplicationName(),moduleConfiguration.getModuleName(),null,false,binding.getName());
+            ROOT_LOGGER.tracef("Binding %s using service %s",binding.getName(),bindInfo.getBinderServiceName());
+            if (deploymentDescriptorBindings.containsKey(bindInfo.getBinderServiceName())) {
+              continue;
+            }
+            addJndiBinding(moduleConfiguration,binding,phaseContext,bindInfo.getBinderServiceName(),ownerName,handleCount,dependencies);
           }
-          final ContextNames.BindInfo bindInfo=ContextNames.bindInfoForEnvEntry(moduleConfiguration.getApplicationName(),moduleConfiguration.getModuleName(),null,false,binding.getName());
-          ROOT_LOGGER.tracef("Binding %s using service %s",binding.getName(),bindInfo.getBinderServiceName());
-          if (deploymentDescriptorBindings.containsKey(bindInfo.getBinderServiceName())) {
-            continue;
-          }
-          addJndiBinding(moduleConfiguration,binding,phaseContext,bindInfo.getBinderServiceName(),ownerName,handleCount,dependencies);
         }
       }
     }
