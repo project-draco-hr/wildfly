@@ -32,71 +32,78 @@
     this.writeNoSuchEJBFailureMessage(channel,invocationId,appName,moduleName,distinctName,beanName,null);
     return;
   }
-  classLoaderProvider.switchClassLoader(ejbDeploymentInformation.getDeploymentClassLoader());
-  final EJBLocator locator;
+  final ClassLoader tccl=SecurityActions.getContextClassLoader();
   try {
-    locator=(EJBLocator)unMarshaller.readObject();
-  }
- catch (  ClassNotFoundException e) {
-    throw new RuntimeException(e);
-  }
-  final String viewClassName=locator.getViewType().getName();
-  if (!ejbDeploymentInformation.getViewNames().contains(viewClassName)) {
-    this.writeNoSuchEJBFailureMessage(channel,invocationId,appName,moduleName,distinctName,beanName,viewClassName);
-    return;
-  }
-  final ComponentView componentView=ejbDeploymentInformation.getView(viewClassName);
-  final Method invokedMethod=this.findMethod(componentView,methodName,methodParamTypes);
-  if (invokedMethod == null) {
-    this.writeNoSuchEJBMethodFailureMessage(channel,invocationId,appName,moduleName,distinctName,beanName,viewClassName,methodName,methodParamTypes);
-    return;
-  }
-  final Object[] methodParams=new Object[methodParamTypes.length];
-  if (methodParamTypes.length > 0) {
-    for (int i=0; i < methodParamTypes.length; i++) {
-      try {
-        methodParams[i]=unMarshaller.readObject();
-      }
- catch (      ClassNotFoundException cnfe) {
-        throw new RuntimeException(cnfe);
+    SecurityActions.setContextClassLoader(ejbDeploymentInformation.getDeploymentClassLoader());
+    classLoaderProvider.switchClassLoader(ejbDeploymentInformation.getDeploymentClassLoader());
+    final EJBLocator locator;
+    try {
+      locator=(EJBLocator)unMarshaller.readObject();
+    }
+ catch (    ClassNotFoundException e) {
+      throw new RuntimeException(e);
+    }
+    final String viewClassName=locator.getViewType().getName();
+    if (!ejbDeploymentInformation.getViewNames().contains(viewClassName)) {
+      this.writeNoSuchEJBFailureMessage(channel,invocationId,appName,moduleName,distinctName,beanName,viewClassName);
+      return;
+    }
+    final ComponentView componentView=ejbDeploymentInformation.getView(viewClassName);
+    final Method invokedMethod=this.findMethod(componentView,methodName,methodParamTypes);
+    if (invokedMethod == null) {
+      this.writeNoSuchEJBMethodFailureMessage(channel,invocationId,appName,moduleName,distinctName,beanName,viewClassName,methodName,methodParamTypes);
+      return;
+    }
+    final Object[] methodParams=new Object[methodParamTypes.length];
+    if (methodParamTypes.length > 0) {
+      for (int i=0; i < methodParamTypes.length; i++) {
+        try {
+          methodParams[i]=unMarshaller.readObject();
+        }
+ catch (        ClassNotFoundException cnfe) {
+          throw new RuntimeException(cnfe);
+        }
       }
     }
-  }
-  unMarshaller.finish();
-  executorService.submit(new Runnable(){
-    @Override public void run(){
-      if (componentView.isAsynchronous(invokedMethod)) {
-        try {
-          MethodInvocationMessageHandler.this.writeAsyncMethodNotification(channel,invocationId);
+    unMarshaller.finish();
+    executorService.submit(new Runnable(){
+      @Override public void run(){
+        if (componentView.isAsynchronous(invokedMethod)) {
+          try {
+            MethodInvocationMessageHandler.this.writeAsyncMethodNotification(channel,invocationId);
+          }
+ catch (          Throwable t) {
+            logger.warn("Method " + invokedMethod + " was a async method but the client could not be informed about the same. This will mean that the client might block till the method completes",t);
+          }
         }
- catch (        Throwable t) {
-          logger.warn("Method " + invokedMethod + " was a async method but the client could not be informed about the same. This will mean that the client might block till the method completes",t);
-        }
-      }
-      Object result=null;
-      try {
-        result=invokeMethod(componentView,invokedMethod,methodParams,locator,attachments);
-      }
- catch (      Throwable throwable) {
+        Object result=null;
         try {
-          MethodInvocationMessageHandler.this.writeException(channel,invocationId,throwable,attachments);
+          result=invokeMethod(componentView,invokedMethod,methodParams,locator,attachments);
+        }
+ catch (        Throwable throwable) {
+          try {
+            MethodInvocationMessageHandler.this.writeException(channel,invocationId,throwable,attachments);
+          }
+ catch (          IOException ioe) {
+            logger.error("Error invoking method " + invokedMethod + " on bean named "+ beanName+ " for appname "+ appName+ " modulename "+ moduleName+ " distinctname "+ distinctName,throwable);
+            logger.error("Could not write method invocation failure for method " + invokedMethod + " on bean named "+ beanName+ " for appname "+ appName+ " modulename "+ moduleName+ " distinctname "+ distinctName+ " due to ",ioe);
+            IoUtils.safeClose(channel);
+            return;
+          }
+        }
+        try {
+          writeMethodInvocationResponse(channel,invocationId,result,attachments);
         }
  catch (        IOException ioe) {
-          logger.error("Error invoking method " + invokedMethod + " on bean named "+ beanName+ " for appname "+ appName+ " modulename "+ moduleName+ " distinctname "+ distinctName,throwable);
-          logger.error("Could not write method invocation failure for method " + invokedMethod + " on bean named "+ beanName+ " for appname "+ appName+ " modulename "+ moduleName+ " distinctname "+ distinctName+ " due to ",ioe);
+          logger.error("Could not write method invocation result for method " + invokedMethod + " on bean named "+ beanName+ " for appname "+ appName+ " modulename "+ moduleName+ " distinctname "+ distinctName+ " due to ",ioe);
           IoUtils.safeClose(channel);
           return;
         }
       }
-      try {
-        writeMethodInvocationResponse(channel,invocationId,result,attachments);
-      }
- catch (      IOException ioe) {
-        logger.error("Could not write method invocation result for method " + invokedMethod + " on bean named "+ beanName+ " for appname "+ appName+ " modulename "+ moduleName+ " distinctname "+ distinctName+ " due to ",ioe);
-        IoUtils.safeClose(channel);
-        return;
-      }
     }
-  }
 );
+  }
+  finally {
+    SecurityActions.setContextClassLoader(tccl);
+  }
 }
