@@ -30,29 +30,34 @@
       iri.finishBuild();
       logger.info("CORBA interface repository for " + name + ": "+ orb.object_to_string(iri.getReference()));
     }
-    final Any secPolicy=orb.create_any();
-    final IORSecurityConfigMetaData securityConfig=null;
-    secPolicy.insert_Value(securityConfig);
-    csiv2Policy=null;
-    boolean sslRequired=false;
-    if (securityConfig != null) {
-      IORTransportConfigMetaData tc=securityConfig.getTransportConfig();
-      sslRequired=tc.getIntegrity() == IORTransportConfigMetaData.INTEGRITY_REQUIRED || tc.getConfidentiality() == IORTransportConfigMetaData.CONFIDENTIALITY_REQUIRED || tc.getEstablishTrustInClient() == IORTransportConfigMetaData.ESTABLISH_TRUST_IN_CLIENT_REQUIRED;
+    IORSecurityConfigMetaData iorSecurityConfigMetaData=null;
+    if (this.iiopMetaData != null)     iorSecurityConfigMetaData=this.iiopMetaData.getIorSecurityConfigMetaData();
+    List<Policy> policyList=new ArrayList<Policy>();
+    if (iorSecurityConfigMetaData != null) {
+      final Any secPolicy=orb.create_any();
+      secPolicy.insert_Value(iorSecurityConfigMetaData);
+      Policy csiv2Policy=orb.create_policy(CSIv2Policy.TYPE,secPolicy);
+      policyList.add(csiv2Policy);
+      boolean sslRequired=false;
+      if (iorSecurityConfigMetaData != null) {
+        IORTransportConfigMetaData tc=iorSecurityConfigMetaData.getTransportConfig();
+        sslRequired=IORTransportConfigMetaData.INTEGRITY_REQUIRED.equals(tc.getIntegrity()) || IORTransportConfigMetaData.CONFIDENTIALITY_REQUIRED.equals(tc.getConfidentiality()) || IORTransportConfigMetaData.ESTABLISH_TRUST_IN_CLIENT_REQUIRED.equals(tc.getEstablishTrustInClient());
+      }
+      final Any sslPolicyValue=orb.create_any();
+      SSLPolicyValueHelper.insert(sslPolicyValue,(sslRequired) ? SSLPolicyValue.SSL_REQUIRED : SSLPolicyValue.SSL_NOT_REQUIRED);
+      Policy sslPolicy=orb.create_policy(SSL_POLICY_TYPE.value,sslPolicyValue);
+      policyList.add(sslPolicy);
+      logger.debug("container's SSL policy: " + sslPolicy);
     }
-    final Any sslPolicyValue=orb.create_any();
-    SSLPolicyValueHelper.insert(sslPolicyValue,(sslRequired) ? SSLPolicyValue.SSL_REQUIRED : SSLPolicyValue.SSL_NOT_REQUIRED);
-    sslPolicy=null;
-    logger.debug("container's SSL policy: " + sslPolicy);
-    poaCurrent=CurrentHelper.narrow(orb.resolve_initial_references("POACurrent"));
-    Policy[] policies={};
+    Policy[] policies=policyList.toArray(new Policy[policyList.size()]);
     InterfaceDef homeInterfaceDef=null;
     if (iri != null) {
       Repository ir=iri.getReference();
       homeInterfaceDef=InterfaceDefHelper.narrow(ir.lookup_id(homeRepositoryIds[0]));
     }
-    homeServantRegistry=poaRegistry.getValue().getRegistryWithPersistentPOAPerServant();
     final EjbHomeCorbaServant homeServant=new EjbHomeCorbaServant(homeMethodMap,homeRepositoryIds,homeInterfaceDef,orb,homeView.getValue(),component.getTransactionManager(),module.getClassLoader());
-    homeReferenceFactory=homeServantRegistry.bind(homeServantName(name),homeServant,policies);
+    homeServantRegistry=poaRegistry.getValue().getRegistryWithPersistentPOAPerServant();
+    ReferenceFactory homeReferenceFactory=homeServantRegistry.bind(homeServantName(name),homeServant,policies);
     final org.omg.CORBA.Object corbaRef=homeReferenceFactory.createReference(homeRepositoryIds[0]);
     ejbHome=(EJBHome)PortableRemoteObject.narrow(corbaRef,EJBHome.class);
     final HomeHandleImplIIOP homeHandle=new HomeHandleImplIIOP(orb.object_to_string(corbaRef));
@@ -78,11 +83,13 @@
       final Repository ir=iri.getReference();
       beanInterfaceDef=InterfaceDefHelper.narrow(ir.lookup_id(beanRepositoryIds[0]));
     }
+    Current poaCurrent=CurrentHelper.narrow(orb.resolve_initial_references("POACurrent"));
     final EjbObjectCorbaServant beanServant=new EjbObjectCorbaServant(poaCurrent,beanMethodMap,beanRepositoryIds,beanInterfaceDef,orb,remoteView.getValue(),factory,configuration,component.getTransactionManager(),module.getClassLoader());
     beanReferenceFactory=beanServantRegistry.bind(beanServantName(name),beanServant,policies);
-    final NamingContextExt corbaContext=corbaNamingContext.getValue();
-    rebind(corbaContext,name,corbaRef);
-    logger.debug("Home IOR for " + component.getComponentName() + " bound to "+ name+ " in CORBA naming service");
+    this.bindingName=this.iiopMetaData != null ? this.iiopMetaData.getBindingName() : null;
+    if (this.bindingName == null || this.bindingName.isEmpty())     this.bindingName=this.name;
+    rebind(corbaNamingContext.getValue(),bindingName,corbaRef);
+    logger.debug("Home IOR for " + component.getComponentName() + " bound to "+ this.bindingName+ " in CORBA naming service");
   }
  catch (  Exception e) {
     throw new StartException(e);

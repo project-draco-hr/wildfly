@@ -3,12 +3,19 @@
   if (!JacORBDeploymentMarker.isJacORBDeployment(deploymentUnit)) {
     return;
   }
-  if (!settingsService.isEnabledByDefault()) {
-    return;
-  }
   final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
   if (!EjbDeploymentMarker.isEjbDeployment(deploymentUnit)) {
     return;
+  }
+  Map<String,IIOPMetaData> iiopMetaDataMap=new HashMap<String,IIOPMetaData>();
+  final EjbJarMetaData ejbMetaData=deploymentUnit.getAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_METADATA);
+  if (ejbMetaData != null && ejbMetaData.getAssemblyDescriptor() != null) {
+    List<IIOPMetaData> iiopMetaDatas=ejbMetaData.getAssemblyDescriptor().getAny(IIOPMetaData.class);
+    if (iiopMetaDatas != null && iiopMetaDatas.size() > 0) {
+      for (      IIOPMetaData metaData : iiopMetaDatas) {
+        iiopMetaDataMap.put(metaData.getEjbName(),metaData);
+      }
+    }
   }
   final DeploymentClassIndex classIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.CLASS_INDEX);
   final DeploymentReflectionIndex deploymentReflectionIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
@@ -18,7 +25,13 @@
       if (componentDescription instanceof EJBComponentDescription) {
         final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)componentDescription;
         if (ejbComponentDescription.getEjbRemoteView() != null && ejbComponentDescription.getEjbHomeView() != null) {
-          processEjb(ejbComponentDescription,classIndex,deploymentReflectionIndex,module,phaseContext.getServiceTarget());
+          IIOPMetaData iiopMetaData=iiopMetaDataMap.get(ejbComponentDescription.getEJBName());
+          if (iiopMetaData == null) {
+            iiopMetaData=iiopMetaDataMap.get(IIOPMetaData.WILDCARD_BEAN_NAME);
+          }
+          if (iiopMetaData != null || settingsService.isEnabledByDefault()) {
+            processEjb(ejbComponentDescription,classIndex,deploymentReflectionIndex,module,phaseContext.getServiceTarget(),iiopMetaData);
+          }
         }
       }
     }
