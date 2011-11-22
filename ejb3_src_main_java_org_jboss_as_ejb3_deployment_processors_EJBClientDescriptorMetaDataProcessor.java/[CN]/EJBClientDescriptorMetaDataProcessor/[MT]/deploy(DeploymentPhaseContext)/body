@@ -1,0 +1,23 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (deploymentUnit.getParent() != null) {
+    return;
+  }
+  final EJBClientDescriptorMetaData ejbClientDescriptorMetaData=deploymentUnit.getAttachment(Attachments.EJB_CLIENT_METADATA);
+  if (ejbClientDescriptorMetaData == null) {
+    logger.debug("Deployment unit " + deploymentUnit + " doesn't have any EJB client descriptor metadata associated. "+ "Falling back on the default "+ DefaultEjbClientContextService.DEFAULT_SERVICE_NAME+ " EJB client context service");
+    deploymentUnit.putAttachment(EjbDeploymentAttachmentKeys.EJB_CLIENT_CONTEXT_SERVICE_NAME,DefaultEjbClientContextService.DEFAULT_SERVICE_NAME);
+    return;
+  }
+  final ServiceName ejbClientContextServiceName=DescriptorBasedEJBClientContextService.BASE_SERVICE_NAME.append(deploymentUnit.getName());
+  final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+  final DescriptorBasedEJBClientContextService service=new DescriptorBasedEJBClientContextService();
+  final ServiceBuilder serviceBuilder=serviceTarget.addService(ejbClientContextServiceName,service);
+  for (  final String connectionRef : ejbClientDescriptorMetaData.getRemotingReceiverConnectionRefs()) {
+    final ServiceName connectionDependencyService=AbstractOutboundConnectionService.OUTBOUND_CONNECTION_BASE_SERVICE_NAME.append(connectionRef);
+    service.addRemotingConnectionDependency(serviceBuilder,connectionDependencyService);
+  }
+  serviceBuilder.install();
+  logger.debug("Deployment unit " + deploymentUnit + " will use "+ ejbClientContextServiceName+ " as the EJB client context service");
+  deploymentUnit.putAttachment(EjbDeploymentAttachmentKeys.EJB_CLIENT_CONTEXT_SERVICE_NAME,ejbClientContextServiceName);
+}
