@@ -1,0 +1,114 @@
+{
+  String orgSource="Source Organization";
+  String type="Implements";
+  Key savekey=null;
+  Key assockey=null;
+  BusinessQueryManager bqm2=null;
+  BusinessLifeCycleManager blm2=null;
+  Collection associationKeys=null;
+  Collection sourceKeys=null;
+  Collection targetKeys=null;
+  String targetId=null;
+  String sourceId=null;
+  String orgTarget="Target Organization";
+  try {
+    login();
+    getJAXREssentials();
+    Connection con2=loginSecondUser();
+    RegistryService rs2=con2.getRegistryService();
+    blm2=rs2.getBusinessLifeCycleManager();
+    bqm2=rs2.getBusinessQueryManager();
+    Organization source=blm.createOrganization(blm.createInternationalString(orgSource));
+    Organization target=blm2.createOrganization(blm.createInternationalString(orgTarget));
+    Collection orgs=new ArrayList();
+    orgs.add(source);
+    br=blm.saveOrganizations(orgs);
+    if (br.getExceptions() != null) {
+      Assert.fail(" Source:Save Orgs failed");
+    }
+    sourceKeys=br.getCollection();
+    Iterator iter=sourceKeys.iterator();
+    while (iter.hasNext()) {
+      savekey=(Key)iter.next();
+    }
+    sourceId=savekey.getId();
+    String objectType=LifeCycleManager.ORGANIZATION;
+    Organization pubSource=(Organization)bqm.getRegistryObject(sourceId,objectType);
+    Assert.assertNotNull(pubSource.getName().getValue());
+    orgs.clear();
+    orgs.add(target);
+    br=blm2.saveOrganizations(orgs);
+    if (br.getExceptions() != null) {
+      Assert.fail(" Target:Save Orgs failed");
+    }
+    targetKeys=br.getCollection();
+    iter=targetKeys.iterator();
+    while (iter.hasNext()) {
+      savekey=(Key)iter.next();
+    }
+    targetId=savekey.getId();
+    Organization pubTarget=(Organization)bqm2.getRegistryObject(targetId,objectType);
+    Concept associationType=getAssociationConcept(type);
+    if (associationType == null)     Assert.fail(" getAssociationConcept returned null associationType");
+    Association a=blm.createAssociation(pubTarget,associationType);
+    a.setSourceObject(pubSource);
+    blm.confirmAssociation(a);
+    blm2.confirmAssociation(a);
+    Collection associations=new ArrayList();
+    associations.add(a);
+    br=blm2.saveAssociations(associations,false);
+    if (br.getExceptions() != null) {
+      Assert.fail("Error:Save Associations failed \n");
+    }
+    BulkResponse targetAssoc=bqm.findCallerAssociations(null,new Boolean(true),new Boolean(true),null);
+    if (targetAssoc.getExceptions() == null) {
+      Collection targetCol=targetAssoc.getCollection();
+      if (targetCol.size() > 0) {
+        iter=targetCol.iterator();
+        while (iter.hasNext()) {
+          Association a1=(Association)iter.next();
+          Organization o=(Organization)a1.getSourceObject();
+          o=(Organization)a1.getTargetObject();
+          Concept atype=a1.getAssociationType();
+          Assert.assertNotNull("Concept Type stored in Association",atype);
+        }
+      }
+    }
+    br=null;
+    Collection associationTypes=new ArrayList();
+    associationTypes.add(type);
+    br=bqm.findAssociations(null,sourceId,targetId,null);
+    if (br.getExceptions() != null) {
+      Assert.fail("Error: findAssociations failed ");
+    }
+    associations=null;
+    associations=br.getCollection();
+    if (associations.size() > 0) {
+      iter=associations.iterator();
+      while (iter.hasNext()) {
+        Association a1=(Association)iter.next();
+        assockey=a1.getKey();
+        ScoutUtil.validateAssociation(a1,orgSource);
+      }
+    }
+  }
+ catch (  Exception e) {
+    e.printStackTrace();
+    Assert.fail(" Test failed ");
+  }
+ finally {
+    try {
+      if (assockey != null) {
+        associationKeys=new ArrayList();
+        associationKeys.add(assockey);
+        blm.deleteAssociations(associationKeys);
+      }
+      blm2.deleteOrganizations(targetKeys);
+      blm.deleteOrganizations(sourceKeys);
+    }
+ catch (    JAXRException ex) {
+      ex.printStackTrace();
+      Assert.fail("Error: Cleanup failed");
+    }
+  }
+}

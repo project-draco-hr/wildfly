@@ -1,0 +1,156 @@
+{
+  String serviceName="jbosstestService";
+  String sbDescription="jbosstest sb description";
+  String conceptName="jbosstest concept";
+  Collection sbKeys=null;
+  Collection serviceKeys=null;
+  Collection orgKeys=null;
+  Collection conceptKeys=null;
+  Key conceptKey=null;
+  Key serviceKey=null;
+  Key orgKey=null;
+  String accessURI="http://myhost/jaxrTest.jsp";
+  login();
+  try {
+    getJAXREssentials();
+    String orgname="Jaxr Org";
+    Organization org=blm.createOrganization(getIString(orgname));
+    Collection orgs=new ArrayList();
+    orgs.add(org);
+    BulkResponse br=blm.saveOrganizations(orgs);
+    if (br.getExceptions() != null) {
+      Assert.fail("Save Organizations failed ");
+    }
+    orgKeys=br.getCollection();
+    Iterator iter=orgKeys.iterator();
+    while (iter.hasNext()) {
+      orgKey=(Key)iter.next();
+    }
+    org=(Organization)bqm.getRegistryObject(orgKey.getId(),LifeCycleManager.ORGANIZATION);
+    Service service=blm.createService(serviceName);
+    org.addService(service);
+    Collection services=new ArrayList();
+    services.add(service);
+    br=blm.saveServices(services);
+    if (br.getExceptions() != null) {
+      Assert.fail("Save Services failed ");
+    }
+    serviceKeys=br.getCollection();
+    iter=serviceKeys.iterator();
+    while (iter.hasNext()) {
+      serviceKey=(Key)iter.next();
+    }
+    service=(Service)bqm.getRegistryObject(serviceKey.getId(),LifeCycleManager.SERVICE);
+    Concept testConcept=(Concept)blm.createObject(LifeCycleManager.CONCEPT);
+    testConcept.setName(blm.createInternationalString(conceptName));
+    Collection concepts=new ArrayList();
+    concepts.add(testConcept);
+    br=blm.saveConcepts(concepts);
+    if (br.getExceptions() != null) {
+      Assert.fail("Save Concepts failed ");
+    }
+    conceptKeys=br.getCollection();
+    iter=conceptKeys.iterator();
+    while (iter.hasNext()) {
+      conceptKey=(Key)iter.next();
+    }
+    testConcept=(Concept)bqm.getRegistryObject(conceptKey.getId(),LifeCycleManager.CONCEPT);
+    SpecificationLink sl=blm.createSpecificationLink();
+    sl.setSpecificationObject(testConcept);
+    ServiceBinding sb=blm.createServiceBinding();
+    sb.setDescription(blm.createInternationalString(sbDescription));
+    sb.setAccessURI(accessURI);
+    sb.addSpecificationLink(sl);
+    service.addServiceBinding(sb);
+    Collection sbs=new ArrayList();
+    sbs.add(sb);
+    br=blm.saveServiceBindings(sbs);
+    if (br.getExceptions() != null) {
+      Assert.fail("Save ServiceBindings failed ");
+    }
+    Collection specifications=new ArrayList();
+    specifications.add(testConcept);
+    br=bqm.findServiceBindings(serviceKey,null,null,specifications);
+    sbs=br.getCollection();
+    iter=sbs.iterator();
+    while (iter.hasNext()) {
+      sb=(ServiceBinding)iter.next();
+      Service storedService=sb.getService();
+      if (!(storedService.getName().getValue().equals(serviceName))) {
+        Assert.fail("Error: service name");
+      }
+      Organization storedOrg=storedService.getProvidingOrganization();
+      if (!(storedOrg.getName().getValue().equals(orgname))) {
+        Assert.fail("Error: unexpected organization name \n");
+      }
+      if (!(sb.getDescription().getValue().equals(sbDescription))) {
+        Assert.fail("Error: servicebinding description");
+      }
+      if (!(sb.getAccessURI().equals(accessURI))) {
+        Assert.fail("Error: unexpected accessURI name");
+      }
+    }
+    sbs=new ArrayList();
+    sb.setAccessURI("http://newURI");
+    sbs.add(sb);
+    br=blm.saveServiceBindings(sbs);
+    br=bqm.findServiceBindings(serviceKey,null,null,specifications);
+    sbs=br.getCollection();
+    iter=sbs.iterator();
+    while (iter.hasNext()) {
+      sb=(ServiceBinding)iter.next();
+      Service storedService=sb.getService();
+      if (!(storedService.getName().getValue().equals(serviceName))) {
+        Assert.fail("Error: service name");
+      }
+      Organization storedOrg=storedService.getProvidingOrganization();
+      if (!(storedOrg.getName().getValue().equals(orgname))) {
+        Assert.fail("Error: unexpected organization name \n");
+      }
+      if (!(sb.getDescription().getValue().equals(sbDescription))) {
+        Assert.fail("Error: servicebinding description");
+      }
+      if (!(sb.getAccessURI().equals("http://newURI"))) {
+        Assert.fail("Error: unexpected accessURI name");
+      }
+    }
+  }
+ catch (  Exception e) {
+    log.error("Exception:",e);
+    Assert.fail("Test has failed due to an exception:" + e.getMessage());
+  }
+ finally {
+    try {
+      if (conceptKeys != null) {
+        blm.deleteConcepts(conceptKeys);
+      }
+    }
+ catch (    JAXRException je) {
+      Assert.fail("Cleanup of JAXR objects failed:" + je);
+    }
+    try {
+      if (sbKeys != null) {
+        blm.deleteServiceBindings(sbKeys);
+      }
+    }
+ catch (    JAXRException je) {
+      Assert.fail("Cleanup of JAXR objects failed:" + je);
+    }
+    try {
+      if (serviceKeys != null) {
+        blm.deleteServices(serviceKeys);
+      }
+    }
+ catch (    JAXRException je) {
+      Assert.fail("Cleanup of JAXR objects failed:" + je);
+    }
+    try {
+      if (orgKeys != null) {
+        blm.deleteOrganizations(orgKeys);
+      }
+    }
+ catch (    JAXRException je) {
+      Assert.fail("Cleanup of JAXR objects failed:" + je);
+    }
+  }
+}
