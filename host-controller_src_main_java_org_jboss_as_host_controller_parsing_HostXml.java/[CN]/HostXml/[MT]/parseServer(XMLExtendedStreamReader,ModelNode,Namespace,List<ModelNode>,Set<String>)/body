@@ -1,99 +1,12 @@
 {
-  String name=null;
-  String group=null;
-  Boolean start=null;
-  final int count=reader.getAttributeCount();
-  for (int i=0; i < count; i++) {
-    final String value=reader.getAttributeValue(i);
-    if (!isNoNamespaceAttribute(reader,i)) {
-      throw unexpectedAttribute(reader,i);
-    }
- else {
-      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
-switch (attribute) {
-case NAME:
-{
-          if (!serverNames.add(value)) {
-            throw MESSAGES.duplicateDeclaration("server",value,reader.getLocation());
-          }
-          name=value;
-          break;
-        }
-case GROUP:
-{
-        group=value;
-        break;
-      }
-case AUTO_START:
-{
-      start=Boolean.valueOf(value);
-      break;
-    }
+  final ModelNode addUpdate=parseServerAttributes(reader,parentAddress,serverNames);
+  final ModelNode address=addUpdate.require(OP_ADDR);
+  list.add(addUpdate);
+switch (expectedNs) {
+case DOMAIN_1_0:
+    parseServerContent1_0(reader,address,expectedNs,list);
+  break;
 default :
-  throw unexpectedAttribute(reader,i);
-}
-}
-}
-if (name == null) {
-throw missingRequired(reader,Collections.singleton(Attribute.NAME));
-}
-if (group == null) {
-throw missingRequired(reader,Collections.singleton(Attribute.GROUP));
-}
-final ModelNode address=parentAddress.clone().add(SERVER_CONFIG,name);
-final ModelNode addUpdate=Util.getEmptyOperation(ADD,address);
-addUpdate.get(GROUP).set(group);
-if (start != null) {
-addUpdate.get(AUTO_START).set(start.booleanValue());
-}
-list.add(addUpdate);
-boolean sawJvm=false;
-boolean sawSystemProperties=false;
-boolean sawSocketBinding=false;
-final Set<String> interfaceNames=new HashSet<String>();
-while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
-requireNamespace(reader,expectedNs);
-final Element element=Element.forName(reader.getLocalName());
-switch (element) {
-case INTERFACE_SPECS:
-{
-parseInterfaces(reader,interfaceNames,address,expectedNs,list,true);
-break;
-}
-case JVM:
-{
-if (sawJvm) {
-throw MESSAGES.alreadyDefined(element.getLocalName(),reader.getLocation());
-}
-parseJvm(reader,address,expectedNs,list,new HashSet<String>(),true);
-sawJvm=true;
-break;
-}
-case PATHS:
-{
-parsePaths(reader,address,expectedNs,list,true);
-break;
-}
-case SOCKET_BINDING_GROUP:
-{
-if (sawSocketBinding) {
-throw MESSAGES.alreadyDefined(element.getLocalName(),reader.getLocation());
-}
-parseSocketBindingGroupRef(reader,address,list);
-sawSocketBinding=true;
-break;
-}
-case SYSTEM_PROPERTIES:
-{
-if (sawSystemProperties) {
-throw MESSAGES.alreadyDefined(element.getLocalName(),reader.getLocation());
-}
-parseSystemProperties(reader,address,expectedNs,list,false);
-sawSystemProperties=true;
-break;
-}
-default :
-throw unexpectedElement(reader);
-}
+parseServerContent1_1(reader,address,expectedNs,list);
 }
 }
