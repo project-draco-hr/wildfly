@@ -1,94 +1,129 @@
 {
+  final ModelControllerClient client=ctx.getModelControllerClient();
   ParsedCommandLine args=ctx.getParsedCommandLine();
-  if (!args.hasProperties()) {
-    throw new OperationFormatException("Required arguments are missing.");
+  boolean l=this.l.isPresent(args);
+  if (!args.hasProperties() || l) {
+    throw new OperationFormatException("Command is missing arguments for non-interactive mode: '" + args.getOriginalLine() + "'.");
   }
-  final String filePath=path.getValue(args);
-  String name=this.name.getValue(args);
-  String runtimeName=rtName.getValue(args);
+  final String path=this.path.getValue(args);
   final File f;
-  if (filePath != null) {
-    f=new File(filePath);
+  if (path != null) {
+    f=new File(path);
     if (!f.exists()) {
-      throw new OperationFormatException(f.getAbsolutePath() + " doesn't exist.");
+      throw new OperationFormatException("Path " + f.getAbsolutePath() + " doesn't exist.");
     }
-    if (name == null) {
-      name=f.getName();
+    if (f.isDirectory()) {
+      throw new OperationFormatException(f.getAbsolutePath() + " is a directory.");
     }
   }
  else {
     f=null;
-    if (name == null) {
-      throw new CommandFormatException("Either file path or --name has to be specified.");
-    }
   }
-  if (Util.isDeploymentInRepository(name,ctx.getModelControllerClient()) && f != null) {
-    if (force.isPresent(args)) {
-      DefaultOperationRequestBuilder builder=new DefaultOperationRequestBuilder();
-      builder=new DefaultOperationRequestBuilder();
-      builder.setOperationName(Util.FULL_REPLACE_DEPLOYMENT);
-      builder.addProperty(Util.NAME,name);
-      if (runtimeName != null) {
-        builder.addProperty(Util.RUNTIME_NAME,runtimeName);
-      }
-      byte[] bytes=readBytes(f);
-      builder.getModelNode().get(Util.CONTENT).get(0).get(Util.BYTES).set(bytes);
-      return builder.buildRequest();
+  String name=this.name.getValue(args);
+  if (name == null) {
+    if (f == null) {
+      throw new OperationFormatException("Either path or --name is requied.");
+    }
+    name=f.getName();
+  }
+  final String runtimeName=rtName.getValue(args);
+  final boolean force=this.force.isPresent(args);
+  final boolean disabled=this.disabled.isPresent(args);
+  final String serverGroups=this.serverGroups.getValue(args);
+  final boolean allServerGroups=this.allServerGroups.isPresent(args);
+  if (force) {
+    if (f == null) {
+      throw new OperationFormatException(this.force.getFullName() + " requires a filesystem path of the deployment to be added to the deployment repository.");
+    }
+    if (disabled || serverGroups != null || allServerGroups) {
+      throw new OperationFormatException(this.force.getFullName() + " only replaces the content in the deployment repository and can't be used in combination with any of " + this.disabled.getFullName()+ ", "+ this.serverGroups.getFullName()+ " or "+ this.allServerGroups.getFullName()+ '.');
+    }
+    if (Util.isDeploymentInRepository(name,client)) {
+      return buildDeploymentReplace(f,name,runtimeName);
     }
  else {
-      throw new OperationFormatException("'" + name + "' is already deployed (use -f to force re-deploy).");
+      return buildDeploymentAdd(f,name,runtimeName);
     }
   }
-  final List<String> serverGroups;
+  if (disabled) {
+    if (f == null) {
+      throw new OperationFormatException(this.disabled.getFullName() + " requires a filesystem path of the deployment to be added to the deployment repository.");
+    }
+    if (serverGroups != null || allServerGroups) {
+      throw new OperationFormatException(this.serverGroups.getFullName() + " and " + this.allServerGroups.getFullName()+ " can't be used in combination with "+ this.disabled.getFullName()+ '.');
+    }
+    if (Util.isDeploymentInRepository(name,client)) {
+      throw new OperationFormatException("'" + name + "' already exists in the deployment repository (use "+ this.force.getFullName()+ " to replace the existing content in the repository).");
+    }
+    return buildDeploymentAdd(f,name,runtimeName);
+  }
+  final ModelNode deployRequest;
   if (ctx.isDomainMode()) {
-    if (allServerGroups.isPresent(args)) {
-      serverGroups=Util.getServerGroups(ctx.getModelControllerClient());
-    }
- else {
-      String serverGroupsStr=this.serverGroups.getValue(args);
-      if (serverGroupsStr == null) {
-        throw new OperationFormatException("Either --all-server-groups or --server-groups must be specified.");
+    final List<String> sgList;
+    if (allServerGroups) {
+      if (serverGroups != null) {
+        throw new OperationFormatException(this.serverGroups.getFullName() + " can't appear in the same command with " + this.allServerGroups.getFullName());
       }
-      serverGroups=Arrays.asList(serverGroupsStr.split(","));
+      sgList=Util.getServerGroups(client);
+      if (sgList.isEmpty()) {
+        throw new OperationFormatException("No server group is available.");
+      }
     }
-    if (serverGroups.isEmpty() && !disabled.isPresent(args)) {
-      new OperationFormatException("No server group is available.");
+ else     if (serverGroups == null) {
+      final StringBuilder buf=new StringBuilder();
+      buf.append("One of ");
+      if (f != null) {
+        buf.append(this.disabled.getFullName()).append(", ");
+      }
+      buf.append(this.allServerGroups.getFullName() + " or " + this.serverGroups.getFullName()+ " is missing.");
+      throw new OperationFormatException(buf.toString());
+    }
+ else {
+      sgList=Arrays.asList(serverGroups.split(","));
+      if (sgList.isEmpty()) {
+        throw new OperationFormatException("Couldn't locate server group name in '" + this.serverGroups.getFullName() + "="+ serverGroups+ "'.");
+      }
+    }
+    deployRequest=new ModelNode();
+    deployRequest.get(Util.OPERATION).set(Util.COMPOSITE);
+    deployRequest.get(Util.ADDRESS).setEmptyList();
+    ModelNode steps=deployRequest.get(Util.STEPS);
+    for (    String serverGroup : sgList) {
+      steps.add(Util.configureDeploymentOperation(Util.ADD,name,serverGroup));
+    }
+    for (    String serverGroup : sgList) {
+      steps.add(Util.configureDeploymentOperation(Util.DEPLOY,name,serverGroup));
     }
   }
  else {
-    serverGroups=null;
+    if (serverGroups != null || allServerGroups) {
+      throw new OperationFormatException(this.serverGroups.getFullName() + " and " + this.allServerGroups.getFullName()+ " can't appear in standalone mode.");
+    }
+    deployRequest=new ModelNode();
+    deployRequest.get(Util.OPERATION).set(Util.DEPLOY);
+    deployRequest.get(Util.ADDRESS,Util.DEPLOYMENT).set(name);
   }
-  ModelNode composite=new ModelNode();
-  composite.get(Util.OPERATION).set(Util.COMPOSITE);
-  composite.get(Util.ADDRESS).setEmptyList();
-  ModelNode steps=composite.get(Util.STEPS);
-  DefaultOperationRequestBuilder builder;
+  final ModelNode addRequest;
   if (f != null) {
-    builder=new DefaultOperationRequestBuilder();
-    builder.setOperationName(Util.ADD);
-    builder.addNode(Util.DEPLOYMENT,name);
-    if (runtimeName != null) {
-      builder.addProperty(Util.RUNTIME_NAME,runtimeName);
+    if (Util.isDeploymentInRepository(name,client)) {
+      throw new OperationFormatException("'" + name + "' already exists in the deployment repository (use "+ this.force.getFullName()+ " to replace the existing content in the repository).");
     }
-    byte[] bytes=readBytes(f);
-    builder.getModelNode().get(Util.CONTENT).get(0).get(Util.BYTES).set(bytes);
-    steps.add(builder.buildRequest());
+    addRequest=this.buildDeploymentAdd(f,name,runtimeName);
   }
-  if (!disabled.isPresent(args)) {
-    if (ctx.isDomainMode()) {
-      for (      String serverGroup : serverGroups) {
-        steps.add(Util.configureDeploymentOperation(Util.ADD,name,serverGroup));
-      }
-      for (      String serverGroup : serverGroups) {
-        steps.add(Util.configureDeploymentOperation(Util.DEPLOY,name,serverGroup));
-      }
-    }
+ else   if (!Util.isDeploymentInRepository(name,client)) {
+    throw new OperationFormatException("'" + name + "' is not found among the registered deployments.");
+  }
  else {
-      builder=new DefaultOperationRequestBuilder();
-      builder.setOperationName(Util.DEPLOY);
-      builder.addNode(Util.DEPLOYMENT,name);
-      steps.add(builder.buildRequest());
-    }
+    addRequest=null;
   }
-  return composite;
+  if (addRequest != null) {
+    final ModelNode composite=new ModelNode();
+    composite.get(Util.OPERATION).set(Util.COMPOSITE);
+    composite.get(Util.ADDRESS).setEmptyList();
+    final ModelNode steps=composite.get(Util.STEPS);
+    steps.add(addRequest);
+    steps.add(deployRequest);
+    return addRequest;
+  }
+  return deployRequest;
 }
