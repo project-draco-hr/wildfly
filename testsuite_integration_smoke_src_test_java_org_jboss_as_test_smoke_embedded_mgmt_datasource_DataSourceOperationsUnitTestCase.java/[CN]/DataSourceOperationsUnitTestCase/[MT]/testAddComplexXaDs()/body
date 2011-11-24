@@ -1,0 +1,32 @@
+{
+  final String complexXaDs="complexXaDs";
+  final String complexXaDsJndi="java:jboss/xa-datasources/" + complexXaDs;
+  final ModelNode address=new ModelNode();
+  address.add("subsystem","datasources");
+  address.add("xa-data-source",complexXaDs);
+  address.protect();
+  final ModelNode operation=new ModelNode();
+  operation.get(OP).set("add");
+  operation.get(OP_ADDR).set(address);
+  Hashtable<String,String> params=hashtableWithXaParameters(complexXaDs,complexXaDsJndi);
+  setOperationParams(operation,params);
+  addExtensionProperties(operation);
+  execute(operation);
+  final ModelNode xaDatasourcePropertiesAddress=address.clone();
+  xaDatasourcePropertiesAddress.add("xa-datasource-properties","URL");
+  xaDatasourcePropertiesAddress.protect();
+  final ModelNode xaDatasourcePropertyOperation=new ModelNode();
+  xaDatasourcePropertyOperation.get(OP).set("add");
+  xaDatasourcePropertyOperation.get(OP_ADDR).set(xaDatasourcePropertiesAddress);
+  xaDatasourcePropertyOperation.get("value").set("jdbc:h2:mem:test");
+  execute(xaDatasourcePropertyOperation);
+  final ModelNode operationts=new ModelNode();
+  operationts.get(OP).set("take-snapshot");
+  execute(operationts);
+  List<ModelNode> newList=marshalAndReparseDsResources("xa-data-source");
+  Assert.assertNotNull(newList);
+  final Map<String,ModelNode> parseChildren=getChildren(newList.get(1));
+  Assert.assertFalse(parseChildren.isEmpty());
+  controlParseChildrenParams(parseChildren,params);
+  remove(address);
+}

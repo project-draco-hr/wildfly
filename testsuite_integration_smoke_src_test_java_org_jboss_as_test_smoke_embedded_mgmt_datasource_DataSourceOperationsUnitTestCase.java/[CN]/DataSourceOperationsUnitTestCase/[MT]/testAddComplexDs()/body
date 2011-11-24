@@ -1,0 +1,32 @@
+{
+  final String complexDs="complexDs";
+  final String complexDsJndi="java:jboss/datasources/" + complexDs;
+  final ModelNode address=new ModelNode();
+  address.add("subsystem","datasources");
+  address.add("data-source",complexDs);
+  address.protect();
+  Hashtable<String,String> params=hashtableWithNonXaParameters(complexDs,complexDsJndi);
+  final ModelNode operation=new ModelNode();
+  operation.get(OP).set("add");
+  operation.get(OP_ADDR).set(address);
+  setOperationParams(operation,params);
+  addExtensionProperties(operation);
+  execute(operation);
+  final ModelNode datasourcePropertiesAddress=address.clone();
+  datasourcePropertiesAddress.add("connection-properties","char.encoding");
+  datasourcePropertiesAddress.protect();
+  final ModelNode datasourcePropertyOperation=new ModelNode();
+  datasourcePropertyOperation.get(OP).set("add");
+  datasourcePropertyOperation.get(OP_ADDR).set(datasourcePropertiesAddress);
+  datasourcePropertyOperation.get("value").set("UTF-8");
+  execute(datasourcePropertyOperation);
+  final ModelNode operationts=new ModelNode();
+  operationts.get(OP).set("take-snapshot");
+  execute(operationts);
+  List<ModelNode> newList=marshalAndReparseDsResources("data-source");
+  Assert.assertNotNull(newList);
+  final Map<String,ModelNode> parseChildren=getChildren(newList.get(1));
+  Assert.assertFalse(parseChildren.isEmpty());
+  controlParseChildrenParams(parseChildren,params);
+  remove(address);
+}
