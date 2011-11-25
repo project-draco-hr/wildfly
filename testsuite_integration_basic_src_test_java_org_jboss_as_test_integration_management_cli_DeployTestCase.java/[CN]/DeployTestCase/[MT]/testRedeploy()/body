@@ -7,10 +7,23 @@
   new ZipExporterImpl(war).exportTo(warFile,true);
   cli.sendLine("deploy " + warFile.getAbsolutePath(),true);
   String line=cli.readLine(1000);
-  assertFalse("Deployment failed: " + line,line.indexOf("deployed successfully") >= 0);
+  assertTrue("Deployment failed: " + line,line.indexOf("use --force to replace") >= 0);
   cli.sendLine("deploy " + warFile.getAbsolutePath() + " --force",true);
-  line=cli.readLine(1000);
-  assertTrue("Deployment failed: " + line,line.indexOf("deployed successfully") >= 0);
-  response=HttpRequest.get(getBaseURL(url) + "SimpleServlet/page.html",10,TimeUnit.SECONDS);
+  final long firstTry=System.currentTimeMillis();
+  response=HttpRequest.get(getBaseURL(url) + "SimpleServlet/page.html",1000,10,TimeUnit.SECONDS);
+  while (response.indexOf("Version2") < 0) {
+    if (System.currentTimeMillis() - firstTry >= 1000) {
+      break;
+    }
+    try {
+      Thread.sleep(500);
+    }
+ catch (    InterruptedException e) {
+      break;
+    }
+ finally {
+      response=HttpRequest.get(getBaseURL(url) + "SimpleServlet/page.html",1000,10,TimeUnit.SECONDS);
+    }
+  }
   assertTrue("Invalid response: " + response,response.indexOf("Version2") >= 0);
 }
