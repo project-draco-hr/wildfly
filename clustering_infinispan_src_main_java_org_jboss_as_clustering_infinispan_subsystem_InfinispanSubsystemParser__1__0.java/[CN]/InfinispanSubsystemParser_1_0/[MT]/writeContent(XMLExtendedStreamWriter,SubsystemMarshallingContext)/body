@@ -4,9 +4,10 @@
   if (model.isDefined()) {
     writer.writeAttribute(Attribute.DEFAULT_CACHE_CONTAINER.getLocalName(),model.require(ModelKeys.DEFAULT_CACHE_CONTAINER).asString());
     for (    Property entry : model.get(ModelKeys.CACHE_CONTAINER).asPropertyList()) {
-      writer.writeStartElement(Element.CACHE_CONTAINER.getLocalName());
-      writer.writeAttribute(Attribute.NAME.getLocalName(),entry.getName());
+      String containerName=entry.getName();
       ModelNode container=entry.getValue();
+      writer.writeStartElement(Element.CACHE_CONTAINER.getLocalName());
+      writer.writeAttribute(Attribute.NAME.getLocalName(),containerName);
       this.writeRequired(writer,Attribute.DEFAULT_CACHE,container,ModelKeys.DEFAULT_CACHE);
       this.writeOptional(writer,Attribute.JNDI_NAME,container,ModelKeys.JNDI_NAME);
       this.writeOptional(writer,Attribute.LISTENER_EXECUTOR,container,ModelKeys.LISTENER_EXECUTOR);
@@ -30,8 +31,18 @@
         this.writeOptional(writer,Attribute.MACHINE,transport,ModelKeys.MACHINE);
         writer.writeEndElement();
       }
-      for (      ModelNode cache : container.get(ModelKeys.CACHE).asList()) {
-        Configuration.CacheMode mode=Configuration.CacheMode.valueOf(cache.get(ModelKeys.MODE).asString());
+      List<Property> cachesPL=new ArrayList<Property>();
+      String[] cacheTypes={ModelKeys.LOCAL_CACHE,ModelKeys.INVALIDATION_CACHE,ModelKeys.REPLICATED_CACHE,ModelKeys.DISTRIBUTED_CACHE};
+      for (      String cacheType : cacheTypes) {
+        List<Property> cachesOfAType=getCachesAsPropertyList(model,containerName,cacheType);
+        if (cachesOfAType != null)         cachesPL.addAll(cachesOfAType);
+      }
+      List<ModelNode> caches=new ArrayList<ModelNode>();
+      for (      Property cacheEntry : cachesPL) {
+        caches.add(cacheEntry.getValue());
+      }
+      for (      ModelNode cache : caches) {
+        Configuration.CacheMode mode=Configuration.CacheMode.valueOf(cache.get(ModelKeys.CACHE_MODE).asString());
         if (mode.isClustered()) {
           if (mode.isDistributed()) {
             writer.writeStartElement(Element.DISTRIBUTED_CACHE.getLocalName());

@@ -1,0 +1,79 @@
+{
+  Properties properties=new Properties();
+  if (store.hasDefined(ModelKeys.PROPERTY)) {
+    for (    Property property : store.get(ModelKeys.PROPERTY).asPropertyList()) {
+      String propertyName=property.getName();
+      String propertyValue=property.getValue().asString();
+      properties.setProperty(propertyName,propertyValue);
+    }
+  }
+  if (storeKey.equals(ModelKeys.FILE_STORE)) {
+    FileCacheStoreConfig storeConfig=new FileCacheStoreConfig();
+    String relativeTo=store.hasDefined(ModelKeys.RELATIVE_TO) ? store.get(ModelKeys.RELATIVE_TO).asString() : ServerEnvironment.SERVER_DATA_DIR;
+    AdditionalDependency<String> dep=new AdditionalDependency<String>(AbstractPathService.pathNameOf(relativeTo),String.class,storeConfig.getRelativeToInjector());
+    additionalDeps.add(dep);
+    storeConfig.setPath(store.hasDefined(ModelKeys.PATH) ? store.get(ModelKeys.PATH).asString() : name);
+    storeConfig.setProperties(properties);
+    XmlConfigHelper.setValues(storeConfig,properties,false,true);
+    return storeConfig;
+  }
+ else   if (storeKey.equals(ModelKeys.JDBC_STORE)) {
+    AbstractJdbcCacheStoreConfig storeConfig=this.buildJDBCStoreConfig(store);
+    String datasource=store.require(ModelKeys.DATASOURCE).asString();
+    AdditionalDependency<Object> dep=new AdditionalDependency<Object>(ServiceName.JBOSS.append("data-source").append("reference-factory").append(datasource));
+    additionalDeps.add(dep);
+    storeConfig.setDatasourceJndiLocation(datasource);
+    storeConfig.setConnectionFactoryClass(ManagedConnectionFactory.class.getName());
+    storeConfig.setProperties(properties);
+    XmlConfigHelper.setValues(storeConfig,properties,false,true);
+    return storeConfig;
+  }
+ else   if (storeKey.equals(ModelKeys.REMOTE_STORE)) {
+    final RemoteCacheStoreConfig storeConfig=new RemoteCacheStoreConfig();
+    for (    ModelNode server : store.require(ModelKeys.REMOTE_SERVER).asList()) {
+      String outboundSocketBinding=server.get(ModelKeys.OUTBOUND_SOCKET_BINDING).asString();
+      AdditionalDependency<OutboundSocketBinding> dep=new AdditionalDependency<OutboundSocketBinding>(OutboundSocketBinding.OUTBOUND_SOCKET_BINDING_BASE_SERVICE_NAME.append(outboundSocketBinding),OutboundSocketBinding.class,new Injector<OutboundSocketBinding>(){
+        @Override public void inject(        OutboundSocketBinding value) throws InjectionException {
+          final String address;
+          try {
+            address=value.getDestinationAddress().getHostAddress() + ":" + Integer.toString(value.getDestinationPort());
+          }
+ catch (          UnknownHostException uhe) {
+            throw InfinispanMessages.MESSAGES.failedToInjectSocketBinding(uhe,value);
+          }
+          String serverList=storeConfig.getHotRodClientProperties().getProperty(ConfigurationProperties.SERVER_LIST);
+          serverList=serverList == null ? address : serverList + ";" + address;
+          storeConfig.getHotRodClientProperties().setProperty(ConfigurationProperties.SERVER_LIST,serverList);
+        }
+        @Override public void uninject(){
+        }
+      }
+);
+      additionalDeps.add(dep);
+    }
+    if (store.hasDefined(ModelKeys.CACHE)) {
+      storeConfig.setRemoteCacheName(store.get(ModelKeys.CACHE).asString());
+    }
+    if (store.hasDefined(ModelKeys.SOCKET_TIMEOUT)) {
+      properties.setProperty(ConfigurationProperties.SO_TIMEOUT,store.require(ModelKeys.SOCKET_TIMEOUT).asString());
+    }
+    if (store.hasDefined(ModelKeys.TCP_NO_DELAY)) {
+      properties.setProperty(ConfigurationProperties.TCP_NO_DELAY,store.require(ModelKeys.TCP_NO_DELAY).asString());
+    }
+    storeConfig.setHotRodClientProperties(properties);
+    return storeConfig;
+  }
+  String className=store.require(ModelKeys.CLASS).asString();
+  try {
+    CacheStore cacheStore=CacheStore.class.getClassLoader().loadClass(className).asSubclass(CacheStore.class).newInstance();
+    CacheStoreConfig storeConfig=cacheStore.getConfigurationClass().asSubclass(CacheStoreConfig.class).newInstance();
+    if (storeConfig instanceof AbstractCacheLoaderConfig) {
+      ((AbstractCacheLoaderConfig)storeConfig).setProperties(properties);
+      XmlConfigHelper.setValues(storeConfig,properties,false,true);
+    }
+    return storeConfig;
+  }
+ catch (  Exception e) {
+    throw new IllegalArgumentException(String.format("%s is not a valid cache store",className),e);
+  }
+}
