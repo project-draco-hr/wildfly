@@ -1,0 +1,45 @@
+{
+  final ClassFile asm=new ClassFile(stubClassName,superclass.getName(),interfaceAnalysis.getCls().getName());
+  int methodIndex=0;
+  AttributeAnalysis[] attrs=interfaceAnalysis.getAttributes();
+  for (int i=0; i < attrs.length; i++) {
+    OperationAnalysis op=attrs[i].getAccessorAnalysis();
+    generateMethodCode(asm,superclass,op.getMethod(),op.getIDLName(),strategy(methodIndex),init(methodIndex));
+    methodIndex++;
+    op=attrs[i].getMutatorAnalysis();
+    if (op != null) {
+      generateMethodCode(asm,superclass,op.getMethod(),op.getIDLName(),strategy(methodIndex),init(methodIndex));
+      methodIndex++;
+    }
+  }
+  final OperationAnalysis[] ops=interfaceAnalysis.getOperations();
+  for (int i=0; i < ops.length; i++) {
+    generateMethodCode(asm,superclass,ops[i].getMethod(),ops[i].getIDLName(),strategy(methodIndex),init(methodIndex));
+    methodIndex++;
+  }
+  final ClassMethod ctor=asm.addMethod(Modifier.PUBLIC,"<init>","V");
+  ctor.getCodeAttribute().aload(0);
+  ctor.getCodeAttribute().invokespecial(superclass.getName(),"<init>","()V");
+  ctor.getCodeAttribute().returnInstruction();
+  final String[] ids=interfaceAnalysis.getAllTypeIds();
+  asm.addField(Modifier.PRIVATE + Modifier.STATIC,ID_FIELD_NAME,String[].class);
+  final CodeAttribute idMethod=asm.addMethod(Modifier.PUBLIC + Modifier.FINAL,"_ids","[Ljava/lang/String;").getCodeAttribute();
+  idMethod.getstatic(stubClassName,ID_FIELD_NAME,"[Ljava/lang/String;");
+  idMethod.returnInstruction();
+  final CodeAttribute clinit=asm.addMethod(Modifier.STATIC,"<clinit>","V").getCodeAttribute();
+  clinit.iconst(ids.length);
+  clinit.anewarray(String.class.getName());
+  for (int i=0; i < ids.length; i++) {
+    clinit.dup();
+    clinit.iconst(i);
+    clinit.ldc(ids[i]);
+    clinit.aastore();
+  }
+  clinit.putstatic(stubClassName,ID_FIELD_NAME,"[Ljava/lang/String;");
+  int n=methodIndex;
+  for (methodIndex=0; methodIndex < n; methodIndex++) {
+    clinit.invokestatic(stubClassName,init(methodIndex),"()V");
+  }
+  clinit.returnInstruction();
+  return asm;
+}
