@@ -1,0 +1,41 @@
+{
+  final EntityBeanComponentInstance instance;
+  try {
+    instance=ejbComponent.getCache().get(timer.getPrimaryKey());
+  }
+ catch (  Exception e) {
+    throw new BeanRemovedException(e);
+  }
+  boolean discarded=false;
+  try {
+    instance.invokeTimeoutMethod(timeoutMethod,timer);
+  }
+ catch (  Exception ex) {
+    if (ejbComponent.getApplicationException(ex.getClass(),timeoutMethod) != null) {
+      throw ex;
+    }
+    if (ex instanceof ConcurrentAccessTimeoutException || ex instanceof ConcurrentAccessException) {
+      throw ex;
+    }
+    if (ex instanceof RuntimeException || ex instanceof RemoteException) {
+      discarded=true;
+      ejbComponent.getCache().discard(instance);
+    }
+    throw ex;
+  }
+catch (  final Error e) {
+    discarded=true;
+    ejbComponent.getCache().discard(instance);
+    throw e;
+  }
+catch (  final Throwable t) {
+    discarded=true;
+    ejbComponent.getCache().discard(instance);
+    throw new RuntimeException(t);
+  }
+ finally {
+    if (!discarded) {
+      ejbComponent.getCache().release(instance,true);
+    }
+  }
+}
