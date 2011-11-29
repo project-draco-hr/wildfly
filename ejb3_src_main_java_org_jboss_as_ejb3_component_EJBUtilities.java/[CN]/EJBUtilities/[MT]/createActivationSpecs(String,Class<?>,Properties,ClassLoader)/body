@@ -1,58 +1,28 @@
 {
   try {
-    ActivationSpec activationSpec=null;
-    boolean raFound=false;
-    String packageName=knownRar.get(resourceAdapterName);
-    if (packageName != null) {
-      raFound=true;
+    final String raIdentifier=ConnectorServices.getRegisteredResourceAdapterIdentifier(resourceAdapterName);
+    if (raIdentifier == null) {
+      throw MESSAGES.unknownResourceAdapter(resourceAdapterName);
     }
-    if (!raFound) {
-      for (      String id : getMdr().getResourceAdapters()) {
-        if (id.equals(resourceAdapterName)) {
-          if (!raFound) {
-            ResourceAdapter ra=getMdr().getResourceAdapter(id).getResourceadapter();
-            if (ra instanceof ResourceAdapter1516 && ((ResourceAdapter1516)ra).getInboundResourceadapter() != null) {
-              String className=((ResourceAdapter1516)ra).getResourceadapterClass();
-              if (className.lastIndexOf(".") != -1) {
-                packageName=className.substring(0,className.lastIndexOf("."));
-              }
- else {
-                packageName="";
-              }
-              raFound=true;
-              EJB3_LOGGER.debug("Found resource adapter class: " + className + " for resource-adapter-name: "+ resourceAdapterName);
-            }
-          }
- else {
-            throw MESSAGES.multipleResourceAdapterRegistered(resourceAdapterName);
-          }
-        }
+    final ResourceAdapterRepository resourceAdapterRepository=getResourceAdapterRepository();
+    final List<MessageListener> messageListeners=resourceAdapterRepository.getMessageListeners(raIdentifier);
+    if (messageListeners == null || messageListeners.isEmpty()) {
+      throw MESSAGES.unknownMessageListenerType(resourceAdapterName,messageListenerInterface.getName());
+    }
+    MessageListener requiredMessageListener=null;
+    for (    final MessageListener messageListener : messageListeners) {
+      if (messageListenerInterface.equals(messageListener.getType())) {
+        requiredMessageListener=messageListener;
+        break;
       }
     }
-    if (!raFound) {
-      throw MESSAGES.failToRegisteredResourceAdapter(resourceAdapterName);
+    if (requiredMessageListener == null) {
+      throw MESSAGES.unknownMessageListenerType(resourceAdapterName,messageListenerInterface.getName());
     }
-    Set<String> ids=getResourceAdapterRepository().getResourceAdapters(messageListenerInterface);
-    List<MessageListener> listeners=null;
-    boolean found=false;
-    for (    String id : ids) {
-      if (id.startsWith(packageName)) {
-        if (!found) {
-          listeners=getResourceAdapterRepository().getMessageListeners(id);
-          found=true;
-        }
- else {
-          throw MESSAGES.multipleResourceAdapterRegistered(resourceAdapterName);
-        }
-      }
-    }
-    if (found) {
-      final MessageListener messageListener=listeners.get(0);
-      final Activation activation=messageListener.getActivation();
-      final Properties validActivationConfigProps=this.filterUnknownActivationConfigProperties(resourceAdapterName,activation,activationConfigProperties);
-      activationSpec=activation.createInstance();
-      PropertyEditors.mapJavaBeanProperties(activationSpec,validActivationConfigProps);
-    }
+    final Activation activation=requiredMessageListener.getActivation();
+    final Properties validActivationConfigProps=this.filterUnknownActivationConfigProperties(resourceAdapterName,activation,activationConfigProperties);
+    final ActivationSpec activationSpec=activation.createInstance();
+    PropertyEditors.mapJavaBeanProperties(activationSpec,validActivationConfigProps);
     return activationSpec;
   }
  catch (  IllegalAccessException e) {
@@ -68,9 +38,6 @@ catch (  NotFoundException e) {
     throw new RuntimeException(e);
   }
 catch (  IntrospectionException e) {
-    throw new RuntimeException(e);
-  }
-catch (  org.jboss.jca.core.spi.mdr.NotFoundException e) {
     throw new RuntimeException(e);
   }
 }
