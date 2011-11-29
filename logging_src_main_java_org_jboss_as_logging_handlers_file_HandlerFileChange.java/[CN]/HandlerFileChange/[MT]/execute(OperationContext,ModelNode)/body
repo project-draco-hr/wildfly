@@ -1,0 +1,24 @@
+{
+  final Resource resource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
+  final ModelNode originalModel=resource.getModel().clone();
+  final ModelNode model=resource.getModel();
+  FILE.validateAndSet(operation,model);
+  if (context.getType() == OperationContext.Type.SERVER && !context.isBooting()) {
+    context.addStep(new OperationStepHandler(){
+      public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+        final String name=address.getLastElement().getValue();
+        final ModelNode oldFile=FILE.resolveModelAttribute(context,originalModel);
+        final ModelNode file=FILE.resolveModelAttribute(context,model);
+        if (FileHandlers.changeFile(context,oldFile,file,name)) {
+          context.restartRequired();
+        }
+        if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
+          FileHandlers.revertFileChange(context,FILE.resolveModelAttribute(context,originalModel),name);
+        }
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}
