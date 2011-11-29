@@ -51,32 +51,34 @@
       homeInterfaceDef=InterfaceDefHelper.narrow(ir.lookup_id(homeRepositoryIds[0]));
     }
     homeServantRegistry=poaRegistry.getValue().getRegistryWithPersistentPOAPerServant();
-    final EjbHomeCorbaServant homeServant=new EjbHomeCorbaServant(homeMethodMap,homeRepositoryIds,homeInterfaceDef,orb,homeView.getValue(),deploymentRepository.getValue(),component.getTransactionManager());
+    final EjbHomeCorbaServant homeServant=new EjbHomeCorbaServant(homeMethodMap,homeRepositoryIds,homeInterfaceDef,orb,homeView.getValue(),deploymentRepository.getValue(),component.getTransactionManager(),module.getClassLoader());
     homeReferenceFactory=homeServantRegistry.bind(homeServantName(name),homeServant,policies);
     final org.omg.CORBA.Object corbaRef=homeReferenceFactory.createReference(homeRepositoryIds[0]);
     ejbHome=(EJBHome)PortableRemoteObject.narrow(corbaRef,EJBHome.class);
-    homeServant.setHomeHandle(new HomeHandleImplIIOP(corbaRef));
+    final HomeHandleImplIIOP homeHandle=new HomeHandleImplIIOP(orb.object_to_string(corbaRef));
+    homeServant.setHomeHandle(homeHandle);
     if (component instanceof EntityBeanComponent) {
       beanServantRegistry=poaRegistry.getValue().getRegistryWithPersistentPOAPerServant();
       final EntityBeanComponent entityBeanComponent=(EntityBeanComponent)component;
       final Class pkClass=entityBeanComponent.getPrimaryKeyClass();
-      ejbMetaData=new EJBMetaDataImp(entityBeanComponent.getRemoteClass(),entityBeanComponent.getHomeClass(),pkClass,false,false,ejbHome);
+      ejbMetaData=new EJBMetaDataImplIIOP(entityBeanComponent.getRemoteClass(),entityBeanComponent.getHomeClass(),pkClass,false,false,homeHandle);
     }
  else {
       beanServantRegistry=poaRegistry.getValue().getRegistryWithTransientPOAPerServant();
       if (component instanceof StatelessSessionComponent) {
-        ejbMetaData=new EJBMetaDataImp(remoteView.getValue().getViewClass(),homeView.getValue().getViewClass(),null,true,true,ejbHome);
+        ejbMetaData=new EJBMetaDataImplIIOP(remoteView.getValue().getViewClass(),homeView.getValue().getViewClass(),null,true,true,homeHandle);
       }
  else {
-        ejbMetaData=new EJBMetaDataImp(remoteView.getValue().getViewClass(),homeView.getValue().getViewClass(),null,true,false,ejbHome);
+        ejbMetaData=new EJBMetaDataImplIIOP(remoteView.getValue().getViewClass(),homeView.getValue().getViewClass(),null,true,false,homeHandle);
       }
     }
+    homeServant.setEjbMetaData(ejbMetaData);
     InterfaceDef beanInterfaceDef=null;
     if (iri != null) {
       final Repository ir=iri.getReference();
       beanInterfaceDef=InterfaceDefHelper.narrow(ir.lookup_id(beanRepositoryIds[0]));
     }
-    final EjbObjectCorbaServant beanServant=new EjbObjectCorbaServant(poaCurrent,beanMethodMap,beanRepositoryIds,beanInterfaceDef,orb,remoteView.getValue(),factory,configuration,component.getTransactionManager());
+    final EjbObjectCorbaServant beanServant=new EjbObjectCorbaServant(poaCurrent,beanMethodMap,beanRepositoryIds,beanInterfaceDef,orb,remoteView.getValue(),factory,configuration,component.getTransactionManager(),module.getClassLoader());
     beanReferenceFactory=beanServantRegistry.bind(beanServantName(name),beanServant,policies);
     final NamingContextExt corbaContext=corbaNamingContext.getValue();
     rebind(corbaContext,name,corbaRef);
