@@ -20,22 +20,38 @@
       final Object primaryKey=invokeEjbCreate(context,ejbCreate,instance,params);
       instance.associate(primaryKey);
       primaryKeyReference.set(primaryKey);
+      boolean synchronizationRegistered=false;
+      boolean exception=false;
       entityBeanComponent.getCache().create(instance);
-      invokeEjbPostCreate(context,ejbPostCreate,instance,params);
-      final TransactionSynchronizationRegistry transactionSynchronizationRegistry=entityBeanComponent.getTransactionSynchronizationRegistry();
-      if (transactionSynchronizationRegistry.getTransactionKey() != null) {
-        transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
-          @Override public void beforeCompletion(){
-          }
-          @Override public void afterCompletion(          final int status){
-            if (status != Status.STATUS_COMMITTED) {
-              entityBeanComponent.getPool().release(instance);
+      entityBeanComponent.getCache().reference(instance);
+      try {
+        invokeEjbPostCreate(context,ejbPostCreate,instance,params);
+        final TransactionSynchronizationRegistry transactionSynchronizationRegistry=entityBeanComponent.getTransactionSynchronizationRegistry();
+        if (transactionSynchronizationRegistry.getTransactionKey() != null) {
+          transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
+            @Override public void beforeCompletion(){
+            }
+            @Override public void afterCompletion(            final int status){
+              entityBeanComponent.getCache().release(instance,status == Status.STATUS_COMMITTED);
+              if (status != Status.STATUS_COMMITTED) {
+                entityBeanComponent.getPool().release(instance);
+              }
             }
           }
-        }
 );
+          synchronizationRegistered=true;
+        }
+        return context.proceed();
       }
-      return context.proceed();
+ catch (      Exception e) {
+        entityBeanComponent.getCache().release(instance,false);
+        throw e;
+      }
+ finally {
+        if (!synchronizationRegistered && !exception) {
+          entityBeanComponent.getCache().release(instance,true);
+        }
+      }
     }
   }
 ;
