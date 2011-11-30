@@ -1,13 +1,10 @@
 {
   Authenticator.setDefault(getAuthenticator());
+  HttpURLConnection connection=null;
   BufferedOutputStream os=null;
   BufferedInputStream is=null;
   try {
-    HttpURLConnection connection=(HttpURLConnection)new URL(UPLOAD_URL).openConnection();
-    connection.setDoInput(true);
-    connection.setDoOutput(true);
-    connection.setRequestMethod(POST_REQUEST_METHOD);
-    connection.setRequestProperty("Content-Type","multipart/form-data; boundary=" + BOUNDARY_PARAM);
+    connection=getHttpURLConnection(UPLOAD_URL,"multipart/form-data; boundary=" + BOUNDARY_PARAM);
     final JavaArchive archive=ShrinkWrapUtils.createJavaArchive("servermodule/test-http-deployment.sar",Simple.class.getPackage());
     os=new BufferedOutputStream(connection.getOutputStream());
     is=new BufferedInputStream(archive.as(ZipExporter.class).exportAsInputStream());
@@ -18,20 +15,32 @@
     System.out.println(node);
     assertEquals(SUCCESS,node.require(OUTCOME).asString());
     byte[] hash=node.require(RESULT).asBytes();
-    connection=(HttpURLConnection)new URL(BASIC_URL).openConnection();
-    connection.setDoInput(true);
-    connection.setDoOutput(true);
-    connection.setRequestMethod(POST_REQUEST_METHOD);
-    connection.setRequestProperty("Content-Type","application/json");
+    connection.disconnect();
+    connection=getHttpURLConnection(BASIC_URL,"application/json");
     os=new BufferedOutputStream(connection.getOutputStream());
     writeAddRequest(os,hash);
     node=readResult(connection.getInputStream());
     assertNotNull(node);
     System.out.println(node);
     assertEquals(SUCCESS,node.require(OUTCOME).asString());
+    connection.disconnect();
   }
   finally {
     closeQuietly(is);
     closeQuietly(os);
+    try {
+      connection=getHttpURLConnection(BASIC_URL,"application/json");
+      os=new BufferedOutputStream(connection.getOutputStream());
+      writeRemoveRequest(os);
+      ModelNode node=readResult(connection.getInputStream());
+      System.out.println(node);
+      connection.disconnect();
+    }
+ catch (    Exception ignored) {
+      ignored.printStackTrace();
+    }
+ finally {
+      closeQuietly(os);
+    }
   }
 }
