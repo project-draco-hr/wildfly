@@ -1,0 +1,50 @@
+{
+  try {
+    Connection conn=ds.getConnection();
+    PreparedStatement psSelect=conn.prepareStatement("SELECT balance FROM account WHERE id = ?");
+    double balance;
+    try {
+      psSelect.setLong(1,id);
+      ResultSet rs=psSelect.executeQuery();
+      if (!rs.next())       throw new IllegalArgumentException("can't find account " + id);
+      balance=rs.getDouble(1);
+      PreparedStatement ps=conn.prepareStatement("UPDATE account SET balance = ? WHERE id = ?");
+      try {
+        beginTx();
+        try {
+          balance-=a1;
+          ps.setDouble(1,balance);
+          ps.setLong(2,id);
+          int rows=ps.executeUpdate();
+          if (rows != 1)           throw new IllegalStateException("first update failed");
+          commitTx();
+        }
+  finally {
+          rollbackTxIfNeeded();
+        }
+        beginTx();
+        try {
+          balance-=a2;
+          ps.setDouble(1,balance);
+          ps.setLong(2,id);
+          int rows=ps.executeUpdate();
+          if (rows != 1)           throw new IllegalStateException("second update failed");
+        }
+  finally {
+          rollbackTx();
+        }
+      }
+  finally {
+        ps.close();
+      }
+      return balance;
+    }
+  finally {
+      psSelect.close();
+      conn.close();
+    }
+  }
+ catch (  SQLException e) {
+    throw new RuntimeException(e);
+  }
+}
