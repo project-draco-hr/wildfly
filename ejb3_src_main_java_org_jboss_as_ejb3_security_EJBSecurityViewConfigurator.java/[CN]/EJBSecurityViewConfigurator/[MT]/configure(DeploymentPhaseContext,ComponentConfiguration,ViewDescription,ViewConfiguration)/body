@@ -2,6 +2,7 @@
   if (componentConfiguration.getComponentDescription() instanceof EJBComponentDescription == false) {
     throw MESSAGES.invalidEjbComponent(componentConfiguration.getComponentName(),componentConfiguration.getComponentClass());
   }
+  final DeploymentReflectionIndex deploymentReflectionIndex=context.getDeploymentUnit().getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
   final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)componentConfiguration.getComponentDescription();
   if (!ejbComponentDescription.isSecurityEnabled()) {
     ROOT_LOGGER.debug("Security is *not* enabled on EJB: " + ejbComponentDescription.getEJBName() + ", no security interceptors will apply");
@@ -9,6 +10,7 @@
   }
   final String viewClassName=viewDescription.getViewClassName();
   viewConfiguration.addViewInterceptor(new SecurityContextInterceptorFactory(),InterceptorOrder.View.SECURITY_CONTEXT);
+  final EJBViewDescription ejbViewDescription=(EJBViewDescription)viewDescription;
   final List<Method> viewMethods=viewConfiguration.getProxyFactory().getCachedMethods();
   for (  final Method viewMethod : viewMethods) {
     if (!Modifier.isPublic(viewMethod.getModifiers())) {
@@ -17,8 +19,22 @@
     if (viewMethod.getDeclaringClass() == WriteReplaceInterface.class) {
       continue;
     }
-    final EJBMethodSecurityMetaData ejbMethodSecurityMetaData=new EJBMethodSecurityMetaData(componentConfiguration,viewClassName,viewMethod);
-    final Interceptor authorizationInterceptor=new AuthorizationInterceptor(ejbMethodSecurityMetaData,viewClassName,viewMethod);
-    viewConfiguration.addViewInterceptor(viewMethod,new ImmediateInterceptorFactory(authorizationInterceptor),InterceptorOrder.View.EJB_SECURITY_AUTHORIZATION_INTERCEPTOR);
+    EJBMethodSecurityMetaData ejbMethodSecurityMetaData=ejbComponentDescription.getMethodPermissions().getViewAttribute(ejbViewDescription.getMethodIntf(),viewMethod.getName(),MethodIdentifier.getIdentifierForMethod(viewMethod).getParameterTypes());
+    if (ejbMethodSecurityMetaData == null) {
+      ejbMethodSecurityMetaData=ejbComponentDescription.getMethodPermissions().getViewAttribute(MethodIntf.BEAN,viewMethod.getName(),MethodIdentifier.getIdentifierForMethod(viewMethod).getParameterTypes());
+    }
+    if (ejbMethodSecurityMetaData == null) {
+      final Method classMethod=ClassReflectionIndexUtil.findMethod(deploymentReflectionIndex,componentConfiguration.getComponentClass(),viewMethod);
+      if (classMethod != null) {
+        ejbMethodSecurityMetaData=ejbComponentDescription.getMethodPermissions().getAttribute(ejbViewDescription.getMethodIntf(),classMethod.getDeclaringClass().getName(),classMethod.getName(),MethodIdentifier.getIdentifierForMethod(classMethod).getParameterTypes());
+        if (ejbMethodSecurityMetaData == null) {
+          ejbMethodSecurityMetaData=ejbComponentDescription.getMethodPermissions().getAttribute(MethodIntf.BEAN,classMethod.getDeclaringClass().getName(),classMethod.getName(),MethodIdentifier.getIdentifierForMethod(classMethod).getParameterTypes());
+        }
+      }
+    }
+    if (ejbMethodSecurityMetaData != null) {
+      final Interceptor authorizationInterceptor=new AuthorizationInterceptor(ejbMethodSecurityMetaData,viewClassName,viewMethod);
+      viewConfiguration.addViewInterceptor(viewMethod,new ImmediateInterceptorFactory(authorizationInterceptor),InterceptorOrder.View.EJB_SECURITY_AUTHORIZATION_INTERCEPTOR);
+    }
   }
 }

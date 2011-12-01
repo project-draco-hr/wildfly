@@ -1,13 +1,51 @@
 {
-  final EnterpriseBeanMetaData beanMetaData=description.getDescriptorData();
-  if (beanMetaData == null) {
-    return;
+  componentConfiguration.getConfigurators().add(new EjbJaccConfigurator());
+  EjbJarMetaData ejbJarMetadata=deploymentUnit.getAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_METADATA);
+  if (ejbJarMetadata != null) {
+    final AssemblyDescriptorMetaData assemblyDescriptor=ejbJarMetadata.getAssemblyDescriptor();
+    if (assemblyDescriptor != null) {
+      final ExcludeListMetaData excludeList=assemblyDescriptor.getExcludeListByEjbName(componentConfiguration.getEJBName());
+      if (excludeList != null && excludeList.getMethods() != null) {
+        for (        final MethodMetaData method : excludeList.getMethods()) {
+          final String methodName=method.getMethodName();
+          final MethodIntf methodIntf=this.getMethodIntf(method.getMethodIntf());
+          if (methodName.equals("*")) {
+            componentConfiguration.getMethodPermissions().setAttribute(methodIntf,null,EJBMethodSecurityMetaData.denyAll());
+          }
+ else {
+            final MethodParametersMetaData methodParams=method.getMethodParams();
+            if (methodParams == null) {
+              componentConfiguration.getMethodPermissions().setAttribute(methodIntf,EJBMethodSecurityMetaData.denyAll(),methodName);
+            }
+ else {
+              componentConfiguration.getMethodPermissions().setAttribute(methodIntf,EJBMethodSecurityMetaData.denyAll(),null,methodName,this.getMethodParams(methodParams));
+            }
+          }
+        }
+      }
+      final MethodPermissionsMetaData methodPermissions=assemblyDescriptor.getMethodPermissionsByEjbName(componentConfiguration.getEJBName());
+      if (methodPermissions != null) {
+        for (        final MethodPermissionMetaData methodPermissionMetaData : methodPermissions) {
+          final EJBMethodSecurityMetaData ejbMethodSecurityMetaData=EJBMethodSecurityMetaData.rolesAllowed(methodPermissionMetaData.getRoles());
+          final MethodsMetaData methods=methodPermissionMetaData.getMethods();
+          for (          final MethodMetaData method : methods) {
+            final String methodName=method.getMethodName();
+            final MethodIntf methodIntf=this.getMethodIntf(method.getMethodIntf());
+            if (methodName.equals("*")) {
+              componentConfiguration.getMethodPermissions().setAttribute(methodIntf,null,ejbMethodSecurityMetaData);
+            }
+ else {
+              final MethodParametersMetaData methodParams=method.getMethodParams();
+              if (methodParams == null) {
+                componentConfiguration.getMethodPermissions().setAttribute(methodIntf,ejbMethodSecurityMetaData,methodName);
+              }
+ else {
+                componentConfiguration.getMethodPermissions().setAttribute(methodIntf,ejbMethodSecurityMetaData,null,methodName,this.getMethodParams(methodParams));
+              }
+            }
+          }
+        }
+      }
+    }
   }
-  final AssemblyDescriptorMetaData assemblyDescriptor=beanMetaData.getAssemblyDescriptor();
-  if (assemblyDescriptor == null) {
-    return;
-  }
-  final ClassReflectionIndex<?> classReflectionIndex=deploymentReflectionIndex.getClassIndex(componentClass);
-  handleMethodPermissions(deploymentReflectionIndex,description,assemblyDescriptor,classReflectionIndex);
-  handleExcludeList(deploymentReflectionIndex,description,assemblyDescriptor,classReflectionIndex);
 }
