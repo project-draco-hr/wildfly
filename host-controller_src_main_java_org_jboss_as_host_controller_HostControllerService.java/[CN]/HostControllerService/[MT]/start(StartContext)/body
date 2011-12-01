@@ -1,0 +1,49 @@
+{
+  processState.setStarting();
+  AS_ROOT_LOGGER.serverStarting(Version.AS_VERSION,Version.AS_RELEASE_CODENAME);
+  if (CONFIG_LOGGER.isDebugEnabled()) {
+    final Properties properties=System.getProperties();
+    final StringBuilder b=new StringBuilder(8192);
+    b.append("Configured system properties:");
+    for (    String property : new TreeSet<String>(properties.stringPropertyNames())) {
+      b.append("\n\t").append(property).append(" = ").append(properties.getProperty(property,"<undefined>"));
+    }
+    CONFIG_LOGGER.debug(b);
+    CONFIG_LOGGER.debugf("VM Arguments: %s",getVMArguments());
+    if (CONFIG_LOGGER.isTraceEnabled()) {
+      b.setLength(0);
+      final Map<String,String> env=System.getenv();
+      b.append("Configured system environment:");
+      for (      String key : new TreeSet<String>(env.keySet())) {
+        b.append("\n\t").append(key).append(" = ").append(env.get(key));
+      }
+      CONFIG_LOGGER.trace(b);
+    }
+  }
+  final ServiceTarget serviceTarget=context.getChildTarget();
+  final ServiceController<?> myController=context.getController();
+  final ServiceContainer serviceContainer=myController.getServiceContainer();
+  futureContainer=new FutureServiceContainer();
+  long startTime=this.startTime;
+  if (startTime == -1) {
+    startTime=System.currentTimeMillis();
+  }
+ else {
+    this.startTime=-1;
+  }
+  final BootstrapListener bootstrapListener=new BootstrapListener(serviceContainer,startTime,serviceTarget,futureContainer,"JBoss AS (Host Controller)");
+  serviceTarget.addListener(ServiceListener.Inheritance.ALL,bootstrapListener);
+  myController.addListener(bootstrapListener);
+  final ProcessControllerConnectionService processControllerClient=new ProcessControllerConnectionService(environment,authCode);
+  serviceTarget.addService(ProcessControllerConnectionService.SERVICE_NAME,processControllerClient).install();
+  final ServiceName threadFactoryServiceName=HC_SERVICE_NAME.append("thread-factory");
+  final ServiceName executorServiceName=HC_SERVICE_NAME.append("executor");
+  serviceTarget.addService(threadFactoryServiceName,new ThreadFactoryService()).install();
+  final HostControllerExecutorService executorService=new HostControllerExecutorService();
+  serviceTarget.addService(executorServiceName,executorService).addDependency(threadFactoryServiceName,ThreadFactory.class,executorService.threadFactoryValue).install();
+  AbsolutePathService.addService(HostControllerEnvironment.HOME_DIR,environment.getHomeDir().getAbsolutePath(),serviceTarget);
+  AbsolutePathService.addService(HostControllerEnvironment.DOMAIN_CONFIG_DIR,environment.getDomainConfigurationDir().getAbsolutePath(),serviceTarget);
+  AbsolutePathService.addService(HostControllerEnvironment.DOMAIN_TEMP_DIR,environment.getDomainTempDir().getAbsolutePath(),serviceTarget);
+  AbsolutePathService.addService(HostControllerEnvironment.CONTROLLER_TEMP_DIR,environment.getDomainTempDir().getAbsolutePath(),serviceTarget);
+  DomainModelControllerService.addService(serviceTarget,environment,runningModeControl,processState,bootstrapListener);
+}
