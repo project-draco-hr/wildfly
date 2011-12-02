@@ -1,15 +1,22 @@
 {
+  if (context.getRunningMode() == RunningMode.ADMIN_ONLY) {
+    throw new OperationFailedException(new ModelNode(String.format("Cannot start servers when the Host Controller running mode is %s",context.getRunningMode())));
+  }
   final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
   final PathElement element=address.getLastElement();
   final String serverName=element.getValue();
   final ModelNode model=Resource.Tools.readModel(context.getRootResource());
   context.addStep(new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      final ServerStatus origStatus=serverInventory.determineServerStatus(serverName);
+      if (origStatus != ServerStatus.STARTED) {
+        throw new OperationFailedException(new ModelNode(String.format("Cannot restart server %s as it is not currently started; it is %s",serverName,origStatus)));
+      }
       final ServerStatus status=serverInventory.restartServer(serverName,-1,model);
       context.getResult().set(status.toString());
-      context.completeStep();
+      context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
     }
   }
 ,OperationContext.Stage.RUNTIME);
-  context.completeStep();
+  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
 }

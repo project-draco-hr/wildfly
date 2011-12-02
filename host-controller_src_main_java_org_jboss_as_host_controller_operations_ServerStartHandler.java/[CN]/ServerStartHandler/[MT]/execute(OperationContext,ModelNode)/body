@@ -1,15 +1,31 @@
 {
+  if (context.getRunningMode() == RunningMode.ADMIN_ONLY) {
+    throw new OperationFailedException(new ModelNode(String.format("Cannot start servers when the Host Controller running mode is %s",context.getRunningMode())));
+  }
   final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
   final PathElement element=address.getLastElement();
   final String serverName=element.getValue();
   final ModelNode model=Resource.Tools.readModel(context.getRootResource());
   context.addStep(new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
-      final ServerStatus status=serverInventory.startServer(serverName,model);
-      context.getResult().set(status.toString());
-      context.completeStep();
+      final ServerStatus origStatus=serverInventory.determineServerStatus(serverName);
+      if (origStatus != ServerStatus.STARTED && origStatus != ServerStatus.STARTING) {
+        final ServerStatus status=serverInventory.startServer(serverName,model);
+        context.getResult().set(status.toString());
+      }
+ else {
+        context.getResult().set(origStatus.toString());
+      }
+      context.completeStep(new OperationContext.RollbackHandler(){
+        @Override public void handleRollback(        OperationContext context,        ModelNode operation){
+          if (origStatus != ServerStatus.STARTED && origStatus != ServerStatus.STARTING) {
+            serverInventory.stopServer(serverName,-1);
+          }
+        }
+      }
+);
     }
   }
 ,OperationContext.Stage.RUNTIME);
-  context.completeStep();
+  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
 }
