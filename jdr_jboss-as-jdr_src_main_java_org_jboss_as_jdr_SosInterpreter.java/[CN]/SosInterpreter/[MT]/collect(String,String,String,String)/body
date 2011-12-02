@@ -1,0 +1,46 @@
+{
+  ROOT_LOGGER.startingCollection();
+  Date startTime=new Date();
+  String homeDir=getJbossHomeDir();
+  if (homeDir == null) {
+    ROOT_LOGGER.jbossHomeNotSet();
+    throw new OperationFailedException(MESSAGES.jbossHomeNotSet(),new ModelNode().set(MESSAGES.jbossHomeNotSet()));
+  }
+  PythonInterpreter interpreter=new PythonInterpreter();
+  interpreter.exec("import sys");
+  interpreter.exec("import shlex");
+  String pyLocation=getPythonScriptLocation();
+  ROOT_LOGGER.debug("Location of JDR scripts: " + pyLocation);
+  String locationDir=getReportLocationDir();
+  ROOT_LOGGER.debug("locationDir = " + locationDir);
+  ROOT_LOGGER.debug("homeDir = " + SosInterpreter.cleanPath(homeDir));
+  PyObject report=new PyObject();
+  try {
+    interpreter.exec("sys.path.append(\"" + pyLocation + "\")");
+    interpreter.exec("import sos");
+    if (controllerClient != null) {
+      interpreter.set("controller_client_proxy",new ModelControllerClientProxy(controllerClient));
+      interpreter.exec("sos.controllerClient = controller_client_proxy");
+    }
+    setSosVariable(interpreter,"as7_user",username);
+    setSosVariable(interpreter,"as7_pass",password);
+    setSosVariable(interpreter,"as7_host",host);
+    setSosVariable(interpreter,"as7_port",port);
+    interpreter.exec("from sos.sosreport import main");
+    interpreter.exec("args = shlex.split('-k eap6.home=\"" + homeDir + "\" --tmp-dir=\""+ locationDir+ "\" -o eap6 --batch --report --compression-type=zip --silent')");
+    interpreter.exec("reportLocation = main(args)");
+    report=interpreter.get("reportLocation");
+    interpreter.cleanup();
+  }
+ catch (  Throwable t) {
+    interpreter.cleanup();
+    ROOT_LOGGER.pythonExceptionEncountered(t);
+  }
+  Date endTime=new Date();
+  ROOT_LOGGER.endingCollection();
+  JdrReport result=new JdrReport();
+  result.setStartTime(startTime);
+  result.setEndTime(endTime);
+  result.setLocation(report.asString());
+  return result;
+}

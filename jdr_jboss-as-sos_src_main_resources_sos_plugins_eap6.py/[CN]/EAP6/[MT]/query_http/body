@@ -1,8 +1,10 @@
 def query_http(self, request_obj, postdata=None):
-    host_port = self.getOption('address')
-    username = self.getOption('user')
-    password = self.getOption('pass')
-    uri = (((('http://' + host_port) + '/management') + request_obj.resource) + '?')
+    import sos
+    host = (getattr(sos, 'as7_host', None) or self.getOption('host'))
+    port = (getattr(sos, 'as7_port', None) or self.getOption('port'))
+    username = (self.getOption('user') or getattr(sos, 'as7_user', None))
+    password = (self.getOption('pass') or getattr(sos, 'as7_pass', None))
+    uri = (((('http://' + host) + ':') + port) + '/management')
     json_data = {'operation': request_obj.operation, 'address': [], }
     for (key, val) in request_obj.url_parts():
         json_data['address'].append({key: val, })
@@ -12,16 +14,17 @@ def query_http(self, request_obj, postdata=None):
     headers = {'Content-Type': 'application/json', 'Accept': 'application/json', }
     opener = urllib2.build_opener()
     if (username and password):
-        params = {'realm': 'PropertiesMgmtSecurityRealm', 'uri': uri, 'user': username, 'passwd': password, }
-        digest_auth_handler = urllib2.HTTPDigestAuthHandler()
-        digest_auth_handler.add_password(**params)
-        basic_auth_handler = urllib2.HTTPBasicAuthHandler()
-        basic_auth_handler.add_password(**params)
+        passwd_manager = urllib2.HTTPPasswordMgrWithDefaultRealm()
+        passwd_manager.add_password(realm='ManagementRealm', uri=uri, user=username, passwd=password)
+        digest_auth_handler = urllib2.HTTPDigestAuthHandler(passwd_manager)
+        basic_auth_handler = urllib2.HTTPBasicAuthHandler(passwd_manager)
         opener.add_handler(digest_auth_handler)
         opener.add_handler(basic_auth_handler)
     req = urllib2.Request(uri, data=postdata, headers=headers)
     try:
         resp = opener.open(req)
-        resp.read()
+        return resp.read()
     except Exception as e:
-        self.addAlert(('Could not query url: %s; error: %s' % (uri, e)))
+        err_msg = ('Could not query url: %s; error: %s' % (uri, e))
+        self.addAlert(err_msg)
+        return err_msg
