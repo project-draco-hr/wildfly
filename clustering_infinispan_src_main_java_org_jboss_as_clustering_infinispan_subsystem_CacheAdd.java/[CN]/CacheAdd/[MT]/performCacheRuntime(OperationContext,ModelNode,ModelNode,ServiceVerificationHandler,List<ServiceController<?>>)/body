@@ -1,0 +1,43 @@
+{
+  Configuration overrides=new Configuration();
+  List<AdditionalDependency> additionalDeps=new LinkedList<AdditionalDependency>();
+  processCacheModelNode(model,overrides,additionalDeps);
+  PathAddress cacheAddress=PathAddress.pathAddress(operation.get(OP_ADDR));
+  PathAddress containerAddress=cacheAddress.subAddress(0,cacheAddress.size() - 1);
+  String cacheName=cacheAddress.getLastElement().getValue();
+  String containerName=containerAddress.getLastElement().getValue();
+  ServiceName containerServiceName=EmbeddedCacheManagerService.getServiceName(containerName);
+  ServiceName cacheServiceName=containerServiceName.append(cacheName);
+  Resource rootResource=context.getRootResource();
+  ModelNode container=rootResource.navigate(containerAddress).getModel();
+  String defaultCache=container.require(ModelKeys.DEFAULT_CACHE).asString();
+  StartMode startMode=operation.hasDefined(ModelKeys.START) ? StartMode.valueOf(operation.get(ModelKeys.START).asString()) : StartMode.LAZY;
+  String jndiName=CacheContainerAdd.getContainerJNDIName(container,containerName);
+  final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndiName);
+  CacheService.CacheConfigurationHelperImpl helper=new CacheService.CacheConfigurationHelperImpl(cacheName);
+  ServiceTarget target=context.getServiceTarget();
+  CacheService<Object,Object> cacheService=new CacheService<Object,Object>(cacheName,overrides,helper);
+  ServiceBuilder<Cache<Object,Object>> builder=target.addService(cacheServiceName,cacheService);
+  builder.addDependency(containerServiceName,CacheContainer.class,helper.getCacheContainerInjector());
+  builder.addDependency(EmbeddedCacheManagerDefaultsService.SERVICE_NAME,EmbeddedCacheManagerDefaults.class,helper.getDefaultsInjector());
+  builder.addDependency(ServiceBuilder.DependencyType.OPTIONAL,TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,helper.getTransactionManagerInjector());
+  builder.addDependency(ServiceBuilder.DependencyType.OPTIONAL,TxnServices.JBOSS_TXN_SYNCHRONIZATION_REGISTRY,TransactionSynchronizationRegistry.class,helper.getTransactionSynchronizationRegistryInjector());
+  builder.addDependency(bindInfo.getBinderServiceName());
+  for (  AdditionalDependency dep : additionalDeps) {
+    if (dep.hasInjector()) {
+      builder.addDependency(dep.getName(),dep.getType(),dep.getTarget());
+    }
+ else {
+      builder.addDependency(dep.getName());
+    }
+  }
+  builder.setInitialMode(startMode.getMode());
+  if (cacheName.equals(defaultCache)) {
+    builder.addAliases(CacheService.getServiceName(containerName,null));
+  }
+  if (startMode.getMode() == ServiceController.Mode.ACTIVE) {
+    builder.addListener(verificationHandler);
+  }
+  newControllers.add(builder.install());
+  log.debug("cache " + cacheName + " installed for container "+ containerName);
+}

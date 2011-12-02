@@ -1,9 +1,30 @@
 {
-  CacheContainer container=this.container.getValue();
-  EmbeddedCacheManagerDefaults defaults=this.defaults.getValue();
+  CacheContainer container=this.configurationHelper.getCacheContainer();
+  EmbeddedCacheManagerDefaults defaults=this.configurationHelper.getEmbeddedCacheManagerDefaults();
   Configuration.CacheMode mode=this.overrides.getCacheMode();
   Configuration configuration=defaults.getDefaultConfiguration(mode);
   configuration.applyOverrides(overrides);
+  if (configuration.isTransactionalCache() && configurationHelper.getTransactionManager() == null) {
+    throw new StartException("Missing dependency: transaction manager required");
+  }
+  if (configuration.isUseSynchronizationForTransactions() && configurationHelper.getTransactionSynchronizationRegistry() == null) {
+    throw new StartException("Missing dependency: transaction synchronization registry provider required");
+  }
+  FluentConfiguration.TransactionConfig tx=configuration.fluent().transaction();
+  if (configuration.isTransactionalCache()) {
+    TransactionManager txManager=this.configurationHelper.getTransactionManager();
+    if (txManager != null) {
+      tx.transactionManagerLookup(new TransactionManagerProvider(txManager));
+    }
+    if (configuration.isUseSynchronizationForTransactions()) {
+      TransactionSynchronizationRegistry txSyncRegistry=this.configurationHelper.getTransactionSynchronizationRegistry();
+      if (txSyncRegistry != null) {
+        tx.transactionSynchronizationRegistryLookup(new TransactionSynchronizationRegistryProvider(txSyncRegistry));
+      }
+    }
+    if (configuration.isTransactionRecoveryEnabled()) {
+    }
+  }
   if (this.template != null) {
     ((EmbeddedCacheManager)container).defineConfiguration(this.name,this.template,configuration);
   }
