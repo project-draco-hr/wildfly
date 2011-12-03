@@ -1,0 +1,82 @@
+{
+  if (f == null) {
+    throw new CliInitializationException("The file argument is null.");
+  }
+  if (!f.exists()) {
+    return new CliConfigImpl();
+  }
+  CliConfigImpl config=new CliConfigImpl();
+  BufferedInputStream input=null;
+  try {
+    final XMLMapper mapper=XMLMapper.Factory.create();
+    mapper.registerRootElement(new QName("urn:jboss:cli:1.0","jboss-cli"),new XMLElementReader<CliConfigImpl>(){
+      @Override public void readElement(      XMLExtendedStreamReader reader,      CliConfigImpl config) throws XMLStreamException {
+        RolloutPlanHeader rolloutPlan=null;
+        boolean concurrent=false;
+        while (reader.hasNext()) {
+          int tag=reader.nextTag();
+          if (tag == XMLStreamConstants.START_ELEMENT) {
+            final String localName=reader.getLocalName();
+            if (localName.equals("plan")) {
+              final String planName=reader.getAttributeValue(null,"id");
+              if (planName == null) {
+                throw new IllegalStateException("Rollout plan is missing required attribute 'id' @" + reader.getLocation().getColumnNumber() + ","+ reader.getLocation().getLineNumber());
+              }
+              rolloutPlan=new RolloutPlanHeader(planName);
+              config.addRolloutPlan(rolloutPlan);
+            }
+ else             if (localName.equals("concurrent")) {
+              concurrent=true;
+              rolloutPlan.addGroup(new ConcurrentRolloutPlanGroup());
+            }
+ else             if (localName.equals("server-group")) {
+              final String name=reader.getAttributeValue(null,"name");
+              if (name == null) {
+                throw new IllegalStateException("Server group is missing required attribute 'name' @" + reader.getLocation().getColumnNumber() + ","+ reader.getLocation().getLineNumber());
+              }
+              final SingleRolloutPlanGroup group=new SingleRolloutPlanGroup();
+              group.setGroupName(name);
+              String value=reader.getAttributeValue(null,"rolling-to-servers");
+              if (value != null) {
+                group.addProperty("rolling-to-servers",value);
+              }
+              value=reader.getAttributeValue(null,"max-failure-percentage");
+              if (value != null) {
+                group.addProperty("max-failure-percentage",value);
+              }
+              value=reader.getAttributeValue(null,"max-failed-servers");
+              if (value != null) {
+                group.addProperty("max-failed-servers",value);
+              }
+              if (concurrent) {
+                rolloutPlan.addConcurrentGroup(group);
+              }
+ else {
+                rolloutPlan.addGroup(group);
+              }
+            }
+          }
+ else           if (tag == XMLStreamConstants.END_ELEMENT) {
+            final String localName=reader.getLocalName();
+            if (localName.equals("concurrent")) {
+              concurrent=false;
+            }
+          }
+        }
+      }
+    }
+);
+    FileInputStream is=new FileInputStream(f);
+    input=new BufferedInputStream(is);
+    XMLStreamReader streamReader=XMLInputFactory.newInstance().createXMLStreamReader(input);
+    mapper.parseDocument(config,streamReader);
+    streamReader.close();
+  }
+ catch (  Throwable t) {
+    throw new CliInitializationException("Failed to parse " + f.getAbsolutePath(),t);
+  }
+ finally {
+    StreamUtils.safeClose(input);
+  }
+  return config;
+}
