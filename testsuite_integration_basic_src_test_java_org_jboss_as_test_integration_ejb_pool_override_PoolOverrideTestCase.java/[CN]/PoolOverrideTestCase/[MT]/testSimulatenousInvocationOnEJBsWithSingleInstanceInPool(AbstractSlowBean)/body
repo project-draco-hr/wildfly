@@ -1,0 +1,46 @@
+{
+  final ExecutorService executorService=Executors.newFixedThreadPool(2);
+  Future<Void> firstBeanInvocationResult=null;
+  Future<Void> secondBeanInvocationResult=null;
+  try {
+    final PooledBeanInvoker firstBeanInvoker=new PooledBeanInvoker(bean,1000);
+    firstBeanInvocationResult=executorService.submit(firstBeanInvoker);
+    final PooledBeanInvoker secondBeanInvoker=new PooledBeanInvoker(bean,1000);
+    secondBeanInvocationResult=executorService.submit(secondBeanInvoker);
+  }
+  finally {
+    executorService.shutdown();
+  }
+  boolean firstInvocationFailed=false;
+  boolean secondInvocationFailed=false;
+  try {
+    firstBeanInvocationResult.get(5,TimeUnit.SECONDS);
+  }
+ catch (  ExecutionException ee) {
+    if (ee.getCause() instanceof EJBException) {
+      logger.info("Got EJBException for first invocation ",ee.getCause());
+      firstInvocationFailed=true;
+    }
+ else {
+      throw ee;
+    }
+  }
+  try {
+    secondBeanInvocationResult.get(5,TimeUnit.SECONDS);
+  }
+ catch (  ExecutionException ee) {
+    if (ee.getCause() instanceof EJBException) {
+      logger.info("Got EJBException for second invocation ",ee.getCause());
+      secondInvocationFailed=true;
+    }
+ else {
+      throw ee;
+    }
+  }
+  if (firstInvocationFailed && secondInvocationFailed) {
+    Assert.fail("Both first and second invocations to EJB failed. Only one was expected to fail");
+  }
+  if (!firstInvocationFailed && !secondInvocationFailed) {
+    Assert.fail("Both first and second invocations to EJB passed. Only one was expected to pass");
+  }
+}
