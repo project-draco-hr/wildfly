@@ -4,14 +4,18 @@
   String targetHost=null;
   final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
   final String operationName=operation.get(OP).asString();
+  boolean compositeOp=false;
   if (address.size() > 0) {
     PathElement first=address.getElement(0);
     if (HOST.equals(first.getKey())) {
       targetHost=first.getValue();
     }
   }
+ else {
+    compositeOp=COMPOSITE.equals(operationName);
+  }
   if (targetHost != null) {
-    Set<OperationEntry.Flag> flags=registry.getOperationFlags(PathAddress.EMPTY_ADDRESS,operation.require(OP).asString());
+    Set<OperationEntry.Flag> flags=registry.getOperationFlags(PathAddress.EMPTY_ADDRESS,operationName);
     checkNull(operation,flags);
     if (flags.contains(OperationEntry.Flag.READ_ONLY) && !flags.contains(OperationEntry.Flag.DOMAIN_PUSH_TO_SERVERS)) {
       routing=new OperationRouting(targetHost,false);
@@ -31,8 +35,31 @@
       }
     }
   }
+ else   if (compositeOp) {
+    if (operation.hasDefined(STEPS)) {
+      Set<String> allHosts=new HashSet<String>();
+      boolean twoStep=false;
+      for (      ModelNode step : operation.get(STEPS).asList()) {
+        ImmutableManagementResourceRegistration stepRegistry=registry.getSubModel(PathAddress.pathAddress(step.get(OP_ADDR)));
+        OperationRouting stepRouting=determineRouting(step,localHostControllerInfo,stepRegistry);
+        if (stepRouting.isTwoStep()) {
+          twoStep=true;
+        }
+        allHosts.addAll(stepRouting.getHosts());
+      }
+      if (allHosts.size() == 1) {
+        routing=new OperationRouting(allHosts.iterator().next(),twoStep);
+      }
  else {
-    Set<OperationEntry.Flag> flags=registry.getOperationFlags(PathAddress.EMPTY_ADDRESS,operation.require(OP).asString());
+        routing=new OperationRouting(allHosts);
+      }
+    }
+ else {
+      routing=new OperationRouting(localHostControllerInfo.getLocalHostName(),false);
+    }
+  }
+ else {
+    Set<OperationEntry.Flag> flags=registry.getOperationFlags(PathAddress.EMPTY_ADDRESS,operationName);
     checkNull(operation,flags);
     if (flags.contains(OperationEntry.Flag.READ_ONLY) && !flags.contains(OperationEntry.Flag.DOMAIN_PUSH_TO_SERVERS)) {
       routing=new OperationRouting(localHostControllerInfo.getLocalHostName(),false);
@@ -45,32 +72,7 @@
     }
   }
   if (routing == null) {
-    if (COMPOSITE.equals(operationName)) {
-      if (operation.hasDefined(STEPS)) {
-        Set<String> allHosts=new HashSet<String>();
-        boolean twoStep=false;
-        for (        ModelNode step : operation.get(STEPS).asList()) {
-          ImmutableManagementResourceRegistration stepRegistry=registry.getSubModel(PathAddress.pathAddress(step.get(OP_ADDR)));
-          OperationRouting stepRouting=determineRouting(step,localHostControllerInfo,stepRegistry);
-          if (stepRouting.isTwoStep()) {
-            twoStep=true;
-          }
-          allHosts.addAll(stepRouting.getHosts());
-        }
-        if (allHosts.size() == 1) {
-          routing=new OperationRouting(allHosts.iterator().next(),twoStep);
-        }
- else {
-          routing=new OperationRouting(allHosts);
-        }
-      }
- else {
-        routing=new OperationRouting(localHostControllerInfo.getLocalHostName(),false);
-      }
-    }
- else {
-      routing=new OperationRouting(true);
-    }
+    routing=new OperationRouting(true);
   }
   return routing;
 }
