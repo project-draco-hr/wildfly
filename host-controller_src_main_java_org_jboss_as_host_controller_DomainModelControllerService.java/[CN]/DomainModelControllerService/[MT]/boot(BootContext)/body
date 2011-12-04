@@ -7,13 +7,19 @@
     ManagementRemotingServices.installRemotingEndpoint(serviceTarget,ManagementRemotingServices.MANAGEMENT_ENDPOINT,hostControllerInfo.getLocalHostName(),EndpointService.EndpointType.MANAGEMENT,null,null);
     if (!hostControllerInfo.isMasterDomainController() && !environment.isUseCachedDc()) {
       serverInventory=getFuture(inventoryFuture);
-      Future<MasterDomainControllerClient> clientFuture=RemoteDomainConnectionService.install(serviceTarget,getValue(),hostControllerInfo.getLocalHostName(),hostControllerInfo.getRemoteDomainControllerHost(),hostControllerInfo.getRemoteDomainControllertPort(),hostControllerInfo.getRemoteDomainControllerSecurityRealm(),remoteFileRepository);
-      MasterDomainControllerClient masterDomainControllerClient=getFuture(clientFuture);
-      try {
-        masterDomainControllerClient.register();
+      if (hostControllerInfo.getRemoteDomainControllerHost() != null) {
+        Future<MasterDomainControllerClient> clientFuture=RemoteDomainConnectionService.install(serviceTarget,getValue(),hostControllerInfo.getLocalHostName(),hostControllerInfo.getRemoteDomainControllerHost(),hostControllerInfo.getRemoteDomainControllertPort(),hostControllerInfo.getRemoteDomainControllerSecurityRealm(),remoteFileRepository);
+        MasterDomainControllerClient masterDomainControllerClient=getFuture(clientFuture);
+        try {
+          masterDomainControllerClient.register();
+        }
+ catch (        IllegalStateException e) {
+          log.error(HostControllerMessages.MESSAGES.cannotConnectToMaster(e));
+          System.exit(ExitCodes.HOST_CONTROLLER_ABORT_EXIT_CODE);
+        }
       }
- catch (      IllegalStateException e) {
-        log.error("Could not connect to master. Aborting. Error was: " + e.getMessage());
+ else       if (currentRunningMode != RunningMode.ADMIN_ONLY) {
+        log.error(HostControllerMessages.MESSAGES.noDomainControllerConfigurationProvided(currentRunningMode,CommandLineConstants.ADMIN_ONLY,RunningMode.ADMIN_ONLY));
         System.exit(ExitCodes.HOST_CONTROLLER_ABORT_EXIT_CODE);
       }
     }
