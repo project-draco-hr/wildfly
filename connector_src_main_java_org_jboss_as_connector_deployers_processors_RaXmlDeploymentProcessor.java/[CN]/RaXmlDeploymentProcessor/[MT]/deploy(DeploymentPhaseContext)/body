@@ -1,5 +1,6 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final ManagementResourceRegistration registration=deploymentUnit.getAttachment(DeploymentModelUtils.MUTABLE_REGISTRATION_ATTACHMENT);
   final ConnectorXmlDescriptor connectorXmlDescriptor=deploymentUnit.getAttachment(ConnectorXmlDescriptor.ATTACHMENT_KEY);
   if (connectorXmlDescriptor == null) {
     return;
@@ -30,11 +31,39 @@
         String raName=connectorXmlDescriptor.getDeploymentName();
         ServiceName serviceName=ConnectorServices.registerDeployment(raName);
         ResourceAdapterXmlDeploymentService service=new ResourceAdapterXmlDeploymentService(connectorXmlDescriptor,raxml,module,deployment,serviceName);
-        serviceTarget.addService(serviceName,service).addDependency(ConnectorServices.IRONJACAMAR_MDR,MetadataRepository.class,service.getMdrInjector()).addDependency(ConnectorServices.RA_REPOSISTORY_SERVICE,ResourceAdapterRepository.class,service.getRaRepositoryInjector()).addDependency(ConnectorServices.MANAGEMENT_REPOSISTORY_SERVICE,ManagementRepository.class,service.getManagementRepositoryInjector()).addDependency(ConnectorServices.RESOURCE_ADAPTER_REGISTRY_SERVICE,ResourceAdapterDeploymentRegistry.class,service.getRegistryInjector()).addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,service.getTxIntegrationInjector()).addDependency(ConnectorServices.CONNECTOR_CONFIG_SERVICE,JcaSubsystemConfiguration.class,service.getConfigInjector()).addDependency(SubjectFactoryService.SERVICE_NAME,SubjectFactory.class,service.getSubjectFactoryInjector()).addDependency(ConnectorServices.CCM_SERVICE,CachedConnectionManager.class,service.getCcmInjector()).addDependency(NamingService.SERVICE_NAME).addDependency(ConnectorServices.RESOURCE_ADAPTER_DEPLOYER_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName())).setInitialMode(Mode.ACTIVE).install();
+        ServiceBuilder builder=serviceTarget.addService(serviceName,service).addDependency(ConnectorServices.IRONJACAMAR_MDR,MetadataRepository.class,service.getMdrInjector()).addDependency(ConnectorServices.RA_REPOSISTORY_SERVICE,ResourceAdapterRepository.class,service.getRaRepositoryInjector()).addDependency(ConnectorServices.MANAGEMENT_REPOSISTORY_SERVICE,ManagementRepository.class,service.getManagementRepositoryInjector()).addDependency(ConnectorServices.RESOURCE_ADAPTER_REGISTRY_SERVICE,ResourceAdapterDeploymentRegistry.class,service.getRegistryInjector()).addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,service.getTxIntegrationInjector()).addDependency(ConnectorServices.CONNECTOR_CONFIG_SERVICE,JcaSubsystemConfiguration.class,service.getConfigInjector()).addDependency(SubjectFactoryService.SERVICE_NAME,SubjectFactory.class,service.getSubjectFactoryInjector()).addDependency(ConnectorServices.CCM_SERVICE,CachedConnectionManager.class,service.getCcmInjector()).addDependency(NamingService.SERVICE_NAME).addDependency(ConnectorServices.RESOURCE_ADAPTER_DEPLOYER_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName()));
+        builder.addListener(new AbstractServiceListener<Object>(){
+          public void transition(          final ServiceController<? extends Object> controller,          final ServiceController.Transition transition){
+switch (transition) {
+case STARTING_to_UP:
+{
+                CommonDeployment deploymentMD=((ResourceAdapterXmlDeploymentService)controller.getService()).getRaxmlDeployment();
+                StatisticsPlugin poolStats=deploymentMD.getConnectionManagers()[0].getPool().getStatistics();
+                for (                String statName : poolStats.getNames()) {
+                  registration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(poolStats));
+                  SUBSYSTEM_DATASOURCES_LOGGER.infof("registering metric: %s",statName);
+                }
+                break;
+              }
+case UP_to_STOP_REQUESTED:
+{
+              CommonDeployment deploymentMD=((ResourceAdapterXmlDeploymentService)controller.getService()).getRaxmlDeployment();
+              StatisticsPlugin poolStats=deploymentMD.getConnectionManagers()[0].getPool().getStatistics();
+              for (              String statName : poolStats.getNames()) {
+                registration.unregisterMetric(statName);
+                SUBSYSTEM_DATASOURCES_LOGGER.infof("Unregistering metric: %s",statName);
+              }
+              break;
+            }
+        }
       }
     }
+);
+    builder.setInitialMode(Mode.ACTIVE).install();
   }
- catch (  Throwable t) {
-    throw new DeploymentUnitProcessingException(t);
-  }
+}
+}
+ catch (Throwable t) {
+throw new DeploymentUnitProcessingException(t);
+}
 }
