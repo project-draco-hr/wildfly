@@ -5,12 +5,20 @@
     context.addStep(new OperationStepHandler(){
       public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
         performRuntime(context,operation,model);
-        if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
-          recoverServices(context,operation,model);
+        context.completeStep(new OperationContext.RollbackHandler(){
+          @Override public void handleRollback(          OperationContext context,          ModelNode operation){
+            try {
+              recoverServices(context,operation,model);
+            }
+ catch (            Exception e) {
+              MGMT_OP_LOGGER.errorRevertingOperation(e,getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)));
+            }
+          }
         }
+);
       }
     }
 ,OperationContext.Stage.RUNTIME);
   }
-  context.completeStep();
+  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
 }

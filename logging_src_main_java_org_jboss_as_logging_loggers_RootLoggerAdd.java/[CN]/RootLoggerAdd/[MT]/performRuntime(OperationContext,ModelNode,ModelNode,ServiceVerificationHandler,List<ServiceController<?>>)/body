@@ -5,21 +5,18 @@
   final ModelNode handlers=HANDLERS.resolveModelAttribute(context,model);
   final ModelNode filter=FILTER.resolveModelAttribute(context,model);
   final ServiceTarget target=context.getServiceTarget();
-  try {
-    final RootLoggerService service=new RootLoggerService();
-    if (level.isDefined())     service.setLevel(ModelParser.parseLevel(level));
-    if (filter.isDefined())     service.setFilter(ModelParser.parseFilter(context,filter));
-    newControllers.add(target.addService(LogServices.loggerName(name),service).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+  final RootLoggerService service=new RootLoggerService();
+  if (level.isDefined())   service.setLevel(ModelParser.parseLevel(level));
+  if (filter.isDefined())   service.setFilter(ModelParser.parseFilter(context,filter));
+  ServiceBuilder builder=target.addService(LogServices.loggerName(name),service).setInitialMode(ServiceController.Mode.ACTIVE);
+  if (verificationHandler != null) {
+    builder.addListener(verificationHandler);
   }
- catch (  Throwable t) {
-    throw new OperationFailedException(new ModelNode().set(t.getLocalizedMessage()));
+  ServiceController<?> controller=builder.install();
+  if (newControllers != null) {
+    newControllers.add(controller);
   }
-  try {
-    if (handlers.isDefined()) {
-      newControllers.addAll(LoggerAssignHandler.installHandlers(target,name,handlers,verificationHandler));
-    }
-  }
- catch (  Throwable t) {
-    throw new OperationFailedException(new ModelNode().set(t.getLocalizedMessage()));
+  if (handlers.isDefined()) {
+    newControllers.addAll(LoggerAssignHandler.installHandlers(target,name,handlers,verificationHandler));
   }
 }
