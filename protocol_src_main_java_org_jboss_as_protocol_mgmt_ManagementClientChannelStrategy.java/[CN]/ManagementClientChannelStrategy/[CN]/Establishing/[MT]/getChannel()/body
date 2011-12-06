@@ -1,30 +1,41 @@
 {
-  final ProtocolChannelClient.Configuration<ManagementChannel> configuration=new ProtocolChannelClient.Configuration<ManagementChannel>();
-  try {
-    configuration.setEndpoint(endpoint);
-    configuration.setUri(new URI("remote://" + hostName + ":"+ port));
-    configuration.setChannelFactory(new ManagementChannelFactory(receiverFactory.createReceiver()));
-    client=ProtocolChannelClient.create(configuration);
-  }
- catch (  Exception e) {
-    throw new RuntimeException(e);
-  }
   boolean ok=false;
   try {
-    try {
-      client.connect(callbackHandler,saslOptions);
+synchronized (this) {
+      if (connection == null) {
+        this.connection=setup.connect(callbackHandler,saslOptions).get();
+        this.connection.addCloseHandler(new CloseHandler<Connection>(){
+          @Override public void handleClose(          Connection closed,          IOException exception){
+synchronized (Establishing.this) {
+              if (connection == closed) {
+                connection=null;
+              }
+            }
+          }
+        }
+);
+      }
+      if (channel == null) {
+        channel=connection.openChannel(channelName,OptionMap.EMPTY).get();
+        channel.addCloseHandler(new CloseHandler<Channel>(){
+          @Override public void handleClose(          Channel closed,          IOException exception){
+synchronized (Establishing.this) {
+              if (channel == closed) {
+                channel=null;
+              }
+            }
+          }
+        }
+);
+        channel.receiveMessage(receiver);
+      }
+      ok=true;
     }
- catch (    ConnectException e) {
-      throw e;
-    }
-    channel=client.openChannel("management");
-    channel.startReceiving();
-    ok=true;
   }
   finally {
     if (!ok) {
-      IoUtils.safeClose(channel);
-      IoUtils.safeClose(client);
+      StreamUtils.safeClose(connection);
+      StreamUtils.safeClose(channel);
     }
   }
   return channel;
