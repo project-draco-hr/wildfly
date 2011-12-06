@@ -1,10 +1,16 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
-  final ResourceRoot resourceRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
   final ServiceModuleLoader moduleLoader=deploymentUnit.getAttachment(Attachments.SERVICE_MODULE_LOADER);
+  if (deploymentUnit.getParent() != null) {
+    if (deploymentRoot.hasAttachment(SUB_DEPLOYMENT_STRUCTURE)) {
+      final ModuleSpecification subModuleSpec=deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
+      handleDeployment(deploymentUnit,subModuleSpec,deploymentRoot.getAttachment(SUB_DEPLOYMENT_STRUCTURE));
+    }
+  }
   VirtualFile deploymentFile=null;
   for (  final String loc : DEPLOYMENT_STRUCTURE_DESCRIPTOR_LOCATIONS) {
-    final VirtualFile file=resourceRoot.getRoot().getChild(loc);
+    final VirtualFile file=deploymentRoot.getRoot().getChild(loc);
     if (file.exists()) {
       deploymentFile=file;
       break;
@@ -14,7 +20,7 @@
     return;
   }
   if (deploymentUnit.getParent() != null) {
-    log.warnf("%s in subdeployment ignored. jboss-deployment-structure.xml is only parsed for top level deployments.",deploymentFile.getPathName());
+    ServerLogger.DEPLOYMENT_LOGGER.jbossDeploymentStructureIgnored(deploymentFile.getPathName());
     return;
   }
   try {
@@ -25,63 +31,32 @@
     }
     final ModuleStructureSpec rootDeploymentSpecification=result.getRootDeploymentSpecification();
     if (rootDeploymentSpecification != null) {
-      final Map<VirtualFile,ResourceRoot> resourceRoots=resourceRoots(deploymentUnit);
-      moduleSpec.addUserDependencies(rootDeploymentSpecification.getModuleDependencies());
-      moduleSpec.addExclusions(rootDeploymentSpecification.getExclusions());
-      moduleSpec.addAliases(rootDeploymentSpecification.getAliases());
-      moduleSpec.addModuleSystemDependencies(rootDeploymentSpecification.getSytemDependencies());
-      for (      final ResourceRoot additionalResourceRoot : rootDeploymentSpecification.getResourceRoots()) {
-        final ResourceRoot existingRoot=resourceRoots.get(additionalResourceRoot.getRoot());
-        if (existingRoot != null) {
-          existingRoot.merge(additionalResourceRoot);
-        }
- else {
-          deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,additionalResourceRoot);
-        }
-      }
-      for (      final String classFileTransformer : rootDeploymentSpecification.getClassFileTransformers()) {
-        moduleSpec.addClassFileTransformer(classFileTransformer);
+      handleDeployment(deploymentUnit,moduleSpec,rootDeploymentSpecification);
+    }
+    final List<ResourceRoot> resourceRoots=deploymentUnit.getAttachmentList(Attachments.RESOURCE_ROOTS);
+    final Map<String,ResourceRoot> subDeploymentMap=new HashMap<String,ResourceRoot>();
+    for (    final ResourceRoot root : resourceRoots) {
+      if (SubDeploymentMarker.isSubDeployment(root)) {
+        subDeploymentMap.put(root.getRoot().getPathNameRelativeTo(deploymentRoot.getRoot()),root);
       }
     }
-    final List<DeploymentUnit> subDeployments=deploymentUnit.getAttachmentList(Attachments.SUB_DEPLOYMENTS);
-    final Map<String,DeploymentUnit> subDeploymentMap=new HashMap<String,DeploymentUnit>();
-    for (    final DeploymentUnit subDeployment : subDeployments) {
-      final ResourceRoot subDeploymentRoot=subDeployment.getAttachment(Attachments.DEPLOYMENT_ROOT);
-      final String path=subDeploymentRoot.getRoot().getPathNameRelativeTo(resourceRoot.getRoot());
-      subDeploymentMap.put(path,subDeployment);
-    }
-    for (    final Entry<String,ModuleStructureSpec> subDeploymentResult : result.getSubDeploymentSpecifications().entrySet()) {
-      final String path=subDeploymentResult.getKey();
-      final ModuleStructureSpec spec=subDeploymentResult.getValue();
+    for (    final Entry<String,ModuleStructureSpec> entry : result.getSubDeploymentSpecifications().entrySet()) {
+      final String path=entry.getKey();
+      final ModuleStructureSpec spec=entry.getValue();
       if (!subDeploymentMap.containsKey(path)) {
         throw subDeploymentNotFound(path,subDeploymentMap.keySet());
       }
-      final DeploymentUnit subDeployment=subDeploymentMap.get(path);
-      final ModuleSpecification subModuleSpec=subDeployment.getAttachment(Attachments.MODULE_SPECIFICATION);
-      final Map<VirtualFile,ResourceRoot> resourceRoots=resourceRoots(subDeployment);
-      subModuleSpec.addUserDependencies(spec.getModuleDependencies());
-      subModuleSpec.addExclusions(spec.getExclusions());
-      subModuleSpec.addAliases(spec.getAliases());
-      subModuleSpec.addModuleSystemDependencies(spec.getSytemDependencies());
-      for (      final ResourceRoot additionalResourceRoot : spec.getResourceRoots()) {
-        final ResourceRoot existingRoot=resourceRoots.get(additionalResourceRoot.getRoot());
-        if (existingRoot != null) {
-          existingRoot.merge(additionalResourceRoot);
-        }
- else {
-          subDeployment.addToAttachmentList(Attachments.RESOURCE_ROOTS,additionalResourceRoot);
-        }
-      }
-      for (      final String classFileTransformer : spec.getClassFileTransformers()) {
-        subModuleSpec.addClassFileTransformer(classFileTransformer);
-      }
-      subModuleSpec.setLocalLast(spec.isLocalLast());
+      final ResourceRoot subDeployment=subDeploymentMap.get(path);
+      subDeployment.putAttachment(SUB_DEPLOYMENT_STRUCTURE,spec);
     }
     for (    final ModuleStructureSpec additionalModule : result.getAdditionalModules()) {
       final AdditionalModuleSpecification additional=new AdditionalModuleSpecification(additionalModule.getModuleIdentifier(),additionalModule.getResourceRoots());
       additional.addAliases(additionalModule.getAliases());
       additional.addSystemDependencies(additionalModule.getModuleDependencies());
       deploymentUnit.addToAttachmentList(Attachments.ADDITIONAL_MODULES,additional);
+      for (      final ResourceRoot root : additionalModule.getResourceRoots()) {
+        ResourceRootIndexer.indexResourceRoot(root);
+      }
     }
   }
  catch (  IOException e) {

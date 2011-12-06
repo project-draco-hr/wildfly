@@ -1,20 +1,30 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
-  if (deploymentUnit.getAttachment(Attachments.CLASS_PATH_ENTRIES) != null) {
-    return;
-  }
-  final ArrayDeque<ResourceRoot> resourceRoots=new ArrayDeque<ResourceRoot>(DeploymentUtils.allResourceRoots(deploymentUnit));
   final DeploymentUnit parent=deploymentUnit.getParent();
   final DeploymentUnit topLevelDeployment=parent == null ? deploymentUnit : parent;
   final VirtualFile topLevelRoot=topLevelDeployment.getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
   final ExternalModuleService externalModuleService=topLevelDeployment.getAttachment(Attachments.EXTERNAL_MODULE_SERVICE);
-  final List<ResourceRoot> topLevelResourceRoots=topLevelDeployment.getAttachment(Attachments.RESOURCE_ROOTS);
   final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  final Set<VirtualFile> existingAccessibleRoots=new HashSet<VirtualFile>();
   final Map<VirtualFile,ResourceRoot> subDeployments=new HashMap<VirtualFile,ResourceRoot>();
   for (  ResourceRoot root : DeploymentUtils.allResourceRoots(topLevelDeployment)) {
     if (SubDeploymentMarker.isSubDeployment(root)) {
       subDeployments.put(root.getRoot(),root);
     }
+ else     if (ModuleRootMarker.isModuleRoot(root)) {
+      existingAccessibleRoots.add(root.getRoot());
+    }
+  }
+  final ArrayDeque<RootEntry> resourceRoots=new ArrayDeque<RootEntry>();
+  if (deploymentUnit.getParent() != null) {
+    for (    ResourceRoot root : DeploymentUtils.allResourceRoots(deploymentUnit)) {
+      if (ModuleRootMarker.isModuleRoot(root)) {
+        existingAccessibleRoots.add(root.getRoot());
+      }
+    }
+  }
+  for (  ResourceRoot root : DeploymentUtils.allResourceRoots(deploymentUnit)) {
+    resourceRoots.add(new RootEntry(deploymentUnit,root));
   }
   final Map<VirtualFile,AdditionalModuleSpecification> additionalModules=new HashMap<VirtualFile,AdditionalModuleSpecification>();
   for (  AdditionalModuleSpecification module : topLevelDeployment.getAttachmentList(Attachments.ADDITIONAL_MODULES)) {
@@ -22,48 +32,32 @@
       additionalModules.put(additionalModuleResourceRoot.getRoot(),module);
     }
   }
-  final Set<VirtualFile> earLibJars=new HashSet<VirtualFile>();
-  if (deploymentUnit.getParent() != null && topLevelResourceRoots != null) {
-    for (    ResourceRoot resourceRoot : topLevelResourceRoots) {
-      if (ModuleRootMarker.isModuleRoot(resourceRoot) && !SubDeploymentMarker.isSubDeployment(resourceRoot)) {
-        earLibJars.add(resourceRoot.getRoot());
-      }
-    }
-  }
   while (!resourceRoots.isEmpty()) {
-    final ResourceRoot resourceRoot=resourceRoots.pop();
+    final RootEntry entry=resourceRoots.pop();
+    final ResourceRoot resourceRoot=entry.resourceRoot;
+    final Attachable target=entry.target;
     if (SubDeploymentMarker.isSubDeployment(resourceRoot) && resourceRoot != deploymentRoot) {
       continue;
     }
-    final Attachable target;
-    if (additionalModules.containsKey(resourceRoot.getRoot())) {
-      target=additionalModules.get(resourceRoot.getRoot());
-    }
- else {
-      target=deploymentUnit;
-    }
     final String[] items=getClassPathEntries(resourceRoot);
-    for (    String item : items) {
+    for (    final String item : items) {
       final VirtualFile classPathFile=resourceRoot.getRoot().getParent().getChild(item);
       final VirtualFile topLevelClassPathFile=deploymentRoot.getRoot().getParent().getChild(item);
-      if (isInside(classPathFile,topLevelRoot) || isInside(topLevelClassPathFile,topLevelRoot)) {
+      if (item.startsWith("/")) {
+        final ModuleIdentifier moduleIdentifier=externalModuleService.addExternalModule(item);
+        target.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES,moduleIdentifier);
+        ServerLogger.DEPLOYMENT_LOGGER.debugf("Resource %s added as external jar %s",classPathFile,resourceRoot.getRoot());
+      }
+ else {
         if (classPathFile.exists()) {
-          handlingExistingClassPathEntry(deploymentUnit,resourceRoots,topLevelDeployment,topLevelRoot,subDeployments,additionalModules,earLibJars,resourceRoot,target,classPathFile);
+          handlingExistingClassPathEntry(deploymentUnit,resourceRoots,topLevelDeployment,topLevelRoot,subDeployments,additionalModules,existingAccessibleRoots,resourceRoot,target,classPathFile);
         }
  else         if (topLevelClassPathFile.exists()) {
-          handlingExistingClassPathEntry(deploymentUnit,resourceRoots,topLevelDeployment,topLevelRoot,subDeployments,additionalModules,earLibJars,resourceRoot,target,topLevelClassPathFile);
+          handlingExistingClassPathEntry(deploymentUnit,resourceRoots,topLevelDeployment,topLevelRoot,subDeployments,additionalModules,existingAccessibleRoots,resourceRoot,target,topLevelClassPathFile);
         }
  else {
-          log.warn("Class Path entry " + item + " in "+ resourceRoot.getRoot()+ "  does not point to a valid jar for a Class-Path reference.");
+          ServerLogger.DEPLOYMENT_LOGGER.warn("Class Path entry " + item + " in "+ resourceRoot.getRoot()+ "  does not point to a valid jar for a Class-Path reference.");
         }
-      }
- else       if (item.startsWith("/")) {
-        ModuleIdentifier moduleIdentifier=externalModuleService.addExternalModule(item);
-        target.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES,moduleIdentifier);
-        log.debugf("Resource %s added as external jar %s",classPathFile,resourceRoot.getRoot());
-      }
- else {
-        log.debugf("Ignoring missing Class-Path entry %s",classPathFile);
       }
     }
   }
