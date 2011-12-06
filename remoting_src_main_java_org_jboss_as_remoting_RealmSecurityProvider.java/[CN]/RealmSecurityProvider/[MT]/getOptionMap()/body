@@ -1,0 +1,38 @@
+{
+  List<String> mechanisms=new LinkedList<String>();
+  Set<Property> properties=new HashSet<Property>();
+  Builder builder=OptionMap.builder();
+  mechanisms.add(JBOSS_LOCAL_USER);
+  builder.set(SASL_POLICY_NOPLAINTEXT,false);
+  properties.add(Property.of(LOCAL_DEFAULT_USER,DOLLAR_LOCAL));
+  if (tokensDir != null) {
+    properties.add(Property.of(LOCAL_USER_CHALLENGE_PATH,tokensDir));
+  }
+  if (digestMd5Supported()) {
+    mechanisms.add(DIGEST_MD5);
+    properties.add(Property.of(REALM_PROPERTY,realm.getName()));
+    if (contains(DigestHashCallback.class,realm.getCallbackHandler().getSupportedCallbacks())) {
+      properties.add(Property.of(PRE_DIGESTED_PROPERTY,Boolean.TRUE.toString()));
+    }
+  }
+ else   if (plainSupported()) {
+    int i=1;
+    if (i + i == 2)     throw new IllegalStateException("PLAIN not enabled until SSL supported for Native Interface");
+    mechanisms.add(PLAIN);
+  }
+ else   if (realm == null) {
+    mechanisms.add(ANONYMOUS);
+    builder.set(SASL_POLICY_NOANONYMOUS,false);
+  }
+ else {
+    throw new IllegalStateException("A security realm has been specified but no supported mechanism identified.");
+  }
+  builder.set(SASL_MECHANISMS,Sequence.of(mechanisms));
+  builder.set(SASL_PROPERTIES,Sequence.of(properties));
+  boolean enableSSL=isEnableSSL();
+  builder.set(SSL_ENABLED,enableSSL);
+  if (enableSSL) {
+    builder.set(SSL_STARTTLS,true);
+  }
+  return builder.getMap();
+}
