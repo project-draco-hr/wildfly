@@ -1,0 +1,27 @@
+{
+  final QName rootElement=new QName(Namespace.CURRENT.getUriString(),"domain");
+  final DomainXml parser=new DomainXml(Module.getBootModuleLoader(),null);
+  final XmlConfigurationPersister persister=new XmlConfigurationPersister(file,rootElement,parser,parser);
+  for (  Namespace namespace : Namespace.values()) {
+    if (namespace != Namespace.CURRENT) {
+      persister.registerAdditionalRootElement(new QName(namespace.getUriString(),"domain"),parser);
+    }
+  }
+  final List<ModelNode> ops=persister.load();
+  final ModelNode model=new ModelNode();
+  final ModelController controller=createController(model,new Setup(){
+    public void setup(    Resource resource,    ManagementResourceRegistration rootRegistration){
+      DomainModelUtil.updateCoreModel(resource.getModel());
+      DomainModelUtil.initializeMasterDomainRegistry(rootRegistration,persister,null,new MockFileRepository(),new MockDomainController(),null);
+    }
+  }
+);
+  final ModelNode caputreModelOp=new ModelNode();
+  caputreModelOp.get(OP_ADDR).set(PathAddress.EMPTY_ADDRESS.toModelNode());
+  caputreModelOp.get(OP).set("capture-model");
+  final List<ModelNode> toRun=new ArrayList<ModelNode>(ops);
+  toRun.add(caputreModelOp);
+  executeOperations(controller,toRun);
+  persister.store(model,null).commit();
+  return model;
+}
