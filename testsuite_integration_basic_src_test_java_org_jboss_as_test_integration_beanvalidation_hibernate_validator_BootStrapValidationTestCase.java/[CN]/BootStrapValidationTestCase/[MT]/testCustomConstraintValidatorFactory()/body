@@ -1,0 +1,27 @@
+{
+  HibernateValidatorConfiguration configuration=Validation.byProvider(HibernateValidator.class).configure();
+  Assert.assertNotNull(configuration);
+  ValidatorFactory factory=configuration.buildValidatorFactory();
+  Validator validator=factory.getValidator();
+  Employee emp=new Employee();
+  emp.setEmpId("M1234");
+  emp.setFirstName("MADHUMITA");
+  emp.setLastName("SADHUKHAN");
+  emp.setEmail("madhu@redhat.com");
+  Set<ConstraintViolation<Employee>> constraintViolations=validator.validate(emp);
+  Assert.assertEquals("Wrong number of constraints",constraintViolations.size(),0);
+  configuration=(HibernateValidatorConfiguration)Validation.byDefaultProvider().configure();
+  configuration.constraintValidatorFactory(new ConstraintValidatorFactory(){
+    @Override public <T extends ConstraintValidator<?,?>>T getInstance(    Class<T> key){
+      if (key == NotNullValidator.class) {
+        return (T)new ErroneousNotNullValidator();
+      }
+      return new ConstraintValidatorFactoryImpl().getInstance(key);
+    }
+  }
+);
+  factory=configuration.buildValidatorFactory();
+  validator=factory.getValidator();
+  constraintViolations=validator.validate(emp);
+  Assert.assertEquals("Wrong number of constraints",constraintViolations.size(),1);
+}
