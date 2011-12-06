@@ -1,0 +1,26 @@
+{
+  checkCanRemove(context,operation);
+  final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
+  List<byte[]> deploymentHashes=DeploymentUtils.getDeploymentHash(resource);
+  operation.get(OPERATION_HEADERS,DEPLOYMENT_HASHES).setEmptyList();
+  for (  byte[] hash : deploymentHashes) {
+    operation.get(OPERATION_HEADERS,DEPLOYMENT_HASHES).add(hash);
+  }
+  context.removeResource(PathAddress.EMPTY_ADDRESS);
+  context.addStep(new OperationStepHandler(){
+    public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      if (context.completeStep() != ResultAction.ROLLBACK) {
+        for (        ModelNode node : operation.get(OPERATION_HEADERS,DEPLOYMENT_HASHES).asList()) {
+          try {
+            contentRepository.removeContent(node.asBytes());
+          }
+ catch (          Exception e) {
+            log.debugf(e,"Exception occurred removing %s",node.asBytes());
+          }
+        }
+      }
+    }
+  }
+,OperationContext.Stage.RUNTIME);
+  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+}
