@@ -49,13 +49,18 @@
       policyList.add(sslPolicy);
       logger.debug("container's SSL policy: " + sslPolicy);
     }
+    String securityDomain="CORBA_REMOTE";
+    if (component.getSecurityMetaData() != null) {
+      securityDomain=component.getSecurityMetaData().getSecurityDomain();
+    }
     Policy[] policies=policyList.toArray(new Policy[policyList.size()]);
     InterfaceDef homeInterfaceDef=null;
     if (iri != null) {
       Repository ir=iri.getReference();
       homeInterfaceDef=InterfaceDefHelper.narrow(ir.lookup_id(homeRepositoryIds[0]));
     }
-    final EjbHomeCorbaServant homeServant=new EjbHomeCorbaServant(homeMethodMap,homeRepositoryIds,homeInterfaceDef,orb,homeView.getValue(),component.getTransactionManager(),module.getClassLoader());
+    Current poaCurrent=CurrentHelper.narrow(orb.resolve_initial_references("POACurrent"));
+    final EjbCorbaServant homeServant=new EjbCorbaServant(poaCurrent,homeMethodMap,homeRepositoryIds,homeInterfaceDef,orb,homeView.getValue(),factory,configuration,component.getTransactionManager(),module.getClassLoader(),true,securityDomain);
     homeServantRegistry=poaRegistry.getValue().getRegistryWithPersistentPOAPerServant();
     ReferenceFactory homeReferenceFactory=homeServantRegistry.bind(homeServantName(name),homeServant,policies);
     final org.omg.CORBA.Object corbaRef=homeReferenceFactory.createReference(homeRepositoryIds[0]);
@@ -83,8 +88,7 @@
       final Repository ir=iri.getReference();
       beanInterfaceDef=InterfaceDefHelper.narrow(ir.lookup_id(beanRepositoryIds[0]));
     }
-    Current poaCurrent=CurrentHelper.narrow(orb.resolve_initial_references("POACurrent"));
-    final EjbObjectCorbaServant beanServant=new EjbObjectCorbaServant(poaCurrent,beanMethodMap,beanRepositoryIds,beanInterfaceDef,orb,remoteView.getValue(),factory,configuration,component.getTransactionManager(),module.getClassLoader());
+    final EjbCorbaServant beanServant=new EjbCorbaServant(poaCurrent,beanMethodMap,beanRepositoryIds,beanInterfaceDef,orb,remoteView.getValue(),factory,configuration,component.getTransactionManager(),module.getClassLoader(),false,securityDomain);
     beanReferenceFactory=beanServantRegistry.bind(beanServantName(name),beanServant,policies);
     this.bindingName=this.iiopMetaData != null ? this.iiopMetaData.getBindingName() : null;
     if (this.bindingName == null || this.bindingName.isEmpty())     this.bindingName=this.name;

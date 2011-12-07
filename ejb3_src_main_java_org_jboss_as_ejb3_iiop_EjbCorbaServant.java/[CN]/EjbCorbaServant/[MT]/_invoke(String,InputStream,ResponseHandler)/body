@@ -1,8 +1,8 @@
 {
   if (logger.isTraceEnabled()) {
-    logger.trace("EJBHome IIOP invocation: " + opName);
+    logger.trace("EJBObject invocation: " + opName);
   }
-  final SkeletonStrategy op=methodInvokerMap.get(opName);
+  SkeletonStrategy op=methodInvokerMap.get(opName);
   if (op == null) {
     logger.debug("Unable to find opname '" + opName + "' valid operations:"+ methodInvokerMap.keySet());
     throw new BAD_OPERATION(opName);
@@ -12,20 +12,22 @@
   NamespaceContextSelector.pushCurrentSelector(selector);
   try {
     SecurityActions.setContextClassLoader(classLoader);
+    SecurityContext sc=null;
     org.omg.CORBA_2_3.portable.OutputStream out;
     try {
       Object retVal;
-      if (opName.equals("_get_homeHandle")) {
+      if (!home && opName.equals("_get_handle")) {
+        retVal=new HandleImplIIOP(orb.object_to_string(_this_object()));
+      }
+ else       if (home && opName.equals("_get_homeHandle")) {
         retVal=homeHandle;
       }
- else       if (opName.equals("_get_EJBMetaData")) {
+ else       if (home && opName.equals("_get_EJBMetaData")) {
         retVal=ejbMetaData;
       }
  else {
         Transaction tx=null;
-        if (inboundTxCurrent != null) {
-          tx=inboundTxCurrent.getCurrentTransaction();
-        }
+        if (inboundTxCurrent != null)         tx=inboundTxCurrent.getCurrentTransaction();
         if (tx != null) {
           transactionManager.resume(tx);
         }
@@ -34,7 +36,7 @@
           char[] password=null;
           if (sasCurrent != null) {
             final byte[] username=sasCurrent.get_incoming_username();
-            byte[] credential=sasCurrent.get_incoming_password();
+            final byte[] credential=sasCurrent.get_incoming_password();
             String name=new String(username,"UTF-8");
             int domainIndex=name.indexOf('@');
             if (domainIndex > 0)             name=name.substring(0,domainIndex);
@@ -52,17 +54,39 @@
               principal=new SimplePrincipal(name);
               password=new String(credential,"UTF-8").toCharArray();
             }
+            if (securityDomain != null) {
+              sc=SecurityContextFactory.createSecurityContext(securityDomain);
+              sc.getUtil().createSubjectInfo(principal,password,null);
+            }
           }
           final Object[] params=op.readParams((org.omg.CORBA_2_3.portable.InputStream)in);
-          final SecurityContext sc=SecurityContextFactory.createSecurityContext("CORBA_REMOTE");
-          sc.getUtil().createSubjectInfo(principal,password,null);
-          final InterceptorContext interceptorContext=new InterceptorContext();
-          interceptorContext.setContextData(new HashMap<String,Object>());
-          interceptorContext.setParameters(params);
-          interceptorContext.setMethod(op.getMethod());
-          interceptorContext.putPrivateData(ComponentView.class,componentView);
-          interceptorContext.putPrivateData(Component.class,componentView.getComponent());
-          retVal=componentView.invoke(interceptorContext);
+          if (!home && opName.equals("isIdentical") && params.length == 1) {
+            Object val=params[0];
+            if (val instanceof org.omg.CORBA.Object) {
+              retVal=handleIsIdentical((org.omg.CORBA.Object)val);
+            }
+ else {
+              retVal=false;
+            }
+          }
+ else {
+            if (sc != null) {
+              SecurityContextAssociation.setSecurityContext(sc);
+            }
+            try {
+              final InterceptorContext interceptorContext=new InterceptorContext();
+              if (sc != null) {
+                interceptorContext.putPrivateData(SecurityContext.class,sc);
+              }
+              prepareInterceptorContext(op,params,interceptorContext);
+              retVal=componentView.invoke(interceptorContext);
+            }
+  finally {
+              if (sc != null) {
+                SecurityContextAssociation.clearSecurityContext();
+              }
+            }
+          }
         }
   finally {
           if (tx != null) {
@@ -79,7 +103,10 @@
     }
  catch (    Exception e) {
       if (logger.isTraceEnabled()) {
-        logger.trace("Exception in EJBHome invocation",e);
+        logger.trace("Exception in EJBObject invocation",e);
+      }
+      if (e instanceof MBeanException) {
+        e=((MBeanException)e).getTargetException();
       }
       RmiIdlUtil.rethrowIfCorbaSystemException(e);
       out=(org.omg.CORBA_2_3.portable.OutputStream)handler.createExceptionReply();
