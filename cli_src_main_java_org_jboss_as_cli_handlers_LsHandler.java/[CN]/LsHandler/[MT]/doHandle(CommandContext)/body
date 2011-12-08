@@ -79,8 +79,38 @@
       resourceRequest.get(Util.INCLUDE_RUNTIME).set(Util.TRUE);
       steps.add(resourceRequest);
     }
+    final String[] additionalProps;
     if (l.isPresent(parsedCmd)) {
       steps.add(Util.buildRequest(ctx,address,Util.READ_RESOURCE_DESCRIPTION));
+      final Set<String> argNames=parsedCmd.getPropertyNames();
+      if (argNames.size() > 1) {
+        additionalProps=new String[argNames.size() - 1];
+        int i=0;
+        for (        String arg : argNames) {
+          if (arg.equals(l.getFullName())) {
+            continue;
+          }
+          final String prop;
+          if (arg.length() > 1 && arg.charAt(0) == '-') {
+            if (arg.charAt(1) == '-') {
+              prop=arg.substring(2);
+            }
+ else {
+              prop=arg.substring(1);
+            }
+          }
+ else {
+            prop=arg;
+          }
+          additionalProps[i++]=prop;
+        }
+      }
+ else {
+        additionalProps=null;
+      }
+    }
+ else {
+      additionalProps=null;
     }
     try {
       ModelNode outcome=ctx.getModelControllerClient().execute(composite);
@@ -144,7 +174,26 @@
                 final ModelNode resourceResult=resourceOutcome.get(Util.RESULT);
                 final List<Property> props=resourceResult.asPropertyList();
                 if (!props.isEmpty()) {
-                  SimpleTable attrTable=attrDescriptions == null ? null : new SimpleTable(new String[]{"ATTRIBUTE","VALUE","TYPE"});
+                  final SimpleTable attrTable;
+                  if (attrDescriptions == null) {
+                    attrTable=null;
+                  }
+ else {
+                    if (additionalProps != null) {
+                      String[] headers=new String[3 + additionalProps.length];
+                      headers[0]="ATTRIBUTE";
+                      headers[1]="VALUE";
+                      headers[2]="TYPE";
+                      int i=3;
+                      for (                      String additional : additionalProps) {
+                        headers[i++]=additional.toUpperCase();
+                      }
+                      attrTable=new SimpleTable(headers);
+                    }
+ else {
+                      attrTable=new SimpleTable(new String[]{"ATTRIBUTE","VALUE","TYPE"});
+                    }
+                  }
                   SimpleTable childrenTable=childDescriptions == null ? null : new SimpleTable(new String[]{"CHILD","MIN-OCCURS","MAX-OCCURS"});
                   if (typeNames == null && attrTable == null && childrenTable == null) {
                     typeNames=new ArrayList<String>();
@@ -162,7 +211,17 @@
  else {
                         if (attrDescriptions.hasDefined(prop.getName())) {
                           final ModelNode attrDescr=attrDescriptions.get(prop.getName());
-                          attrTable.addLine(new String[]{prop.getName(),prop.getValue().asString(),getAsString(attrDescr,Util.TYPE)});
+                          final String[] line=new String[attrTable.columnsTotal()];
+                          line[0]=prop.getName();
+                          line[1]=prop.getValue().asString();
+                          line[2]=getAsString(attrDescr,Util.TYPE);
+                          if (additionalProps != null) {
+                            int i=3;
+                            for (                            String additional : additionalProps) {
+                              line[i++]=getAsString(attrDescr,additional);
+                            }
+                          }
+                          attrTable.addLine(line);
                         }
  else {
                           attrTable.addLine(new String[]{prop.getName(),prop.getValue().asString(),"n/a"});
