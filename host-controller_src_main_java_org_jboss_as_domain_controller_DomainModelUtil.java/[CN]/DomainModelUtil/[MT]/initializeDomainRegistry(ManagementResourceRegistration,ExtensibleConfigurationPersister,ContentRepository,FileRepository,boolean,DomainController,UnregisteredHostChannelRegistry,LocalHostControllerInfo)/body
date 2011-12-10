@@ -7,11 +7,11 @@
   root.registerOperationHandler(NamespaceRemoveHandler.OPERATION_NAME,NamespaceRemoveHandler.INSTANCE,NamespaceRemoveHandler.INSTANCE,false);
   root.registerOperationHandler(SchemaLocationAddHandler.OPERATION_NAME,SchemaLocationAddHandler.INSTANCE,SchemaLocationAddHandler.INSTANCE,false);
   root.registerOperationHandler(SchemaLocationRemoveHandler.OPERATION_NAME,SchemaLocationRemoveHandler.INSTANCE,SchemaLocationRemoveHandler.INSTANCE,false);
-  DeploymentUploadBytesHandler dubh=new DeploymentUploadBytesHandler(contentRepo);
+  DeploymentUploadBytesHandler dubh=isMaster ? new DeploymentUploadBytesHandler(contentRepo) : new DeploymentUploadBytesHandler();
   root.registerOperationHandler(DeploymentUploadBytesHandler.OPERATION_NAME,dubh,dubh,false,OperationEntry.EntryType.PUBLIC,deploymentUpload);
-  DeploymentUploadURLHandler duuh=new DeploymentUploadURLHandler(contentRepo);
+  DeploymentUploadURLHandler duuh=isMaster ? new DeploymentUploadURLHandler(contentRepo) : new DeploymentUploadURLHandler();
   root.registerOperationHandler(DeploymentUploadURLHandler.OPERATION_NAME,duuh,duuh,false,OperationEntry.EntryType.PUBLIC,deploymentUpload);
-  DeploymentUploadStreamAttachmentHandler dush=new DeploymentUploadStreamAttachmentHandler(contentRepo);
+  DeploymentUploadStreamAttachmentHandler dush=isMaster ? new DeploymentUploadStreamAttachmentHandler(contentRepo) : new DeploymentUploadStreamAttachmentHandler();
   root.registerOperationHandler(DeploymentUploadStreamAttachmentHandler.OPERATION_NAME,dush,dush,false,OperationEntry.EntryType.PUBLIC,deploymentUpload);
   DeploymentFullReplaceHandler dfrh=isMaster ? new DeploymentFullReplaceHandler(contentRepo) : new DeploymentFullReplaceHandler(fileRepository);
   root.registerOperationHandler(DeploymentFullReplaceHandler.OPERATION_NAME,dfrh,dfrh);
@@ -70,10 +70,15 @@
   serverGroupSystemProperties.registerReadWriteAttribute(VALUE,null,SystemPropertyValueWriteAttributeHandler.INSTANCE,Storage.CONFIGURATION);
   serverGroupSystemProperties.registerReadWriteAttribute(BOOT_TIME,null,new ModelTypeValidatingHandler(ModelType.BOOLEAN),Storage.CONFIGURATION);
   final ManagementResourceRegistration deployments=root.registerSubModel(PathElement.pathElement(DEPLOYMENT),DomainDescriptionProviders.DEPLOYMENT_PROVIDER);
-  DeploymentAddHandler dah=new DeploymentAddHandler(contentRepo);
+  DeploymentAddHandler dah=isMaster ? new DeploymentAddHandler(contentRepo) : new DeploymentAddHandler();
   deployments.registerOperationHandler(DeploymentAddHandler.OPERATION_NAME,dah,dah);
-  DeploymentRemoveHandler drh=new DeploymentRemoveHandler(contentRepo);
+  DeploymentRemoveHandler drh=isMaster ? new DeploymentRemoveHandler(contentRepo) : new DeploymentRemoveHandler();
   deployments.registerOperationHandler(DeploymentRemoveHandler.OPERATION_NAME,drh,drh);
+  ManagedDMRContentTypeResourceDefinition plansDef=new ManagedDMRContentTypeResourceDefinition(contentRepo,ROLLOUT_PLAN,PathElement.pathElement(MANAGEMENT_CLIENT_CONTENT,ROLLOUT_PLANS),DomainRootDescription.getResourceDescriptionResolver(ROLLOUT_PLANS));
+  ManagementResourceRegistration mgmtContent=root.registerSubModel(plansDef);
+  ParameterValidator contentValidator=new ModelTypeValidator(ModelType.OBJECT);
+  ManagedDMRContentResourceDefinition planDef=ManagedDMRContentResourceDefinition.create(ROLLOUT_PLAN,contentValidator,DomainRootDescription.getResourceDescriptionResolver(ROLLOUT_PLAN));
+  mgmtContent.registerSubModel(planDef);
   final ManagementResourceRegistration extensions=root.registerSubModel(PathElement.pathElement(EXTENSION),CommonProviders.EXTENSION_PROVIDER);
   final ExtensionContext extensionContext=new ExtensionContextImpl(profile,deployments,configurationPersister,ProcessType.HOST_CONTROLLER);
   final ExtensionAddHandler addExtensionHandler=new ExtensionAddHandler(extensionContext,true);
@@ -81,7 +86,7 @@
   final ExtensionRemoveHandler removeExtensionHandler=new ExtensionRemoveHandler(extensionContext);
   extensions.registerOperationHandler(ExtensionRemoveHandler.OPERATION_NAME,removeExtensionHandler,removeExtensionHandler,false);
   if (!isMaster) {
-    ApplyRemoteMasterDomainModelHandler armdmh=new ApplyRemoteMasterDomainModelHandler(extensionContext,fileRepository,hostControllerInfo);
+    ApplyRemoteMasterDomainModelHandler armdmh=new ApplyRemoteMasterDomainModelHandler(extensionContext,fileRepository,contentRepo,hostControllerInfo);
     root.registerOperationHandler(ApplyRemoteMasterDomainModelHandler.OPERATION_NAME,armdmh,armdmh,false,OperationEntry.EntryType.PRIVATE);
   }
  else {

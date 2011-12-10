@@ -4,6 +4,7 @@
   final Set<String> ourServerGroups=getOurServerGroups(context);
   final Map<String,Set<byte[]>> deploymentHashes=new HashMap<String,Set<byte[]>>();
   final Set<String> relevantDeployments=new HashSet<String>();
+  final Set<byte[]> requiredContent=new HashSet<byte[]>();
   final Resource rootResource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
   clearDomain(rootResource);
   for (  final ModelNode resourceDescription : domainModel.asList()) {
@@ -17,19 +18,29 @@
       }
     }
     resource.writeModel(resourceDescription.get("domain-resource-model"));
-    if (resourceAddress.size() == 1 && resourceAddress.getElement(0).getKey().equals(DEPLOYMENT)) {
-      ModelNode model=resource.getModel();
-      String id=resourceAddress.getElement(0).getValue();
-      if (model.hasDefined(CONTENT)) {
-        for (        ModelNode contentItem : model.get(CONTENT).asList()) {
-          if (contentItem.hasDefined(HASH)) {
-            Set<byte[]> hashes=deploymentHashes.get(id);
-            if (hashes == null) {
-              hashes=new HashSet<byte[]>();
-              deploymentHashes.put(id,hashes);
+    if (resourceAddress.size() == 1) {
+      PathElement pe=resourceAddress.getElement(0);
+      String peKey=pe.getKey();
+      if (peKey.equals(DEPLOYMENT)) {
+        ModelNode model=resource.getModel();
+        String id=resourceAddress.getElement(0).getValue();
+        if (model.hasDefined(CONTENT)) {
+          for (          ModelNode contentItem : model.get(CONTENT).asList()) {
+            if (contentItem.hasDefined(HASH)) {
+              Set<byte[]> hashes=deploymentHashes.get(id);
+              if (hashes == null) {
+                hashes=new HashSet<byte[]>();
+                deploymentHashes.put(id,hashes);
+              }
+              hashes.add(contentItem.get(HASH).asBytes());
             }
-            hashes.add(contentItem.get(HASH).asBytes());
           }
+        }
+      }
+ else       if (peKey.equals(MANAGEMENT_CLIENT_CONTENT)) {
+        ModelNode model=resource.getModel();
+        if (model.hasDefined(HASH)) {
+          requiredContent.add(model.get(HASH).asBytes());
         }
       }
     }
@@ -40,10 +51,11 @@
   for (  String id : relevantDeployments) {
     Set<byte[]> hashes=deploymentHashes.remove(id);
     if (hashes != null) {
-      for (      byte[] hash : hashes) {
-        fileRepository.getDeploymentFiles(hash);
-      }
+      requiredContent.addAll(hashes);
     }
+  }
+  for (  byte[] hash : requiredContent) {
+    fileRepository.getDeploymentFiles(hash);
   }
   if (!context.isBooting()) {
     final ModelNode endRoot=Resource.Tools.readModel(context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS));
