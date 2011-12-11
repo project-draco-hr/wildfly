@@ -1,13 +1,23 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
+  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
   for (  final ComponentDescription component : moduleDescription.getComponentDescriptions()) {
     if (component.isTimerServiceApplicable()) {
+      final String deploymentName;
+      if (moduleDescription.getDistinctName() == null || moduleDescription.getDistinctName().length() == 0) {
+        deploymentName=moduleDescription.getApplicationName() + "." + moduleDescription.getModuleName();
+      }
+ else {
+        deploymentName=moduleDescription.getApplicationName() + "." + moduleDescription.getModuleName()+ "."+ moduleDescription.getDistinctName();
+      }
       ROOT_LOGGER.debug("Installing timer service for component " + component.getComponentName());
       component.getConfigurators().add(new ComponentConfigurator(){
         @Override public void configure(        final DeploymentPhaseContext context,        final ComponentDescription description,        final ComponentConfiguration configuration) throws DeploymentUnitProcessingException {
           final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)description;
-          configuration.addTimeoutInterceptor(CurrentInvocationContextInterceptor.FACTORY,InterceptorOrder.Component.TIMEOUT_INVOCATION_CONTEXT_INTERCEPTOR);
+          final ServiceName invokerServiceName=ejbComponentDescription.getServiceName().append(TimedObjectInvokerImpl.SERVICE_NAME);
+          final TimedObjectInvokerImpl invoker=new TimedObjectInvokerImpl(deploymentName,module);
+          context.getServiceTarget().addService(invokerServiceName,invoker).addDependency(component.getCreateServiceName(),EJBComponent.class,invoker.getEjbComponent()).install();
           final ServiceName serviceName=component.getServiceName().append(TimerServiceImpl.SERVICE_NAME);
           final TimerServiceImpl service=new TimerServiceImpl(ejbComponentDescription.getScheduleMethods(),serviceName);
           final ServiceBuilder<javax.ejb.TimerService> createBuilder=context.getServiceTarget().addService(serviceName,service);
@@ -15,6 +25,7 @@
           createBuilder.addDependency(component.getCreateServiceName(),EJBComponent.class,service.getEjbComponentInjectedValue());
           createBuilder.addDependency(timerServiceThreadPool,ExecutorService.class,service.getExecutorServiceInjectedValue());
           createBuilder.addDependency(FileTimerPersistence.SERVICE_NAME,TimerPersistence.class,service.getTimerPersistence());
+          createBuilder.addDependency(invokerServiceName,TimedObjectInvoker.class,service.getTimedObjectInvoker());
           createBuilder.install();
           ejbComponentDescription.setTimerService(service);
           configuration.getStartDependencies().add(new DependencyConfigurator<ComponentStartService>(){
