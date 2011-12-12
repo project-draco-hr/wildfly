@@ -16,20 +16,21 @@ case STARTING_to_UP:
 {
           CommonDeployment deploymentMD=((AbstractDataSourceService)controller.getService()).getDeploymentMD();
           StatisticsPlugin jdbcStats=deploymentMD.getDataSources()[0].getStatistics();
-          if (jdbcStats.getNames().size() != 0) {
-            ManagementResourceRegistration subRegistration=registration.registerSubModel(PathElement.pathElement("statistics","jdbc"),new StatisticsDescriptionProvider(jdbcStats));
-            for (            String statName : jdbcStats.getNames()) {
-              subRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(jdbcStats));
-            }
-            subRegistration.registerOperationHandler("clear-metrics",new ClearStatisticsHandler(jdbcStats),DataSourcesSubsystemProviders.CLEAR_STATISTICS_DESC,false);
-          }
           StatisticsPlugin poolStats=deploymentMD.getDataSources()[0].getPool().getStatistics();
-          if (poolStats.getNames().size() != 0) {
-            ManagementResourceRegistration subRegistration=registration.registerSubModel(PathElement.pathElement("statistics","pool"),new StatisticsDescriptionProvider(poolStats));
-            for (            String statName : poolStats.getNames()) {
-              subRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(poolStats));
+          int size=jdbcStats.getNames().size() + poolStats.getNames().size();
+          if (size != 0) {
+            ManagementResourceRegistration subRegistration=registration.registerOverrideModel(dsName,new StatisticsDescriptionProvider(jdbcStats,poolStats));
+            subRegistration.registerOperationHandler("clear-statistics",new ClearStatisticsHandler(jdbcStats,poolStats),DataSourcesSubsystemProviders.CLEAR_STATISTICS_DESC,false);
+            if (jdbcStats.getNames().size() != 0) {
+              for (              String statName : jdbcStats.getNames()) {
+                subRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(jdbcStats));
+              }
             }
-            subRegistration.registerOperationHandler("clear-statistics",new ClearStatisticsHandler(poolStats),DataSourcesSubsystemProviders.CLEAR_STATISTICS_DESC,false);
+            if (poolStats.getNames().size() != 0) {
+              for (              String statName : poolStats.getNames()) {
+                subRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(poolStats));
+              }
+            }
           }
           break;
         }
@@ -37,12 +38,21 @@ case UP_to_STOP_REQUESTED:
 {
         CommonDeployment deploymentMD=((AbstractDataSourceService)controller.getService()).getDeploymentMD();
         StatisticsPlugin jdbcStats=deploymentMD.getDataSources()[0].getStatistics();
-        if (jdbcStats.getNames().size() != 0) {
-          registration.unregisterSubModel(PathElement.pathElement("statistics","jdbc"));
-        }
         StatisticsPlugin poolStats=deploymentMD.getDataSources()[0].getPool().getStatistics();
-        if (poolStats.getNames().size() != 0) {
-          registration.unregisterSubModel(PathElement.pathElement("statistics","pool"));
+        ManagementResourceRegistration subRegistration=registration.getOverrideModel(dsName);
+        if (subRegistration != null) {
+          if (jdbcStats.getNames().size() != 0) {
+            for (            String statName : jdbcStats.getNames()) {
+              subRegistration.unregisterAttribute(statName);
+            }
+          }
+          if (poolStats.getNames().size() != 0) {
+            for (            String statName : poolStats.getNames()) {
+              subRegistration.unregisterAttribute(statName);
+            }
+          }
+          subRegistration.unregisterOperationHandler("clear-statistics");
+          registration.unregisterOverrideModel(dsName);
         }
         break;
       }
