@@ -9,7 +9,12 @@
       try {
         lock.lock();
         Map<String,TimerEntity> map=getTimers(timerEntity.getTimedObjectId());
-        map.put(timerEntity.getId(),timerEntity);
+        if (timerEntity.getTimerState() == TimerState.CANCELED || timerEntity.getTimerState() == TimerState.EXPIRED) {
+          map.remove(timerEntity.getId());
+        }
+ else {
+          map.put(timerEntity.getId(),timerEntity);
+        }
         writeFile(timerEntity);
       }
   finally {
@@ -17,7 +22,12 @@
       }
     }
  else {
-      transactionSynchronizationRegistry.getValue().registerInterposedSynchronization(new PersistTransactionSynchronization(timerEntity,lock));
+      final String key=timerTransactionKey(timerEntity);
+      Object existing=transactionSynchronizationRegistry.getValue().getResource(key);
+      if (existing == null) {
+        transactionSynchronizationRegistry.getValue().registerInterposedSynchronization(new PersistTransactionSynchronization(lock,key));
+      }
+      transactionSynchronizationRegistry.getValue().putResource(key,timerEntity);
     }
   }
  catch (  SystemException e) {
