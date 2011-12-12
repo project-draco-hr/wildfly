@@ -10,19 +10,17 @@
  else {
     methodParamTypes=signature.split(String.valueOf(METHOD_PARAM_TYPE_SEPARATOR));
   }
-  final RemotingAttachments attachments=this.readAttachments(input);
-  final UnMarshaller unMarshaller=MarshallerFactory.createUnMarshaller(this.marshallingStrategy);
-  final ClassLoaderSwitchingClassLoaderProvider classLoaderProvider=new ClassLoaderSwitchingClassLoaderProvider(Thread.currentThread().getContextClassLoader());
-  unMarshaller.start(input,classLoaderProvider);
+  final ClassLoaderSwitchingClassResolver classResolver=new ClassLoaderSwitchingClassResolver(Thread.currentThread().getContextClassLoader());
+  final Unmarshaller unmarshaller=this.prepareForUnMarshalling(this.marshallerFactory,classResolver,input);
   final String appName;
   final String moduleName;
   final String distinctName;
   final String beanName;
   try {
-    appName=(String)unMarshaller.readObject();
-    moduleName=(String)unMarshaller.readObject();
-    distinctName=(String)unMarshaller.readObject();
-    beanName=(String)unMarshaller.readObject();
+    appName=(String)unmarshaller.readObject();
+    moduleName=(String)unmarshaller.readObject();
+    distinctName=(String)unmarshaller.readObject();
+    beanName=(String)unmarshaller.readObject();
   }
  catch (  ClassNotFoundException e) {
     throw new RuntimeException(e);
@@ -36,10 +34,10 @@
   Runnable runnable=null;
   try {
     SecurityActions.setContextClassLoader(ejbDeploymentInformation.getDeploymentClassLoader());
-    classLoaderProvider.switchClassLoader(ejbDeploymentInformation.getDeploymentClassLoader());
+    classResolver.switchClassLoader(ejbDeploymentInformation.getDeploymentClassLoader());
     final EJBLocator locator;
     try {
-      locator=(EJBLocator)unMarshaller.readObject();
+      locator=(EJBLocator)unmarshaller.readObject();
     }
  catch (    ClassNotFoundException e) {
       throw new RuntimeException(e);
@@ -59,14 +57,21 @@
     if (methodParamTypes.length > 0) {
       for (int i=0; i < methodParamTypes.length; i++) {
         try {
-          methodParams[i]=unMarshaller.readObject();
+          methodParams[i]=unmarshaller.readObject();
         }
  catch (        ClassNotFoundException cnfe) {
           throw new RuntimeException(cnfe);
         }
       }
     }
-    unMarshaller.finish();
+    final Map<String,Object> attachments;
+    try {
+      attachments=this.readAttachments(unmarshaller);
+    }
+ catch (    ClassNotFoundException cnfe) {
+      throw new RuntimeException(cnfe);
+    }
+    unmarshaller.finish();
     runnable=new Runnable(){
       @Override public void run(){
         if (componentView.isAsynchronous(invokedMethod)) {
@@ -83,7 +88,7 @@
         }
  catch (        Throwable throwable) {
           try {
-            MethodInvocationMessageHandler.this.writeException(channel,invocationId,throwable,attachments);
+            MethodInvocationMessageHandler.this.writeException(channel,MethodInvocationMessageHandler.this.marshallerFactory,invocationId,throwable,attachments);
           }
  catch (          IOException ioe) {
             logger.error("Error invoking method " + invokedMethod + " on bean named "+ beanName+ " for appname "+ appName+ " modulename "+ moduleName+ " distinctname "+ distinctName,throwable);
