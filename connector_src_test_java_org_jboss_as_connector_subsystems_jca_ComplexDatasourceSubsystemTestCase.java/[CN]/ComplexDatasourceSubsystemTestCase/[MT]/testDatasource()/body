@@ -1,0 +1,31 @@
+{
+  String xml=readResource("datasource.xml");
+  KernelServices services=super.installInController(new AdditionalInitialization(){
+    @Override protected Type getType(){
+      return Type.MANAGEMENT;
+    }
+  }
+,xml);
+  ModelNode model=services.readWholeModel();
+  final String complexDs="complexDs";
+  final String complexDsJndi="java:jboss/datasources/" + complexDs;
+  Properties params=nonXaDsProperties(complexDsJndi);
+  ModelNode modelDs=model.get("subsystem","datasources","data-source",complexDs + "_Pool");
+  controlModelParams(modelDs,params);
+  Assert.assertEquals(modelDs.asString(),"UTF-8",modelDs.get("connection-properties","char.encoding","value").asString());
+  final String complexXaDs="complexXaDs";
+  final String complexXaDsJndi="java:jboss/xa-datasources/" + complexXaDs;
+  params=nonXaDsProperties(complexXaDsJndi);
+  ModelNode modelXaDs=model.get("subsystem","datasources","xa-data-source",complexXaDs + "_Pool");
+  controlModelParams(modelXaDs,params);
+  Assert.assertEquals(modelXaDs.asString(),"jdbc:h2:mem:test",modelXaDs.get("xa-datasource-properties","URL","value").asString());
+  String marshalled=services.getPersistedSubsystemXml();
+  services=super.installInController(new AdditionalInitialization(){
+    @Override protected Type getType(){
+      return Type.MANAGEMENT;
+    }
+  }
+,marshalled);
+  ModelNode modelReloaded=services.readWholeModel();
+  compare(model,modelReloaded);
+}
