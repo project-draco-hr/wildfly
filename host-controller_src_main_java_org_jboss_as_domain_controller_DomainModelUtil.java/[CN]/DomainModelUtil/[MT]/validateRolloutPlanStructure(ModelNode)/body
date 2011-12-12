@@ -1,0 +1,55 @@
+{
+  if (rolloutPlan == null) {
+    throw new OperationFailedException("rolloutPlan argument is null.");
+  }
+  if (!rolloutPlan.hasDefined(ROLLOUT_PLAN)) {
+    throw new OperationFailedException("Rollout plan is missing " + ROLLOUT_PLAN + ": "+ rolloutPlan);
+  }
+  rolloutPlan=rolloutPlan.get(ROLLOUT_PLAN);
+  final Set<String> keys;
+  try {
+    keys=rolloutPlan.keys();
+  }
+ catch (  IllegalArgumentException e) {
+    throw new OperationFailedException("Rollout plan is missing required child " + IN_SERIES + ": "+ rolloutPlan);
+  }
+  if (!keys.contains(IN_SERIES)) {
+    throw new OperationFailedException("Rollout plan is missing required child " + IN_SERIES + ": "+ rolloutPlan);
+  }
+  if (keys.size() > 2 || keys.size() == 2 && !keys.contains(ROLLBACK_ACROSS_GROUPS)) {
+    throw new OperationFailedException("Rollout plan recognizes only two children " + IN_SERIES + " and "+ ROLLBACK_ACROSS_GROUPS+ ": "+ rolloutPlan);
+  }
+  final ModelNode inSeries=rolloutPlan.get(IN_SERIES);
+  if (!inSeries.isDefined()) {
+    throw new OperationFailedException(IN_SERIES + " child of rollout plan is not defined: " + rolloutPlan);
+  }
+  final List<ModelNode> groups=inSeries.asList();
+  if (groups.isEmpty()) {
+    throw new OperationFailedException(IN_SERIES + " doesn't contain any group: " + rolloutPlan);
+  }
+  for (  ModelNode group : groups) {
+    if (group.hasDefined(SERVER_GROUP)) {
+      final ModelNode serverGroup=group.get(SERVER_GROUP);
+      final Set<String> groupKeys;
+      try {
+        groupKeys=serverGroup.keys();
+      }
+ catch (      IllegalArgumentException e) {
+        throw new OperationFailedException(SERVER_GROUP + " is missing server group name: " + rolloutPlan);
+      }
+      if (groupKeys.size() != 1) {
+        throw new OperationFailedException(SERVER_GROUP + " allows only one child: " + rolloutPlan);
+      }
+      validateInSeriesServerGroup(serverGroup.asProperty().getValue());
+    }
+ else     if (group.hasDefined(CONCURRENT_GROUPS)) {
+      final ModelNode concurrent=group.get(CONCURRENT_GROUPS);
+      for (      ModelNode child : concurrent.asList()) {
+        validateInSeriesServerGroup(child.asProperty().getValue());
+      }
+    }
+ else {
+      throw new OperationFailedException("One of the groups in the rollout plan does not define neither " + SERVER_GROUP + " nor "+ CONCURRENT_GROUPS+ ": "+ rolloutPlan);
+    }
+  }
+}
