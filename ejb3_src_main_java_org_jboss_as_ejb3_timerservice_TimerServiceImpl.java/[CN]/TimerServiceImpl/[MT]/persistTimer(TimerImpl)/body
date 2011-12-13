@@ -4,24 +4,30 @@
   }
   if (!timer.persistent) {
 switch (timer.getState()) {
-case CANCELED:
 case EXPIRED:
       nonPersistentTimers.remove(timer.handle);
+    break;
+case CANCELED:
+  if (transactionActive()) {
+    registerSynchronization(new NonPersistentTimerRemoveSynchronization(timer.handle));
+  }
+ else {
+    nonPersistentTimers.remove(timer.handle);
   }
 }
+}
  else {
-  final TimerEntity timerEntity=timer.getPersistentState();
-  try {
-    persistentWaitingOnTxCompletionTimers.remove(timer.handle);
-    if (timerPersistence == null) {
-      ROOT_LOGGER.timerPersistenceNotEnable();
-      return;
-    }
-    timerPersistence.getValue().persistTimer(timerEntity);
-  }
- catch (  Throwable t) {
-    this.setRollbackOnly();
-    throw new RuntimeException(t);
-  }
+final TimerEntity timerEntity=timer.getPersistentState();
+try {
+if (timerPersistence == null) {
+  ROOT_LOGGER.timerPersistenceNotEnable();
+  return;
+}
+timerPersistence.getValue().persistTimer(timerEntity);
+}
+ catch (Throwable t) {
+this.setRollbackOnly();
+throw new RuntimeException(t);
+}
 }
 }
