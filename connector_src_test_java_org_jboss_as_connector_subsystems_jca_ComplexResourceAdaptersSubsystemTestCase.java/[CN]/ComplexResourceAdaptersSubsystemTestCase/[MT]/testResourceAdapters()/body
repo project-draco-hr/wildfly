@@ -1,0 +1,33 @@
+{
+  String xml=readResource("ra.xml");
+  KernelServices services=super.installInController(new AdditionalInitialization(){
+    @Override protected Type getType(){
+      return Type.MANAGEMENT;
+    }
+  }
+,xml);
+  ModelNode model=services.readWholeModel();
+  Properties params=raCommonProperties();
+  ModelNode raCommonModel=model.get("subsystem","resource-adapters","resource-adapter","some.rar");
+  controlModelParams(raCommonModel,params);
+  Assert.assertEquals(raCommonModel.asString(),"A",raCommonModel.get("config-properties","Property","value").asString());
+  params=raAdminProperties();
+  ModelNode raAdminModel=raCommonModel.get("admin-objects","Pool2");
+  controlModelParams(raAdminModel,params);
+  Assert.assertEquals(raAdminModel.asString(),"D",raAdminModel.get("config-properties","Property","value").asString());
+  params=raConnectionProperties();
+  ModelNode raConnModel=raCommonModel.get("connection-definitions","Pool1");
+  controlModelParams(raConnModel,params);
+  Assert.assertEquals(raConnModel.asString(),"B",raConnModel.get("config-properties","Property","value").asString());
+  Assert.assertEquals(raConnModel.asString(),"C",raConnModel.get("recover-plugin-config-properties","Property","value").asString());
+  String marshalled=services.getPersistedSubsystemXml();
+  Assert.assertEquals(normalizeXML(xml),normalizeXML(marshalled));
+  services=super.installInController(new AdditionalInitialization(){
+    @Override protected Type getType(){
+      return Type.MANAGEMENT;
+    }
+  }
+,marshalled);
+  ModelNode modelReloaded=services.readWholeModel();
+  compare(model,modelReloaded);
+}

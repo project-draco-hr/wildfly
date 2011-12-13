@@ -5,13 +5,13 @@
   address.add("subsystem","datasources");
   address.add("data-source",complexDs);
   address.protect();
-  Hashtable<String,String> params=hashtableWithNonXaParameters(complexDs,complexDsJndi);
+  Properties params=nonXaDsProperties(complexDsJndi);
   final ModelNode operation=new ModelNode();
   operation.get(OP).set("add");
   operation.get(OP_ADDR).set(address);
   setOperationParams(operation,params);
   addExtensionProperties(operation);
-  execute(operation);
+  executeOperation(operation);
   final ModelNode datasourcePropertiesAddress=address.clone();
   datasourcePropertiesAddress.add("connection-properties","char.encoding");
   datasourcePropertiesAddress.protect();
@@ -19,17 +19,10 @@
   datasourcePropertyOperation.get(OP).set("add");
   datasourcePropertyOperation.get(OP_ADDR).set(datasourcePropertiesAddress);
   datasourcePropertyOperation.get("value").set("UTF-8");
-  execute(datasourcePropertyOperation);
+  executeOperation(datasourcePropertyOperation);
   List<ModelNode> newList=marshalAndReparseDsResources("data-source");
-  Assert.assertNotNull(newList);
-  Map<String,ModelNode> rightChildren=Collections.emptyMap();
-  for (  ModelNode result : newList) {
-    final Map<String,ModelNode> parseChildren=getChildren(result);
-    if (!parseChildren.isEmpty() && parseChildren.get("jndi-name") != null && parseChildren.get("jndi-name").asString().equals("java:jboss/datasources/complexDs")) {
-      rightChildren=parseChildren;
-    }
-  }
-  Assert.assertFalse(rightChildren.isEmpty());
-  controlParseChildrenParams(rightChildren,params);
   remove(address);
+  Assert.assertNotNull("Reparsing failed:",newList);
+  ModelNode rightChild=findNodeWithProperty(newList,"jndi-name",complexDsJndi);
+  controlModelParams(rightChild,params);
 }

@@ -8,10 +8,10 @@
   final ModelNode operation=new ModelNode();
   operation.get(OP).set("add");
   operation.get(OP_ADDR).set(address);
-  Hashtable<String,String> params=hashtableWithXaParameters(complexXaDs,complexXaDsJndi);
+  Properties params=xaDsProperties(complexXaDsJndi);
   setOperationParams(operation,params);
   addExtensionProperties(operation);
-  execute(operation);
+  executeOperation(operation);
   final ModelNode xaDatasourcePropertiesAddress=address.clone();
   xaDatasourcePropertiesAddress.add("xa-datasource-properties","URL");
   xaDatasourcePropertiesAddress.protect();
@@ -19,19 +19,10 @@
   xaDatasourcePropertyOperation.get(OP).set("add");
   xaDatasourcePropertyOperation.get(OP_ADDR).set(xaDatasourcePropertiesAddress);
   xaDatasourcePropertyOperation.get("value").set("jdbc:h2:mem:test");
-  execute(xaDatasourcePropertyOperation);
+  executeOperation(xaDatasourcePropertyOperation);
   List<ModelNode> newList=marshalAndReparseDsResources("xa-data-source");
-  Assert.assertNotNull(newList);
-  Map<String,ModelNode> parseChildren=null;
-  boolean containsRightJndiname=false;
-  for (  ModelNode result : newList) {
-    parseChildren=getChildren(result);
-    if (!parseChildren.isEmpty() && parseChildren.get("jndi-name") != null && parseChildren.get("jndi-name").asString().equals(complexXaDsJndi)) {
-      containsRightJndiname=true;
-      break;
-    }
-  }
   remove(address);
-  Assert.assertTrue(containsRightJndiname);
-  controlParseChildrenParams(parseChildren,params);
+  Assert.assertNotNull("Reparsing failed:",newList);
+  ModelNode rightChild=findNodeWithProperty(newList,"jndi-name",complexXaDsJndi);
+  controlModelParams(rightChild,params);
 }
