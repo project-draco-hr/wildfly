@@ -20,16 +20,19 @@ case STARTING_to_UP:
           int jdbcStatsSize=jdbcStats.getNames().size();
           int poolStatsSize=poolStats.getNames().size();
           if (jdbcStatsSize > 0 || poolStatsSize > 0) {
-            ManagementResourceRegistration subRegistration=registration.registerOverrideModel(dsName,new StatisticsDescriptionProvider(jdbcStats,poolStats));
-            subRegistration.registerOperationHandler("clear-statistics",new ClearStatisticsHandler(jdbcStats,poolStats),DataSourcesSubsystemProviders.CLEAR_STATISTICS_DESC,false);
+            ManagementResourceRegistration subRegistration=registration.registerOverrideModel(dsName,DataSourcesSubsystemProviders.OVERRIDE_DS_DESC);
             if (jdbcStatsSize > 0) {
+              ManagementResourceRegistration jdbcRegistration=subRegistration.registerSubModel(PathElement.pathElement("statistics","jdbc"),new StatisticsDescriptionProvider(DataSourcesSubsystemProviders.RESOURCE_NAME,"statistics",jdbcStats));
+              jdbcRegistration.registerOperationHandler("clear-statistics",new ClearStatisticsHandler(jdbcStats),DataSourcesSubsystemProviders.CLEAR_STATISTICS_DESC,false);
               for (              String statName : jdbcStats.getNames()) {
-                subRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(jdbcStats));
+                jdbcRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(jdbcStats));
               }
             }
             if (poolStatsSize > 0) {
+              ManagementResourceRegistration poolRegistration=subRegistration.registerSubModel(PathElement.pathElement("statistics","pool"),new StatisticsDescriptionProvider(DataSourcesSubsystemProviders.RESOURCE_NAME,"statistics",poolStats));
+              poolRegistration.registerOperationHandler("clear-statistics",new ClearStatisticsHandler(poolStats),DataSourcesSubsystemProviders.CLEAR_STATISTICS_DESC,false);
               for (              String statName : poolStats.getNames()) {
-                subRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(poolStats));
+                poolRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(poolStats));
               }
             }
           }
@@ -39,6 +42,8 @@ case UP_to_STOP_REQUESTED:
 {
         ManagementResourceRegistration subRegistration=registration.getOverrideModel(dsName);
         if (subRegistration != null) {
+          subRegistration.unregisterSubModel(PathElement.pathElement("statistics","jdbc"));
+          subRegistration.unregisterSubModel(PathElement.pathElement("statistics","pool"));
           registration.unregisterOverrideModel(dsName);
         }
         break;
