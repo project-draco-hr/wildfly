@@ -15,70 +15,68 @@
   final ReadResourceAssemblyHandler assemblyHandler=new ReadResourceAssemblyHandler(directAttributes,metrics,otherAttributes,directChildren,childResources);
   context.addStep(assemblyHandler,queryRuntime ? OperationContext.Stage.VERIFY : OperationContext.Stage.IMMEDIATE,queryRuntime);
   final ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
-  if (!registry.isRuntimeOnly()) {
-    final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
-    final Map<String,Set<String>> childrenByType=registry != null ? getChildAddresses(registry,resource,null) : Collections.<String,Set<String>>emptyMap();
-    final ModelNode model=resource.getModel();
-    if (model.isDefined()) {
-      for (      String key : model.keys()) {
-        if (!childrenByType.containsKey(key)) {
-          directAttributes.put(key,model.get(key));
-        }
+  final Resource resource=nullSafeReadResource(context,registry);
+  final Map<String,Set<String>> childrenByType=registry != null ? getChildAddresses(registry,resource,null) : Collections.<String,Set<String>>emptyMap();
+  final ModelNode model=resource.getModel();
+  if (model.isDefined()) {
+    for (    String key : model.keys()) {
+      if (!childrenByType.containsKey(key)) {
+        directAttributes.put(key,model.get(key));
       }
-      if (defaults) {
-        final DescriptionProvider descriptionProvider=registry.getModelDescription(PathAddress.EMPTY_ADDRESS);
-        final Locale locale=getLocale(operation);
-        final ModelNode nodeDescription=descriptionProvider.getModelDescription(locale);
-        if (nodeDescription.isDefined() && nodeDescription.hasDefined(ATTRIBUTES)) {
-          for (          String key : nodeDescription.get(ATTRIBUTES).keys()) {
-            if ((!childrenByType.containsKey(key)) && (!directAttributes.containsKey(key) || !directAttributes.get(key).isDefined()) && nodeDescription.get(ATTRIBUTES).hasDefined(key)&& nodeDescription.get(ATTRIBUTES,key).hasDefined(DEFAULT)) {
-              directAttributes.put(key,nodeDescription.get(ATTRIBUTES,key,DEFAULT));
-            }
+    }
+    if (defaults) {
+      final DescriptionProvider descriptionProvider=registry.getModelDescription(PathAddress.EMPTY_ADDRESS);
+      final Locale locale=getLocale(operation);
+      final ModelNode nodeDescription=descriptionProvider.getModelDescription(locale);
+      if (nodeDescription.isDefined() && nodeDescription.hasDefined(ATTRIBUTES)) {
+        for (        String key : nodeDescription.get(ATTRIBUTES).keys()) {
+          if ((!childrenByType.containsKey(key)) && (!directAttributes.containsKey(key) || !directAttributes.get(key).isDefined()) && nodeDescription.get(ATTRIBUTES).hasDefined(key)&& nodeDescription.get(ATTRIBUTES,key).hasDefined(DEFAULT)) {
+            directAttributes.put(key,nodeDescription.get(ATTRIBUTES,key,DEFAULT));
           }
         }
       }
     }
-    for (    Map.Entry<String,Set<String>> entry : childrenByType.entrySet()) {
-      String childType=entry.getKey();
-      Set<String> children=entry.getValue();
-      if (children.isEmpty()) {
-        directAttributes.put(childType,new ModelNode());
-      }
+  }
+  for (  Map.Entry<String,Set<String>> entry : childrenByType.entrySet()) {
+    String childType=entry.getKey();
+    Set<String> children=entry.getValue();
+    if (children.isEmpty()) {
+      directAttributes.put(childType,new ModelNode());
+    }
  else {
-        for (        String child : children) {
-          boolean storeDirect=!recursive;
-          if (recursive) {
-            PathElement childPE=PathElement.pathElement(childType,child);
-            PathAddress relativeAddr=PathAddress.pathAddress(childPE);
-            ImmutableManagementResourceRegistration childReg=registry.getSubModel(relativeAddr);
-            if (childReg == null) {
-              throw new OperationFailedException(new ModelNode().set(MESSAGES.noChildRegistry(childType,child)));
-            }
-            if (childReg.isRuntimeOnly() && (!proxies || !childReg.isRemote())) {
-              storeDirect=true;
-            }
+      for (      String child : children) {
+        boolean storeDirect=!recursive;
+        if (recursive) {
+          PathElement childPE=PathElement.pathElement(childType,child);
+          PathAddress relativeAddr=PathAddress.pathAddress(childPE);
+          ImmutableManagementResourceRegistration childReg=registry.getSubModel(relativeAddr);
+          if (childReg == null) {
+            throw new OperationFailedException(new ModelNode().set(MESSAGES.noChildRegistry(childType,child)));
+          }
+          if (childReg.isRuntimeOnly() && (!proxies || !childReg.isRemote())) {
+            storeDirect=true;
+          }
  else {
-              ModelNode rrOp=new ModelNode();
-              rrOp.get(OP).set(opName);
-              rrOp.get(OP_ADDR).set(PathAddress.pathAddress(address,childPE).toModelNode());
-              rrOp.get(RECURSIVE).set(true);
-              rrOp.get(PROXIES).set(proxies);
-              rrOp.get(INCLUDE_RUNTIME).set(queryRuntime);
-              ModelNode rrRsp=new ModelNode();
-              childResources.put(childPE,rrRsp);
-              OperationStepHandler rrHandler=childReg.getOperationHandler(PathAddress.EMPTY_ADDRESS,opName);
-              context.addStep(rrRsp,rrOp,rrHandler,OperationContext.Stage.IMMEDIATE);
-            }
+            ModelNode rrOp=new ModelNode();
+            rrOp.get(OP).set(opName);
+            rrOp.get(OP_ADDR).set(PathAddress.pathAddress(address,childPE).toModelNode());
+            rrOp.get(RECURSIVE).set(true);
+            rrOp.get(PROXIES).set(proxies);
+            rrOp.get(INCLUDE_RUNTIME).set(queryRuntime);
+            ModelNode rrRsp=new ModelNode();
+            childResources.put(childPE,rrRsp);
+            OperationStepHandler rrHandler=childReg.getOperationHandler(PathAddress.EMPTY_ADDRESS,opName);
+            context.addStep(rrRsp,rrOp,rrHandler,OperationContext.Stage.IMMEDIATE);
           }
-          if (storeDirect) {
-            ModelNode childMap=directChildren.get(childType);
-            if (childMap == null) {
-              childMap=new ModelNode();
-              childMap.setEmptyObject();
-              directChildren.put(childType,childMap);
-            }
-            childMap.get(child);
+        }
+        if (storeDirect) {
+          ModelNode childMap=directChildren.get(childType);
+          if (childMap == null) {
+            childMap=new ModelNode();
+            childMap.setEmptyObject();
+            directChildren.put(childType,childMap);
           }
+          childMap.get(child);
         }
       }
     }
