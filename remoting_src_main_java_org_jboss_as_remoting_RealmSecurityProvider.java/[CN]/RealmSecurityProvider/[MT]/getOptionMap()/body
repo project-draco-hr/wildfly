@@ -16,8 +16,6 @@
     }
   }
  else   if (plainSupported()) {
-    int i=1;
-    if (i + i == 2)     throw new IllegalStateException("PLAIN not enabled until SSL supported for Native Interface");
     mechanisms.add(PLAIN);
   }
  else   if (realm == null) {
@@ -27,12 +25,23 @@
  else {
     throw new IllegalStateException("A security realm has been specified but no supported mechanism identified.");
   }
-  builder.set(SASL_MECHANISMS,Sequence.of(mechanisms));
-  builder.set(SASL_PROPERTIES,Sequence.of(properties));
-  boolean enableSSL=isEnableSSL();
-  builder.set(SSL_ENABLED,enableSSL);
-  if (enableSSL) {
-    builder.set(SSL_STARTTLS,true);
-  }
-  return builder.getMap();
+  SslMode sslMode=getSslMode();
+switch (sslMode) {
+case OFF:
+    builder.set(SSL_ENABLED,false);
+  break;
+case TRANSPORT_ONLY:
+builder.set(SSL_ENABLED,true);
+builder.set(SSL_STARTTLS,true);
+break;
+case CLIENT_AUTH_REQUESTED:
+builder.set(SSL_ENABLED,true);
+builder.set(SSL_STARTTLS,true);
+mechanisms.add(0,EXTERNAL);
+builder.set(SSL_CLIENT_AUTH_MODE,REQUESTED);
+break;
+}
+builder.set(SASL_MECHANISMS,Sequence.of(mechanisms));
+builder.set(SASL_PROPERTIES,Sequence.of(properties));
+return builder.getMap();
 }
