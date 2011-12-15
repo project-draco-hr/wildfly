@@ -7,15 +7,21 @@
     return ConnectStatus.SUCCESS;
   }
  catch (  Exception e) {
-    boolean authenticationFailure=false;
-    Throwable current=e;
-    while (current != null && authenticationFailure == false) {
-      if (current instanceof SaslException) {
-        authenticationFailure=true;
+    try {
+      Throwable current=e;
+      while (current != null) {
+        if (current instanceof SaslException) {
+          return ConnectStatus.AUTHENTICATION_FAILURE;
+        }
+        if (current instanceof SSLException) {
+          return ConnectStatus.SSL_FAILURE;
+        }
+        current=current.getCause();
       }
-      current=current.getCause();
+      return ConnectStatus.CONNECTION_FAILURE;
     }
-    StreamUtils.safeClose(client);
-    return authenticationFailure ? ConnectStatus.AUTHENTICATION_FAILURE : ConnectStatus.CONNECTION_FAILURE;
+  finally {
+      StreamUtils.safeClose(client);
+    }
   }
 }
