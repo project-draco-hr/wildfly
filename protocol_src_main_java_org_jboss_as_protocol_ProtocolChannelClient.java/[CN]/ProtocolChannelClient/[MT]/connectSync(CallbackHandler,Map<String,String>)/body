@@ -1,6 +1,29 @@
 {
-  final IoFuture<Connection> future=connect(handler,saslOptions);
-  final IoFuture.Status status=future.await(configuration.getConnectionTimeout(),TimeUnit.MILLISECONDS);
+  WrapperCallbackHandler wrapperHandler=new WrapperCallbackHandler(handler);
+  final IoFuture<Connection> future=connect(wrapperHandler,saslOptions);
+  long timeoutMillis=configuration.getConnectionTimeout();
+  IoFuture.Status status=future.await(timeoutMillis,TimeUnit.MILLISECONDS);
+  while (status == IoFuture.Status.WAITING) {
+    if (wrapperHandler.isInCall()) {
+      status=future.await(timeoutMillis,TimeUnit.MILLISECONDS);
+    }
+ else {
+      long lastInteraction=wrapperHandler.getCallFinished();
+      if (lastInteraction > 0) {
+        long now=System.currentTimeMillis();
+        long timeSinceLast=now - lastInteraction;
+        if (timeSinceLast < timeoutMillis) {
+          status=future.await(timeoutMillis - timeSinceLast,TimeUnit.MILLISECONDS);
+        }
+ else {
+          status=null;
+        }
+      }
+ else {
+        status=null;
+      }
+    }
+  }
   if (status == IoFuture.Status.DONE) {
     return future.get();
   }
