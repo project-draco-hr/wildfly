@@ -1,0 +1,55 @@
+{
+  if (SecurityActions.getSystemProperty("javax.net.ssl.keyStore") != null || SecurityActions.getSystemProperty("javax.net.ssl.trustStore") != null) {
+    return;
+  }
+  KeyManager[] keyManagers=null;
+  TrustManager[] trustManagers=null;
+  String trustStore=null;
+  String trustStorePassword=null;
+  boolean modifyTrustStore=true;
+  SSLConfig sslConfig=config.getSslConfig();
+  if (sslConfig != null) {
+    String keyStoreLoc=sslConfig.getKeyStore();
+    if (keyStoreLoc != null) {
+      char[] keyStorePassword=sslConfig.getKeyStorePassword().toCharArray();
+      File keyStoreFile=new File(keyStoreLoc);
+      FileInputStream fis=null;
+      try {
+        fis=new FileInputStream(keyStoreFile);
+        KeyStore theKeyStore=KeyStore.getInstance("JKS");
+        theKeyStore.load(fis,keyStorePassword);
+        KeyManagerFactory keyManagerFactory=KeyManagerFactory.getInstance("SunX509");
+        keyManagerFactory.init(theKeyStore,keyStorePassword);
+        keyManagers=keyManagerFactory.getKeyManagers();
+      }
+ catch (      IOException e) {
+        throw new CliInitializationException(e);
+      }
+catch (      GeneralSecurityException e) {
+        throw new CliInitializationException(e);
+      }
+ finally {
+        StreamUtils.safeClose(fis);
+      }
+    }
+    trustStore=sslConfig.getTrustStore();
+    trustStorePassword=sslConfig.getTrustStorePassword();
+    modifyTrustStore=sslConfig.isModifyTrustStore();
+  }
+  if (trustStore == null) {
+    final String userHome=SecurityActions.getSystemProperty("user.home");
+    File trustStoreFile=new File(userHome,".jboss-cli.truststore");
+    trustStore=trustStoreFile.getAbsolutePath();
+    trustStorePassword="cli_truststore";
+  }
+  trustManager=new LazyDelagatingTrustManager(trustStore,trustStorePassword,modifyTrustStore);
+  trustManagers=new TrustManager[]{trustManager};
+  try {
+    SSLContext sslContext=SSLContext.getInstance("TLS");
+    sslContext.init(keyManagers,trustManagers,null);
+    this.sslContext=sslContext;
+  }
+ catch (  GeneralSecurityException e) {
+    throw new CliInitializationException(e);
+  }
+}
