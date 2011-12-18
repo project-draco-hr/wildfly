@@ -31,17 +31,19 @@
       try {
         ServerEnvironment serverEnvironment=Main.determineEnvironment(new String[0],systemProps,systemEnv,ServerEnvironment.LaunchType.EMBEDDED);
         Bootstrap bootstrap=Bootstrap.Factory.newInstance();
-        Bootstrap.Configuration configuration=new Bootstrap.Configuration();
+        Bootstrap.Configuration configuration=new Bootstrap.Configuration(serverEnvironment);
+        final ExtensionRegistry extensionRegistry=configuration.getExtensionRegistry();
         final Bootstrap.ConfigurationPersisterFactory configurationPersisterFactory=new Bootstrap.ConfigurationPersisterFactory(){
           @Override public ExtensibleConfigurationPersister createConfigurationPersister(          ServerEnvironment serverEnvironment,          ExecutorService executorService){
             final QName rootElement=new QName(Namespace.CURRENT.getUriString(),"server");
-            final StandaloneXml parser=new StandaloneXml(Module.getBootModuleLoader(),executorService);
-            return new TransientConfigurationPersister(serverEnvironment.getServerConfigurationFile(),rootElement,parser,parser);
+            final StandaloneXml parser=new StandaloneXml(Module.getBootModuleLoader(),executorService,extensionRegistry);
+            ExtensibleConfigurationPersister persister=new TransientConfigurationPersister(serverEnvironment.getServerConfigurationFile(),rootElement,parser,parser);
+            extensionRegistry.setWriterRegistry(persister);
+            return persister;
           }
         }
 ;
         configuration.setConfigurationPersisterFactory(configurationPersisterFactory);
-        configuration.setServerEnvironment(serverEnvironment);
         configuration.setModuleLoader(moduleLoader);
         Future<ServiceContainer> future=bootstrap.startup(configuration,Collections.<ServiceActivator>emptyList());
         serviceContainer=future.get();
