@@ -2,65 +2,29 @@
   thread=new Thread(new Runnable(){
     @Override public void run(){
       try {
-        final Endpoint endpoint=Remoting.createEndpoint("endpoint",OptionMap.EMPTY);
-        endpoint.addConnectionProvider("remote",new RemoteConnectionProviderFactory(),OptionMap.create(Options.SSL_ENABLED,Boolean.FALSE));
-        final IoFuture<Connection> futureConnection=endpoint.connect(new URI(hostUrl),OptionMap.create(Options.SASL_POLICY_NOANONYMOUS,Boolean.FALSE),new AnonymousCallbackHandler());
-        final Connection connection=IoFutureHelper.get(futureConnection,5L,TimeUnit.SECONDS);
+        final ClassLoader oldTccl=SecurityActions.getContextClassLoader();
         try {
           try {
-            final ClassLoader oldTccl=SecurityActions.getContextClassLoader();
-            try {
-              try {
-                SecurityActions.setContextClassLoader(classLoader);
-                final EJBClientContext ejbClientContext=EJBClientContext.create();
-                ejbClientContext.registerConnection(connection);
-                final ContextSelector<EJBClientContext> previousSelector=EJBClientContext.setConstantContext(ejbClientContext);
-                applicationClientDeploymentServiceInjectedValue.getValue().getDeploymentCompleteLatch().await();
-                try {
-                  NamespaceContextSelector.setDefault(namespaceContextSelectorInjectedValue);
-                  instance=applicationClientComponent.getValue().createInstance();
-                  mainMethod.invoke(null,new Object[]{parameters});
-                }
-  finally {
-                  if (previousSelector != null) {
-                    EJBClientContext.setSelector(previousSelector);
-                  }
-                }
-              }
- catch (              Exception e) {
-                ROOT_LOGGER.exceptionRunningAppClient(e,e.getClass().getSimpleName());
-              }
+            SecurityActions.setContextClassLoader(classLoader);
+            EJBClientContext.setSelector(lazyConnectionContextSelector);
+            applicationClientDeploymentServiceInjectedValue.getValue().getDeploymentCompleteLatch().await();
+            NamespaceContextSelector.setDefault(namespaceContextSelectorInjectedValue);
+            instance=applicationClientComponent.getValue().createInstance();
+            mainMethod.invoke(null,new Object[]{parameters});
+          }
+ catch (          Exception e) {
+            ROOT_LOGGER.exceptionRunningAppClient(e,e.getClass().getSimpleName());
+          }
  finally {
-                SecurityActions.setContextClassLoader(oldTccl);
-              }
-            }
-  finally {
-              CurrentServiceContainer.getServiceContainer().shutdown();
-            }
-          }
-  finally {
-            try {
-              connection.close();
-            }
- catch (            Throwable e) {
-              ROOT_LOGGER.exceptionClosingConnection(e);
-            }
+            SecurityActions.setContextClassLoader(oldTccl);
           }
         }
   finally {
-          try {
-            endpoint.close();
-          }
- catch (          Throwable e) {
-            ROOT_LOGGER.exceptionClosingConnection(e);
-          }
+          CurrentServiceContainer.getServiceContainer().shutdown();
         }
       }
- catch (      IOException e) {
-        throw new RuntimeException(e);
-      }
-catch (      URISyntaxException e) {
-        throw new RuntimeException(e);
+  finally {
+        lazyConnectionContextSelector.close();
       }
     }
   }
