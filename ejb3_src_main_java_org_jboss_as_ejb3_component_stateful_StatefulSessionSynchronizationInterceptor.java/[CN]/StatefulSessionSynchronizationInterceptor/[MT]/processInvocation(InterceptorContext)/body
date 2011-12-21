@@ -20,23 +20,25 @@ synchronized (threadLock) {
       Object currentTransactionKey=null;
       boolean wasTxSyncRegistered=false;
       try {
-        if (!synchronizationRegistered) {
-          currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
-          final int status=transactionSynchronizationRegistry.getTransactionStatus();
-          if (currentTransactionKey != null && status != Status.STATUS_COMMITTED) {
-            final Synchronization statefulSessionSync=new StatefulSessionSynchronization(instance,lockOwner);
-            transactionSynchronizationRegistry.registerInterposedSynchronization(statefulSessionSync);
-            wasTxSyncRegistered=true;
-            if (ROOT_LOGGER.isTraceEnabled()) {
-              ROOT_LOGGER.trace("Registered tx synchronization: " + statefulSessionSync + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
+        if (containerManagedTransactions) {
+          if (!synchronizationRegistered) {
+            currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
+            final int status=transactionSynchronizationRegistry.getTransactionStatus();
+            if (currentTransactionKey != null && status != Status.STATUS_COMMITTED) {
+              final Synchronization statefulSessionSync=new StatefulSessionSynchronization(instance,lockOwner);
+              transactionSynchronizationRegistry.registerInterposedSynchronization(statefulSessionSync);
+              wasTxSyncRegistered=true;
+              if (ROOT_LOGGER.isTraceEnabled()) {
+                ROOT_LOGGER.trace("Registered tx synchronization: " + statefulSessionSync + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
+              }
+              instance.afterBegin();
+              synchronizationRegistered=true;
+              context.putPrivateData(StatefulTransactionMarker.class,StatefulTransactionMarker.of(true));
             }
-            instance.afterBegin();
-            synchronizationRegistered=true;
-            context.putPrivateData(StatefulTransactionMarker.class,StatefulTransactionMarker.of(true));
           }
-        }
  else {
-          context.putPrivateData(StatefulTransactionMarker.class,StatefulTransactionMarker.of(false));
+            context.putPrivateData(StatefulTransactionMarker.class,StatefulTransactionMarker.of(false));
+          }
         }
         return context.proceed();
       }
