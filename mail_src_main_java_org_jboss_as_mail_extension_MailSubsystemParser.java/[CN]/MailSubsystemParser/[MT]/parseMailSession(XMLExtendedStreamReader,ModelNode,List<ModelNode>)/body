@@ -1,19 +1,28 @@
 {
   log.debug("parsing mail session");
-  MailSessionConfig cfg=new MailSessionConfig();
+  String jndiName=null;
+  Boolean debug=null;
   for (int i=0; i < reader.getAttributeCount(); i++) {
     Attribute attr=Attribute.forName(reader.getAttributeLocalName(i));
     String value=reader.getAttributeValue(i);
     if (attr == Attribute.JNDI_NAME) {
-      String jndiName=value;
+      jndiName=value;
       log.tracef("jndi name: %s",jndiName);
-      cfg.setJndiName(jndiName);
     }
     if (attr == Attribute.DEBUG) {
-      boolean debug=Boolean.parseBoolean(value.trim());
-      cfg.setDebug(debug);
+      debug=Boolean.parseBoolean(value.trim());
     }
   }
+  if (jndiName == null) {
+    throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.JNDI_NAME));
+  }
+  ModelNode op=new ModelNode();
+  op.get(OP).set(ADD);
+  op.get(OP_ADDR).set(subsystemAddr.clone()).add(ModelKeys.MAIL_SESSION,jndiName);
+  if (debug != null) {
+    op.get(ModelKeys.DEBUG).set(debug);
+  }
+  op.get(ModelKeys.JNDI_NAME).set(jndiName);
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
 case MAIL_1_0:
@@ -22,17 +31,17 @@ case MAIL_1_0:
 switch (element) {
 case SMTP_SERVER:
 {
-            cfg.setSmtpServer(parseServerConfig(reader));
+            op.get(ModelKeys.SMTP_SERVER).set(parseServerConfig(reader));
             break;
           }
 case POP3_SERVER:
 {
-          cfg.setPop3Server(parseServerConfig(reader));
+          op.get(ModelKeys.POP3_SERVER).set(parseServerConfig(reader));
           break;
         }
 case IMAP_SERVER:
 {
-        cfg.setImapServer(parseServerConfig(reader));
+        op.get(ModelKeys.IMAP_SERVER).set(parseServerConfig(reader));
         break;
       }
 default :
@@ -49,5 +58,5 @@ throw unexpectedElement(reader);
 }
 }
 }
-return cfg;
+list.add(op);
 }
