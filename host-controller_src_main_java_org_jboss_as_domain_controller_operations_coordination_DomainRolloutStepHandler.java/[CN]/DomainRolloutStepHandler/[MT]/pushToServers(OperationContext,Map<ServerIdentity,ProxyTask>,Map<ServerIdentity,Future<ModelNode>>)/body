@@ -8,7 +8,7 @@
   if (opsByGroup.size() > 0) {
     final ModelNode rolloutPlan=getRolloutPlan(this.providedRolloutPlan,opsByGroup);
     if (trace) {
-      PrepareStepHandler.log.trace("Rollout plan is " + rolloutPlan);
+      HOST_CONTROLLER_LOGGER.tracef("Rollout plan is %s",rolloutPlan);
     }
     final NewServerOperationExecutor operationExecutor=new NewServerOperationExecutor(){
       @Override public ModelNode executeServerOperation(      ServerIdentity server,      ModelNode operation){
@@ -18,7 +18,7 @@
             proxy=serverProxies.get(server.getServerName());
             if (proxy == null) {
               if (trace) {
-                PrepareStepHandler.log.trace("No proxy for " + server);
+                HOST_CONTROLLER_LOGGER.tracef("No proxy for %s",server);
               }
               return null;
             }
@@ -38,11 +38,11 @@
           result=new ModelNode();
           result.get(OUTCOME).set(FAILED);
           if (e instanceof InterruptedException) {
-            result.get(FAILURE_DESCRIPTION).set(String.format("Interrupted waiting for result from server %s",server));
+            result.get(FAILURE_DESCRIPTION).set(MESSAGES.interruptedAwaitingResultFromServer(server));
             interrupted=true;
           }
  else {
-            result.get(FAILURE_DESCRIPTION).set(String.format("Exception getting result from server %s: %s",server,e.getMessage()));
+            result.get(FAILURE_DESCRIPTION).set(MESSAGES.exceptionAwaitingResultFromServer(server,e.getMessage()));
           }
           task.cancel();
           future.cancel(true);
@@ -59,12 +59,12 @@
     NewRolloutPlanController rolloutPlanController=new NewRolloutPlanController(opsByGroup,rolloutPlan,domainOperationContext,operationExecutor,executorService);
     NewRolloutPlanController.Result planResult=rolloutPlanController.execute();
     if (trace) {
-      PrepareStepHandler.log.trace("Rollout plan result is " + planResult);
+      HOST_CONTROLLER_LOGGER.tracef("Rollout plan result is %s",planResult);
     }
     if (planResult == NewRolloutPlanController.Result.FAILED) {
       domainOperationContext.setCompleteRollback(true);
       context.getResult();
-      context.getFailureDescription().set("Operation failed or was rolled back on all servers.");
+      context.getFailureDescription().set(MESSAGES.operationFailedOrRolledBack());
       domainOperationContext.setFailureReported(true);
     }
   }
