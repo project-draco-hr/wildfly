@@ -1,0 +1,42 @@
+{
+  final ModelNode authentication=model.hasDefined(AUTHENTICATION) ? model.get(AUTHENTICATION) : null;
+  final ModelNode serverIdentities=model.hasDefined(SERVER_IDENTITY) ? model.get(SERVER_IDENTITY) : null;
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  final SecurityRealmService securityRealmService=new SecurityRealmService(realmName);
+  final ServiceName realmServiceName=SecurityRealmService.BASE_SERVICE_NAME.append(realmName);
+  ServiceBuilder<?> realmBuilder=serviceTarget.addService(realmServiceName,securityRealmService);
+  ServiceName authenticationName=null;
+  ModelNode authTruststore=null;
+  if (authentication != null) {
+    if (authentication.hasDefined(TRUSTSTORE)) {
+      authTruststore=authentication.require(TRUSTSTORE);
+    }
+    if (authentication.hasDefined(LDAP)) {
+      authenticationName=addLdapService(authentication.require(LDAP),realmServiceName,serviceTarget,newControllers);
+    }
+ else     if (authentication.hasDefined(PROPERTIES)) {
+      authenticationName=addPropertiesService(authentication.require(PROPERTIES),realmServiceName,realmName,serviceTarget,newControllers);
+    }
+ else     if (authentication.hasDefined(USERS)) {
+      authenticationName=addUsersService(context,authentication.require(USERS),realmServiceName,realmName,serviceTarget,newControllers);
+    }
+  }
+  if (authenticationName != null) {
+    realmBuilder.addDependency(authenticationName,DomainCallbackHandler.class,securityRealmService.getCallbackHandlerInjector());
+  }
+  if (serverIdentities != null) {
+    if (serverIdentities.hasDefined(SSL)) {
+      ServiceName sslServiceName=addSSLService(context,serverIdentities.require(SSL),authTruststore,realmServiceName,serviceTarget,newControllers);
+      realmBuilder.addDependency(sslServiceName,SSLIdentityService.class,securityRealmService.getSSLIdentityInjector());
+    }
+    if (serverIdentities.hasDefined(SECRET)) {
+      ServiceName secretServiceName=addSecretService(serverIdentities.require(SECRET),realmServiceName,serviceTarget,newControllers);
+      realmBuilder.addDependency(secretServiceName,CallbackHandlerFactory.class,securityRealmService.getSecretCallbackFactory());
+    }
+  }
+  realmBuilder.setInitialMode(ServiceController.Mode.ON_DEMAND);
+  ServiceController<?> sc=realmBuilder.install();
+  if (newControllers != null) {
+    newControllers.add(sc);
+  }
+}
