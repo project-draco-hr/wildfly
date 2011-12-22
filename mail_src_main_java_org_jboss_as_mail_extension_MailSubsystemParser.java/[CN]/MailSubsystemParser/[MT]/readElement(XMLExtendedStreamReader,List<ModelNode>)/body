@@ -1,11 +1,4 @@
 {
-  final ModelNode address=new ModelNode();
-  address.add(ModelDescriptionConstants.SUBSYSTEM,MailExtension.SUBSYSTEM_NAME);
-  address.protect();
-  final ModelNode subsystem=new ModelNode();
-  subsystem.get(OP).set(ADD);
-  subsystem.get(OP_ADDR).set(address);
-  list.add(subsystem);
   List<MailSessionConfig> sessionConfigList=new LinkedList<MailSessionConfig>();
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 switch (Namespace.forUri(reader.getNamespaceURI())) {
@@ -32,15 +25,27 @@ default :
 }
 }
 }
+final ModelNode address=new ModelNode();
+address.add(ModelDescriptionConstants.SUBSYSTEM,MailExtension.SUBSYSTEM_NAME);
+address.protect();
+final ModelNode subsystem=new ModelNode();
+subsystem.get(OP).set(ADD);
+subsystem.get(OP_ADDR).set(address);
+list.add(subsystem);
 for (MailSessionConfig c : sessionConfigList) {
 final ModelNode dsAddress=address.clone();
-dsAddress.add(ModelKeys.MAIL_SESSION,c.getJndiName());
+dsAddress.add(MailSubsystemModel.MAIL_SESSION,c.getJndiName());
 dsAddress.protect();
 final ModelNode operation=new ModelNode();
 operation.get(OP_ADDR).set(dsAddress);
 operation.get(OP).set(ADD);
-Util.fillFrom(operation,c);
+operation.get(JNDI_NAME).set(c.getJndiName());
+operation.get(DEBUG).set(c.isDebug());
+if (c.getFrom() != null) {
+operation.get(FROM).set(c.getFrom());
+}
 list.add(operation);
+fillSessionData(c,dsAddress,list);
 }
 log.tracef("parsing done, config is: %s",sessionConfigList);
 log.tracef("list is: %s",list);
