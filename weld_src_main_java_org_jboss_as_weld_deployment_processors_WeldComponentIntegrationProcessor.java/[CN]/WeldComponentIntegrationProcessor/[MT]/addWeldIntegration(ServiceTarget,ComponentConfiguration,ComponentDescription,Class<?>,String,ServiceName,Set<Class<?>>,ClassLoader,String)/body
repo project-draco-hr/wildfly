@@ -10,15 +10,15 @@
   }
 );
   if (description instanceof EJBComponentDescription) {
+    final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)description;
     final Jsr299BindingsInterceptor.Factory aroundInvokeFactory=new Jsr299BindingsInterceptor.Factory(description.getBeanDeploymentArchiveId(),beanName,InterceptionType.AROUND_INVOKE,classLoader);
     final Jsr299BindingsInterceptor.Factory aroundTimeoutFactory=new Jsr299BindingsInterceptor.Factory(description.getBeanDeploymentArchiveId(),beanName,InterceptionType.AROUND_TIMEOUT,classLoader);
     builder.addDependency(weldServiceName,WeldContainer.class,aroundTimeoutFactory.getWeldContainer());
     builder.addDependency(weldServiceName,WeldContainer.class,aroundInvokeFactory.getWeldContainer());
     configuration.addComponentInterceptor(new UserInterceptorFactory(aroundInvokeFactory,aroundTimeoutFactory),InterceptorOrder.Component.CDI_INTERCEPTORS,false);
     if (description.isTimerServiceApplicable()) {
-      final EjbRequestScopeActivationInterceptor.Factory requestFactory=new EjbRequestScopeActivationInterceptor.Factory(classLoader);
+      final EjbRequestScopeActivationInterceptor.Factory requestFactory=new EjbRequestScopeActivationInterceptor.Factory(classLoader,weldServiceName);
       configuration.addTimeoutViewInterceptor(requestFactory,InterceptorOrder.View.CDI_REQUEST_SCOPE);
-      builder.addDependency(weldServiceName,WeldContainer.class,requestFactory.getWeldContainer());
     }
     final Jsr299BindingsInterceptor.Factory preDestroyInterceptor=new Jsr299BindingsInterceptor.Factory(description.getBeanDeploymentArchiveId(),beanName,InterceptionType.PRE_DESTROY,classLoader);
     builder.addDependency(weldServiceName,WeldContainer.class,preDestroyInterceptor.getWeldContainer());
@@ -26,10 +26,9 @@
     final Jsr299BindingsInterceptor.Factory postConstruct=new Jsr299BindingsInterceptor.Factory(description.getBeanDeploymentArchiveId(),beanName,InterceptionType.POST_CONSTRUCT,classLoader);
     builder.addDependency(weldServiceName,WeldContainer.class,postConstruct.getWeldContainer());
     configuration.addPostConstructInterceptor(postConstruct,InterceptorOrder.ComponentPostConstruct.CDI_INTERCEPTORS);
-    if (((EJBComponentDescription)description).isMessageDriven()) {
-      final EjbRequestScopeActivationInterceptor.Factory requestFactory=new EjbRequestScopeActivationInterceptor.Factory(classLoader);
+    if (ejbComponentDescription.isMessageDriven()) {
+      final EjbRequestScopeActivationInterceptor.Factory requestFactory=new EjbRequestScopeActivationInterceptor.Factory(classLoader,weldServiceName);
       configuration.addComponentInterceptor(requestFactory,InterceptorOrder.Component.CDI_REQUEST_SCOPE,false);
-      builder.addDependency(weldServiceName,WeldContainer.class,requestFactory.getWeldContainer());
     }
   }
   builder.install();

@@ -3,7 +3,8 @@
     final ClassLoader tccl=SecurityActions.getContextClassLoader();
     try {
       SecurityActions.setContextClassLoader(classLoader);
-      final BeanManager beanManager=weldContainer.getValue().getBeanManager();
+      final WeldContainer weldContainer=(WeldContainer)CurrentServiceContainer.getServiceContainer().getRequiredService(weldContainerServiceName).getValue();
+      final BeanManager beanManager=weldContainer.getBeanManager();
       final Bean<?> bean=beanManager.resolve(beanManager.getBeans(EjbRequestContext.class,EjbLiteral.INSTANCE));
       final CreationalContext<?> ctx=beanManager.createCreationalContext(bean);
       requestContext=(EjbRequestContext)beanManager.getReference(bean,EjbRequestContext.class,ctx);
@@ -12,13 +13,18 @@
       SecurityActions.setContextClassLoader(tccl);
     }
   }
-  try {
-    requestContext.associate(context.getInvocationContext());
-    requestContext.activate();
-    return context.proceed();
-  }
+  if (!requestContext.isActive()) {
+    try {
+      requestContext.associate(context.getInvocationContext());
+      requestContext.activate();
+      return context.proceed();
+    }
   finally {
-    requestContext.deactivate();
-    requestContext.dissociate(context.getInvocationContext());
+      requestContext.deactivate();
+      requestContext.dissociate(context.getInvocationContext());
+    }
+  }
+ else {
+    return context.proceed();
   }
 }
