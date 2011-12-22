@@ -1,0 +1,22 @@
+{
+  ServiceName baseServiceName=EmbeddedCacheManagerService.getServiceName(null);
+  ReplicationConfig config=metaData.getReplicationConfig();
+  String cacheName=(config != null) ? config.getCacheName() : null;
+  ServiceName serviceName=ServiceName.parse((cacheName != null) ? cacheName : DEFAULT_CACHE_CONTAINER);
+  if (!baseServiceName.isParentOf(serviceName)) {
+    serviceName=baseServiceName.append(serviceName);
+  }
+  if (serviceName.length() < 4) {
+    serviceName=serviceName.append(CacheContainer.DEFAULT_CACHE_NAME);
+  }
+  if (CurrentServiceContainer.getServiceContainer().getService(serviceName) == null) {
+    return false;
+  }
+  String container=serviceName.getParent().getSimpleName();
+  new CoreGroupCommunicationServiceService(SCOPE_ID).build(target,container).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  new SharedLocalYieldingClusterLockManagerService(container).build(target).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  builder.addDependency(serviceName,Cache.class,this.sessionCache);
+  builder.addDependency(CacheService.getServiceName(container,DEFAULT_JVM_ROUTE_CACHE),Cache.class,this.jvmRouteCache);
+  builder.addDependency(SharedLocalYieldingClusterLockManagerService.getServiceName(container),SharedLocalYieldingClusterLockManager.class,this.lockManager);
+  return true;
+}

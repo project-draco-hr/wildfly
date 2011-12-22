@@ -1,0 +1,24 @@
+{
+  if (!Session.SESSION_DESTROYED_EVENT.equals(event.getType()))   return;
+  Session session=event.getSession();
+  log.tracef("Process session destroyed on %s",session);
+  String ssoId=null;
+synchronized (reverse) {
+    ssoId=reverse.get(session);
+  }
+  if (ssoId == null) {
+    log.tracef("ignoring as SSO is already closed for session %s",session);
+    return;
+  }
+  boolean timedOut;
+  boolean stopped=false;
+  if ((timedOut=isSessionTimedOut(session)) || (stopped=isManagerStopped(session))) {
+    log.tracef("remove session %s from SSO %s, isSessionTimedOut=%s, isManagerStopped=%s",session,ssoId,timedOut,stopped);
+    removeSession(ssoId,session);
+    processExpires();
+  }
+ else {
+    log.tracef("user logged out of SSO %s",ssoId);
+    logout(ssoId);
+  }
+}
