@@ -1,6 +1,9 @@
 {
+  final boolean appclient=context.getProcessType() == ProcessType.APPLICATION_CLIENT;
   final EEJndiViewExtension extension=new EEJndiViewExtension();
   context.getServiceTarget().addService(EEJndiViewExtension.SERVICE_NAME,extension).addDependency(JndiViewExtensionRegistry.SERVICE_NAME,JndiViewExtensionRegistry.class,extension.getRegistryInjector()).addListener(verificationHandler).install();
+  EEResourceReferenceProcessorRegistry.registerResourceReferenceProcessor(BeanValidationFactoryResourceReferenceProcessor.INSTANCE);
+  EEResourceReferenceProcessorRegistry.registerResourceReferenceProcessor(BeanValidationResourceReferenceProcessor.INSTANCE);
   final ModelNode globalModules=GlobalModulesDefinition.INSTANCE.resolveModelAttribute(context,model);
   final boolean earSubDeploymentsIsolated=EeSubsystemRootResource.EAR_SUBDEPLOYMENTS_ISOLATED.resolveModelAttribute(context,model).asBoolean();
   context.addStep(new AbstractDeploymentChainStep(){
@@ -10,7 +13,6 @@
       ROOT_LOGGER.debug("Activating EE subsystem");
       processorTarget.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_EAR_DEPLOYMENT_INIT,new EarInitializationProcessor());
       processorTarget.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_EAR_APP_XML_PARSE,new EarMetaDataParsingProcessor());
-      processorTarget.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_EAR_JBOSS_APP_XML_PARSE,new JBossAppMetaDataParsingProcessor());
       processorTarget.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_JBOSS_EJB_CLIENT_XML_PARSE,new EJBClientDescriptorParsingProcessor());
       processorTarget.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_EJB_EAR_APPLICATION_NAME,new EarApplicationNameProcessor());
       processorTarget.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_EAR,new EarStructureProcessor());
@@ -18,7 +20,6 @@
       processorTarget.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_APPLICATION_CLIENT_IN_EAR,new ApplicationClientDeploymentProcessor());
       processorTarget.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_MANAGED_BEAN_JAR_IN_EAR,new ManagedBeanSubDeploymentMarkingProcessor());
       processorTarget.addDeploymentProcessor(Phase.STRUCTURE,Phase.STRUCTURE_EE_MODULE_INIT,new EEModuleInitialProcessor());
-      processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_MANAGED_BEAN_ANNOTATION,new ManagedBeanAnnotationProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EE_MODULE_NAME,new EEModuleNameProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EE_ANNOTATIONS,new EEAnnotationProcessor());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_LIEFCYCLE_ANNOTATION,new LifecycleAnnotationParsingProcessor());
@@ -26,6 +27,7 @@
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EAR_SUBDEPLOYMENTS_ISOLATION_DEFAULT,isolationProcessor);
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_DATA_SOURCE_DEFINITION_ANNOTATION,new DataSourceDefinitionAnnotationParser());
       processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_DISTINCT_NAME,new EEDistinctNameProcessor());
+      processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_EAR_MESSAGE_DESTINATIONS,new EarMessageDestinationProcessor());
       processorTarget.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_MANAGED_BEAN,new JavaEEDependencyProcessor());
       processorTarget.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_GLOBAL_MODULES,moduleDependencyProcessor);
       processorTarget.addDeploymentProcessor(Phase.DEPENDENCIES,Phase.DEPENDENCIES_EE_CLASS_DESCRIPTIONS,new ApplicationClassesAggregationProcessor());
@@ -44,6 +46,9 @@
       processorTarget.addDeploymentProcessor(Phase.INSTALL,Phase.INSTALL_EE_MODULE_CONFIG,new EEModuleConfigurationProcessor());
       processorTarget.addDeploymentProcessor(Phase.INSTALL,Phase.INSTALL_EE_COMPONENT,new ComponentInstallProcessor());
       processorTarget.addDeploymentProcessor(Phase.CLEANUP,Phase.CLEANUP_EE,new EECleanUpProcessor());
+      if (!appclient) {
+        processorTarget.addDeploymentProcessor(Phase.PARSE,Phase.PARSE_MANAGED_BEAN_ANNOTATION,new ManagedBeanAnnotationProcessor());
+      }
     }
   }
 ,OperationContext.Stage.RUNTIME);
