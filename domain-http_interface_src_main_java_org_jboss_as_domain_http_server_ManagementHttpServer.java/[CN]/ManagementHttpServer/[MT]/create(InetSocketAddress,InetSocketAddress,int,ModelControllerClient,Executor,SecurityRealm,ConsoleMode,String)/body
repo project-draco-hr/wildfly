@@ -1,0 +1,77 @@
+{
+  Map<String,String> configuration=new HashMap<String,String>(1);
+  configuration.put("sun.net.httpserver.maxReqTime","15");
+  Authenticator auth=null;
+  final CertAuth certAuthMode;
+  if (securityRealm != null) {
+    DomainCallbackHandler callbackHandler=securityRealm.getCallbackHandler();
+    Class[] supportedCallbacks=callbackHandler.getSupportedCallbacks();
+    if (DigestAuthenticator.requiredCallbacksSupported(supportedCallbacks)) {
+      auth=new DigestAuthenticator(callbackHandler,securityRealm.getName(),contains(DigestHashCallback.class,supportedCallbacks));
+    }
+ else     if (BasicAuthenticator.requiredCallbacksSupported(supportedCallbacks)) {
+      auth=new BasicAuthenticator(callbackHandler,securityRealm.getName());
+    }
+    if (securityRealm.hasTrustStore()) {
+      if (auth == null) {
+        certAuthMode=CertAuth.NEED;
+        auth=new ClientCertAuthenticator(securityRealm.getName());
+      }
+ else {
+        certAuthMode=CertAuth.WANT;
+      }
+    }
+ else {
+      certAuthMode=CertAuth.NONE;
+    }
+  }
+ else {
+    certAuthMode=CertAuth.NONE;
+  }
+  HttpServer httpServer=null;
+  if (bindAddress != null) {
+    httpServer=HttpServer.create(bindAddress,backlog,configuration);
+    httpServer.setExecutor(executor);
+  }
+  HttpsServer secureHttpServer=null;
+  if (secureBindAddress != null) {
+    secureHttpServer=HttpsServer.create(secureBindAddress,backlog,configuration);
+    final SSLContext context=securityRealm.getSSLContext();
+    secureHttpServer.setHttpsConfigurator(new HttpsConfigurator(context){
+      @Override public void configure(      HttpsParameters params){
+        SSLParameters sslparams=context.getDefaultSSLParameters();
+switch (certAuthMode) {
+case NEED:
+          sslparams.setNeedClientAuth(true);
+        break;
+case WANT:
+      sslparams.setWantClientAuth(true);
+    break;
+}
+params.setSSLParameters(sslparams);
+}
+}
+);
+secureHttpServer.setExecutor(executor);
+}
+ManagementHttpServer managementHttpServer=new ManagementHttpServer(httpServer,secureHttpServer,securityRealm);
+ResourceHandler consoleHandler;
+try {
+consoleHandler=consoleMode.createConsoleHandler(consoleSlot);
+}
+ catch (ModuleLoadException e) {
+throw new IOException("Unable to load resource handler",e);
+}
+managementHttpServer.addHandler(new RootHandler(consoleHandler));
+managementHttpServer.addHandler(new DomainApiHandler(modelControllerClient,auth));
+if (consoleHandler != null) {
+managementHttpServer.addHandler(consoleHandler);
+}
+try {
+managementHttpServer.addHandler(new ErrorHandler(consoleSlot));
+}
+ catch (ModuleLoadException e) {
+throw new IOException("Unable to load resource handler",e);
+}
+return managementHttpServer;
+}
