@@ -1,0 +1,27 @@
+{
+  ConnectionFactory connFactory=lookup("ConnectionFactory",ConnectionFactory.class);
+  Connection conn=connFactory.createConnection();
+  conn.start();
+  Session session=conn.createSession(false,Session.AUTO_ACKNOWLEDGE);
+  TemporaryQueue replyQueue=session.createTemporaryQueue();
+  TextMessage msg=session.createTextMessage("Hello world");
+  msg.setJMSDeliveryMode(DeliveryMode.NON_PERSISTENT);
+  msg.setJMSReplyTo(replyQueue);
+  Queue queue=lookup("java:jboss/" + queueName,Queue.class);
+  MessageProducer producer=session.createProducer(queue);
+  producer.send(msg);
+  MessageConsumer consumer=session.createConsumer(replyQueue);
+  Message replyMsg=consumer.receive(5000);
+  Assert.assertNotNull(replyMsg);
+  if (replyMsg instanceof ObjectMessage) {
+    Exception e=(Exception)((ObjectMessage)replyMsg).getObject();
+    throw e;
+  }
+  Assert.assertTrue(replyMsg instanceof TextMessage);
+  String actual=((TextMessage)replyMsg).getText();
+  Assert.assertEquals("SUCCESS",actual);
+  consumer.close();
+  producer.close();
+  session.close();
+  conn.stop();
+}
