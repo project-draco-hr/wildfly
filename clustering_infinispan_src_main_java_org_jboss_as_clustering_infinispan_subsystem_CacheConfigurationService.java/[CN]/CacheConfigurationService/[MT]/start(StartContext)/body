@@ -1,42 +1,12 @@
 {
-  EmbeddedCacheManager container=this.configurationHelper.getCacheContainer();
-  EmbeddedCacheManagerDefaults defaults=this.configurationHelper.getEmbeddedCacheManagerDefaults();
-  Configuration.CacheMode mode=this.overrides.getCacheMode();
-  Configuration configurationDefaults=defaults.getDefaultConfiguration(mode);
-  configuration=configurationDefaults.clone();
-  configuration.applyOverrides(overrides);
-  if (configuration.isTransactionalCache() && !configuration.isInvocationBatchingEnabled() && configurationHelper.getTransactionManager() == null) {
-    throw new StartException("Missing dependency: transaction manager required");
+  TransactionManager tm=this.dependencies.getTransactionManager();
+  if (tm != null) {
+    this.builder.transaction().transactionManagerLookup(new TransactionManagerProvider(tm));
   }
-  if (configuration.isUseSynchronizationForTransactions() && configurationHelper.getTransactionSynchronizationRegistry() == null) {
-    throw new StartException("Missing dependency: transaction synchronization registry provider required");
+  TransactionSynchronizationRegistry tsr=this.dependencies.getTransactionSynchronizationRegistry();
+  if (tsr != null) {
+    this.builder.transaction().transactionSynchronizationRegistryLookup(new TransactionSynchronizationRegistryProvider(tsr));
   }
-  FluentConfiguration.TransactionConfig tx=configuration.fluent().transaction();
-  if (configuration.isTransactionalCache()) {
-    if (configuration.isInvocationBatchingEnabled()) {
-      tx.transactionManagerLookup(new TransactionManagerProvider(new ImmediateValue<TransactionManager>(BatchModeTransactionManager.getInstance())));
-    }
- else {
-      Value<TransactionManager> tm=this.configurationHelper.getTransactionManager();
-      if (tm != null) {
-        tx.transactionManagerLookup(new TransactionManagerProvider(tm));
-      }
-      if (configuration.isUseSynchronizationForTransactions()) {
-        Value<TransactionSynchronizationRegistry> txSyncRegistry=this.configurationHelper.getTransactionSynchronizationRegistry();
-        if (txSyncRegistry != null) {
-          tx.transactionSynchronizationRegistryLookup(new TransactionSynchronizationRegistryProvider(txSyncRegistry));
-        }
-      }
-    }
-  }
-  if (this.template != null) {
-    container.defineConfiguration(this.name,this.template,configuration);
-  }
- else {
-    container.defineConfiguration(this.name,configuration);
-  }
-  if (log.isDebugEnabled()) {
-    Configuration config=((EmbeddedCacheManager)container).defineConfiguration(this.name,new Configuration());
-    log.debugf("Cache configuration defined for cache %s with contents: %s",this.name,dumpCacheConfiguration(this.name,config));
-  }
+  this.config=this.builder.build();
+  this.dependencies.getCacheContainer().defineConfiguration(this.name,this.config);
 }

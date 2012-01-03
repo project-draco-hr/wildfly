@@ -1,73 +1,56 @@
 {
-  EmbeddedCacheManagerDefaults defaults=this.configuration.getDefaults();
-  GlobalConfiguration global=defaults.getGlobalConfiguration().clone();
-  String name=this.configuration.getName();
-  TransportConfiguration transport=this.configuration.getTransportConfiguration();
-  FluentGlobalConfiguration.TransportConfig fluentTransport=global.fluent().transport();
-  if (context.getController().getServiceContainer().getRequiredService(getTransportServiceName(name)).getState() == ServiceController.State.UP) {
-    log.debugf("Initializing %s cache container transport",name);
-    fluentTransport.transportClass(JGroupsTransport.class);
+  GlobalConfigurationBuilder globalBuilder=new GlobalConfigurationBuilder();
+  globalBuilder.shutdown().hookBehavior(ShutdownHookBehavior.DONT_REGISTER).transport().strictPeerToPeer(false);
+  TransportConfiguration transport=this.dependencies.getTransportConfiguration();
+  TransportConfigurationBuilder transportBuilder=globalBuilder.transport();
+  if (context.getController().getServiceContainer().getRequiredService(getTransportServiceName(this.name)).getState() == ServiceController.State.UP) {
+    ChannelProvider.init(transportBuilder,transport.getChannel());
     Long timeout=transport.getLockTimeout();
-    if (timeout != null) {
-      fluentTransport.distributedSyncTimeout(timeout.longValue());
-    }
+    transportBuilder.distributedSyncTimeout((timeout != null) ? timeout.longValue() : 60000);
     String site=transport.getSite();
     if (site != null) {
-      fluentTransport.siteId(site);
+      transportBuilder.siteId(site);
     }
     String rack=transport.getRack();
     if (rack != null) {
-      fluentTransport.rackId(rack);
+      transportBuilder.rackId(rack);
     }
     String machine=transport.getMachine();
     if (machine != null) {
-      fluentTransport.machineId(machine);
+      transportBuilder.machineId(machine);
     }
-    fluentTransport.clusterName(this.configuration.getName());
-    ChannelProvider.init(global,transport.getChannel());
+    transportBuilder.clusterName(this.name);
     Executor executor=transport.getExecutor();
     if (executor != null) {
-      ExecutorProvider.initTransportExecutor(global,executor);
+      ExecutorProvider.initTransportExecutor(globalBuilder,executor);
     }
   }
  else {
-    fluentTransport.transportClass(null);
+    transportBuilder.clearTransport();
   }
-  Executor listenerExecutor=this.configuration.getListenerExecutor();
+  Executor listenerExecutor=this.dependencies.getListenerExecutor();
   if (listenerExecutor != null) {
-    ExecutorProvider.initListenerExecutor(global,listenerExecutor);
+    ExecutorProvider.initListenerExecutor(globalBuilder,listenerExecutor);
   }
-  ScheduledExecutorService evictionExecutor=this.configuration.getEvictionExecutor();
+  ScheduledExecutorService evictionExecutor=this.dependencies.getEvictionExecutor();
   if (evictionExecutor != null) {
-    ExecutorProvider.initEvictionExecutor(global,evictionExecutor);
+    ExecutorProvider.initEvictionExecutor(globalBuilder,evictionExecutor);
   }
-  ScheduledExecutorService replicationQueueExecutor=this.configuration.getReplicationQueueExecutor();
+  ScheduledExecutorService replicationQueueExecutor=this.dependencies.getReplicationQueueExecutor();
   if (replicationQueueExecutor != null) {
-    ExecutorProvider.initReplicationQueueExecutor(global,replicationQueueExecutor);
+    ExecutorProvider.initReplicationQueueExecutor(globalBuilder,replicationQueueExecutor);
   }
-  FluentGlobalConfiguration.GlobalJmxStatisticsConfig globalJmx=fluentTransport.globalJmxStatistics();
-  globalJmx.cacheManagerName(this.configuration.getName());
-  Configuration defaultConfig=new Configuration();
-  FluentConfiguration fluent=defaultConfig.fluent();
-  MBeanServer server=this.configuration.getMBeanServer();
+  GlobalJmxStatisticsConfigurationBuilder jmxBuilder=globalBuilder.globalJmxStatistics().cacheManagerName(this.name);
+  MBeanServer server=this.dependencies.getMBeanServer();
   if (server != null) {
-    globalJmx.mBeanServerLookup(new MBeanServerProvider(server)).jmxDomain(SERVICE_NAME.getCanonicalName());
-    fluent.jmxStatistics();
+    jmxBuilder.enable().mBeanServerLookup(new MBeanServerProvider(server)).jmxDomain(SERVICE_NAME.getCanonicalName());
   }
  else {
-    globalJmx.disable();
+    jmxBuilder.disable();
   }
-  this.configureTransactions(defaultConfig);
-  EmbeddedCacheManager manager=new DefaultCacheManager(global,defaultConfig,false);
-  manager.addListener(this);
-  for (  Map.Entry<String,Configuration> entry : this.configuration.getConfigurations().entrySet()) {
-    Configuration overrides=entry.getValue();
-    Configuration configuration=defaults.getDefaultConfiguration(overrides.getCacheMode()).clone();
-    configuration.applyOverrides(overrides);
-    this.configureTransactions(configuration);
-    manager.defineConfiguration(entry.getKey(),configuration);
-  }
-  this.container=new DefaultEmbeddedCacheManager(manager,this.configuration.getDefaultCache());
+  EmbeddedCacheManager manager=new DefaultCacheManager(globalBuilder.build(),false);
+  this.container=new DefaultEmbeddedCacheManager(manager,this.defaultCache);
+  this.container.addListener(this);
   this.container.start();
-  log.debugf("%s cache container started",name);
+  log.debugf("%s cache container started",this.name);
 }

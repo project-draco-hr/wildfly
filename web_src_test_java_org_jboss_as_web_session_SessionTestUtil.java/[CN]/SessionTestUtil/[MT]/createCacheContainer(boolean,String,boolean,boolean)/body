@@ -1,23 +1,13 @@
 {
-  Configuration.CacheMode mode=local ? CacheMode.LOCAL : (totalReplication ? CacheMode.REPL_SYNC : CacheMode.DIST_SYNC);
-  GlobalConfiguration global=defaults.getGlobalConfiguration().clone();
-  FluentGlobalConfiguration.TransportConfig transport=global.fluent().transport();
-  if (mode.isClustered()) {
-    transport.transportClass(JGroupsTransport.class);
-    transport.addProperty(JGroupsTransport.CHANNEL_LOOKUP,ChannelProvider.class.getName());
-  }
- else {
-    transport.transportClass(null);
-  }
-  transport.clusterName("test").globalJmxStatistics().cacheManagerName("container" + containerIndex++).disable();
-  Configuration config=defaults.getDefaultConfiguration(mode).clone();
-  config.fluent().syncCommitPhase(true).syncRollbackPhase(true).invocationBatching().transaction().transactionMode(TransactionMode.TRANSACTIONAL).useSynchronization(true);
+  CacheMode mode=local ? CacheMode.LOCAL : (totalReplication ? CacheMode.REPL_SYNC : CacheMode.DIST_SYNC);
+  GlobalConfigurationBuilder globalBuilder=new GlobalConfigurationBuilder();
+  globalBuilder.transport().transport(mode.isClustered() ? new JGroupsTransport() : null).clusterName("test").globalJmxStatistics().cacheManagerName("container" + containerIndex++).disable();
+  ConfigurationBuilder builder=new ConfigurationBuilder().read(CacheAdd.getDefaultConfiguration(mode));
+  builder.transaction().syncCommitPhase(true).syncRollbackPhase(true).transactionMode(TransactionMode.TRANSACTIONAL).transactionManagerLookup(new TransactionManagerProvider(BatchModeTransactionManager.getInstance())).invocationBatching().enable();
   if (passivationDir != null) {
-    config.fluent().loaders().passivation(true).preload(!purgeCacheLoader).addCacheLoader(new FileCacheStoreConfig().location(passivationDir).fetchPersistentState(mode.isReplicated()).purgeOnStartup(purgeCacheLoader).purgeSynchronously(true));
+    builder.loaders().passivation(true).preload(!purgeCacheLoader).addFileCacheStore().location(passivationDir).fetchPersistentState(mode.isReplicated()).purgeOnStartup(purgeCacheLoader).purgeSynchronously(true);
   }
-  final EmbeddedCacheManager container=new DefaultCacheManager(global,config,false);
-  config=defaults.getDefaultConfiguration(Configuration.CacheMode.REPL_SYNC).clone();
-  config.fluent().syncCommitPhase(true).syncRollbackPhase(true).transaction().invocationBatching().transaction().transactionMode(TransactionMode.TRANSACTIONAL).useSynchronization(true);
-  container.defineConfiguration(JVM_ROUTE_CACHE_NAME,CacheContainer.DEFAULT_CACHE_NAME,config);
+  final EmbeddedCacheManager container=new DefaultEmbeddedCacheManager(new DefaultCacheManager(globalBuilder.build(),builder.build(),false),CacheContainer.DEFAULT_CACHE_NAME);
+  container.defineConfiguration(JVM_ROUTE_CACHE_NAME,builder.build());
   return container;
 }

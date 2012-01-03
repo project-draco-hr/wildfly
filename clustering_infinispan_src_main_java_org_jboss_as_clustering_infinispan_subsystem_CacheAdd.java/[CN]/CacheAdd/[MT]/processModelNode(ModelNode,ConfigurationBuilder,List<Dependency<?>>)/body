@@ -1,0 +1,125 @@
+{
+  String cacheName=cache.require(ModelKeys.NAME).asString();
+  builder.classLoader(this.getClass().getClassLoader());
+  builder.clustering().cacheMode(CacheMode.valueOf(cache.require(ModelKeys.CACHE_MODE).asString()));
+  if (cache.hasDefined(ModelKeys.INDEXING)) {
+    Indexing indexing=Indexing.valueOf(cache.get(ModelKeys.INDEXING).asString());
+    builder.indexing().enabled(indexing.isEnabled()).indexLocalOnly(indexing.isLocalOnly());
+  }
+  if (cache.hasDefined(ModelKeys.QUEUE_SIZE)) {
+    builder.clustering().async().replQueueMaxElements(cache.get(ModelKeys.QUEUE_SIZE).asInt());
+  }
+  if (cache.hasDefined(ModelKeys.QUEUE_FLUSH_INTERVAL)) {
+    builder.clustering().async().replQueueInterval(cache.get(ModelKeys.QUEUE_FLUSH_INTERVAL).asLong());
+  }
+  if (cache.hasDefined(ModelKeys.REMOTE_TIMEOUT)) {
+    builder.clustering().sync().replTimeout(cache.get(ModelKeys.REMOTE_TIMEOUT).asLong());
+  }
+  if (cache.hasDefined(ModelKeys.OWNERS)) {
+    builder.clustering().hash().numOwners(cache.get(ModelKeys.OWNERS).asInt());
+  }
+  if (cache.hasDefined(ModelKeys.VIRTUAL_NODES)) {
+    builder.clustering().hash().numVirtualNodes(cache.get(ModelKeys.VIRTUAL_NODES).asInt());
+  }
+  if (cache.hasDefined(ModelKeys.L1_LIFESPAN)) {
+    long lifespan=cache.get(ModelKeys.L1_LIFESPAN).asLong();
+    if (lifespan > 0) {
+      builder.clustering().l1().enable().lifespan(lifespan);
+    }
+ else {
+      builder.clustering().l1().disable();
+    }
+  }
+  if (cache.hasDefined(ModelKeys.SINGLETON) && cache.get(ModelKeys.SINGLETON,ModelKeys.LOCKING).isDefined()) {
+    ModelNode locking=cache.get(ModelKeys.SINGLETON,ModelKeys.LOCKING);
+    if (locking.hasDefined(ModelKeys.ISOLATION)) {
+      builder.locking().isolationLevel(IsolationLevel.valueOf(locking.get(ModelKeys.ISOLATION).asString()));
+    }
+    if (locking.hasDefined(ModelKeys.STRIPING)) {
+      builder.locking().useLockStriping(locking.get(ModelKeys.STRIPING).asBoolean());
+    }
+    if (locking.hasDefined(ModelKeys.ACQUIRE_TIMEOUT)) {
+      builder.locking().lockAcquisitionTimeout(locking.get(ModelKeys.ACQUIRE_TIMEOUT).asLong());
+    }
+    if (locking.hasDefined(ModelKeys.CONCURRENCY_LEVEL)) {
+      builder.locking().concurrencyLevel(locking.get(ModelKeys.CONCURRENCY_LEVEL).asInt());
+    }
+  }
+  TransactionMode txMode=TransactionMode.NONE;
+  LockingMode lockingMode=LockingMode.OPTIMISTIC;
+  if (cache.hasDefined(ModelKeys.SINGLETON) && cache.get(ModelKeys.SINGLETON,ModelKeys.TRANSACTION).isDefined()) {
+    ModelNode transaction=cache.get(ModelKeys.SINGLETON,ModelKeys.TRANSACTION);
+    if (transaction.hasDefined(ModelKeys.STOP_TIMEOUT)) {
+      builder.transaction().cacheStopTimeout(transaction.get(ModelKeys.STOP_TIMEOUT).asLong());
+    }
+    if (transaction.hasDefined(ModelKeys.MODE)) {
+      txMode=TransactionMode.valueOf(transaction.get(ModelKeys.MODE).asString());
+    }
+    if (transaction.hasDefined(ModelKeys.LOCKING)) {
+      lockingMode=LockingMode.valueOf(transaction.get(ModelKeys.LOCKING).asString());
+    }
+  }
+  builder.transaction().transactionMode(txMode.getMode()).lockingMode(lockingMode).useSynchronization(!txMode.isXAEnabled()).recovery().enabled(txMode.isRecoveryEnabled());
+  if (txMode.isRecoveryEnabled()) {
+    builder.transaction().syncCommitPhase(true).syncRollbackPhase(true);
+  }
+  if (cache.hasDefined(ModelKeys.BATCHING)) {
+    InvocationBatchingConfigurationBuilder batchingBuilder=builder.transaction().transactionMode(org.infinispan.transaction.TransactionMode.TRANSACTIONAL).invocationBatching();
+    if (cache.get(ModelKeys.BATCHING).asBoolean()) {
+      batchingBuilder.enable();
+    }
+ else {
+      batchingBuilder.disable();
+    }
+  }
+  if (cache.hasDefined(ModelKeys.SINGLETON) && cache.get(ModelKeys.SINGLETON,ModelKeys.EVICTION).isDefined()) {
+    ModelNode eviction=cache.get(ModelKeys.SINGLETON,ModelKeys.EVICTION);
+    if (eviction.hasDefined(ModelKeys.STRATEGY)) {
+      builder.eviction().strategy(EvictionStrategy.valueOf(eviction.get(ModelKeys.STRATEGY).asString()));
+    }
+    if (eviction.hasDefined(ModelKeys.MAX_ENTRIES)) {
+      builder.eviction().maxEntries(eviction.get(ModelKeys.MAX_ENTRIES).asInt());
+    }
+  }
+  if (cache.hasDefined(ModelKeys.SINGLETON) && cache.get(ModelKeys.SINGLETON,ModelKeys.EXPIRATION).isDefined()) {
+    ModelNode expiration=cache.get(ModelKeys.SINGLETON,ModelKeys.EXPIRATION);
+    if (expiration.hasDefined(ModelKeys.MAX_IDLE)) {
+      builder.expiration().maxIdle(expiration.get(ModelKeys.MAX_IDLE).asLong());
+    }
+    if (expiration.hasDefined(ModelKeys.LIFESPAN)) {
+      builder.expiration().lifespan(expiration.get(ModelKeys.LIFESPAN).asLong());
+    }
+    if (expiration.hasDefined(ModelKeys.INTERVAL)) {
+      builder.expiration().wakeUpInterval(expiration.get(ModelKeys.INTERVAL).asLong());
+    }
+  }
+  if (cache.hasDefined(ModelKeys.SINGLETON) && cache.get(ModelKeys.SINGLETON,ModelKeys.STATE_TRANSFER).isDefined()) {
+    ModelNode stateTransfer=cache.get(ModelKeys.SINGLETON,ModelKeys.STATE_TRANSFER);
+    if (stateTransfer.hasDefined(ModelKeys.ENABLED)) {
+      builder.clustering().stateRetrieval().fetchInMemoryState(stateTransfer.get(ModelKeys.ENABLED).asBoolean());
+    }
+    if (stateTransfer.hasDefined(ModelKeys.TIMEOUT)) {
+      builder.clustering().stateRetrieval().timeout(stateTransfer.get(ModelKeys.TIMEOUT).asLong());
+    }
+    if (stateTransfer.hasDefined(ModelKeys.FLUSH_TIMEOUT)) {
+      builder.clustering().stateRetrieval().logFlushTimeout(stateTransfer.get(ModelKeys.FLUSH_TIMEOUT).asLong());
+    }
+  }
+  if (cache.hasDefined(ModelKeys.SINGLETON) && cache.get(ModelKeys.SINGLETON,ModelKeys.REHASHING).isDefined()) {
+    ModelNode rehashing=cache.get(ModelKeys.SINGLETON,ModelKeys.REHASHING);
+    if (rehashing.hasDefined(ModelKeys.ENABLED)) {
+      builder.clustering().hash().rehashEnabled(rehashing.get(ModelKeys.ENABLED).asBoolean());
+    }
+    if (rehashing.hasDefined(ModelKeys.TIMEOUT)) {
+      builder.clustering().hash().rehashRpcTimeout(rehashing.get(ModelKeys.TIMEOUT).asLong());
+    }
+  }
+  String storeKey=this.findStoreKey(cache);
+  if (storeKey != null) {
+    ModelNode store=cache.get(storeKey);
+    builder.loaders().shared(store.hasDefined(ModelKeys.SHARED) ? store.get(ModelKeys.SHARED).asBoolean() : false).preload(store.hasDefined(ModelKeys.PRELOAD) ? store.get(ModelKeys.PRELOAD).asBoolean() : false).passivation(store.hasDefined(ModelKeys.PASSIVATION) ? store.get(ModelKeys.PASSIVATION).asBoolean() : true);
+    LoaderConfigurationBuilder storeBuilder=builder.loaders().addCacheLoader().fetchPersistentState(store.hasDefined(ModelKeys.FETCH_STATE) ? store.get(ModelKeys.FETCH_STATE).asBoolean() : true).purgeOnStartup(store.hasDefined(ModelKeys.PURGE) ? store.get(ModelKeys.PURGE).asBoolean() : true);
+    storeBuilder.singletonStore().enabled(store.hasDefined(ModelKeys.SINGLETON) ? store.get(ModelKeys.SINGLETON).asBoolean() : false);
+    this.buildCacheStore(storeBuilder,cacheName,store,storeKey,dependencies);
+  }
+}

@@ -1,0 +1,74 @@
+{
+  final Properties properties=new TypedProperties();
+  if (store.hasDefined(ModelKeys.PROPERTY)) {
+    for (    Property property : store.get(ModelKeys.PROPERTY).asPropertyList()) {
+      String propertyName=property.getName();
+      String propertyValue=property.getValue().asString();
+      properties.setProperty(propertyName,propertyValue);
+    }
+  }
+  builder.withProperties(properties);
+  if (storeKey.equals(ModelKeys.FILE_STORE)) {
+    builder.cacheLoader(new FileCacheStore());
+    final String path=store.hasDefined(ModelKeys.PATH) ? store.get(ModelKeys.PATH).asString() : name;
+    Injector<String> injector=new SimpleInjector<String>(){
+      @Override public void inject(      String value){
+        StringBuilder location=new StringBuilder(value);
+        if (path != null) {
+          location.append(File.separatorChar).append(path);
+        }
+        properties.setProperty("location",location.toString());
+      }
+    }
+;
+    String relativeTo=store.hasDefined(ModelKeys.RELATIVE_TO) ? store.get(ModelKeys.RELATIVE_TO).asString() : ServerEnvironment.SERVER_DATA_DIR;
+    dependencies.add(new Dependency<String>(AbstractPathService.pathNameOf(relativeTo),String.class,injector));
+    properties.setProperty("fsyncMode","perWrite");
+  }
+ else   if (storeKey.equals(ModelKeys.JDBC_STORE)) {
+    builder.cacheLoader(this.createJDBCStore(properties,store));
+    String datasource=store.require(ModelKeys.DATASOURCE).asString();
+    dependencies.add(new Dependency<Object>(ServiceName.JBOSS.append("data-source").append("reference-factory").append(datasource)));
+    properties.setProperty("datasourceJndiLocation",datasource);
+    properties.setProperty("connectionFactoryClass",ManagedConnectionFactory.class.getName());
+  }
+ else   if (storeKey.equals(ModelKeys.REMOTE_STORE)) {
+    builder.cacheLoader(new RemoteCacheStore());
+    for (    ModelNode server : store.require(ModelKeys.REMOTE_SERVER).asList()) {
+      String outboundSocketBinding=server.get(ModelKeys.OUTBOUND_SOCKET_BINDING).asString();
+      Injector<OutboundSocketBinding> injector=new SimpleInjector<OutboundSocketBinding>(){
+        @Override public void inject(        OutboundSocketBinding value){
+          try {
+            String address=value.getDestinationAddress().getHostAddress() + ":" + value.getDestinationPort();
+            String serverList=properties.getProperty(ConfigurationProperties.SERVER_LIST);
+            properties.setProperty(ConfigurationProperties.SERVER_LIST,(serverList == null) ? address : serverList + ";" + address);
+          }
+ catch (          UnknownHostException e) {
+            throw InfinispanMessages.MESSAGES.failedToInjectSocketBinding(e,value);
+          }
+        }
+      }
+;
+      dependencies.add(new Dependency<OutboundSocketBinding>(OutboundSocketBinding.OUTBOUND_SOCKET_BINDING_BASE_SERVICE_NAME.append(outboundSocketBinding),OutboundSocketBinding.class,injector));
+    }
+    if (store.hasDefined(ModelKeys.CACHE)) {
+      properties.setProperty("remoteCacheName",store.get(ModelKeys.CACHE).asString());
+    }
+    if (store.hasDefined(ModelKeys.SOCKET_TIMEOUT)) {
+      properties.setProperty(ConfigurationProperties.SO_TIMEOUT,store.require(ModelKeys.SOCKET_TIMEOUT).asString());
+    }
+    if (store.hasDefined(ModelKeys.TCP_NO_DELAY)) {
+      properties.setProperty(ConfigurationProperties.TCP_NO_DELAY,store.require(ModelKeys.TCP_NO_DELAY).asString());
+    }
+  }
+ else {
+    String className=store.require(ModelKeys.CLASS).asString();
+    try {
+      CacheLoader loader=CacheLoader.class.getClassLoader().loadClass(className).asSubclass(CacheLoader.class).newInstance();
+      builder.cacheLoader(loader);
+    }
+ catch (    Exception e) {
+      throw new IllegalArgumentException(String.format("%s is not a valid cache store",className),e);
+    }
+  }
+}

@@ -1,19 +1,16 @@
 {
   Cache<?,?> groupCache=this.groupCache.getValue();
+  Configuration groupCacheConfiguration=groupCache.getCacheConfiguration();
   EmbeddedCacheManager container=groupCache.getCacheManager();
-  Configuration configuration=new Configuration();
+  ConfigurationBuilder builder=new ConfigurationBuilder().read(groupCacheConfiguration);
   if (this.maxSize > 0) {
-    configuration.fluent().eviction().strategy(EvictionStrategy.LRU).maxEntries(this.maxSize);
+    builder.eviction().strategy(EvictionStrategy.LRU).maxEntries(this.maxSize);
   }
-  for (  CacheLoaderConfig loader : groupCache.getConfiguration().getCacheLoaders()) {
-    CacheLoaderConfig config=loader.clone();
-    if (config instanceof FileCacheStoreConfig) {
-      FileCacheStoreConfig fileConfig=(FileCacheStoreConfig)config;
-      fileConfig.path(fileConfig.getPath() + File.separatorChar + beanName);
-    }
-    configuration.fluent().loaders().addCacheLoader(config);
+  builder.loaders().read(new ConfigurationBuilder().build().loaders()).passivation(groupCacheConfiguration.loaders().passivation()).preload(groupCacheConfiguration.loaders().preload()).shared(groupCacheConfiguration.loaders().shared());
+  for (  AbstractLoaderConfiguration loader : groupCacheConfiguration.loaders().cacheLoaders()) {
+    this.addCacheLoader(builder.loaders(),loader,beanName).async().read(loader.async()).singletonStore().read(loader.singletonStore());
   }
-  groupCache.getCacheManager().defineConfiguration(beanName,groupCache.getName(),configuration);
+  groupCache.getCacheManager().defineConfiguration(beanName,builder.build());
   Cache<MarshalledValue<K,MarshallingContext>,MarshalledValue<E,MarshallingContext>> cache=container.<MarshalledValue<K,MarshallingContext>,MarshalledValue<E,MarshallingContext>>getCache(beanName).getAdvancedCache().with(this.getClass().getClassLoader());
   MarshallingContext context=new MarshallingContext(this.factory,passivationManager.getMarshallingConfiguration());
   MarshalledValueFactory<MarshallingContext> keyFactory=new HashableMarshalledValueFactory(context);
