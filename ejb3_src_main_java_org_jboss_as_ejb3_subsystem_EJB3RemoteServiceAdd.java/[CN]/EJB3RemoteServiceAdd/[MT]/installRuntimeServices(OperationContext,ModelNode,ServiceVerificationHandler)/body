@@ -1,0 +1,39 @@
+{
+  final String connectorName=model.require(CONNECTOR_REF).asString();
+  final String threadPoolName=model.require(THREAD_POOL_NAME).asString();
+  String clientMappingCacheContainerRef=DEFAULT_CLIENT_MAPPINGS_CACHE_CONTAINER_REF;
+  if (model.hasDefined(CLIENT_MAPPINGS_CACHE_CONTAINER_REF)) {
+    clientMappingCacheContainerRef=model.get(CLIENT_MAPPINGS_CACHE_CONTAINER_REF).asString();
+  }
+  String clientMappingCacheRef=DEFAULT_CLIENT_MAPPINGS_CACHE_REF;
+  if (model.hasDefined(CLIENT_MAPPINGS_CACHE_REF)) {
+    clientMappingCacheRef=model.get(CLIENT_MAPPINGS_CACHE_REF).asString();
+  }
+  final ServiceName remotingServerServiceName=RemotingServices.serverServiceName(connectorName);
+  final List<ServiceController<?>> services=new ArrayList<ServiceController<?>>();
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  final EJBRemotingConnectorClientMappingService clientMappingEntryProviderService=new EJBRemotingConnectorClientMappingService();
+  final ServiceBuilder clusterMappingServiceServiceBuilder=serviceTarget.addService(EJBRemotingConnectorClientMappingService.SERVICE_NAME,clientMappingEntryProviderService).addDependency(remotingServerServiceName,AbstractStreamServerService.class,clientMappingEntryProviderService.getRemotingServerInjector());
+  if (verificationHandler != null) {
+    clusterMappingServiceServiceBuilder.addListener(verificationHandler);
+  }
+  final RegistryService<String,List<ClientMapping>> clientMappingRegistryService=new RegistryService<String,List<ClientMapping>>(clientMappingEntryProviderService.getRegistryEntryProvider());
+  final ServiceName clientMappingRegistryServiceName=ServiceName.JBOSS.of("ejb").append("remoting").append("cluster-registry-service");
+  final ServiceName clientMappingCacheContainerServiceName=EmbeddedCacheManagerService.getServiceName(clientMappingCacheContainerRef);
+  final ServiceName clientMappingCacheServiceName=clientMappingCacheContainerServiceName.append(clientMappingCacheRef);
+  final ServiceBuilder registryServiceBuilder=clientMappingRegistryService.build(serviceTarget,clientMappingRegistryServiceName,clientMappingCacheServiceName);
+  if (verificationHandler != null) {
+    registryServiceBuilder.addListener(verificationHandler);
+  }
+  final EJBRemoteConnectorService service=new EJBRemoteConnectorService((byte)0x01,new String[]{"river"});
+  final ServiceBuilder<EJBRemoteConnectorService> ejbRemoteConnectorServiceBuilder=serviceTarget.addService(EJBRemoteConnectorService.SERVICE_NAME,service);
+  ejbRemoteConnectorServiceBuilder.addDependency(RemotingServices.SUBSYSTEM_ENDPOINT,Endpoint.class,service.getEndpointInjector());
+  ejbRemoteConnectorServiceBuilder.addDependency(RemotingServices.serverServiceName(connectorName));
+  ejbRemoteConnectorServiceBuilder.addDependency(EJB3ThreadPoolAdd.BASE_SERVICE_NAME.append(threadPoolName),ExecutorService.class,service.getExecutorService()).addDependency(DeploymentRepository.SERVICE_NAME,DeploymentRepository.class,service.getDeploymentRepositoryInjector()).addDependency(EJBRemoteTransactionsRepository.SERVICE_NAME,EJBRemoteTransactionsRepository.class,service.getEJBRemoteTransactionsRepositoryInjector()).addDependency(GroupMembershipNotifierRegistryService.SERVICE_NAME,GroupMembershipNotifierRegistry.class,service.getClusterRegistryInjector()).addDependency(clientMappingRegistryServiceName,Registry.class,service.getClientMappingRegistryServiceInjector()).setInitialMode(ServiceController.Mode.ACTIVE);
+  if (verificationHandler != null) {
+    ejbRemoteConnectorServiceBuilder.addListener(verificationHandler);
+  }
+  final ServiceController ejbRemotingConnectorServiceController=ejbRemoteConnectorServiceBuilder.install();
+  services.add(ejbRemotingConnectorServiceController);
+  return services;
+}
