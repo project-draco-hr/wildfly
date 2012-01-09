@@ -1,20 +1,22 @@
 {
   stopServer(serverName,gracefulTimeout);
-  ServerStatus status;
-  for (int i=0; i < 50; i++) {
-    status=determineServerStatus(serverName);
-    if (status == ServerStatus.STOPPING) {
-      try {
-        Thread.sleep(100);
+synchronized (shutdownCondition) {
+    for (; ; ) {
+      if (stopped || connectionFinished) {
+        throw HostControllerMessages.MESSAGES.hostAlreadyShutdown();
       }
- catch (      final InterruptedException e) {
+      if (!servers.containsKey(serverName)) {
+        break;
+      }
+      try {
+        shutdownCondition.wait();
+      }
+ catch (      InterruptedException e) {
         Thread.currentThread().interrupt();
         break;
       }
     }
- else {
-      break;
-    }
   }
-  return startServer(serverName,domainModel);
+  startServer(serverName,domainModel);
+  return determineServerStatus(serverName);
 }

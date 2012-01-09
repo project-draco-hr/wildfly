@@ -1,44 +1,41 @@
 {
-  stopped=true;
-  Map<String,ProcessInfo> processInfoMap=determineRunningProcesses();
-  for (  String serverProcessName : processInfoMap.keySet()) {
-    if (ManagedServer.isServerProcess(serverProcessName)) {
-      String serverName=ManagedServer.getServerName(serverProcessName);
-      stopServer(serverName,gracefulTimeout);
+  final boolean stopped=this.stopped;
+  this.stopped=true;
+  if (!stopped) {
+    if (connectionFinished) {
+      return;
     }
-  }
-  if (blockUntilStopped) {
+    for (    final ManagedServer server : servers.values()) {
+      server.stop();
+    }
+    if (blockUntilStopped) {
 synchronized (shutdownCondition) {
-      for (; ; ) {
-        int count=0;
-        try {
-          processInfoMap=determineRunningProcesses();
-        }
- catch (        RuntimeException e) {
-          return;
-        }
-        for (        ManagedServer server : servers.values()) {
-          final ProcessInfo info=processInfoMap.get(server.getServerProcessName());
-switch (server.getState()) {
-case FAILED:
-case MAX_FAILED:
-case STOPPED:
+        for (; ; ) {
+          if (connectionFinished) {
             break;
-default :
-          if (info != null) {
-            count++;
           }
+          int count=0;
+          for (          final ManagedServer server : servers.values()) {
+            final ServerStatus state=server.getState();
+switch (state) {
+case DISABLED:
+case FAILED:
+case STOPPED:
+              break;
+default :
+            count++;
+        }
       }
-    }
-    if (count == 0) {
-      break;
-    }
-    try {
-      shutdownCondition.wait(500);
-    }
- catch (    InterruptedException e) {
-      Thread.currentThread().interrupt();
-      break;
+      if (count == 0) {
+        break;
+      }
+      try {
+        shutdownCondition.wait();
+      }
+ catch (      InterruptedException e) {
+        Thread.currentThread().interrupt();
+        break;
+      }
     }
   }
 }

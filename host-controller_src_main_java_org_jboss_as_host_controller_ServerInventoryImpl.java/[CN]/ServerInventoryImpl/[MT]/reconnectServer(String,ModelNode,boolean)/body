@@ -1,21 +1,21 @@
 {
-  final String processName=ManagedServer.getServerProcessName(serverName);
-  final ManagedServer existing=servers.get(processName);
-  if (existing != null) {
-    ROOT_LOGGER.existingServerWithState(processName,existing.getState());
+  if (stopped || connectionFinished) {
+    throw HostControllerMessages.MESSAGES.hostAlreadyShutdown();
   }
-  ROOT_LOGGER.reconnectingServer(serverName);
+  final ManagedServer existing=servers.get(serverName);
+  if (existing != null) {
+    ROOT_LOGGER.existingServerWithState(serverName,existing.getState());
+    return;
+  }
   final ManagedServer server=createManagedServer(serverName,domainModel);
-synchronized (shutdownCondition) {
-    servers.put(processName,server);
-    shutdownCondition.notifyAll();
+  if (servers.putIfAbsent(serverName,server) != null) {
+    ROOT_LOGGER.existingServerWithState(serverName,existing.getState());
+    return;
   }
   if (running) {
-    try {
-      server.reconnectServerProcess();
-    }
- catch (    IOException e) {
-      ROOT_LOGGER.failedToSendReconnect(e,serverName);
-    }
+    server.reconnectServerProcess();
+  }
+synchronized (shutdownCondition) {
+    shutdownCondition.notifyAll();
   }
 }

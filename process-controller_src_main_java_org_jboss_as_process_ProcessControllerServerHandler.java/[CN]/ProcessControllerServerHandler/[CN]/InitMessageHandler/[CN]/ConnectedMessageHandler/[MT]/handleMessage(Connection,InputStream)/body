@@ -1,11 +1,14 @@
 {
+  ProcessMessageHandler.OperationType operationType=null;
+  String processName=null;
   try {
     final int cmd=StreamUtils.readUnsignedByte(dataStream);
 switch (cmd) {
 case Protocol.SEND_STDIN:
 {
         if (isPrivileged) {
-          final String processName=readUTFZBytes(dataStream);
+          operationType=ProcessMessageHandler.OperationType.SEND_STDIN;
+          processName=readUTFZBytes(dataStream);
           SERVER_LOGGER.tracef("Received send_stdin for process %s",processName);
           processController.sendStdin(processName,dataStream);
         }
@@ -18,7 +21,8 @@ case Protocol.SEND_STDIN:
 case Protocol.ADD_PROCESS:
 {
       if (isPrivileged) {
-        final String processName=readUTFZBytes(dataStream);
+        operationType=ProcessMessageHandler.OperationType.ADD;
+        processName=readUTFZBytes(dataStream);
         final byte[] authKey=new byte[16];
         readFully(dataStream,authKey);
         final int commandCount=readInt(dataStream);
@@ -44,7 +48,8 @@ case Protocol.ADD_PROCESS:
 case Protocol.START_PROCESS:
 {
     if (isPrivileged) {
-      final String processName=readUTFZBytes(dataStream);
+      operationType=ProcessMessageHandler.OperationType.START;
+      processName=readUTFZBytes(dataStream);
       processController.startProcess(processName);
       SERVER_LOGGER.tracef("Received start_process for process %s",processName);
     }
@@ -57,7 +62,8 @@ case Protocol.START_PROCESS:
 case Protocol.STOP_PROCESS:
 {
   if (isPrivileged) {
-    final String processName=readUTFZBytes(dataStream);
+    operationType=ProcessMessageHandler.OperationType.STOP;
+    processName=readUTFZBytes(dataStream);
     processController.stopProcess(processName);
   }
  else {
@@ -69,7 +75,8 @@ case Protocol.STOP_PROCESS:
 case Protocol.REMOVE_PROCESS:
 {
 if (isPrivileged) {
-  final String processName=readUTFZBytes(dataStream);
+  operationType=ProcessMessageHandler.OperationType.REMOVE;
+  processName=readUTFZBytes(dataStream);
   processController.removeProcess(processName);
 }
  else {
@@ -81,6 +88,7 @@ break;
 case Protocol.REQUEST_PROCESS_INVENTORY:
 {
 if (isPrivileged) {
+operationType=ProcessMessageHandler.OperationType.INVENTORY;
 processController.sendInventory();
 }
  else {
@@ -92,7 +100,8 @@ break;
 case Protocol.RECONNECT_PROCESS:
 {
 if (isPrivileged) {
-final String processName=readUTFZBytes(dataStream);
+operationType=ProcessMessageHandler.OperationType.REMOVE;
+processName=readUTFZBytes(dataStream);
 final String hostName=readUTFZBytes(dataStream);
 final int port=readInt(dataStream);
 final boolean managementSubsystemEndpoint=readBoolean(dataStream);
@@ -109,10 +118,11 @@ break;
 case Protocol.SHUTDOWN:
 {
 if (isPrivileged) {
+final int exitCode=readInt(dataStream);
 new Thread(new Runnable(){
 public void run(){
 processController.shutdown();
-System.exit(0);
+System.exit(exitCode);
 }
 }
 ).start();
@@ -129,7 +139,28 @@ dataStream.close();
 }
 }
 }
+ catch (IOException e) {
+if (operationType != null && processName != null) {
+safeClose(dataStream);
+try {
+final OutputStream os=connection.writeMessage();
+try {
+os.write(Protocol.OPERATION_FAILED);
+os.write(operationType.getCode());
+StreamUtils.writeUTFZBytes(os,processName);
+os.close();
+}
   finally {
+safeClose(os);
+}
+}
+ catch (IOException ignore) {
+ROOT_LOGGER.debugf(ignore,"failed to write operation failed message");
+}
+}
+throw e;
+}
+ finally {
 safeClose(dataStream);
 }
 }

@@ -1,27 +1,19 @@
 {
-  final String processName=ManagedServer.getServerProcessName(serverName);
-  final ManagedServer existing=servers.get(processName);
+  if (stopped || connectionFinished) {
+    throw HostControllerMessages.MESSAGES.hostAlreadyShutdown();
+  }
+  final ManagedServer existing=servers.get(serverName);
   if (existing != null) {
-    ROOT_LOGGER.existingServerWithState(processName,existing.getState());
+    ROOT_LOGGER.existingServerWithState(serverName,existing.getState());
     return determineServerStatus(serverName);
   }
-  ROOT_LOGGER.startingServer(serverName);
   final ManagedServer server=createManagedServer(serverName,domainModel);
+  if (servers.putIfAbsent(serverName,server) != null) {
+    return determineServerStatus(serverName);
+  }
+  server.start();
 synchronized (shutdownCondition) {
-    servers.put(processName,server);
     shutdownCondition.notifyAll();
   }
-  try {
-    server.createServerProcess();
-  }
- catch (  IOException e) {
-    ROOT_LOGGER.failedToCreateServerProcess(e,serverName);
-  }
-  try {
-    server.startServerProcess();
-  }
- catch (  IOException e) {
-    ROOT_LOGGER.failedToStartServer(e,serverName);
-  }
-  return determineServerStatus(serverName);
+  return server.getState();
 }
