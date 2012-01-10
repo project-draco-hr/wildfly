@@ -1,13 +1,39 @@
 {
   CacheMode mode=local ? CacheMode.LOCAL : (totalReplication ? CacheMode.REPL_SYNC : CacheMode.DIST_SYNC);
   GlobalConfigurationBuilder globalBuilder=new GlobalConfigurationBuilder();
-  globalBuilder.transport().transport(mode.isClustered() ? new JGroupsTransport() : null).clusterName("test").globalJmxStatistics().cacheManagerName("container" + containerIndex++).disable();
+  String name="container" + containerIndex++;
+  globalBuilder.transport().transport(new JGroupsTransport()).distributedSyncTimeout(60000).clusterName("test").globalJmxStatistics().cacheManagerName(name).disable();
+  InjectedValue<Channel> channelInjection=new InjectedValue<Channel>();
+  ChannelProvider.init(globalBuilder.transport(),channelInjection);
   ConfigurationBuilder builder=new ConfigurationBuilder().read(CacheAdd.getDefaultConfiguration(mode));
   builder.transaction().syncCommitPhase(true).syncRollbackPhase(true).transactionMode(TransactionMode.TRANSACTIONAL).transactionManagerLookup(new TransactionManagerProvider(BatchModeTransactionManager.getInstance())).invocationBatching().enable();
   if (passivationDir != null) {
     builder.loaders().passivation(true).preload(!purgeCacheLoader).addFileCacheStore().location(passivationDir).fetchPersistentState(mode.isReplicated()).purgeOnStartup(purgeCacheLoader).purgeSynchronously(true);
   }
-  final EmbeddedCacheManager container=new DefaultEmbeddedCacheManager(new DefaultCacheManager(globalBuilder.build(),builder.build(),false),CacheContainer.DEFAULT_CACHE_NAME);
-  container.defineConfiguration(JVM_ROUTE_CACHE_NAME,builder.build());
-  return container;
+  try {
+    final Channel channel=new MuxChannel(XmlConfigurator.getInstance(Thread.currentThread().getContextClassLoader().getResource("jgroups-udp.xml")));
+    channel.setName(name);
+    channelInjection.inject(channel);
+    final EmbeddedCacheManager container=new DefaultEmbeddedCacheManager(new DefaultCacheManager(globalBuilder.build(),builder.build(),false),CacheContainer.DEFAULT_CACHE_NAME){
+      @Override public void start(){
+        try {
+          channel.connect("test");
+        }
+ catch (        Exception e) {
+          throw new IllegalStateException(e);
+        }
+        super.start();
+      }
+      @Override public void stop(){
+        super.stop();
+        channel.close();
+      }
+    }
+;
+    container.defineConfiguration(JVM_ROUTE_CACHE_NAME,builder.build());
+    return container;
+  }
+ catch (  Exception e) {
+    throw new IllegalStateException(e);
+  }
 }
