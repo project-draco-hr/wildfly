@@ -1,0 +1,45 @@
+{
+  ClassLoader loader=Thread.currentThread().getContextClassLoader();
+  NamingEnumeration<?> enumeration=ctx.list("");
+  while (enumeration.hasMoreElements()) {
+    NameClassPair ncp=(NameClassPair)enumeration.next();
+    String name=ncp.getName();
+    out.print(indent + " +- " + name);
+    boolean recursive=false;
+    boolean isLinkRef=false;
+    try {
+      Class<?> c=loader.loadClass(ncp.getClassName());
+      if (Context.class.isAssignableFrom(c))       recursive=true;
+      if (LinkRef.class.isAssignableFrom(c))       isLinkRef=true;
+    }
+ catch (    ClassNotFoundException cnfe) {
+    }
+    if (isLinkRef) {
+      try {
+        LinkRef link=(LinkRef)ctx.lookupLink(name);
+        out.print("[link -> ");
+        out.print(link.getLinkName());
+        out.print(']');
+      }
+ catch (      Throwable e) {
+        out.print("[invalid] (" + e.getMessage() + ")");
+      }
+    }
+    out.println();
+    if (recursive) {
+      try {
+        Object value=ctx.lookup(name);
+        if (value instanceof Context) {
+          Context subctx=(Context)value;
+          showTree(indent + " |  ",subctx,out);
+        }
+ else {
+          out.println(indent + " |   NonContext: " + value);
+        }
+      }
+ catch (      Throwable t) {
+        out.println("Failed to lookup: " + name + ", errmsg="+ t.getMessage());
+      }
+    }
+  }
+}
