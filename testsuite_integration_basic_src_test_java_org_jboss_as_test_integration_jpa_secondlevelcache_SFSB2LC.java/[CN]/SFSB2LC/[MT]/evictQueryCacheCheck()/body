@@ -1,0 +1,25 @@
+{
+  EntityManager em=emf.createEntityManager();
+  Statistics stats=em.unwrap(Session.class).getSessionFactory().getStatistics();
+  try {
+    String queryString="from Employee e where e.id > 2";
+    QueryStatistics queryStats=stats.getQueryStatistics(queryString);
+    Query query=em.createQuery(queryString);
+    query.setHint("org.hibernate.cacheable",true);
+    query.getResultList();
+    assertEquals("Expected 1 put in cache" + generateQueryCacheStats(queryStats),1,queryStats.getCachePutCount());
+    assertEquals("Expected no hits in cache" + generateQueryCacheStats(queryStats),0,queryStats.getCacheHitCount());
+    query.getResultList();
+    assertEquals("Expected 1 hit in cache" + generateQueryCacheStats(queryStats),1,queryStats.getCacheHitCount());
+    em.unwrap(Session.class).getSessionFactory().getCache().evictQueryRegions();
+    query.getResultList();
+    assertEquals("Expected 2 puts in cache" + generateQueryCacheStats(queryStats),2,queryStats.getCachePutCount());
+  }
+ catch (  AssertionError e) {
+    return e.getMessage();
+  }
+ finally {
+    em.close();
+  }
+  return "OK";
+}
