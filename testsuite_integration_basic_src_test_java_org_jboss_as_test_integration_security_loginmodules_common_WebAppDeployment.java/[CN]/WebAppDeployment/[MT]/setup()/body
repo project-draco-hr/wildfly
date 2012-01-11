@@ -1,0 +1,37 @@
+{
+  log.debug("start setup()");
+  try {
+    createSecurityDomain();
+  }
+ catch (  Exception e) {
+    log.error("updateSecurityDomain() throws exception: " + e.getMessage());
+    throw new RuntimeException(e);
+  }
+  war=ShrinkWrap.create(WebArchive.class,deploymentName + ".war");
+  war.addClass(servletClass);
+  war.addClass(AbstractLoginModuleTestServlet.class);
+  ClassLoader tccl=Thread.currentThread().getContextClassLoader();
+  war.addAsWebResource(tccl.getResource("web-secure.war/login.jsp"),"login.jsp");
+  war.addAsWebResource(tccl.getResource("web-secure.war/error.jsp"),"error.jsp");
+  File jbossWeb;
+  try {
+    jbossWeb=File.createTempFile("jboss-web","xml");
+    jbossWeb.deleteOnExit();
+    PrintWriter writer=new PrintWriter(new BufferedWriter(new FileWriter(jbossWeb)));
+    writer.println("<?xml version=\"1.0\"?>");
+    writer.println("<jboss-web>");
+    writer.println("<security-domain>" + getSecurityDomainName() + "</security-domain>");
+    writer.println("</jboss-web>");
+    writer.close();
+  }
+ catch (  IOException e) {
+    throw new RuntimeException("temporary file could not be created or modified by the test");
+  }
+  war.addAsWebInfResource(jbossWeb,"jboss-web.xml");
+  for (  Class clazz : classes) {
+    war.addClass(clazz);
+  }
+  war.setWebXML(tccl.getResource("web-secure.war/web.xml"));
+  setUp=true;
+  log.debug("setup completed");
+}
