@@ -1,0 +1,46 @@
+{
+  final List<BindingConfiguration> bindings=new ArrayList<BindingConfiguration>();
+  final MessageDestinationReferencesMetaData messageDestinationReferences=environment.getEnvironment().getMessageDestinationReferences();
+  if (messageDestinationReferences == null) {
+    return bindings;
+  }
+  for (  final MessageDestinationReferenceMetaData messageRef : messageDestinationReferences) {
+    final String name;
+    if (messageRef.getName().startsWith("java:")) {
+      name=messageRef.getName();
+    }
+ else {
+      name=environment.getDefaultContext() + messageRef.getName();
+    }
+    Class<?> classType=null;
+    if (messageRef.getType() != null) {
+      try {
+        classType=classLoader.loadClass(messageRef.getType());
+      }
+ catch (      ClassNotFoundException e) {
+        throw MESSAGES.cannotLoad(e,messageRef.getType());
+      }
+    }
+    final LookupInjectionSource injectionSource=new LookupInjectionSource(name);
+    classType=processInjectionTargets(resourceInjectionTarget,injectionSource,classLoader,deploymentReflectionIndex,messageRef,classType);
+    final BindingConfiguration bindingConfiguration;
+    if (!isEmpty(messageRef.getLookupName())) {
+      bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(messageRef.getLookupName()));
+      bindings.add(bindingConfiguration);
+    }
+ else     if (!isEmpty(messageRef.getMappedName())) {
+      bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(messageRef.getMappedName()));
+      bindings.add(bindingConfiguration);
+    }
+ else     if (!isEmpty(messageRef.getLink())) {
+      final MessageDestinationInjectionSource messageDestinationInjectionSource=new MessageDestinationInjectionSource(messageRef.getLink(),name);
+      bindingConfiguration=new BindingConfiguration(name,messageDestinationInjectionSource);
+      deploymentUnit.addToAttachmentList(Attachments.MESSAGE_DESTINATIONS,messageDestinationInjectionSource);
+      bindings.add(bindingConfiguration);
+    }
+ else {
+      ROOT_LOGGER.cannotResolve("message-destination-ref",name);
+    }
+  }
+  return bindings;
+}

@@ -1,0 +1,120 @@
+{
+  final RemoteEnvironment remoteEnvironment=environment.getEnvironment();
+  final DeploymentClassIndex index=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.CLASS_INDEX);
+  List<BindingConfiguration> bindingDescriptions=new ArrayList<BindingConfiguration>();
+  EJBReferencesMetaData ejbRefs=remoteEnvironment.getEjbReferences();
+  if (ejbRefs != null) {
+    for (    EJBReferenceMetaData ejbRef : ejbRefs) {
+      String name=ejbRef.getEjbRefName();
+      String ejbName=ejbRef.getLink();
+      String lookup=ejbRef.getLookupName();
+      String remoteInterface=ejbRef.getRemote();
+      String home=ejbRef.getHome();
+      Class<?> remoteInterfaceType=null;
+      if (!isEmpty(home)) {
+        try {
+          remoteInterfaceType=index.classIndex(home).getModuleClass();
+        }
+ catch (        ClassNotFoundException e) {
+          throw new DeploymentUnitProcessingException("Could not load home interface type " + home,e);
+        }
+      }
+ else       if (!isEmpty(remoteInterface)) {
+        try {
+          remoteInterfaceType=index.classIndex(remoteInterface).getModuleClass();
+        }
+ catch (        ClassNotFoundException e) {
+          throw new DeploymentUnitProcessingException("Could not load remote interface type " + remoteInterface,e);
+        }
+      }
+      if (!name.startsWith("java:")) {
+        name=environment.getDefaultContext() + name;
+      }
+      LookupInjectionSource injectionSource=new LookupInjectionSource(name);
+      remoteInterfaceType=processInjectionTargets(resourceInjectionTarget,injectionSource,classLoader,deploymentReflectionIndex,ejbRef,remoteInterfaceType);
+      final BindingConfiguration bindingConfiguration;
+      EjbInjectionSource ejbInjectionSource=null;
+      if (!isEmpty(lookup)) {
+        if (!lookup.startsWith("java:")) {
+          bindingConfiguration=new BindingConfiguration(name,new EjbLookupInjectionSource(lookup,remoteInterfaceType));
+        }
+ else {
+          bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(lookup));
+        }
+      }
+ else {
+        if (remoteInterfaceType == null) {
+          throw new DeploymentUnitProcessingException("Could not determine type of ejb-ref " + name + " for "+ resourceInjectionTarget);
+        }
+        if (!isEmpty(ejbName)) {
+          bindingConfiguration=new BindingConfiguration(name,ejbInjectionSource=new EjbInjectionSource(ejbName,remoteInterfaceType.getName(),name,deploymentUnit,appclient));
+        }
+ else {
+          bindingConfiguration=new BindingConfiguration(name,ejbInjectionSource=new EjbInjectionSource(remoteInterfaceType.getName(),name,deploymentUnit,appclient));
+        }
+      }
+      if (ejbInjectionSource != null) {
+        deploymentUnit.addToAttachmentList(EjbDeploymentAttachmentKeys.EJB_INJECTIONS,ejbInjectionSource);
+      }
+      bindingDescriptions.add(bindingConfiguration);
+    }
+  }
+  if (remoteEnvironment instanceof Environment && !appclient) {
+    EJBLocalReferencesMetaData ejbLocalRefs=((Environment)remoteEnvironment).getEjbLocalReferences();
+    if (ejbLocalRefs != null) {
+      for (      EJBLocalReferenceMetaData ejbRef : ejbLocalRefs) {
+        String name=ejbRef.getEjbRefName();
+        String ejbName=ejbRef.getLink();
+        String lookup=ejbRef.getLookupName();
+        String localInterface=ejbRef.getLocal();
+        String localHome=ejbRef.getLocalHome();
+        Class<?> localInterfaceType=null;
+        if (!isEmpty(localHome)) {
+          try {
+            localInterfaceType=index.classIndex(localHome).getModuleClass();
+          }
+ catch (          ClassNotFoundException e) {
+            throw new DeploymentUnitProcessingException("Could not load local home interface type " + localHome,e);
+          }
+        }
+ else         if (!isEmpty(localInterface)) {
+          try {
+            localInterfaceType=index.classIndex(localInterface).getModuleClass();
+          }
+ catch (          ClassNotFoundException e) {
+            throw new DeploymentUnitProcessingException("Could not load local interface type " + localInterface,e);
+          }
+        }
+        if (!name.startsWith("java:")) {
+          name=environment.getDefaultContext() + name;
+        }
+        LookupInjectionSource injectionSource=new LookupInjectionSource(name);
+        localInterfaceType=processInjectionTargets(resourceInjectionTarget,injectionSource,classLoader,deploymentReflectionIndex,ejbRef,localInterfaceType);
+        if (localInterfaceType == null) {
+          throw new DeploymentUnitProcessingException("Could not determine type of ejb-local-ref " + name + " for "+ resourceInjectionTarget);
+        }
+        final BindingConfiguration bindingConfiguration;
+        EjbInjectionSource ejbInjectionSource=null;
+        if (!isEmpty(lookup)) {
+          if (!lookup.startsWith("java:")) {
+            bindingConfiguration=new BindingConfiguration(name,new EjbLookupInjectionSource(lookup,localInterfaceType));
+          }
+ else {
+            bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(lookup));
+          }
+        }
+ else         if (!isEmpty(ejbName)) {
+          bindingConfiguration=new BindingConfiguration(name,ejbInjectionSource=new EjbInjectionSource(ejbName,localInterfaceType.getName(),name,deploymentUnit,appclient));
+        }
+ else {
+          bindingConfiguration=new BindingConfiguration(name,ejbInjectionSource=new EjbInjectionSource(localInterfaceType.getName(),name,deploymentUnit,appclient));
+        }
+        if (ejbInjectionSource != null) {
+          deploymentUnit.addToAttachmentList(EjbDeploymentAttachmentKeys.EJB_INJECTIONS,ejbInjectionSource);
+        }
+        bindingDescriptions.add(bindingConfiguration);
+      }
+    }
+  }
+  return bindingDescriptions;
+}

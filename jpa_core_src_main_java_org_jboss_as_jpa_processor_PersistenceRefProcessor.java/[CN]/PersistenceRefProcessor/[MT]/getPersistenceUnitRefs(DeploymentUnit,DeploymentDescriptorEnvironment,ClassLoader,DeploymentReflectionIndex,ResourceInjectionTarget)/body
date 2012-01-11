@@ -1,0 +1,35 @@
+{
+  final List<BindingConfiguration> bindingConfigurations=new ArrayList<BindingConfiguration>();
+  if (environment.getEnvironment() == null) {
+    return bindingConfigurations;
+  }
+  PersistenceUnitReferencesMetaData persistenceUnitRefs=environment.getEnvironment().getPersistenceUnitRefs();
+  if (persistenceUnitRefs != null) {
+    if (persistenceUnitRefs.size() > 0) {
+      JPADeploymentMarker.mark(deploymentUnit);
+    }
+    for (    PersistenceUnitReferenceMetaData puRef : persistenceUnitRefs) {
+      String name=puRef.getName();
+      String persistenceUnitName=puRef.getPersistenceUnitName();
+      String lookup=puRef.getLookupName();
+      if (!isEmpty(lookup) && !isEmpty(persistenceUnitName)) {
+        throw MESSAGES.cannotSpecifyBoth("<lookup-name>",lookup,"persistence-unit-name",persistenceUnitName,"<persistence-unit-ref/>",resourceInjectionTarget);
+      }
+      if (!name.startsWith("java:")) {
+        name=environment.getDefaultContext() + name;
+      }
+      LookupInjectionSource injectionSource=new LookupInjectionSource(name);
+      processInjectionTargets(resourceInjectionTarget,injectionSource,classLoader,deploymentReflectionIndex,puRef,EntityManagerFactory.class);
+      BindingConfiguration bindingConfiguration=null;
+      if (!isEmpty(lookup)) {
+        bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(lookup));
+      }
+ else {
+        InjectionSource puBindingSource=this.getPersistenceUnitBindingSource(deploymentUnit,persistenceUnitName);
+        bindingConfiguration=new BindingConfiguration(name,puBindingSource);
+      }
+      bindingConfigurations.add(bindingConfiguration);
+    }
+  }
+  return bindingConfigurations;
+}

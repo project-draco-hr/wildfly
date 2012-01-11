@@ -1,0 +1,59 @@
+{
+  List<BindingConfiguration> bindings=new ArrayList<BindingConfiguration>();
+  final ResourceEnvironmentReferencesMetaData resourceEnvRefs=environment.getEnvironment().getResourceEnvironmentReferences();
+  final EEResourceReferenceProcessorRegistry registry=deploymentUnit.getAttachment(Attachments.RESOURCE_REFERENCE_PROCESSOR_REGISTRY);
+  if (resourceEnvRefs == null) {
+    return bindings;
+  }
+  for (  ResourceEnvironmentReferenceMetaData resourceEnvRef : resourceEnvRefs) {
+    final String name;
+    if (resourceEnvRef.getName().startsWith("java:")) {
+      name=resourceEnvRef.getName();
+    }
+ else {
+      name=environment.getDefaultContext() + resourceEnvRef.getName();
+    }
+    Class<?> classType=null;
+    if (resourceEnvRef.getType() != null) {
+      try {
+        classType=classLoader.loadClass(resourceEnvRef.getType());
+      }
+ catch (      ClassNotFoundException e) {
+        throw MESSAGES.cannotLoad(e,resourceEnvRef.getType());
+      }
+    }
+    LookupInjectionSource injectionSource=new LookupInjectionSource(name);
+    classType=processInjectionTargets(resourceInjectionTarget,injectionSource,classLoader,deploymentReflectionIndex,resourceEnvRef,classType);
+    final BindingConfiguration bindingConfiguration;
+    if (!isEmpty(resourceEnvRef.getLookupName())) {
+      bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(resourceEnvRef.getLookupName()));
+    }
+ else {
+      if (classType == null) {
+        throw MESSAGES.cannotDetermineType(name);
+      }
+      final String lookup=ResourceInjectionAnnotationParsingProcessor.FIXED_LOCATIONS.get(classType.getName());
+      if (lookup != null) {
+        bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(lookup));
+      }
+ else {
+        final EEResourceReferenceProcessor resourceReferenceProcessor=registry.getResourceReferenceProcessor(classType.getName());
+        if (resourceReferenceProcessor != null) {
+          InjectionSource valueSource=resourceReferenceProcessor.getResourceReferenceBindingSource();
+          bindingConfiguration=new BindingConfiguration(name,valueSource);
+        }
+ else {
+          if (resourceEnvRef.getResourceEnvRefName().startsWith("java:")) {
+            ROOT_LOGGER.cannotResolve("resource-env-ref",name);
+            continue;
+          }
+ else {
+            bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource("java:jboss/resources/" + resourceEnvRef.getResourceEnvRefName()));
+          }
+        }
+      }
+    }
+    bindings.add(bindingConfiguration);
+  }
+  return bindings;
+}
