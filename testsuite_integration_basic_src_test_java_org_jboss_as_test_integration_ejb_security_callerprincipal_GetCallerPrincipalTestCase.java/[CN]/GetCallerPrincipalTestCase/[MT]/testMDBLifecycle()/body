@@ -1,0 +1,44 @@
+{
+  deployer.deploy("mdb");
+  SecurityClient client=this.login();
+  ITestResultsSingleton results=this.getResultsSingleton();
+  MessageProducer producer=null;
+  MessageConsumer consumer=null;
+  QueueConnection conn=null;
+  Session session=null;
+  try {
+    QueueConnectionFactory qcf=lookup(modelControllerClient,"RemoteConnectionFactory",QueueConnectionFactory.class);
+    Queue queue=lookup(modelControllerClient,"java:jboss/" + QUEUE_NAME,Queue.class);
+    conn=qcf.createQueueConnection();
+    conn.start();
+    session=conn.createQueueSession(false,QueueSession.AUTO_ACKNOWLEDGE);
+    TemporaryQueue replyQueue=session.createTemporaryQueue();
+    TextMessage msg=session.createTextMessage("Hello world");
+    msg.setJMSDeliveryMode(DeliveryMode.NON_PERSISTENT);
+    msg.setJMSReplyTo(replyQueue);
+    producer=session.createProducer(queue);
+    producer.send(msg);
+    consumer=session.createConsumer(replyQueue);
+    Message replyMsg=consumer.receive(5000);
+    Object obj=((ObjectMessage)replyMsg).getObject();
+    log.info("MDB message get: " + obj);
+    Assert.assertEquals(OK + "start",results.getMdb("postconstruct"));
+    deployer.undeploy("mdb");
+    Assert.assertEquals(OK + "stop",results.getMdb("predestroy"));
+  }
+  finally {
+    if (consumer != null) {
+      consumer.close();
+    }
+    if (producer != null) {
+      producer.close();
+    }
+    if (session != null) {
+      session.close();
+    }
+    if (conn != null) {
+      conn.stop();
+    }
+    client.logout();
+  }
+}
