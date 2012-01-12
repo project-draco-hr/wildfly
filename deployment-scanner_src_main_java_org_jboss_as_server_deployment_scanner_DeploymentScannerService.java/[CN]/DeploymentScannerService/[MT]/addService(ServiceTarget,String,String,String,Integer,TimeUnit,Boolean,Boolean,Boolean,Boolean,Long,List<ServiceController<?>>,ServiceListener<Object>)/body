@@ -1,0 +1,24 @@
+{
+  final DeploymentScannerService service=new DeploymentScannerService(relativeTo,scanInterval,unit,autoDeployZip,autoDeployExploded,autoDeployXml,scanEnabled,deploymentTimeout);
+  final ServiceName serviceName=getServiceName(name);
+  final ServiceName pathService=serviceName.append("path");
+  final ServiceName relativePathService=relativeTo != null ? RelativePathService.pathNameOf(relativeTo) : null;
+  if (relativeTo != null) {
+    RelativePathService.addService(pathService,path,false,relativeTo,serviceTarget,newControllers,listeners);
+  }
+ else {
+    AbsolutePathService.addService(pathService,path,serviceTarget,newControllers,listeners);
+  }
+  final ThreadFactory threadFactory=new JBossThreadFactory(new ThreadGroup("DeploymentScanner-threads"),Boolean.FALSE,null,"%G - %t",null,null,AccessController.getContext());
+  final ScheduledExecutorService scheduledExecutorService=Executors.newScheduledThreadPool(2,threadFactory);
+  ServiceBuilder builder=serviceTarget.addService(serviceName,service).addDependency(pathService,String.class,service.pathValue).addDependency(Services.JBOSS_SERVER_CONTROLLER,ModelController.class,service.controllerValue).addDependency(ServerDeploymentRepository.SERVICE_NAME,ServerDeploymentRepository.class,service.deploymentRepositoryValue).addDependency(ContentRepository.SERVICE_NAME,ContentRepository.class,service.contentRepositoryValue).addDependency(org.jboss.as.server.deployment.Services.JBOSS_DEPLOYMENT_CHAINS).addInjection(service.scheduledExecutorValue,scheduledExecutorService);
+  if (relativePathService != null) {
+    builder.addDependency(relativePathService,String.class,service.relativePathValue);
+  }
+  builder.addListener(listeners);
+  ServiceController<?> svc=builder.setInitialMode(Mode.ACTIVE).install();
+  if (newControllers != null) {
+    newControllers.add(svc);
+  }
+  return svc;
+}

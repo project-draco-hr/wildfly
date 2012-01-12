@@ -59,14 +59,7 @@
       if (autoDeployable) {
         if (!isAutoDeployDisabled(child)) {
           long timestamp=getDeploymentTimestamp(child);
-          final File failedMarker=new File(directory,fileName + FAILED_DEPLOY);
-          if (failedMarker.exists() && timestamp <= failedMarker.lastModified()) {
-            continue;
-          }
-          final File undeployedMarker=new File(directory,fileName + UNDEPLOYED);
-          if (undeployedMarker.exists() && timestamp <= undeployedMarker.lastModified()) {
-            continue;
-          }
+          if (isFailedOrUndeployed(directory,fileName,timestamp))           continue;
           DeploymentMarker marker=deployed.get(fileName);
           if (marker == null || marker.lastModified != timestamp) {
             try {
@@ -83,6 +76,29 @@
             }
  catch (            NonScannableZipException e) {
               scanContext.nonscannable.put(child,new NonScannableStatus(e,timestamp));
+            }
+          }
+        }
+      }
+ else       if (!deployed.containsKey(fileName) && !new File(fileName + DO_DEPLOY).exists() && !new File(fileName + FAILED_DEPLOY).exists()) {
+        scanContext.nonDeployable.add(fileName);
+      }
+    }
+ else     if (isXmlFile(fileName)) {
+      if (autoDeployXml) {
+        if (!isAutoDeployDisabled(child)) {
+          long timestamp=getDeploymentTimestamp(child);
+          if (isFailedOrUndeployed(directory,fileName,timestamp))           continue;
+          DeploymentMarker marker=deployed.get(fileName);
+          if (marker == null || marker.lastModified != timestamp) {
+            if (isXmlComplete(child)) {
+              final String path=relativeTo == null ? child.getAbsolutePath() : relativePath + fileName;
+              addContentAddingTask(path,true,fileName,child,timestamp,scanContext);
+            }
+ else {
+              if (child.exists()) {
+                scanContext.incompleteFiles.put(child,new IncompleteDeploymentStatus(child,timestamp));
+              }
             }
           }
         }
