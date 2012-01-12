@@ -3,18 +3,30 @@
   final byte rootId=input.readByte();
   expectHeader(input,DomainControllerProtocol.PARAM_FILE_PATH);
   final String filePath=input.readUTF();
-  context.executeAsync(new ManagementRequestContext.AsyncTask<Void>(){
-    @Override public void execute(    ManagementRequestContext<Void> context) throws Exception {
-      final File localPath=processRequest(rootId,filePath);
-      final FlushableDataOutput output=writeGenericResponseHeader(context);
-      try {
-        writeResponse(localPath,output);
-        output.close();
+  final RootFileReader reader=new RootFileReader(){
+    public File readRootFile() throws RequestProcessingException {
+      final HostFileRepository localFileRepository=domainController.getLocalFileRepository();
+switch (rootId) {
+case DomainControllerProtocol.PARAM_ROOT_ID_FILE:
+{
+          return localFileRepository.getFile(filePath);
+        }
+case DomainControllerProtocol.PARAM_ROOT_ID_CONFIGURATION:
+{
+        return localFileRepository.getConfigurationFile(filePath);
       }
-  finally {
-        StreamUtils.safeClose(output);
-      }
+case DomainControllerProtocol.PARAM_ROOT_ID_DEPLOYMENT:
+{
+      byte[] hash=HashUtil.hexStringToByteArray(filePath);
+      return localFileRepository.getDeploymentRoot(hash);
     }
+default :
+{
+    throw MESSAGES.invalidRootId(rootId);
   }
-);
+}
+}
+}
+;
+DomainRemoteFileRequestAndHandler.INSTANCE.handleRequest(input,reader,context);
 }
