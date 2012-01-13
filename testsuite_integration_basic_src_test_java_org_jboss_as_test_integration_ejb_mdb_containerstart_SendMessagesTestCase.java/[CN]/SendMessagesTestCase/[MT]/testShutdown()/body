@@ -1,0 +1,74 @@
+{
+  Session session=null;
+  MessageProducer sender=null;
+  MessageConsumer receiver=null;
+  Connection connection=null;
+  try {
+    deployer.deploy("mdb");
+    Queue queue=new HornetQQueue(QUEUE_SEND);
+    Queue replyQueue=new HornetQQueue(QUEUE_REPLY);
+    Map<String,Object> connectionParams=new HashMap<String,Object>();
+    connectionParams.put(TransportConstants.HOST_PROP_NAME,"localhost");
+    connectionParams.put(TransportConstants.PORT_PROP_NAME,5445);
+    TransportConfiguration transportConfiguration=new TransportConfiguration(NettyConnectorFactory.class.getName(),connectionParams);
+    ConnectionFactory cf=(ConnectionFactory)HornetQJMSClient.createConnectionFactoryWithoutHA(JMSFactoryType.CF,transportConfiguration);
+    connection=cf.createConnection();
+    connection.start();
+    session=connection.createSession(false,QueueSession.AUTO_ACKNOWLEDGE);
+    sender=session.createProducer(queue);
+    receiver=session.createConsumer(replyQueue);
+    SortedSet<String> expected=new TreeSet<String>();
+    sendMessage(session,sender,replyQueue,"await");
+    expected.add("Reply: await");
+    int awaitInt=awaitSingleton("first test");
+    log.debug("testsuite: awaitSingleton() returned: " + awaitInt);
+    Future<?> undeployed=executor.submit(undeployTask());
+    Thread.sleep(1000);
+    for (int i=0; i < 50; i++) {
+      String msg="Do not lose! (" + i + ")";
+      sendMessage(session,sender,replyQueue,msg);
+      expected.add("Reply: " + msg);
+    }
+    awaitInt=awaitSingleton("second test");
+    log.debug("testsuite: awaitSingleton()2 returned:: " + awaitInt);
+    undeployed.get(10,SECONDS);
+    final ModelNode deployAddr=new ModelNode();
+    deployAddr.get(ClientConstants.OP_ADDR).add("deployment",MBEAN + ".jar");
+    deployAddr.get(ClientConstants.OP).set("deploy");
+    applyUpdate(deployAddr,modelControllerClient);
+    for (int i=0; i < 10; i++) {
+      String msg="Some more (" + i + ")";
+      sendMessage(session,sender,replyQueue,msg);
+      expected.add("Reply: " + msg);
+    }
+    log.debug("Some more messages sent");
+    SortedSet<String> received=new TreeSet<String>();
+    for (int i=0; i < (1 + 50 + 10); i++) {
+      Message msg=receiver.receive(SECONDS.toMillis(10));
+      Assert.assertNotNull(msg);
+      String text=((TextMessage)msg).getText();
+      received.add(text);
+      log.info(i + ": " + text);
+    }
+    Assert.assertEquals(expected,received);
+    connection.stop();
+  }
+  finally {
+    if (connection != null) {
+      connection.close();
+    }
+    if (session != null) {
+      session.close();
+    }
+    if (sender != null) {
+      sender.close();
+    }
+    if (receiver != null) {
+      receiver.close();
+    }
+    if (executor != null) {
+      executor.shutdown();
+    }
+    deployer.undeploy("mdb");
+  }
+}
