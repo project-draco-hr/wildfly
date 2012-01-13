@@ -1,17 +1,12 @@
 {
-  ServiceName baseServiceName=EmbeddedCacheManagerService.getServiceName(null);
-  ServiceName serviceName=ServiceName.parse((this.cacheName != null) ? this.cacheName : DEFAULT_BACKING_CACHE);
-  if (!baseServiceName.isParentOf(serviceName)) {
-    serviceName=baseServiceName.append(serviceName);
-  }
-  if (serviceName.length() < 4) {
-    serviceName=serviceName.append(CacheContainer.DEFAULT_CACHE_NAME);
-  }
-  String container=serviceName.getParent().getSimpleName();
   final CoreGroupCommunicationServiceService groupCommunicationService=new CoreGroupCommunicationServiceService(SCOPE_ID);
-  groupCommunicationService.build(target,container).setInitialMode(ServiceController.Mode.ON_DEMAND).addDependency(ServiceBuilder.DependencyType.OPTIONAL,GroupMembershipNotifierRegistryService.SERVICE_NAME,GroupMembershipNotifierRegistry.class,groupCommunicationService.getGroupMembershipNotifierRegistryInjector()).install();
-  new SharedLocalYieldingClusterLockManagerService(container).build(target).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
-  builder.addDependency(serviceName,Cache.class,this.groupCache);
-  builder.addDependency(SharedLocalYieldingClusterLockManagerService.getServiceName(container),SharedLocalYieldingClusterLockManager.class,this.lockManager);
-  builder.addDependency(EJBRemoteConnectorService.EJB_REMOTE_CONNECTOR_CLIENT_MAPPINGS_REGISTRY_SERVICE,Registry.class,this.registry);
+  groupCommunicationService.build(target,this.cacheContainerName).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  new SharedLocalYieldingClusterLockManagerService(this.cacheContainerName).build(target).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  builder.addDependency(CacheService.getServiceName(this.cacheContainerName,this.beanCacheName),Cache.class,this.groupCache);
+  builder.addDependency(SharedLocalYieldingClusterLockManagerService.getServiceName(this.cacheContainerName),SharedLocalYieldingClusterLockManager.class,this.lockManager);
+  ServiceName registryServiceName=ClusteredBackingCacheEntryStoreSourceService.getClientMappingRegistryServiceName(this.cacheContainerName);
+  builder.addDependency(registryServiceName,Registry.class,this.registry);
+  @SuppressWarnings("rawtypes") InjectedValue<Registry.RegistryEntryProvider> registryEntryProvider=new InjectedValue<Registry.RegistryEntryProvider>();
+  RegistryService<String,Object> registryService=new RegistryService<String,Object>(new RegistryEntryProviderValue(registryEntryProvider));
+  registryService.build(target,registryServiceName,CacheService.getServiceName(this.cacheContainerName,this.clientMappingsCacheName)).addDependency(EJBRemotingConnectorClientMappingsEntryProviderService.SERVICE_NAME,Registry.RegistryEntryProvider.class,registryEntryProvider).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
 }

@@ -1,14 +1,6 @@
 {
   final String connectorName=model.require(CONNECTOR_REF).asString();
   final String threadPoolName=model.require(THREAD_POOL_NAME).asString();
-  String clientMappingCacheContainerRef=DEFAULT_CLIENT_MAPPINGS_CACHE_CONTAINER_REF;
-  if (model.hasDefined(CLIENT_MAPPINGS_CACHE_CONTAINER_REF)) {
-    clientMappingCacheContainerRef=model.get(CLIENT_MAPPINGS_CACHE_CONTAINER_REF).asString();
-  }
-  String clientMappingCacheRef=DEFAULT_CLIENT_MAPPINGS_CACHE_REF;
-  if (model.hasDefined(CLIENT_MAPPINGS_CACHE_REF)) {
-    clientMappingCacheRef=model.get(CLIENT_MAPPINGS_CACHE_REF).asString();
-  }
   final ServiceName remotingServerServiceName=RemotingServices.serverServiceName(connectorName);
   final List<ServiceController<?>> services=new ArrayList<ServiceController<?>>();
   final ServiceTarget serviceTarget=context.getServiceTarget();
@@ -19,20 +11,11 @@
   }
   final ServiceController clientMappingEntryProviderServiceController=clientMappingEntryProviderServiceBuilder.install();
   services.add(clientMappingEntryProviderServiceController);
-  final RegistryService<String,List<ClientMapping>> clientMappingRegistryService=new RegistryService<String,List<ClientMapping>>(clientMappingEntryProviderService.getRegistryEntryProvider());
-  final ServiceName clientMappingCacheContainerServiceName=EmbeddedCacheManagerService.getServiceName(clientMappingCacheContainerRef);
-  final ServiceName clientMappingCacheServiceName=clientMappingCacheContainerServiceName.append(clientMappingCacheRef);
-  final ServiceBuilder registryServiceBuilder=clientMappingRegistryService.build(serviceTarget,EJBRemoteConnectorService.EJB_REMOTE_CONNECTOR_CLIENT_MAPPINGS_REGISTRY_SERVICE,clientMappingCacheServiceName).setInitialMode(ServiceController.Mode.PASSIVE);
-  if (verificationHandler != null) {
-    registryServiceBuilder.addListener(verificationHandler);
-  }
-  final ServiceController clientMappingRegistryServiceController=registryServiceBuilder.install();
-  services.add(clientMappingRegistryServiceController);
   final EJBRemoteConnectorService ejbRemoteConnectorService=new EJBRemoteConnectorService((byte)0x01,new String[]{"river"},remotingServerServiceName);
   final ServiceBuilder<EJBRemoteConnectorService> ejbRemoteConnectorServiceBuilder=serviceTarget.addService(EJBRemoteConnectorService.SERVICE_NAME,ejbRemoteConnectorService);
   ejbRemoteConnectorServiceBuilder.addDependency(RemotingServices.SUBSYSTEM_ENDPOINT,Endpoint.class,ejbRemoteConnectorService.getEndpointInjector());
   ejbRemoteConnectorServiceBuilder.addDependency(remotingServerServiceName);
-  ejbRemoteConnectorServiceBuilder.addDependency(EJB3ThreadPoolAdd.BASE_SERVICE_NAME.append(threadPoolName),ExecutorService.class,ejbRemoteConnectorService.getExecutorService()).addDependency(DeploymentRepository.SERVICE_NAME,DeploymentRepository.class,ejbRemoteConnectorService.getDeploymentRepositoryInjector()).addDependency(EJBRemoteTransactionsRepository.SERVICE_NAME,EJBRemoteTransactionsRepository.class,ejbRemoteConnectorService.getEJBRemoteTransactionsRepositoryInjector()).addDependency(GroupMembershipNotifierRegistryService.SERVICE_NAME,GroupMembershipNotifierRegistry.class,ejbRemoteConnectorService.getClusterRegistryInjector()).addDependency(ServerEnvironmentService.SERVICE_NAME,ServerEnvironment.class,ejbRemoteConnectorService.getServerEnvironmentInjector()).setInitialMode(ServiceController.Mode.ACTIVE);
+  ejbRemoteConnectorServiceBuilder.addDependency(EJB3ThreadPoolAdd.BASE_SERVICE_NAME.append(threadPoolName),ExecutorService.class,ejbRemoteConnectorService.getExecutorService()).addDependency(DeploymentRepository.SERVICE_NAME,DeploymentRepository.class,ejbRemoteConnectorService.getDeploymentRepositoryInjector()).addDependency(EJBRemoteTransactionsRepository.SERVICE_NAME,EJBRemoteTransactionsRepository.class,ejbRemoteConnectorService.getEJBRemoteTransactionsRepositoryInjector()).addDependency(ClusteredBackingCacheEntryStoreSourceService.CLIENT_MAPPING_REGISTRY_COLLECTOR_SERVICE_NAME,RegistryCollector.class,ejbRemoteConnectorService.getClusterRegistryCollectorInjector()).addDependency(ServerEnvironmentService.SERVICE_NAME,ServerEnvironment.class,ejbRemoteConnectorService.getServerEnvironmentInjector()).setInitialMode(ServiceController.Mode.ACTIVE);
   if (verificationHandler != null) {
     ejbRemoteConnectorServiceBuilder.addListener(verificationHandler);
   }
