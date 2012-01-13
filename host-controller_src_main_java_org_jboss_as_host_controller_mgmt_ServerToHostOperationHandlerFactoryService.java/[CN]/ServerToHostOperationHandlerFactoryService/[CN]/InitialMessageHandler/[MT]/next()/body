@@ -1,3 +1,25 @@
 {
-  return null;
+  return new ManagementChannelReceiver(){
+    @Override public void handleMessage(    final Channel channel,    final DataInput input,    final ManagementProtocolHeader header) throws IOException {
+      final byte type=header.getType();
+      if (type == ManagementProtocol.TYPE_REQUEST) {
+        final ManagementRequestHeader request=(ManagementRequestHeader)header;
+        final byte op=request.getOperationId();
+        if (op == DomainServerProtocol.GET_FILE_REQUEST) {
+          AbstractMessageHandler<ModelNode,Void> operationHandler=new AbstractMessageHandler<ModelNode,Void>(executorService){
+            public void handleMessage(            final Channel channel,            final DataInput input,            final ManagementProtocolHeader header) throws IOException {
+              final ActiveOperation<ModelNode,Void> support=super.registerActiveOperation(((ManagementRequestHeader)header).getBatchId(),null);
+              super.handleMessage(channel,input,header,support,new GetFileOperation());
+            }
+          }
+;
+          operationHandler.handleMessage(channel,input,header);
+        }
+ else {
+          proxyHandler.handleMessage(channel,input,header);
+        }
+      }
+    }
+  }
+;
 }
