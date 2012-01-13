@@ -10,6 +10,13 @@
     throw new IllegalStateException("Expected " + ParsedRolloutPlanHeader.class + " but got "+ lastHeader);
   }
   final ParsedRolloutPlanHeader rollout=(ParsedRolloutPlanHeader)lastHeader;
+  if (rollout.hasProperties()) {
+    final String lastName=rollout.getLastPropertyName();
+    if (Util.ROLLBACK_ACROSS_GROUPS.startsWith(lastName)) {
+      candidates.add(Util.ROLLBACK_ACROSS_GROUPS + '}');
+    }
+    return rollout.getLastChunkIndex();
+  }
   if (rollout.endsOnGroupSeparator()) {
     final List<String> serverGroups=Util.getServerGroups(ctx.getModelControllerClient());
     for (    String group : serverGroups) {
@@ -24,6 +31,11 @@
     return -1;
   }
   if (lastGroup.endsOnPropertyListEnd()) {
+    candidates.add("^");
+    candidates.add(",");
+    if (Character.isWhitespace(buffer.charAt(buffer.length() - 1))) {
+      candidates.add(Util.ROLLBACK_ACROSS_GROUPS);
+    }
     return buffer.length();
   }
   if (lastGroup.endsOnPropertyListStart()) {
@@ -72,6 +84,13 @@
       }
     }
     return lastGroup.getLastChunkIndex();
+  }
+  if (Character.isWhitespace(buffer.charAt(buffer.length() - 1))) {
+    candidates.add("(");
+    candidates.add("^");
+    candidates.add(",");
+    candidates.add(Util.ROLLBACK_ACROSS_GROUPS);
+    return buffer.length();
   }
   int result=lastGroup.getLastChunkIndex();
   final String groupName=lastGroup.getGroupName();
