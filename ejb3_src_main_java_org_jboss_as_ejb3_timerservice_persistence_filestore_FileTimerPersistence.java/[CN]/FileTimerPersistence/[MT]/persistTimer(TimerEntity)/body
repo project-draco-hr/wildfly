@@ -1,36 +1,3 @@
 {
-  final Lock lock=getLock(timerEntity.getTimedObjectId());
-  try {
-    final int status=transactionManager.getValue().getStatus();
-    if (status == Status.STATUS_MARKED_ROLLBACK || status == Status.STATUS_ROLLEDBACK || status == Status.STATUS_ROLLING_BACK) {
-      return;
-    }
-    if (status == Status.STATUS_NO_TRANSACTION || status == Status.STATUS_UNKNOWN || isBeforeCompletion() || status == Status.STATUS_COMMITTED) {
-      try {
-        lock.lock();
-        Map<String,TimerEntity> map=getTimers(timerEntity.getTimedObjectId());
-        if (timerEntity.getTimerState() == TimerState.CANCELED || timerEntity.getTimerState() == TimerState.EXPIRED) {
-          map.remove(timerEntity.getId());
-        }
- else {
-          map.put(timerEntity.getId(),timerEntity);
-        }
-        writeFile(timerEntity);
-      }
-  finally {
-        lock.unlock();
-      }
-    }
- else {
-      final String key=timerTransactionKey(timerEntity);
-      Object existing=transactionSynchronizationRegistry.getValue().getResource(key);
-      if (existing == null) {
-        transactionSynchronizationRegistry.getValue().registerInterposedSynchronization(new PersistTransactionSynchronization(lock,key));
-      }
-      transactionSynchronizationRegistry.getValue().putResource(key,timerEntity);
-    }
-  }
- catch (  SystemException e) {
-    throw new RuntimeException(e);
-  }
+  persistTimer(timerEntity,false);
 }
