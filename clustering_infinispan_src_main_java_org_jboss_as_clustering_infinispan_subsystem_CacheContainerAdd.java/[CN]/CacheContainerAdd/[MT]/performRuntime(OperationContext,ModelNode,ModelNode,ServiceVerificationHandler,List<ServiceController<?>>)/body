@@ -3,7 +3,8 @@
   final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
   final String name=address.getLastElement().getValue();
   String defaultCache=model.require(ModelKeys.DEFAULT_CACHE).asString();
-  Transport transportConfig=new Transport();
+  boolean hasTransport=model.hasDefined(ModelKeys.SINGLETON) && model.get(ModelKeys.SINGLETON).hasDefined(ModelKeys.TRANSPORT);
+  Transport transportConfig=hasTransport ? new Transport() : null;
   EmbeddedCacheManagerDependencies dependencies=new EmbeddedCacheManagerDependencies(transportConfig);
   ServiceName[] aliases=null;
   if (model.hasDefined(ModelKeys.ALIAS)) {
@@ -21,8 +22,8 @@
   BinderService binder=new BinderService(bindInfo.getBindName());
   ServiceBuilder<ManagedReferenceFactory> binderBuilder=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jndiName)).addDependency(serviceName,CacheContainer.class,new ManagedReferenceInjector<CacheContainer>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(ServiceController.Mode.ON_DEMAND);
   newControllers.add(binderBuilder.install());
-  String stack=null;
-  if (model.hasDefined(ModelKeys.SINGLETON)) {
+  if (hasTransport) {
+    String stack=null;
     ModelNode transport=model.get(ModelKeys.SINGLETON,ModelKeys.TRANSPORT);
     if (transport.hasDefined(ModelKeys.STACK)) {
       stack=transport.get(ModelKeys.STACK).asString();
@@ -31,15 +32,15 @@
       transportConfig.setLockTimeout(transport.get(ModelKeys.LOCK_TIMEOUT).asLong());
     }
     addExecutorDependency(containerBuilder,transport,ModelKeys.EXECUTOR,transportConfig.getExecutorInjector());
+    ServiceName channelServiceName=ChannelService.getServiceName(name);
+    containerBuilder.addDependency(channelServiceName,Channel.class,transportConfig.getChannelInjector());
+    InjectedValue<ChannelFactory> channelFactory=new InjectedValue<ChannelFactory>();
+    ServiceBuilder<Channel> channelBuilder=target.addService(channelServiceName,new ChannelService(name,channelFactory)).addDependency(ChannelFactoryService.getServiceName(stack),ChannelFactory.class,channelFactory).setInitialMode(ServiceController.Mode.ON_DEMAND);
+    newControllers.add(channelBuilder.install());
   }
-  ServiceName channelServiceName=ChannelService.getServiceName(name);
-  containerBuilder.addDependency(DependencyType.OPTIONAL,channelServiceName,Channel.class,transportConfig.getChannelInjector());
   addExecutorDependency(containerBuilder,model,ModelKeys.LISTENER_EXECUTOR,dependencies.getListenerExecutorInjector());
   addScheduledExecutorDependency(containerBuilder,model,ModelKeys.EVICTION_EXECUTOR,dependencies.getEvictionExecutorInjector());
   addScheduledExecutorDependency(containerBuilder,model,ModelKeys.REPLICATION_QUEUE_EXECUTOR,dependencies.getReplicationQueueExecutorInjector());
   newControllers.add(containerBuilder.install());
-  InjectedValue<ChannelFactory> channelFactory=new InjectedValue<ChannelFactory>();
-  ServiceBuilder<Channel> channelBuilder=target.addService(channelServiceName,new ChannelService(name,channelFactory)).addAliases(EmbeddedCacheManagerService.getTransportServiceName(name)).addDependency(ChannelFactoryService.getServiceName(stack),ChannelFactory.class,channelFactory).setInitialMode(ServiceController.Mode.NEVER);
-  newControllers.add(channelBuilder.install());
-  log.debugf("Cache container %s installed",name);
+  log.debugf("%s cache container installed",name);
 }
