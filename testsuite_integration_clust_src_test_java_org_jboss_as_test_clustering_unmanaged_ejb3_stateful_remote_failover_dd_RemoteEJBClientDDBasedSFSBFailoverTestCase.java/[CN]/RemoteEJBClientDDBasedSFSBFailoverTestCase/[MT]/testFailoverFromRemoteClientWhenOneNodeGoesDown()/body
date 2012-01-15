@@ -1,0 +1,64 @@
+{
+  this.container.start(CONTAINER1);
+  this.deployer.deploy(ARQUILLIAN_DEPLOYMENT_NAME_FOR_CONTAINER1);
+  this.container.start(CONTAINER2);
+  this.deployer.deploy(ARQUILLIAN_DEPLOYMENT_NAME_FOR_CONTAINER2);
+  final ContextSelector<EJBClientContext> previousSelector=this.setupEJBClientContextSelector();
+  final String jndiName="ejb:" + "" + "/" + MODULE_NAME + "/"+ ""+ "/"+ DDBasedClusteredSFSB.class.getSimpleName()+ "!"+ RemoteCounter.class.getName()+ "?stateful";
+  boolean container1Stopped=false;
+  boolean container2Stopped=false;
+  try {
+    final RemoteCounter remoteCounter=(RemoteCounter)context.lookup(jndiName);
+    final int NUM_TIMES=25;
+    for (int i=0; i < NUM_TIMES; i++) {
+      final CounterResult result=remoteCounter.increment();
+      logger.info("Counter incremented to " + result.getCount() + " on node "+ result.getNodeName());
+    }
+    final CounterResult result=remoteCounter.getCount();
+    Assert.assertNotNull("Result from remote stateful counter was null",result);
+    Assert.assertEquals("Unexpected count from remote counter",NUM_TIMES,result.getCount());
+    final int totalCountBeforeShuttingDownANode=result.getCount();
+    final String previousInvocationNodeName=result.getNodeName();
+    if (previousInvocationNodeName.equals("node-udp-0")) {
+      this.deployer.undeploy(ARQUILLIAN_DEPLOYMENT_NAME_FOR_CONTAINER1);
+      this.container.stop(CONTAINER1);
+      container1Stopped=true;
+    }
+ else {
+      this.deployer.undeploy(ARQUILLIAN_DEPLOYMENT_NAME_FOR_CONTAINER2);
+      this.container.stop(CONTAINER2);
+      container2Stopped=true;
+    }
+    CounterResult resultAfterShuttingDownANode=remoteCounter.increment();
+    Assert.assertNotNull("Result from remote stateful counter, after shutting down a node was null",resultAfterShuttingDownANode);
+    Assert.assertEquals("Unexpected count from remote counter, after shutting down a node",totalCountBeforeShuttingDownANode + 1,resultAfterShuttingDownANode.getCount());
+    Assert.assertFalse("Result was received from an unexpected node, after shutting down a node",previousInvocationNodeName.equals(resultAfterShuttingDownANode.getNodeName()));
+    final int countBeforeDecrementing=resultAfterShuttingDownANode.getCount();
+    final String aliveNode=resultAfterShuttingDownANode.getNodeName();
+    for (int i=NUM_TIMES; i > 0; i--) {
+      resultAfterShuttingDownANode=remoteCounter.decrement();
+      Assert.assertNotNull("Result from remote stateful counter, after shutting down a node was null",resultAfterShuttingDownANode);
+      Assert.assertEquals("Result was received from an unexpected node, after shutting down a node",aliveNode,resultAfterShuttingDownANode.getNodeName());
+      logger.info("Counter decremented to " + resultAfterShuttingDownANode.getCount() + " on node "+ resultAfterShuttingDownANode.getNodeName());
+    }
+    final CounterResult finalResult=remoteCounter.getCount();
+    Assert.assertNotNull("Result from remote stateful counter, after shutting down a node was null",finalResult);
+    final int finalCount=finalResult.getCount();
+    final String finalNodeName=finalResult.getNodeName();
+    Assert.assertEquals("Result was received from an unexpected node, after shutting down a node",aliveNode,finalNodeName);
+    Assert.assertEquals("Unexpected count from remote counter, after shutting down a node",countBeforeDecrementing - NUM_TIMES,finalCount);
+  }
+  finally {
+    if (previousSelector != null) {
+      EJBClientContext.setSelector(previousSelector);
+    }
+    if (!container1Stopped) {
+      this.deployer.undeploy(ARQUILLIAN_DEPLOYMENT_NAME_FOR_CONTAINER1);
+      this.container.stop(CONTAINER1);
+    }
+    if (!container2Stopped) {
+      this.deployer.undeploy(ARQUILLIAN_DEPLOYMENT_NAME_FOR_CONTAINER2);
+      this.container.stop(CONTAINER2);
+    }
+  }
+}
