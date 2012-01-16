@@ -2,6 +2,7 @@
   final ParsedCommandLine parsedCmd=ctx.getParsedCommandLine();
   final List<ParsedOperationRequestHeader> headers=parsedCmd.getHeaders();
   if (headers.isEmpty()) {
+    candidates.add("id=");
     candidates.addAll(Util.getServerGroups(ctx.getModelControllerClient()));
     return buffer.length();
   }
@@ -10,6 +11,20 @@
     throw new IllegalStateException("Expected " + ParsedRolloutPlanHeader.class + " but got "+ lastHeader);
   }
   final ParsedRolloutPlanHeader rollout=(ParsedRolloutPlanHeader)lastHeader;
+  if (rollout.endsOnPlanIdValueSeparator()) {
+    candidates.addAll(Util.getNodeNames(ctx.getModelControllerClient(),address,Util.ROLLOUT_PLAN));
+    return rollout.getLastSeparatorIndex() + 1;
+  }
+  final String planRef=rollout.getPlanRef();
+  if (planRef != null) {
+    final List<String> nodeNames=Util.getNodeNames(ctx.getModelControllerClient(),address,Util.ROLLOUT_PLAN);
+    for (    String name : nodeNames) {
+      if (name.startsWith(planRef)) {
+        candidates.add(name);
+      }
+    }
+    return rollout.getLastChunkIndex();
+  }
   if (rollout.hasProperties()) {
     final String lastName=rollout.getLastPropertyName();
     if (Util.ROLLBACK_ACROSS_GROUPS.startsWith(lastName)) {
@@ -36,6 +51,7 @@
     if (Character.isWhitespace(buffer.charAt(buffer.length() - 1))) {
       candidates.add(Util.ROLLBACK_ACROSS_GROUPS);
     }
+    candidates.add("}");
     return buffer.length();
   }
   if (lastGroup.endsOnPropertyListStart()) {
@@ -53,10 +69,15 @@
  else       if (Util.FALSE.startsWith(propValue)) {
         candidates.add(Util.FALSE);
       }
+ else {
+        return buffer.length();
+      }
     }
  else     if (lastGroup.endsOnPropertyValueSeparator()) {
-      candidates.add(Util.FALSE);
-      candidates.add(Util.TRUE);
+      if (Util.ROLLING_TO_SERVERS.equals(lastGroup.getLastPropertyName())) {
+        candidates.add(Util.FALSE);
+        candidates.add(Util.TRUE);
+      }
       return buffer.length();
     }
  else     if (lastGroup.endsOnPropertySeparator()) {
@@ -90,6 +111,7 @@
     candidates.add("^");
     candidates.add(",");
     candidates.add(Util.ROLLBACK_ACROSS_GROUPS);
+    candidates.add("}");
     return buffer.length();
   }
   int result=lastGroup.getLastChunkIndex();
@@ -100,11 +122,17 @@
       candidates.add(group);
     }
   }
-  if (candidates.size() == 1) {
-    final String group=candidates.get(0);
-    candidates.set(0,group + '(');
-    candidates.add(group + ',');
-    candidates.add(group + '^');
+  if (Util.ID.startsWith(groupName)) {
+    candidates.add("id=");
+  }
+ else {
+    if (candidates.size() == 1) {
+      final String group=candidates.get(0);
+      candidates.set(0,group + '(');
+      candidates.add(group + ',');
+      candidates.add(group + '^');
+      candidates.add(group + '}');
+    }
   }
   return result;
 }
