@@ -10,41 +10,19 @@
   final ModelNode replaceNode=context.readResourceForUpdate(address).getModel();
   final String replacedRuntimeName=replaceNode.require(RUNTIME_NAME).asString();
   final String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : replacedRuntimeName;
-  final byte[] hash;
   final ModelNode content=operation.require(CONTENT).clone();
   final DeploymentHandlerUtil.ContentItem contentItem;
   final ModelNode contentItemNode=content.require(0);
   if (contentItemNode.hasDefined(HASH)) {
     managedContentValidator.validate(contentItemNode);
-    hash=contentItemNode.require(HASH).asBytes();
-    if (!contentRepository.hasContent(hash)) {
-      ServerMessages.MESSAGES.noSuchDeploymentContent(HashUtil.bytesToHexString(hash));
-    }
-    contentItem=new DeploymentHandlerUtil.ContentItem(hash);
+    byte[] hash=contentItemNode.require(HASH).asBytes();
+    contentItem=addFromHash(hash);
   }
  else   if (hasValidContentAdditionParameterDefined(contentItemNode)) {
-    InputStream in=getInputStream(context,contentItemNode);
-    try {
-      try {
-        hash=contentRepository.addContent(in);
-      }
- catch (      IOException e) {
-        throw createFailureException(e.toString());
-      }
-    }
-  finally {
-      StreamUtils.safeClose(in);
-    }
-    contentItemNode.clear();
-    contentItemNode.get(HASH).set(hash);
-    contentItem=new DeploymentHandlerUtil.ContentItem(hash);
+    contentItem=addFromContentAdditionParameter(context,contentItemNode);
   }
  else {
-    unmanagedContentValidator.validate(contentItemNode);
-    final String path=contentItemNode.require(PATH).asString();
-    final String relativeTo=asString(contentItemNode,RELATIVE_TO);
-    final boolean archive=contentItemNode.require(ARCHIVE).asBoolean();
-    contentItem=new DeploymentHandlerUtil.ContentItem(path,relativeTo,archive);
+    contentItem=addUnmanaged(contentItemNode);
   }
   boolean start=replaceNode.get(ENABLED).asBoolean();
   final ModelNode deployNode=context.readResourceForUpdate(address).getModel();
