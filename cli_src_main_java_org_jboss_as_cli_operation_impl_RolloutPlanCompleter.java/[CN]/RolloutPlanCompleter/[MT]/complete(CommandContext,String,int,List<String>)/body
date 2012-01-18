@@ -2,11 +2,35 @@
   if (!ctx.isDomainMode()) {
     return -1;
   }
-  final ParsedCommandLine parsedCmd=ctx.getParsedCommandLine();
-  final List<ParsedOperationRequestHeader> headers=parsedCmd.getHeaders();
+  if (buffer.isEmpty()) {
+    candidates.add("{rollout");
+    return 0;
+  }
+  try {
+    parsedOp.parseOperation(null,buffer);
+  }
+ catch (  CommandFormatException e) {
+    return -1;
+  }
+  if (parsedOp.isRequestComplete()) {
+    return -1;
+  }
+  if (parsedOp.endsOnHeaderListStart() || parsedOp.endsOnHeaderSeparator()) {
+    candidates.add("rollout");
+    return parsedOp.getLastSeparatorIndex() + 1;
+  }
+  final List<ParsedOperationRequestHeader> headers=parsedOp.getHeaders();
   if (headers.isEmpty()) {
-    candidates.add("id=");
-    candidates.addAll(Util.getServerGroups(ctx.getModelControllerClient()));
+    if (ctx.getParsedCommandLine().getOriginalLine().endsWith(" ")) {
+      final String originalLine=ctx.getParsedCommandLine().getOriginalLine();
+      int bufferIndex=originalLine.lastIndexOf(buffer);
+      if (bufferIndex == -1) {
+        return -1;
+      }
+      candidates.add("id=");
+      candidates.addAll(Util.getServerGroups(ctx.getModelControllerClient()));
+      return originalLine.length() - bufferIndex;
+    }
     return buffer.length();
   }
   final ParsedOperationRequestHeader lastHeader=headers.get(headers.size() - 1);
