@@ -1,0 +1,60 @@
+{
+  if (callbacks.length == 1 && callbacks[0] instanceof AuthorizeCallback) {
+    AuthorizeCallback acb=(AuthorizeCallback)callbacks[0];
+    String authenticationId=acb.getAuthenticationID();
+    String authorizationId=acb.getAuthorizationID();
+    acb.setAuthorized(authenticationId.equals(authorizationId));
+    return;
+  }
+  NameCallback nameCallBack=null;
+  VerifyPasswordCallback verifyPasswordCallback=null;
+  for (  Callback current : callbacks) {
+    if (current instanceof NameCallback) {
+      nameCallBack=(NameCallback)current;
+    }
+ else     if (current instanceof RealmCallback) {
+    }
+ else     if (current instanceof VerifyPasswordCallback) {
+      verifyPasswordCallback=(VerifyPasswordCallback)current;
+    }
+ else {
+      throw new UnsupportedCallbackException(current);
+    }
+  }
+  if (nameCallBack == null) {
+    throw MESSAGES.noUsername();
+  }
+  final String userName=nameCallBack.getDefaultName();
+  if (userName == null || userName.length() == 0) {
+    throw MESSAGES.noUsername();
+  }
+  if (verifyPasswordCallback == null || verifyPasswordCallback.getPassword() == null) {
+    throw MESSAGES.noPassword();
+  }
+  final char[] password=verifyPasswordCallback.getPassword().toCharArray();
+  try {
+    LoginContext ctx=new LoginContext(name,new CallbackHandler(){
+      public void handle(      Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+        for (        Callback current : callbacks) {
+          if (current instanceof NameCallback) {
+            NameCallback ncb=(NameCallback)current;
+            ncb.setName(userName);
+          }
+ else           if (current instanceof PasswordCallback) {
+            PasswordCallback pcb=(PasswordCallback)current;
+            pcb.setPassword(password);
+          }
+ else {
+            throw new UnsupportedCallbackException(current);
+          }
+        }
+      }
+    }
+);
+    ctx.login();
+    verifyPasswordCallback.setVerified(true);
+  }
+ catch (  LoginException e) {
+    verifyPasswordCallback.setVerified(false);
+  }
+}
