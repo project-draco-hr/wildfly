@@ -1,7 +1,8 @@
 {
-  final VirtualFile deploymentRoot=phaseContext.getDeploymentUnit().getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final VirtualFile deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
   if (deploymentRoot == null || !deploymentRoot.exists())   return;
-  String deploymentRootName=deploymentRoot.getLowerCaseName();
+  final String deploymentRootName=deploymentRoot.getLowerCaseName();
   if (!deploymentRootName.endsWith("-ds.xml")) {
     return;
   }
@@ -12,48 +13,7 @@
     DsParser parser=new DsParser();
     DataSources dataSources=parser.parse(xmlStream);
     if (dataSources != null) {
-      if (dataSources.getDrivers() != null && dataSources.getDrivers().size() > 0) {
-        log.warnf("DRIVERS in standalone -ds.xml deployments aren't supported: Ignoring %s",deploymentRootName);
-        return;
-      }
-      ServiceTarget serviceTarget=phaseContext.getServiceTarget();
-      ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
-      if (dataSources.getDataSource() != null && dataSources.getDataSource().size() > 0) {
-        for (        DataSource ds : dataSources.getDataSource()) {
-          if (ds.isEnabled() && ds.getDriver() != null) {
-            try {
-              String jndiName=cleanupJavaContext(ds.getJndiName());
-              LocalDataSourceService lds=new LocalDataSourceService(jndiName);
-              lds.getDataSourceConfigInjector().inject(buildDataSource(ds));
-              startDataSource(lds,jndiName,ds.getDriver(),serviceTarget,verificationHandler);
-            }
- catch (            Throwable t) {
-              log.warnf(t.getMessage(),t);
-            }
-          }
- else {
-            log.debugf("Ignoring: %s",ds.getJndiName());
-          }
-        }
-      }
-      if (dataSources.getXaDataSource() != null && dataSources.getXaDataSource().size() > 0) {
-        for (        XaDataSource xads : dataSources.getXaDataSource()) {
-          if (xads.isEnabled() && xads.getDriver() != null) {
-            try {
-              String jndiName=cleanupJavaContext(xads.getJndiName());
-              XaDataSourceService xds=new XaDataSourceService(jndiName);
-              xds.getDataSourceConfigInjector().inject(buildXaDataSource(xads));
-              startDataSource(xds,jndiName,xads.getDriver(),serviceTarget,verificationHandler);
-            }
- catch (            Throwable t) {
-              log.warnf(t.getMessage(),t);
-            }
-          }
- else {
-            log.debugf("Ignoring: %s",xads.getJndiName());
-          }
-        }
-      }
+      deploymentUnit.putAttachment(DATA_SOURCES_ATTACHMENT_KEY,dataSources);
     }
   }
  catch (  Exception e) {

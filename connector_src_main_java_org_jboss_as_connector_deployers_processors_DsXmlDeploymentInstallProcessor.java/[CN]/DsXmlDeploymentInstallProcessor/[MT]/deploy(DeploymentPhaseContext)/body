@@ -1,0 +1,47 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  DataSources dataSources=deploymentUnit.getAttachment(DsXmlDeploymentParsingProcessor.DATA_SOURCES_ATTACHMENT_KEY);
+  if (dataSources != null) {
+    if (dataSources.getDrivers() != null && dataSources.getDrivers().size() > 0) {
+      ConnectorLogger.DS_DEPLOYER_LOGGER.driversElementNotSupported(deploymentUnit.getName());
+    }
+    ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+    ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+    if (dataSources.getDataSource() != null && dataSources.getDataSource().size() > 0) {
+      for (      DataSource ds : dataSources.getDataSource()) {
+        if (ds.isEnabled() && ds.getDriver() != null) {
+          try {
+            final String jndiName=cleanupJavaContext(ds.getJndiName());
+            LocalDataSourceService lds=new LocalDataSourceService(jndiName);
+            lds.getDataSourceConfigInjector().inject(buildDataSource(ds));
+            startDataSource(lds,jndiName,ds.getDriver(),serviceTarget,verificationHandler);
+          }
+ catch (          Exception e) {
+            throw ConnectorMessages.MESSAGES.exceptionDeployingDatasource(e,ds.getJndiName());
+          }
+        }
+ else {
+          ConnectorLogger.DS_DEPLOYER_LOGGER.debugf("Ignoring: %s",ds.getJndiName());
+        }
+      }
+    }
+    if (dataSources.getXaDataSource() != null && dataSources.getXaDataSource().size() > 0) {
+      for (      XaDataSource xads : dataSources.getXaDataSource()) {
+        if (xads.isEnabled() && xads.getDriver() != null) {
+          try {
+            String jndiName=cleanupJavaContext(xads.getJndiName());
+            XaDataSourceService xds=new XaDataSourceService(jndiName);
+            xds.getDataSourceConfigInjector().inject(buildXaDataSource(xads));
+            startDataSource(xds,jndiName,xads.getDriver(),serviceTarget,verificationHandler);
+          }
+ catch (          Exception e) {
+            throw ConnectorMessages.MESSAGES.exceptionDeployingDatasource(e,xads.getJndiName());
+          }
+        }
+ else {
+          ConnectorLogger.DS_DEPLOYER_LOGGER.debugf("Ignoring %s",xads.getJndiName());
+        }
+      }
+    }
+  }
+}
