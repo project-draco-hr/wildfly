@@ -6,39 +6,39 @@
   if (oldStatus != newStatus) {
     previous=newStatus;
     if (hasFailed || hasMissing) {
-      final StringBuilder msg=new StringBuilder();
-      msg.append("Deployment '").append(deploymentName).append("' has ");
+      StringBuilder failures=null;
       if (hasFailed) {
-        msg.append("failed services");
-        if (hasMissing) {
-          msg.append(" and ");
-        }
-      }
-      if (hasMissing) {
-        msg.append("services missing dependencies");
-      }
-      if (hasFailed) {
-        msg.append("\n    Failed services:");
+        failures=new StringBuilder();
         for (        ServiceController<?> service : startFailedServices) {
           final StartException cause=service.getStartException();
           if (cause != null) {
-            msg.append("\n        ").append(service.getName()).append(": ").append(cause);
+            failures.append("\n        ").append(service.getName()).append(": ").append(cause);
           }
         }
       }
+      StringBuilder missingDependencies=null;
       if (hasMissing) {
-        msg.append("\n    Missing dependencies:");
+        missingDependencies=new StringBuilder();
         for (        ServiceController<?> service : servicesMissingDependencies) {
-          msg.append("\n        ").append(service.getName()).append(" is missing: ");
+          StringBuilder dependencies=new StringBuilder();
           for (          ServiceName name : service.getImmediateUnavailableDependencies()) {
-            msg.append("\n            ").append(name);
+            dependencies.append("\n            ").append(name);
           }
+          missingDependencies.append(ServerMessages.MESSAGES.missingDependencies(service.getName(),dependencies.toString()));
         }
       }
-      log.error(msg);
+      if (hasFailed && hasMissing) {
+        ServerLogger.DEPLOYMENT_LOGGER.deploymentHasMissingAndFailedServices(deploymentName,failures.toString(),missingDependencies.toString());
+      }
+ else       if (hasFailed) {
+        ServerLogger.DEPLOYMENT_LOGGER.deploymentHasFailedServices(deploymentName,failures.toString());
+      }
+ else {
+        ServerLogger.DEPLOYMENT_LOGGER.deploymentHasMissingDependencies(deploymentName,missingDependencies.toString());
+      }
     }
  else {
-      log.infof("Deployment '%s' started successfully",deploymentName);
+      ServerLogger.DEPLOYMENT_LOGGER.deploymentStarted(deploymentName);
     }
   }
 }
