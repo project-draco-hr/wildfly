@@ -1,0 +1,42 @@
+{
+switch (transition) {
+case STARTING_to_UP:
+{
+      CommonDeployment deploymentMD=((AbstractDataSourceService)controller.getService()).getDeploymentMD();
+      StatisticsPlugin jdbcStats=deploymentMD.getDataSources()[0].getStatistics();
+      StatisticsPlugin poolStats=deploymentMD.getDataSources()[0].getPool().getStatistics();
+      int jdbcStatsSize=jdbcStats.getNames().size();
+      int poolStatsSize=poolStats.getNames().size();
+      if (jdbcStatsSize > 0 || poolStatsSize > 0) {
+        ManagementResourceRegistration subRegistration=registration.registerOverrideModel(dsName,DataSourcesSubsystemProviders.OVERRIDE_DS_DESC);
+        if (jdbcStatsSize > 0) {
+          ManagementResourceRegistration jdbcRegistration=subRegistration.registerSubModel(PathElement.pathElement("statistics","jdbc"),new StatisticsDescriptionProvider(DataSourcesSubsystemProviders.RESOURCE_NAME,"statistics",jdbcStats));
+          jdbcRegistration.setRuntimeOnly(true);
+          jdbcRegistration.registerOperationHandler("clear-statistics",new ClearStatisticsHandler(jdbcStats),DataSourcesSubsystemProviders.CLEAR_STATISTICS_DESC,false);
+          for (          String statName : jdbcStats.getNames()) {
+            jdbcRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(jdbcStats));
+          }
+        }
+        if (poolStatsSize > 0) {
+          ManagementResourceRegistration poolRegistration=subRegistration.registerSubModel(PathElement.pathElement("statistics","pool"),new StatisticsDescriptionProvider(DataSourcesSubsystemProviders.RESOURCE_NAME,"statistics",poolStats));
+          poolRegistration.setRuntimeOnly(true);
+          poolRegistration.registerOperationHandler("clear-statistics",new ClearStatisticsHandler(poolStats),DataSourcesSubsystemProviders.CLEAR_STATISTICS_DESC,false);
+          for (          String statName : poolStats.getNames()) {
+            poolRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(poolStats));
+          }
+        }
+      }
+      break;
+    }
+case UP_to_STOP_REQUESTED:
+{
+    ManagementResourceRegistration subRegistration=registration.getOverrideModel(dsName);
+    if (subRegistration != null) {
+      subRegistration.unregisterSubModel(PathElement.pathElement("statistics","jdbc"));
+      subRegistration.unregisterSubModel(PathElement.pathElement("statistics","pool"));
+      registration.unregisterOverrideModel(dsName);
+    }
+    break;
+  }
+}
+}
