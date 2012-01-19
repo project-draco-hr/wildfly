@@ -1,0 +1,51 @@
+{
+  final ServiceController<?> configService=context.getServiceRegistry(true).getService(WSServices.CONFIG_SERVICE);
+  if (configService != null) {
+    final QName portNamePattern=getQName(getAttributeValue(operation,PORT_NAME_PATTERN));
+    final String protocolBindings=getAttributeValue(operation,PROTOCOL_BINDINGS);
+    final QName serviceNamePattern=getQName(getAttributeValue(operation,SERVICE_NAME_PATTERN));
+    ensurePreconditions(portNamePattern,protocolBindings,serviceNamePattern);
+    final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+    final String configName=address.getElement(address.size() - 2).getValue();
+    final String handlerChainType=address.getElement(address.size() - 1).getKey();
+    final String handlerChainId=address.getElement(address.size() - 1).getValue();
+    final ServerConfig config=(ServerConfig)configService.getValue();
+    for (    final EndpointConfig endpointConfig : config.getEndpointConfigs()) {
+      if (configName.equals(endpointConfig.getConfigName())) {
+        List<UnifiedHandlerChainMetaData> handlerChains;
+        if (PRE_HANDLER_CHAIN.equals(handlerChainType)) {
+          handlerChains=endpointConfig.getPreHandlerChains();
+          if (handlerChains == null) {
+            handlerChains=new LinkedList<UnifiedHandlerChainMetaData>();
+            endpointConfig.setPreHandlerChains(handlerChains);
+          }
+        }
+ else         if (POST_HANDLER_CHAIN.equals(handlerChainType)) {
+          handlerChains=endpointConfig.getPostHandlerChains();
+          if (handlerChains == null) {
+            handlerChains=new LinkedList<UnifiedHandlerChainMetaData>();
+            endpointConfig.setPostHandlerChains(handlerChains);
+          }
+        }
+ else {
+          throw MESSAGES.wrongHandlerChainType(handlerChainType,PRE_HANDLER_CHAIN,POST_HANDLER_CHAIN);
+        }
+        UnifiedHandlerChainMetaData handlerChain=getChain(handlerChains,handlerChainId);
+        if (handlerChain != null) {
+          throw MESSAGES.multipleHandlerChainsWithSameId(handlerChainType,handlerChainId,configName);
+        }
+        handlerChain=new UnifiedHandlerChainMetaData();
+        handlerChain.setId(handlerChainId);
+        handlerChain.setPortNamePattern(portNamePattern);
+        handlerChain.setProtocolBindings(protocolBindings);
+        handlerChain.setServiceNamePattern(serviceNamePattern);
+        handlerChains.add(handlerChain);
+        if (!context.isBooting()) {
+          context.restartRequired();
+        }
+        return;
+      }
+    }
+    throw MESSAGES.missingEndpointConfig(configName);
+  }
+}

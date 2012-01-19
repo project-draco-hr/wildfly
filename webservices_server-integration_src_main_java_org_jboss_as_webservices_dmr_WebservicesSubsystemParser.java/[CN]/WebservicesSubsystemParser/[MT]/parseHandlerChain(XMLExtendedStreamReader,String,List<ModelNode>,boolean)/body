@@ -1,0 +1,69 @@
+{
+  String handlerChainId=null;
+  final EnumSet<Element> encountered=EnumSet.noneOf(Element.class);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    requireNoNamespaceAttribute(reader,i);
+    final String value=reader.getAttributeValue(i);
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case ID:
+      handlerChainId=value;
+    break;
+default :
+  throw unexpectedAttribute(reader,i);
+}
+}
+if (handlerChainId == null) throw new RuntimeException();
+String protocolBindings=null;
+String portNamePattern=null;
+String serviceNamePattern=null;
+final List<ModelNode> addHandlerOperations=new LinkedList<ModelNode>();
+while (reader.nextTag() != END_ELEMENT) {
+final Element element=Element.forName(reader.getLocalName());
+if (element != Element.HANDLER && !encountered.add(element)) {
+throw unexpectedElement(reader);
+}
+switch (element) {
+case PROTOCOL_BINDINGS:
+{
+  protocolBindings=parseElementNoAttributes(reader);
+  break;
+}
+case SERVICE_NAME_PATTERN:
+{
+serviceNamePattern=parseElementNoAttributes(reader);
+break;
+}
+case PORT_NAME_PATTERN:
+{
+portNamePattern=parseElementNoAttributes(reader);
+break;
+}
+case HANDLER:
+{
+parseHandler(reader,configName,handlerChainId,isPreHandlerChain,addHandlerOperations);
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+final ModelNode operation=new ModelNode();
+final String handlerChainType=isPreHandlerChain ? PRE_HANDLER_CHAIN : POST_HANDLER_CHAIN;
+operation.get(OP).set(ADD);
+operation.get(OP_ADDR).add(SUBSYSTEM,WSExtension.SUBSYSTEM_NAME).add(ENDPOINT_CONFIG,configName).add(handlerChainType,handlerChainId);
+if (protocolBindings != null) {
+operation.get(Constants.PROTOCOL_BINDINGS).set(protocolBindings);
+}
+if (serviceNamePattern != null) {
+operation.get(Constants.SERVICE_NAME_PATTERN).set(serviceNamePattern);
+}
+if (portNamePattern != null) {
+operation.get(Constants.PORT_NAME_PATTERN).set(portNamePattern);
+}
+operationList.add(operation);
+operationList.addAll(addHandlerOperations);
+}
