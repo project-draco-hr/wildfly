@@ -46,11 +46,13 @@
     }
     if (Util.isDeploymentInRepository(name,client)) {
       replaceDeployment(ctx,f,name,runtimeName);
+      return;
     }
- else {
-      addDeployment(ctx,f,name,runtimeName);
+ else     if (ctx.isDomainMode()) {
+      final ModelNode request=buildAddRequest(ctx,f,name,runtimeName);
+      execute(ctx,request,f);
+      return;
     }
-    return;
   }
   if (disabled) {
     if (f == null) {
@@ -65,10 +67,11 @@
       ctx.printLine("'" + name + "' already exists in the deployment repository (use "+ this.force.getFullName()+ " to replace the existing content in the repository).");
       return;
     }
-    addDeployment(ctx,f,name,runtimeName);
+    final ModelNode request=buildAddRequest(ctx,f,name,runtimeName);
+    execute(ctx,request,f);
     return;
   }
-  ModelNode deployRequest=null;
+  final ModelNode deployRequest;
   if (ctx.isDomainMode()) {
     final List<String> sgList;
     if (allServerGroups) {
@@ -124,23 +127,28 @@
       ctx.printLine("'" + name + "' already exists in the deployment repository (use "+ this.force.getFullName()+ " to replace the existing content in the repository).");
       return;
     }
-    addDeployment(ctx,f,name,runtimeName);
+    final ModelNode request=new ModelNode();
+    request.get(Util.OPERATION).set(Util.COMPOSITE);
+    request.get(Util.ADDRESS).setEmptyList();
+    final ModelNode steps=request.get(Util.STEPS);
+    steps.add(buildAddRequest(ctx,f,name,runtimeName));
+    steps.add(deployRequest);
+    execute(ctx,request,f);
+    return;
   }
  else   if (!Util.isDeploymentInRepository(name,client)) {
     ctx.printLine("'" + name + "' is not found among the registered deployments.");
     return;
   }
-  if (deployRequest != null) {
-    try {
-      final ModelNode result=client.execute(deployRequest);
-      if (!Util.isSuccess(result)) {
-        ctx.printLine(Util.getFailureDescription(result));
-        return;
-      }
-    }
- catch (    Exception e) {
-      ctx.printLine("Failed to deploy: " + e.getLocalizedMessage());
+  try {
+    final ModelNode result=client.execute(deployRequest);
+    if (!Util.isSuccess(result)) {
+      ctx.printLine(Util.getFailureDescription(result));
       return;
     }
+  }
+ catch (  Exception e) {
+    ctx.printLine("Failed to deploy: " + e.getLocalizedMessage());
+    return;
   }
 }
