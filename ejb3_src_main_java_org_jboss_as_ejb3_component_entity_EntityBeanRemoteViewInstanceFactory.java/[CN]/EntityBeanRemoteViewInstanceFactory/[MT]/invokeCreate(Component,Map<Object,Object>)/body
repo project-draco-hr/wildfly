@@ -14,19 +14,32 @@
   primaryKey=invokeEjbCreate(contextData,ejbCreate,instance,params);
   instance.associate(primaryKey);
   entityBeanComponent.getCache().create(instance);
-  invokeEjbPostCreate(contextData,ejbPostCreate,instance,params);
-  final TransactionSynchronizationRegistry transactionSynchronizationRegistry=entityBeanComponent.getTransactionSynchronizationRegistry();
-  if (transactionSynchronizationRegistry.getTransactionKey() != null) {
-    transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
-      @Override public void beforeCompletion(){
-      }
-      @Override public void afterCompletion(      final int status){
-        if (status != Status.STATUS_COMMITTED) {
-          entityBeanComponent.releaseEntityBeanInstance(instance);
+  boolean synchronizationRegistered=false;
+  boolean exception=false;
+  try {
+    invokeEjbPostCreate(contextData,ejbPostCreate,instance,params);
+    final TransactionSynchronizationRegistry transactionSynchronizationRegistry=entityBeanComponent.getTransactionSynchronizationRegistry();
+    if (transactionSynchronizationRegistry.getTransactionKey() != null) {
+      transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
+        @Override public void beforeCompletion(){
+        }
+        @Override public void afterCompletion(        final int status){
+          entityBeanComponent.getCache().release(instance,status == Status.STATUS_COMMITTED);
         }
       }
-    }
 );
+      synchronizationRegistered=true;
+    }
+  }
+ catch (  Exception e) {
+    entityBeanComponent.getCache().release(instance,false);
+    exception=true;
+    throw e;
+  }
+ finally {
+    if (!synchronizationRegistered && !exception) {
+      entityBeanComponent.getCache().release(instance,true);
+    }
   }
   return primaryKey;
 }
