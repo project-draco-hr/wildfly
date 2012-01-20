@@ -1,0 +1,19 @@
+{
+  war=ShrinkWrap.create(WebArchive.class,"SimpleServlet.war");
+  war.addClass(SimpleServlet.class);
+  warFile=new File(deployDir.getAbsolutePath() + File.separator + "SimpleServlet.war");
+  new ZipExporterImpl(war).exportTo(warFile,true);
+  cli.sendLine("command add --node-type=/subsystem=deployment-scanner/scanner --command-name=deployment-scanner");
+  cli.sendLine("deployment-scanner add --name=testScanner --path=" + deployDir.getAbsolutePath());
+  Thread.sleep(WAIT_LINETIMEOUT * 2);
+  File marker=new File(deployDir.getAbsolutePath() + File.separator + "SimpleServlet.war.deployed");
+  Assert.assertTrue(marker.exists());
+  String response=HttpRequest.get(getBaseURL(url) + "SimpleServlet/SimpleServlet",10,TimeUnit.SECONDS);
+  Assert.assertTrue("Invalid response: " + response,response.indexOf("SimpleServlet") >= 0);
+  cli.sendLine("deployment-scanner remove --name=testScanner");
+  cli.sendLine("/subsystem=deployment-scanner/scanner=testScanner:read-resource");
+  CLIOpResult res=cli.readAllAsOpResult(WAIT_TIMEOUT,WAIT_LINETIMEOUT);
+  Assert.assertFalse("Deployment scanner not removed.",res.isIsOutcomeSuccess());
+  cli.sendLine("undeploy SimpleServlet.war",true);
+  Assert.assertTrue(checkUndeployed(getBaseURL(url) + "SimpleServlet/SimpleServlet"));
+}
