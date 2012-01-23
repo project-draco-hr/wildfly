@@ -1,0 +1,35 @@
+{
+  final ParsedCommandLine parsedCmd=ctx.getParsedCommandLine();
+  if (!name.isPresent(parsedCmd)) {
+    throw new CommandFormatException("Required argument " + name.getFullName() + " is missing.");
+  }
+  final String deploymentName=name.getValue(parsedCmd);
+  final ModelNode request=new ModelNode();
+  if (ctx.isDomainMode()) {
+    request.get(Util.OPERATION).set(Util.COMPOSITE);
+    request.get(Util.ADDRESS).setEmptyList();
+    final ModelNode steps=request.get(Util.STEPS);
+    ModelNode readResource=new ModelNode();
+    ModelNode address=readResource.get(Util.ADDRESS);
+    address.add(Util.DEPLOYMENT,deploymentName);
+    readResource.get(Util.OPERATION).set(Util.READ_RESOURCE);
+    steps.add(readResource);
+    serverGroups=Util.getServerGroups(ctx.getModelControllerClient());
+    for (    String serverGroup : serverGroups) {
+      readResource=new ModelNode();
+      address=readResource.get(Util.ADDRESS);
+      address.add(Util.SERVER_GROUP,serverGroup);
+      readResource.get(Util.OPERATION).set(Util.READ_CHILDREN_NAMES);
+      readResource.get(Util.CHILD_TYPE).set(Util.DEPLOYMENT);
+      steps.add(readResource);
+    }
+    request.get(Util.OPERATION_HEADERS,Util.ROLLBACK_ON_RUNTIME_FAILURE).set(false);
+  }
+ else {
+    final ModelNode address=request.get(Util.ADDRESS);
+    address.add(Util.DEPLOYMENT,deploymentName);
+    request.get(Util.OPERATION).set(Util.READ_RESOURCE);
+    request.get(Util.INCLUDE_RUNTIME).set(true);
+  }
+  return request;
+}

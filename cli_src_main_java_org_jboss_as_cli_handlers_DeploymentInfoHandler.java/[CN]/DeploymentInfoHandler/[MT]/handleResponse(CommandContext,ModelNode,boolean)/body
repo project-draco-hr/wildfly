@@ -1,0 +1,57 @@
+{
+  try {
+    if (!response.hasDefined(Util.RESULT)) {
+      ctx.error("The operation response came back w/o result: " + response);
+      return;
+    }
+    final ModelNode result=response.get(Util.RESULT);
+    if (ctx.isDomainMode()) {
+      final List<Property> steps=result.asPropertyList();
+      if (steps.isEmpty()) {
+        ctx.error("Response for the main resource info of the deployment is missing.");
+        return;
+      }
+      ModelNode step=steps.get(0).getValue();
+      if (!step.has(Util.RESULT)) {
+        ctx.error("Failed to read the main resource info of the deployment.");
+        return;
+      }
+      ModelNode stepResponse=step.get(Util.RESULT);
+      final StrictSizeTable table=new StrictSizeTable(1);
+      table.addCell(Util.NAME,stepResponse.get(Util.NAME).asString());
+      table.addCell(Util.RUNTIME_NAME,stepResponse.get(Util.RUNTIME_NAME).asString());
+      ctx.printLine(table.toString());
+      if (serverGroups == null) {
+        ctx.error("Server group list is lost.");
+        return;
+      }
+      if (serverGroups.size() != steps.size() - 1) {
+        ctx.error("Expected results for " + serverGroups.size() + " server groups but received "+ (steps.size() - 1));
+        return;
+      }
+      final String deploymentName=name.getValue(ctx.getParsedCommandLine());
+      final SimpleTable groups=new SimpleTable(new String[]{"SERVER GROUP","ENABLED"});
+      for (int i=1; i < steps.size(); ++i) {
+        stepResponse=steps.get(i).getValue();
+        if (Util.listContains(stepResponse,deploymentName)) {
+          groups.addLine(new String[]{serverGroups.get(i - 1),"yes"});
+        }
+ else {
+          groups.addLine(new String[]{serverGroups.get(i - 1),"no"});
+        }
+      }
+      ctx.printLine(groups.toString(true));
+    }
+ else {
+      final StrictSizeTable table=new StrictSizeTable(1);
+      table.addCell(Util.NAME,result.get(Util.NAME).asString());
+      table.addCell(Util.RUNTIME_NAME,result.get(Util.RUNTIME_NAME).asString());
+      table.addCell(Util.ENABLED,result.get(Util.ENABLED).asString());
+      table.addCell(Util.STATUS,result.get(Util.STATUS).asString());
+      ctx.printLine(table.toString());
+    }
+  }
+  finally {
+    serverGroups=null;
+  }
+}
