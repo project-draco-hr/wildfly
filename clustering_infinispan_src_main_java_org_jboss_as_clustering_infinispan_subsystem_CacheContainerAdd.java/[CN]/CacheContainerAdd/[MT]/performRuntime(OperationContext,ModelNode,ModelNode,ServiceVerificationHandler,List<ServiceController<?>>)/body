@@ -14,13 +14,14 @@
       aliases[i]=EmbeddedCacheManagerService.getServiceName(list.get(i).asString());
     }
   }
+  ServiceController.Mode initialMode=model.hasDefined(ModelKeys.START) ? StartMode.valueOf(model.get(ModelKeys.START).asString()).getMode() : ServiceController.Mode.ON_DEMAND;
   ServiceTarget target=context.getServiceTarget();
   ServiceName serviceName=EmbeddedCacheManagerService.getServiceName(name);
-  ServiceBuilder<EmbeddedCacheManager> containerBuilder=target.addService(serviceName,new EmbeddedCacheManagerService(name,defaultCache,dependencies)).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,dependencies.getMBeanServerInjector()).addAliases(aliases).setInitialMode(ServiceController.Mode.ON_DEMAND);
+  ServiceBuilder<EmbeddedCacheManager> containerBuilder=target.addService(serviceName,new EmbeddedCacheManagerService(name,defaultCache,dependencies)).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,dependencies.getMBeanServerInjector()).addAliases(aliases).setInitialMode(initialMode);
   String jndiName=(model.hasDefined(ModelKeys.JNDI_NAME) ? InfinispanJndiName.toJndiName(model.get(ModelKeys.JNDI_NAME).asString()) : InfinispanJndiName.defaultCacheContainerJndiName(name)).getAbsoluteName();
   ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndiName);
   BinderService binder=new BinderService(bindInfo.getBindName());
-  ServiceBuilder<ManagedReferenceFactory> binderBuilder=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jndiName)).addDependency(serviceName,CacheContainer.class,new ManagedReferenceInjector<CacheContainer>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(ServiceController.Mode.ON_DEMAND);
+  ServiceBuilder<ManagedReferenceFactory> binderBuilder=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jndiName)).addDependency(serviceName,CacheContainer.class,new ManagedReferenceInjector<CacheContainer>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(initialMode);
   newControllers.add(binderBuilder.install());
   if (hasTransport) {
     String stack=null;

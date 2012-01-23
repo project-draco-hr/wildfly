@@ -13,12 +13,12 @@
   Resource rootResource=context.getRootResource();
   ModelNode container=rootResource.navigate(containerAddress).getModel();
   String defaultCache=container.require(ModelKeys.DEFAULT_CACHE).asString();
-  StartMode startMode=model.hasDefined(ModelKeys.START) ? StartMode.valueOf(model.get(ModelKeys.START).asString()) : StartMode.LAZY;
+  ServiceController.Mode initialMode=model.hasDefined(ModelKeys.START) ? StartMode.valueOf(model.get(ModelKeys.START).asString()).getMode() : ServiceController.Mode.ON_DEMAND;
   ServiceTarget target=context.getServiceTarget();
   InjectedValue<EmbeddedCacheManager> containerInjection=new InjectedValue<EmbeddedCacheManager>();
   CacheConfigurationDependencies cacheConfigurationDependencies=new CacheConfigurationDependencies(containerInjection);
   CacheConfigurationService cacheConfigurationService=new CacheConfigurationService(cacheName,builder,cacheConfigurationDependencies);
-  ServiceBuilder<Configuration> configBuilder=target.addService(cacheConfigurationServiceName,cacheConfigurationService).addDependency(containerServiceName,EmbeddedCacheManager.class,containerInjection).setInitialMode(ServiceController.Mode.ON_DEMAND);
+  ServiceBuilder<Configuration> configBuilder=target.addService(cacheConfigurationServiceName,cacheConfigurationService).addDependency(containerServiceName,EmbeddedCacheManager.class,containerInjection).setInitialMode(ServiceController.Mode.PASSIVE);
   Configuration config=builder.build();
   if (config.invocationBatching().enabled()) {
     cacheConfigurationDependencies.getTransactionManagerInjector().inject(BatchModeTransactionManager.getInstance());
@@ -39,21 +39,21 @@
   log.debugf("Cache configuration service for %s installed for container %s",cacheName,containerName);
   CacheDependencies cacheDependencies=new CacheDependencies(containerInjection);
   CacheService<Object,Object> cacheService=new CacheService<Object,Object>(cacheName,cacheDependencies);
-  ServiceBuilder<Cache<Object,Object>> cacheBuilder=target.addService(cacheServiceName,cacheService).addDependency(cacheConfigurationServiceName).setInitialMode(startMode.getMode());
+  ServiceBuilder<Cache<Object,Object>> cacheBuilder=target.addService(cacheServiceName,cacheService).addDependency(cacheConfigurationServiceName).setInitialMode(initialMode);
   if (config.transaction().recovery().enabled()) {
     cacheBuilder.addDependency(TxnServices.JBOSS_TXN_ARJUNA_RECOVERY_MANAGER,XAResourceRecoveryRegistry.class,cacheDependencies.getRecoveryRegistryInjector());
   }
   if (cacheName.equals(defaultCache)) {
     cacheBuilder.addAliases(CacheService.getServiceName(containerName,null));
   }
-  if (startMode.getMode() == ServiceController.Mode.ACTIVE) {
+  if (initialMode == ServiceController.Mode.ACTIVE) {
     cacheBuilder.addListener(verificationHandler);
   }
   newControllers.add(cacheBuilder.install());
   String jndiName=(model.hasDefined(ModelKeys.JNDI_NAME) ? InfinispanJndiName.toJndiName(model.get(ModelKeys.JNDI_NAME).asString()) : InfinispanJndiName.defaultCacheJndiName(containerName,cacheName)).getAbsoluteName();
   ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndiName);
   BinderService binder=new BinderService(bindInfo.getBindName());
-  @SuppressWarnings("rawtypes") ServiceBuilder<ManagedReferenceFactory> binderBuilder=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jndiName)).addDependency(cacheServiceName,Cache.class,new ManagedReferenceInjector<Cache>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(startMode.getMode());
+  @SuppressWarnings("rawtypes") ServiceBuilder<ManagedReferenceFactory> binderBuilder=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jndiName)).addDependency(cacheServiceName,Cache.class,new ManagedReferenceInjector<Cache>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(initialMode);
   newControllers.add(binderBuilder.install());
   log.debugf("Cache service for cache %s installed for container %s",cacheName,containerName);
 }
