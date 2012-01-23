@@ -1,18 +1,11 @@
 {
-  if (this.jvmRouteHandler != null) {
-    AdvancedCache<?,?> cache=this.sessionCache.getAdvancedCache();
-    DistributionManager manager=cache.getDistributionManager();
-    if ((manager != null) && !manager.isRehashInProgress()) {
-      List<Address> addresses=manager.locate(sessionId);
-      EmbeddedCacheManager container=(EmbeddedCacheManager)this.sessionCache.getCacheManager();
-      if (!addresses.contains(container.getAddress())) {
-        Address address=addresses.get(random.nextInt(addresses.size()));
-        String jvmRoute=this.jvmRouteHandler.getCache().get(address);
-        if (jvmRoute != null) {
-          ROOT_LOGGER.tracef("%s hashes to %s - next request will route to %s (%s)",sessionId,addresses,address,jvmRoute);
-          this.invoker.forceThreadSynchronous();
-          return jvmRoute;
-        }
+  if (!this.isLocal(sessionId)) {
+    List<Address> addresses=this.cache.getAdvancedCache().getDistributionManager().locate(sessionId);
+    if (!addresses.contains(this.cache.getCacheManager().getAddress())) {
+      this.invoker.forceThreadSynchronous();
+      Map.Entry<String,Void> entry=this.registry.getRemoteEntry(addresses.get(this.random.nextInt(addresses.size())));
+      if (entry != null) {
+        return entry.getKey();
       }
     }
   }

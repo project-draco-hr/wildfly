@@ -1,10 +1,17 @@
 {
-  @SuppressWarnings("unchecked") AdvancedCache<SessionKeyImpl,Map<Object,Object>> sessionCache=this.sessionCache.getValue().getAdvancedCache().with(this.getClass().getClassLoader());
-  if (!sessionCache.getCacheConfiguration().invocationBatching().enabled()) {
-    throw new ClusteringNotSupportedException(MESSAGES.failedToConfigureWebApp(sessionCache.getCacheManager().getCacheManagerConfiguration().globalJmxStatistics().cacheManagerName(),sessionCache.getName()));
+  this.registryEntryProvider.setManager(manager);
+  EmbeddedCacheManager container=this.container.getValue();
+  @SuppressWarnings("unchecked") Registry<String,Void> jvmRouteRegistry=this.registry.getValue();
+  Configuration config=this.config.getValue();
+  if (!config.invocationBatching().enabled()) {
+    throw new ClusteringNotSupportedException(MESSAGES.failedToConfigureWebApp(container.getCacheManagerConfiguration().globalJmxStatistics().cacheManagerName(),config.name()));
   }
-  @SuppressWarnings("unchecked") Cache<Address,String> jvmRouteCache=this.sessionCache.getValue();
+  String name=manager.getName();
+  ConfigurationBuilder builder=new ConfigurationBuilder().read(config).name(name);
+  builder.storeAsBinary().enable().storeKeysAsBinary(false).storeValuesAsBinary(true);
+  container.defineConfiguration(name,builder.build());
+  AdvancedCache<String,Map<Object,Object>> sessionCache=container.<String,Map<Object,Object>>getCache(name).getAdvancedCache().with(this.getClass().getClassLoader());
   BatchingManager batchingManager=new TransactionBatchingManager(sessionCache.getTransactionManager());
   SessionAttributeStorage<T> storage=this.storageFactory.createStorage(manager.getReplicationConfig().getReplicationGranularity(),this.marshallerFactory.createMarshaller(manager));
-  return new DistributedCacheManager<T,SessionKeyImpl>(manager,new AtomicMapCache<SessionKeyImpl,Object,Object>(sessionCache),jvmRouteCache,this.lockManager.getValue(),storage,batchingManager,new SessionKeyFactoryImpl(manager),this.invoker);
+  return new DistributedCacheManager<T>(manager,new AtomicMapCache<String,Object,Object>(sessionCache),jvmRouteRegistry,this.lockManager.getOptionalValue(),storage,batchingManager,this.invoker);
 }

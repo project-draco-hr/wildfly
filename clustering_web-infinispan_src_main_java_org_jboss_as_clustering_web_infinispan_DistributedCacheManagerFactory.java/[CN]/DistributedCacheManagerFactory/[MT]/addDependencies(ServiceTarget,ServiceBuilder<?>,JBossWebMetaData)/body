@@ -12,11 +12,20 @@
   if (CurrentServiceContainer.getServiceContainer().getService(serviceName) == null) {
     return false;
   }
-  String container=serviceName.getParent().getSimpleName();
-  new CoreGroupCommunicationServiceService(SCOPE_ID).build(target,container).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
-  new SharedLocalYieldingClusterLockManagerService(container).build(target).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
-  builder.addDependency(serviceName,Cache.class,this.sessionCache);
-  builder.addDependency(CacheService.getServiceName(container,DEFAULT_JVM_ROUTE_CACHE),Cache.class,this.jvmRouteCache);
+  ServiceName containerServiceName=serviceName.getParent();
+  String container=containerServiceName.getSimpleName();
+  ServiceName lockManagerServiceName=SharedLocalYieldingClusterLockManagerService.getServiceName(container);
+  ServiceName registryServiceName=serviceName.append("registry");
+synchronized (this) {
+    if (CurrentServiceContainer.getServiceContainer().getService(lockManagerServiceName) == null) {
+      new CoreGroupCommunicationServiceService(SCOPE_ID).build(target,container).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+      new SharedLocalYieldingClusterLockManagerService(container).build(target).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+    }
+  }
+  new RegistryService<String,Void>(this.registryEntryProvider).build(target,registryServiceName,serviceName).install();
+  builder.addDependency(containerServiceName,EmbeddedCacheManager.class,this.container);
+  builder.addDependency(CacheConfigurationService.getServiceName(container,serviceName.getSimpleName()),Configuration.class,this.config);
+  builder.addDependency(registryServiceName,Registry.class,this.registry);
   builder.addDependency(SharedLocalYieldingClusterLockManagerService.getServiceName(container),SharedLocalYieldingClusterLockManager.class,this.lockManager);
   return true;
 }
