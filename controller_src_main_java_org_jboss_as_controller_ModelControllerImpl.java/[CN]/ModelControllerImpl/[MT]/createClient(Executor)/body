@@ -30,24 +30,52 @@ class OpTask extends AsyncFutureTask<ModelNode> {
           super(executor);
         }
         public void asyncCancel(        final boolean interruptionDesired){
-          Thread thread=opThread.get();
-          if (thread != null) {
+          Thread thread=opThread.getAndSet(Thread.currentThread());
+          if (thread == null) {
+            setCancelled();
+          }
+ else {
             thread.interrupt();
+            boolean interrupted=false;
+synchronized (opThread) {
+              while (opThread.get() != null) {
+                try {
+                  opThread.wait();
+                }
+ catch (                InterruptedException ie) {
+                  interrupted=true;
+                }
+              }
+            }
+            setCancelled();
+            if (interrupted) {
+              Thread.currentThread().interrupt();
+            }
           }
         }
         void handleResult(        final ModelNode result){
-          setResult(result);
+          if (result != null && result.hasDefined(OUTCOME) && CANCELLED.equals(result.get(OUTCOME).asString())) {
+            setCancelled();
+          }
+ else {
+            setResult(result);
+          }
         }
       }
       final OpTask opTask=new OpTask();
       executor.execute(new Runnable(){
         public void run(){
-          opThread.set(Thread.currentThread());
           try {
-            opTask.handleResult(ModelControllerImpl.this.execute(operation,messageHandler,OperationTransactionControl.COMMIT,attachments));
+            if (opThread.compareAndSet(null,Thread.currentThread())) {
+              ModelNode response=ModelControllerImpl.this.execute(operation,messageHandler,OperationTransactionControl.COMMIT,attachments);
+              opTask.handleResult(response);
+            }
           }
   finally {
-            opThread.set(null);
+synchronized (opThread) {
+              opThread.set(null);
+              opThread.notifyAll();
+            }
           }
         }
       }

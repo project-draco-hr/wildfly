@@ -1,36 +1,27 @@
 {
   final Map<ServiceName,ServiceController<?>> map=realRemovingControllers;
 synchronized (map) {
-    while (map.containsKey(name))     try {
-      map.wait();
-    }
- catch (    InterruptedException ex) {
-      Thread.currentThread().interrupt();
-      throw MESSAGES.serviceInstallCancelled();
-    }
     boolean intr=false;
     try {
-      while (map.containsKey(name))       try {
-        map.wait();
-        removalSteps.remove(name);
-        return realBuilder.install();
-      }
- catch (      InterruptedException e) {
-        if (respectInterruption) {
-          Thread.currentThread().interrupt();
-          throw MESSAGES.serviceInstallCancelled();
+      while (map.containsKey(name)) {
+        try {
+          map.wait();
         }
- else {
+ catch (        InterruptedException e) {
           intr=true;
+          if (respectInterruption) {
+            cancelled=true;
+            throw MESSAGES.serviceInstallCancelled();
+          }
         }
       }
+      removalSteps.remove(name);
+      return realBuilder.install();
     }
   finally {
       if (intr) {
         Thread.currentThread().interrupt();
       }
     }
-    removalSteps.remove(name);
-    return realBuilder.install();
   }
 }
