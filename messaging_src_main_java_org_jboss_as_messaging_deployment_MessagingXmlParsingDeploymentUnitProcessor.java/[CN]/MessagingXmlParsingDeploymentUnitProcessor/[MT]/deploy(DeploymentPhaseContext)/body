@@ -1,0 +1,37 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final VirtualFile deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
+  if (deploymentRoot == null || !deploymentRoot.exists())   return;
+  final String deploymentRootName=deploymentRoot.getLowerCaseName();
+  if (!deploymentRootName.endsWith("-jms.xml")) {
+    return;
+  }
+  InputStream xmlStream=null;
+  try {
+    final File f=deploymentRoot.getPhysicalFile();
+    xmlStream=new FileInputStream(f);
+    try {
+      final XMLInputFactory inputFactory=INPUT_FACTORY;
+      setIfSupported(inputFactory,XMLInputFactory.IS_VALIDATING,Boolean.FALSE);
+      setIfSupported(inputFactory,XMLInputFactory.SUPPORT_DTD,Boolean.FALSE);
+      final XMLStreamReader streamReader=inputFactory.createXMLStreamReader(xmlStream);
+      final ParseResult result=new ParseResult();
+      try {
+        mapper.parseDocument(result,streamReader);
+        deploymentUnit.putAttachment(MessagingAttachments.PARSE_RESULT,result);
+      }
+  finally {
+        safeClose(streamReader,f.getAbsolutePath());
+      }
+    }
+ catch (    XMLStreamException e) {
+      throw MessagingMessages.MESSAGES.couldNotParseDeployment(f.getPath(),e);
+    }
+  }
+ catch (  Exception e) {
+    throw new DeploymentUnitProcessingException(e.getMessage(),e);
+  }
+ finally {
+    VFSUtils.safeClose(xmlStream);
+  }
+}
