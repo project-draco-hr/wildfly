@@ -1,2 +1,43 @@
 {
+  final byte responseType=input.readByte();
+  final ModelNode response=new ModelNode();
+  response.readExternal(input);
+  final boolean prepared=responseType == ModelControllerProtocol.PARAM_OPERATION_PREPARED;
+  context.executeAsync(new ManagementRequestContext.AsyncTask<ExecuteRequestContext>(){
+    @Override public void execute(    ManagementRequestContext<ExecuteRequestContext> executeRequestContextManagementRequestContext) throws Exception {
+      final ExecuteRequestContext executeRequestContext=context.getAttachment();
+      if (prepared) {
+        executeRequestContext.operationPrepared(new ModelController.OperationTransaction(){
+          @Override public void rollback(){
+            done(false);
+          }
+          @Override public void commit(){
+            done(true);
+          }
+          private void done(          boolean commit){
+            final byte status=commit ? ModelControllerProtocol.PARAM_COMMIT : ModelControllerProtocol.PARAM_ROLLBACK;
+            final ActiveOperation<Void,ExecuteRequestContext> activeOperation=RemoteProxyController.this.getActiveOperation(context.getOperationId());
+            try {
+              RemoteProxyController.this.executeRequest(new CompleteTxRequest(status),channel,activeOperation);
+            }
+ catch (            Exception e) {
+              resultHandler.failed(e);
+            }
+            try {
+              activeOperation.getResult().await();
+            }
+ catch (            InterruptedException e) {
+              throw MESSAGES.transactionTimeout(commit ? "commit" : "rollback");
+            }
+          }
+        }
+,response);
+      }
+ else {
+        executeRequestContext.operationFailed(response);
+        resultHandler.done(null);
+      }
+    }
+  }
+);
 }
