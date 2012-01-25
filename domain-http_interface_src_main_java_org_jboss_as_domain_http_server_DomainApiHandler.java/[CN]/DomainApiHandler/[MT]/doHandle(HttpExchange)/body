@@ -1,0 +1,35 @@
+{
+  final String requestMethod=http.getRequestMethod();
+  if (OPTIONS.equals(requestMethod)) {
+    drain(http);
+    http.sendResponseHeaders(METHOD_NOT_ALLOWED,-1);
+    return;
+  }
+  final Headers headers=http.getRequestHeaders();
+  final URI request=http.getRequestURI();
+  if (headers.containsKey(ORIGIN)) {
+    String origin=headers.getFirst(ORIGIN);
+    String host=headers.getFirst(HOST);
+    String protocol=http.getHttpContext().getServer() instanceof HttpServer ? HTTP : HTTPS;
+    String allowedOrigin=protocol + "://" + host;
+    if (origin.equals(allowedOrigin) == false) {
+      drain(http);
+      http.sendResponseHeaders(FORBIDDEN,-1);
+      return;
+    }
+  }
+  final boolean uploadRequest=UPLOAD_REQUEST.equals(request.getPath());
+  if (POST.equals(requestMethod)) {
+    if (uploadRequest) {
+      processUploadRequest(http);
+      return;
+    }
+    String contentType=extractContentType(headers.getFirst(CONTENT_TYPE));
+    if (!(APPLICATION_JSON.equals(contentType) || APPLICATION_DMR_ENCODED.equals(contentType))) {
+      drain(http);
+      sendResponse(http,UNSUPPORTED_MEDIA_TYPE,contentType + "\n");
+      return;
+    }
+  }
+  processRequest(http);
+}
