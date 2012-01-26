@@ -1,0 +1,99 @@
+{
+  final EnumSet<OperationEntry.Flag> readOnly=EnumSet.of(OperationEntry.Flag.READ_ONLY);
+  final EnumSet<OperationEntry.Flag> masterOnly=EnumSet.of(OperationEntry.Flag.MASTER_HOST_CONTROLLER_ONLY);
+  XmlMarshallingHandler xmh=new XmlMarshallingHandler(configurationPersister);
+  root.registerOperationHandler(XmlMarshallingHandler.OPERATION_NAME,xmh,xmh,false,OperationEntry.EntryType.PUBLIC,readOnly);
+  root.registerOperationHandler(NamespaceAddHandler.OPERATION_NAME,NamespaceAddHandler.INSTANCE,NamespaceAddHandler.INSTANCE,false);
+  root.registerOperationHandler(NamespaceRemoveHandler.OPERATION_NAME,NamespaceRemoveHandler.INSTANCE,NamespaceRemoveHandler.INSTANCE,false);
+  root.registerOperationHandler(SchemaLocationAddHandler.OPERATION_NAME,SchemaLocationAddHandler.INSTANCE,SchemaLocationAddHandler.INSTANCE,false);
+  root.registerOperationHandler(SchemaLocationRemoveHandler.OPERATION_NAME,SchemaLocationRemoveHandler.INSTANCE,SchemaLocationRemoveHandler.INSTANCE,false);
+  DeploymentUploadBytesHandler dubh=isMaster ? new DeploymentUploadBytesHandler(contentRepo) : new DeploymentUploadBytesHandler();
+  root.registerOperationHandler(DeploymentUploadBytesHandler.OPERATION_NAME,dubh,dubh,false,OperationEntry.EntryType.PUBLIC,masterOnly);
+  DeploymentUploadURLHandler duuh=isMaster ? new DeploymentUploadURLHandler(contentRepo) : new DeploymentUploadURLHandler();
+  root.registerOperationHandler(DeploymentUploadURLHandler.OPERATION_NAME,duuh,duuh,false,OperationEntry.EntryType.PUBLIC,masterOnly);
+  DeploymentUploadStreamAttachmentHandler dush=isMaster ? new DeploymentUploadStreamAttachmentHandler(contentRepo) : new DeploymentUploadStreamAttachmentHandler();
+  root.registerOperationHandler(DeploymentUploadStreamAttachmentHandler.OPERATION_NAME,dush,dush,false,OperationEntry.EntryType.PUBLIC,masterOnly);
+  DeploymentFullReplaceHandler dfrh=isMaster ? new DeploymentFullReplaceHandler(contentRepo) : new DeploymentFullReplaceHandler(fileRepository);
+  root.registerOperationHandler(DeploymentFullReplaceHandler.OPERATION_NAME,dfrh,dfrh);
+  if (isMaster) {
+    SnapshotDeleteHandler snapshotDelete=new SnapshotDeleteHandler(configurationPersister);
+    root.registerOperationHandler(SnapshotDeleteHandler.OPERATION_NAME,snapshotDelete,snapshotDelete,false,EntryType.PUBLIC,masterOnly);
+    SnapshotListHandler snapshotList=new SnapshotListHandler(configurationPersister);
+    root.registerOperationHandler(SnapshotListHandler.OPERATION_NAME,snapshotList,snapshotList,false,EntryType.PUBLIC,masterOnly);
+    SnapshotTakeHandler snapshotTake=new SnapshotTakeHandler(configurationPersister);
+    root.registerOperationHandler(SnapshotTakeHandler.OPERATION_NAME,snapshotTake,snapshotTake,false,EntryType.PUBLIC,masterOnly);
+  }
+  root.registerReadOnlyAttribute(PROCESS_TYPE,isMaster ? ProcessTypeHandler.MASTER : ProcessTypeHandler.SLAVE,Storage.RUNTIME);
+  root.registerReadOnlyAttribute(ServerDescriptionConstants.LAUNCH_TYPE,new LaunchTypeHandler(ServerEnvironment.LaunchType.DOMAIN),Storage.RUNTIME);
+  root.registerOperationHandler(GlobalOperationHandlers.VALIDATE_ADDRESS_OPERATION_NAME,GlobalOperationHandlers.VALIDATE_ADDRESS,CommonProviders.VALIDATE_ADDRESS_PROVIDER,true);
+  root.registerOperationHandler(ResolveExpressionOnDomainHandler.OPERATION_NAME,ResolveExpressionOnDomainHandler.INSTANCE,ResolveExpressionOnDomainHandler.INSTANCE,EnumSet.of(OperationEntry.Flag.READ_ONLY,OperationEntry.Flag.DOMAIN_PUSH_TO_SERVERS));
+  DomainServerLifecycleHandlers.registerDomainHandlers(root);
+  ManagementResourceRegistration systemProperties=root.registerSubModel(PathElement.pathElement(SYSTEM_PROPERTY),DomainDescriptionProviders.SYSTEM_PROPERTY_PROVIDER);
+  systemProperties.registerOperationHandler(SystemPropertyAddHandler.OPERATION_NAME,SystemPropertyAddHandler.INSTANCE_WITH_BOOTTIME,SystemPropertyAddHandler.INSTANCE_WITH_BOOTTIME,false);
+  systemProperties.registerOperationHandler(SystemPropertyRemoveHandler.OPERATION_NAME,SystemPropertyRemoveHandler.INSTANCE,SystemPropertyRemoveHandler.INSTANCE,false);
+  systemProperties.registerReadWriteAttribute(VALUE,null,SystemPropertyValueWriteAttributeHandler.INSTANCE,Storage.CONFIGURATION);
+  systemProperties.registerReadWriteAttribute(BOOT_TIME,null,new ModelTypeValidatingHandler(ModelType.BOOLEAN),Storage.CONFIGURATION);
+  final ManagementResourceRegistration interfaces=root.registerSubModel(PathElement.pathElement(INTERFACE),CommonProviders.NAMED_INTERFACE_PROVIDER);
+  interfaces.registerOperationHandler(ADD,InterfaceAddHandler.NAMED_INSTANCE,InterfaceAddHandler.NAMED_INSTANCE,false);
+  interfaces.registerOperationHandler(REMOVE,InterfaceRemoveHandler.INSTANCE,InterfaceRemoveHandler.INSTANCE,false);
+  InterfaceCriteriaWriteHandler.register(interfaces);
+  final ManagementResourceRegistration profile=root.registerSubModel(PathElement.pathElement(PROFILE),DomainDescriptionProviders.PROFILE);
+  profile.registerOperationHandler(ADD,ProfileAddHandler.INSTANCE,ProfileAddHandler.INSTANCE,false);
+  profile.registerOperationHandler(REMOVE,ProfileRemoveHandler.INSTANCE,ProfileRemoveHandler.INSTANCE,false);
+  profile.registerOperationHandler(DESCRIBE,ProfileDescribeHandler.INSTANCE,ProfileDescribeHandler.INSTANCE,false,OperationEntry.EntryType.PRIVATE,readOnly);
+  final ManagementResourceRegistration paths=root.registerSubModel(PathElement.pathElement(PATH),DomainDescriptionProviders.PATH_DESCRIPTION);
+  paths.registerOperationHandler(ADD,PathAddHandler.NAMED_INSTANCE,PathAddHandler.NAMED_INSTANCE,false);
+  paths.registerOperationHandler(REMOVE,PathRemoveHandler.INSTANCE,PathRemoveHandler.INSTANCE,false);
+  final ManagementResourceRegistration socketBindingGroup=root.registerSubModel(new SocketBindingGroupResourceDefinition(SocketBindingGroupAddHandler.INSTANCE,SocketBindingGroupRemoveHandler.INSTANCE,true));
+  socketBindingGroup.registerSubModel(SocketBindingResourceDefinition.INSTANCE);
+  socketBindingGroup.registerSubModel(RemoteDestinationOutboundSocketBindingResourceDefinition.INSTANCE);
+  socketBindingGroup.registerSubModel(LocalDestinationOutboundSocketBindingResourceDefinition.INSTANCE);
+  final ManagementResourceRegistration serverGroups=root.registerSubModel(PathElement.pathElement(SERVER_GROUP),DomainDescriptionProviders.SERVER_GROUP);
+  serverGroups.registerOperationHandler(ADD,ServerGroupAddHandler.INSTANCE,ServerGroupAddHandler.INSTANCE,false);
+  serverGroups.registerOperationHandler(REMOVE,ServerGroupRemoveHandler.INSTANCE,ServerGroupRemoveHandler.INSTANCE,false);
+  serverGroups.registerReadWriteAttribute(SOCKET_BINDING_GROUP,null,WriteAttributeHandlers.WriteAttributeOperationHandler.INSTANCE,Storage.CONFIGURATION);
+  serverGroups.registerReadWriteAttribute(SOCKET_BINDING_PORT_OFFSET,null,new IntRangeValidatingHandler(0,true),Storage.CONFIGURATION);
+  serverGroups.registerReadWriteAttribute(PROFILE,null,ServerGroupProfileWriteAttributeHandler.INSTANCE,Storage.CONFIGURATION);
+  DomainServerLifecycleHandlers.registerServerGroupHandlers(serverGroups);
+  final ManagementResourceRegistration groupVMs=serverGroups.registerSubModel(PathElement.pathElement(JVM),CommonProviders.JVM_PROVIDER);
+  JVMHandlers.register(groupVMs);
+  ServerGroupDeploymentReplaceHandler sgdrh=new ServerGroupDeploymentReplaceHandler(fileRepository);
+  serverGroups.registerOperationHandler(ServerGroupDeploymentReplaceHandler.OPERATION_NAME,sgdrh,sgdrh);
+  final ManagementResourceRegistration serverGroupDeployments=serverGroups.registerSubModel(PathElement.pathElement(DEPLOYMENT),DomainDescriptionProviders.SERVER_GROUP_DEPLOYMENT);
+  ServerGroupDeploymentAddHandler sgdah=new ServerGroupDeploymentAddHandler(fileRepository);
+  serverGroupDeployments.registerOperationHandler(ServerGroupDeploymentAddHandler.OPERATION_NAME,sgdah,sgdah);
+  serverGroupDeployments.registerOperationHandler(ServerGroupDeploymentDeployHandler.OPERATION_NAME,ServerGroupDeploymentDeployHandler.INSTANCE,ServerGroupDeploymentDeployHandler.INSTANCE);
+  serverGroupDeployments.registerOperationHandler(ServerGroupDeploymentRedeployHandler.OPERATION_NAME,ServerGroupDeploymentRedeployHandler.INSTANCE,ServerGroupDeploymentRedeployHandler.INSTANCE);
+  serverGroupDeployments.registerOperationHandler(ServerGroupDeploymentUndeployHandler.OPERATION_NAME,ServerGroupDeploymentUndeployHandler.INSTANCE,ServerGroupDeploymentUndeployHandler.INSTANCE);
+  serverGroupDeployments.registerOperationHandler(DeploymentRemoveHandler.OPERATION_NAME,ServerGroupDeploymentRemoveHandler.INSTANCE,ServerGroupDeploymentRemoveHandler.INSTANCE);
+  ManagementResourceRegistration serverGroupSystemProperties=serverGroups.registerSubModel(PathElement.pathElement(SYSTEM_PROPERTY),DomainDescriptionProviders.SERVER_GROUP_SYSTEM_PROPERTY_PROVIDER);
+  serverGroupSystemProperties.registerOperationHandler(SystemPropertyAddHandler.OPERATION_NAME,SystemPropertyAddHandler.INSTANCE_WITH_BOOTTIME,SystemPropertyAddHandler.INSTANCE_WITH_BOOTTIME,false);
+  serverGroupSystemProperties.registerOperationHandler(SystemPropertyRemoveHandler.OPERATION_NAME,SystemPropertyRemoveHandler.INSTANCE,SystemPropertyRemoveHandler.INSTANCE,false);
+  serverGroupSystemProperties.registerReadWriteAttribute(VALUE,null,SystemPropertyValueWriteAttributeHandler.INSTANCE,Storage.CONFIGURATION);
+  serverGroupSystemProperties.registerReadWriteAttribute(BOOT_TIME,null,new ModelTypeValidatingHandler(ModelType.BOOLEAN),Storage.CONFIGURATION);
+  final ManagementResourceRegistration deployments=root.registerSubModel(PathElement.pathElement(DEPLOYMENT),DomainDescriptionProviders.DEPLOYMENT_PROVIDER);
+  DeploymentAddHandler dah=isMaster ? new DeploymentAddHandler(contentRepo) : new DeploymentAddHandler();
+  deployments.registerOperationHandler(DeploymentAddHandler.OPERATION_NAME,dah,dah);
+  DeploymentRemoveHandler drh=isMaster ? DeploymentRemoveHandler.createForMaster(contentRepo) : DeploymentRemoveHandler.createForSlave(fileRepository);
+  deployments.registerOperationHandler(DeploymentRemoveHandler.OPERATION_NAME,drh,drh);
+  ManagedDMRContentTypeResourceDefinition plansDef=new ManagedDMRContentTypeResourceDefinition(contentRepo,ROLLOUT_PLAN,PathElement.pathElement(MANAGEMENT_CLIENT_CONTENT,ROLLOUT_PLANS),DomainRootDescription.getResourceDescriptionResolver(ROLLOUT_PLANS));
+  ManagementResourceRegistration mgmtContent=root.registerSubModel(plansDef);
+  ParameterValidator contentValidator=new AbstractParameterValidator(){
+    @Override public void validateParameter(    String parameterName,    ModelNode value) throws OperationFailedException {
+      validateRolloutPlanStructure(value);
+    }
+  }
+;
+  ManagedDMRContentResourceDefinition planDef=ManagedDMRContentResourceDefinition.create(ROLLOUT_PLAN,contentValidator,DomainRootDescription.getResourceDescriptionResolver(ROLLOUT_PLAN));
+  mgmtContent.registerSubModel(planDef);
+  root.registerSubModel(new ExtensionResourceDefinition(extensionRegistry,true));
+  extensionRegistry.setSubsystemParentResourceRegistrations(profile,null);
+  if (!isMaster) {
+    ApplyRemoteMasterDomainModelHandler armdmh=new ApplyRemoteMasterDomainModelHandler(extensionRegistry,fileRepository,contentRepo,hostControllerInfo,ignoredDomainResourceRegistry);
+    root.registerOperationHandler(ApplyRemoteMasterDomainModelHandler.OPERATION_NAME,armdmh,armdmh,false,OperationEntry.EntryType.PRIVATE);
+  }
+ else {
+    ReadMasterDomainModelHandler rmdmh=new ReadMasterDomainModelHandler(domainController,channelRegistry);
+    root.registerOperationHandler(ReadMasterDomainModelHandler.OPERATION_NAME,rmdmh,rmdmh,false,OperationEntry.EntryType.PRIVATE,EnumSet.of(OperationEntry.Flag.READ_ONLY));
+  }
+}

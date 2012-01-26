@@ -1,31 +1,22 @@
 {
-  if (context.hasResult()) {
-    localResponse.get(RESULT).set(context.getResult());
-  }
   if (context.hasFailureDescription()) {
     localResponse.get(FAILURE_DESCRIPTION).set(context.getFailureDescription());
     context.setRollbackOnly();
   }
  else {
-    final ModelNode domainModel=Resource.Tools.readModel(context.getRootResource());
-    ParsedOp.ServerOperationProvider provider=new ParsedOp.ServerOperationProvider(){
+    boolean nullDomainOp=hostControllerExecutionSupport.getDomainOperation() == null;
+    HostControllerExecutionSupport.ServerOperationProvider provider=nullDomainOp ? NO_OP_PROVIDER : new HostControllerExecutionSupport.ServerOperationProvider(){
       @Override public Map<Set<ServerIdentity>,ModelNode> getServerOperations(      ModelNode domainOp,      PathAddress address){
-        return ServerOperationsResolverHandler.this.getServerOperations(context,domainOp,address,domainModel,domainModel.get(HOST).get(localHostName));
+        return ServerOperationsResolverHandler.this.getServerOperations(context,domainOp,address);
       }
     }
 ;
-    ModelNode localResult=localResponse.get(RESULT);
-    localResponse.remove(RESULT);
-    ModelNode responseNode=recordResponse ? context.getResult() : localResponse.get(RESULT);
-    if (ModelType.STRING == localResult.getType() && IGNORED.equals(localResult.asString())) {
-      responseNode.set(localResult);
-    }
- else {
-      Map<Set<ServerIdentity>,ModelNode> serverOps=parsedOp.getServerOps(provider);
-      createOverallResult(serverOps,localResult,responseNode);
-    }
+    Map<Set<ServerIdentity>,ModelNode> serverOps=hostControllerExecutionSupport.getServerOps(provider);
+    ModelNode domainOpResult=nullDomainOp ? new ModelNode(IGNORED) : (context.hasResult() ? context.getResult() : new ModelNode());
+    ModelNode overallResult=localResponse == null ? context.getResult() : localResponse.get(RESULT);
+    createOverallResult(serverOps,domainOpResult,overallResult);
     if (HOST_CONTROLLER_LOGGER.isTraceEnabled()) {
-      HOST_CONTROLLER_LOGGER.tracef("%s responseNode is %s",getClass().getSimpleName(),responseNode);
+      HOST_CONTROLLER_LOGGER.tracef("%s responseNode is %s",getClass().getSimpleName(),overallResult);
     }
   }
   context.completeStep();
