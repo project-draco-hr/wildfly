@@ -1,46 +1,16 @@
 {
-  if (httpExchange instanceof HttpsExchange) {
-    HttpsExchange httpsExch=(HttpsExchange)httpExchange;
-    SSLSession session=httpsExch.getSSLSession();
-    if (session != null) {
-      try {
-        Principal p=session.getPeerPrincipal();
-        return new Success(new HttpPrincipal(p.getName(),realm));
-      }
- catch (      SSLPeerUnverifiedException e) {
-      }
+  Subject subject=(Subject)httpExchange.getAttribute(Subject.class.getName(),AttributeScope.CONNECTION);
+  if (subject != null) {
+    Set<HttpPrincipal> httpPrincipals=subject.getPrincipals(HttpPrincipal.class);
+    if (httpPrincipals.size() > 0) {
+      return new Success(httpPrincipals.iterator().next());
     }
   }
-  DigestContext context=getOrCreateNegotiationContext(httpExchange);
-  if (context.isAuthenticated()) {
-    return new Authenticator.Success(context.getPrincipal());
+  callbackHandler.set(authenticationProvider.getCallbackHandler());
+  try {
+    return _authenticate(httpExchange);
   }
-  Headers requestHeaders=httpExchange.getRequestHeaders();
-  if (requestHeaders.containsKey(AUTHORIZATION_HEADER) == false) {
-    Headers responseHeaders=httpExchange.getResponseHeaders();
-    responseHeaders.add(WWW_AUTHENTICATE_HEADER,CHALLENGE + " " + createChallenge(context,false));
-    return new Authenticator.Retry(UNAUTHORIZED);
+  finally {
+    callbackHandler.set(null);
   }
-  String authorizationHeader=requestHeaders.getFirst(AUTHORIZATION_HEADER);
-  if (authorizationHeader.startsWith(CHALLENGE + " ") == false) {
-    throw MESSAGES.invalidAuthorizationHeader();
-  }
-  String challenge=authorizationHeader.substring(CHALLENGE.length() + 1);
-  Map<String,String> challengeParameters=parseDigestChallenge(challenge);
-  HttpPrincipal principal=validateUser(httpExchange,challengeParameters);
-  if (principal == null) {
-    if (challengeParameters.containsKey(NONCE)) {
-      context.useNonce(challengeParameters.get(NONCE));
-    }
-    Headers responseHeaders=httpExchange.getResponseHeaders();
-    responseHeaders.add(WWW_AUTHENTICATE_HEADER,CHALLENGE + " " + createChallenge(context,false));
-    return new Authenticator.Retry(UNAUTHORIZED);
-  }
-  if (context.useNonce(challengeParameters.get(NONCE))) {
-    context.principal=principal;
-    return new Authenticator.Success(principal);
-  }
-  Headers responseHeaders=httpExchange.getResponseHeaders();
-  responseHeaders.add(WWW_AUTHENTICATE_HEADER,CHALLENGE + " " + createChallenge(context,true));
-  return new Authenticator.Retry(UNAUTHORIZED);
 }
