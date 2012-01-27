@@ -1,20 +1,34 @@
 {
-  handler.setDelegate(new TransactionalModelControllerOperationHandler(controller,channels.getExecutorService()){
-    @Override public void shutdownNow(){
-      super.shutdown();
-      final List<Integer> cancelled=super.cancelAllActiveOperations();
-      throw new IllegalStateException("failed to complete operations" + cancelled);
-    }
-  }
+  try {
+    channels.setupRemoting(new ManagementChannelInitialization(){
+      @Override public HandleableCloseable.Key startReceiving(      Channel channel){
+        final ManagementChannelHandler support=new ManagementChannelHandler(channel,channels.getExecutorService());
+        support.addHandlerFactory(new TransactionalModelControllerOperationHandler(proxiedController,support));
+        channel.addCloseHandler(new CloseHandler<Channel>(){
+          @Override public void handleClose(          Channel closed,          IOException exception){
+            support.shutdownNow();
+          }
+        }
 );
+        channel.receiveMessage(support.getReceiver());
+        return null;
+      }
+    }
+);
+    channels.startClientConnetion();
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(e);
+  }
   final Channel clientChannel=channels.getClientChannel();
-  final RemoteProxyController proxyController=RemoteProxyController.create(channels.getExecutorService(),PathAddress.pathAddress(),ProxyOperationAddressTranslator.HOST,channels.getClientChannel());
+  final ManagementChannelHandler support=new ManagementChannelHandler(clientChannel,channels.getExecutorService());
+  final RemoteProxyController proxyController=RemoteProxyController.create(support,PathAddress.pathAddress(),ProxyOperationAddressTranslator.HOST);
   clientChannel.addCloseHandler(new CloseHandler<Channel>(){
     @Override public void handleClose(    Channel closed,    IOException exception){
-      proxyController.shutdownNow();
+      support.shutdownNow();
     }
   }
 );
-  clientChannel.receiveMessage(ManagementChannelReceiver.createDelegating(proxyController));
+  clientChannel.receiveMessage(support.getReceiver());
   return proxyController;
 }

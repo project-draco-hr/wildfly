@@ -1,20 +1,26 @@
 {
+  final ModelController controller=this.controller.getValue();
   final Channel channel=hcChannel.getValue();
-  final HostControllerServerHandler handler=new HostControllerServerHandler(controller.getValue(),executor);
-  channel.addCloseHandler(new CloseHandler<Channel>(){
-    @Override public void handleClose(    final Channel closed,    final IOException exception){
-      handler.shutdownNow();
-    }
-  }
-);
+  handler=new ManagementChannelHandler(channel,executor);
+  handler.addHandlerFactory(new TransactionalModelControllerOperationHandler(controller,handler));
   context.asynchronous();
   try {
-    handler.executeRegistrationRequest(channel,new ServerRegisterRequest(),context);
+    this.handler.executeRequest(new ServerRegisterRequest(),null,new ActiveOperation.CompletedCallback<Void>(){
+      @Override public void completed(      Void result){
+        remoteFileRepositoryValue.getValue().setRemoteFileRepositoryExecutor(new RemoteFileRepositoryExecutorImpl());
+        context.complete();
+      }
+      @Override public void failed(      Exception e){
+        context.failed(ServerMessages.MESSAGES.failedToConnectToHC(e));
+      }
+      @Override public void cancelled(){
+        context.failed(ServerMessages.MESSAGES.cancelledHCConnect());
+      }
+    }
+);
   }
  catch (  Exception e) {
     throw ServerMessages.MESSAGES.failedToConnectToHC(e);
   }
-  this.registerHandler=handler;
-  remoteFileRepositoryValue.getValue().setRemoteFileRepositoryExecutor(new RemoteFileRepositoryExecutorImpl());
-  channel.receiveMessage(ManagementChannelReceiver.createDelegating(handler));
+  channel.receiveMessage(handler.getReceiver());
 }

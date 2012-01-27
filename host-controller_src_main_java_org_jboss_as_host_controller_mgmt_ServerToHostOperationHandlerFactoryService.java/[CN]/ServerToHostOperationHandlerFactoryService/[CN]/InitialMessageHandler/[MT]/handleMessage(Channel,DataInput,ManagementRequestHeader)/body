@@ -6,17 +6,18 @@
     CONTROLLER_MANAGEMENT_LOGGER.serverRegistered(serverName,channel);
     executorService.execute(new Runnable(){
       @Override public void run(){
-        final Channel mgmtChannel=channel;
-        ServerToHostOperationHandlerFactoryService.this.callback.getValue().serverCommunicationRegistered(serverName,mgmtChannel,new ServerInventory.ProxyCreatedCallback(){
-          @Override public void proxyOperationHandlerCreated(          final ManagementMessageHandler handler){
+        final ManagementChannelHandler handler=new ManagementChannelHandler(channel,executorService,new ServerHandlerFactory());
+        ServerToHostOperationHandlerFactoryService.this.callback.getValue().serverCommunicationRegistered(serverName,handler,new ServerInventory.ProxyCreatedCallback(){
+          @Override public void proxyOperationHandlerCreated(          final ManagementRequestHandlerFactory handlerFactory){
             channel.addCloseHandler(new CloseHandler<Channel>(){
               @Override public void handleClose(              Channel closed,              IOException exception){
                 handler.shutdownNow();
               }
             }
 );
-            InitialMessageHandler.this.proxyHandler=handler;
             safeWriteResponse(channel,header,null);
+            handler.addHandlerFactory(handlerFactory);
+            channel.receiveMessage(handler.getReceiver());
           }
         }
 );

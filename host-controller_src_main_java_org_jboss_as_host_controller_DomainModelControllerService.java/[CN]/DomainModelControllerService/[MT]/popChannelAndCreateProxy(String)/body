@@ -1,16 +1,21 @@
 {
-  final Channel channel=unregisteredHostChannels.remove(hostName);
-  if (channel == null) {
+  final ManagementChannelHandler channelHandler=unregisteredHostChannels.remove(hostName);
+  if (channelHandler == null) {
     throw MESSAGES.noChannelForHost(hostName);
   }
-  channel.addCloseHandler(new CloseHandler<Channel>(){
-    public void handleClose(    final Channel closed,    final IOException exception){
-      unregisterRemoteHost(hostName);
+  try {
+    channelHandler.getChannel().addCloseHandler(new CloseHandler<Channel>(){
+      public void handleClose(      final Channel closed,      final IOException exception){
+        unregisterRemoteHost(hostName);
+      }
     }
-  }
 );
+  }
+ catch (  IOException e) {
+    throw new RuntimeException(e);
+  }
   final PathAddress addr=PathAddress.pathAddress(PathElement.pathElement(ModelDescriptionConstants.HOST,hostName));
-  RemoteProxyController proxy=RemoteProxyController.create(proxyExecutor,addr,ProxyOperationAddressTranslator.HOST,channel);
+  RemoteProxyController proxy=RemoteProxyController.create(channelHandler,addr,ProxyOperationAddressTranslator.HOST);
   ProxyCreatedCallback callback=proxyCreatedCallbacks.remove(hostName);
   if (callback != null) {
     callback.proxyCreated(proxy);
