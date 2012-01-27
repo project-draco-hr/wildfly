@@ -1,0 +1,24 @@
+{
+  validator.validate(operation);
+  Subject subject=SecurityContext.getSubject();
+  if (subject == null) {
+    throw new OperationFailedException(new ModelNode().set(MESSAGES.noSecurityContextEstablished()));
+  }
+  Set<RealmUser> realmUsers=subject.getPrincipals(RealmUser.class);
+  if (realmUsers.size() != 1) {
+    throw new OperationFailedException(new ModelNode().set(MESSAGES.unexpectedNumberOfRealmUsers(realmUsers.size())));
+  }
+  RealmUser user=realmUsers.iterator().next();
+  ModelNode result=context.getResult();
+  ModelNode identity=result.get(IDENTITY);
+  identity.get(USERNAME).set(user.getName());
+  identity.get(REALM).set(user.getRealm());
+  if (operation.hasDefined(VERBOSE) && operation.require(VERBOSE).asBoolean()) {
+    ModelNode roles=result.get(ROLES);
+    Set<RealmRole> roleSet=subject.getPrincipals(RealmRole.class);
+    for (    RealmRole current : roleSet) {
+      roles.add(current.getName());
+    }
+  }
+  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+}
