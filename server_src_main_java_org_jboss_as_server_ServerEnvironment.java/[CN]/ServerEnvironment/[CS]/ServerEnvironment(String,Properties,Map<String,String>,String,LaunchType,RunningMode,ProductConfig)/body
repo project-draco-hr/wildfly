@@ -12,53 +12,7 @@
   if (!standalone && hostControllerName == null) {
     throw ServerMessages.MESSAGES.hostControllerNameNullInDomain();
   }
-  String hostName=props.getProperty(HOST_NAME);
-  String qualifiedHostName=props.getProperty(QUALIFIED_HOST_NAME);
-  if (qualifiedHostName == null) {
-    qualifiedHostName=hostName;
-    if (qualifiedHostName == null) {
-      qualifiedHostName=env.get("HOSTNAME");
-    }
-    if (qualifiedHostName == null) {
-      qualifiedHostName=env.get("COMPUTERNAME");
-    }
-    if (qualifiedHostName == null) {
-      try {
-        qualifiedHostName=InetAddressUtil.getLocalHost().getHostName();
-      }
- catch (      UnknownHostException e) {
-        qualifiedHostName=null;
-      }
-    }
-    if (qualifiedHostName != null && qualifiedHostName.matches("^\\d+\\.\\d+\\.\\d+\\.\\d+$|:")) {
-      qualifiedHostName=null;
-    }
-    if (qualifiedHostName == null) {
-      qualifiedHostName="unknown-host.unknown-domain";
-    }
-    qualifiedHostName=qualifiedHostName.trim().toLowerCase();
-  }
-  this.qualifiedHostName=qualifiedHostName;
-  if (hostName == null) {
-    final int idx=qualifiedHostName.indexOf('.');
-    hostName=idx == -1 ? qualifiedHostName : qualifiedHostName.substring(0,idx);
-  }
-  this.hostName=hostName;
-  String serverName=props.getProperty(SERVER_NAME);
-  providedServerName=serverName != null;
-  if (!providedServerName) {
-    serverName=hostName;
-  }
- else {
-    serverName=resolveGUID(serverName);
-  }
-  this.serverName=serverName;
-  String nodeName=props.getProperty(NODE_NAME);
-  providedNodeName=nodeName != null;
-  if (!providedNodeName) {
-    nodeName=hostControllerName == null ? serverName : hostControllerName + ":" + serverName;
-  }
-  this.nodeName=nodeName;
+  configureQualifiedHostName(props.getProperty(QUALIFIED_HOST_NAME),props.getProperty(HOST_NAME),props,env);
   javaExtDirs=getFilesFromProperty(JAVA_EXT_DIRS,props);
   homeDir=getFileFromProperty(HOME_DIR,props);
   if (homeDir == null)   throw ServerMessages.MESSAGES.missingHomeDirConfiguration(HOME_DIR);
@@ -67,11 +21,7 @@
     tmp=new File(homeDir,"modules");
   }
   modulesDir=tmp;
-  tmp=getFileFromProperty(BUNDLES_DIR,props);
-  if (tmp == null) {
-    tmp=new File(homeDir,"bundles");
-  }
-  bundlesDir=tmp;
+  configureBundlesDir(props.getProperty(BUNDLES_DIR),props);
   tmp=getFileFromProperty(SERVER_BASE_DIR,props);
   if (tmp == null) {
     tmp=new File(homeDir,standalone ? "standalone" : "domain/servers/" + serverName);
@@ -98,11 +48,7 @@
     tmp=new File(serverBaseDir,"log");
   }
   serverLogDir=tmp;
-  tmp=getFileFromProperty(SERVER_TEMP_DIR,props);
-  if (tmp == null) {
-    tmp=new File(serverBaseDir,"tmp");
-  }
-  serverTempDir=tmp;
+  configureServerTempDir(props.getProperty(SERVER_TEMP_DIR),props);
   tmp=getFileFromProperty(CONTROLLER_TEMP_DIR,props);
   if (tmp == null) {
     tmp=new File(serverBaseDir,"tmp");
@@ -121,4 +67,8 @@
   }
   allowModelControllerExecutor=allowExecutor;
   this.productConfig=productConfig;
+  this.primordialProperties=new Properties();
+  copyProperties(props,primordialProperties);
+  this.providedProperties=new Properties();
+  copyProperties(primordialProperties,providedProperties);
 }
