@@ -2,6 +2,7 @@
   final EjbJarDescription ejbJarDescription=getEjbJarDescription(deploymentUnit);
   final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
   final List<ComponentDescription> additionalComponents=deploymentUnit.getAttachmentList(Attachments.ADDITIONAL_RESOLVABLE_COMPONENTS);
+  final CompositeIndex compositeIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.COMPOSITE_ANNOTATION_INDEX);
   final String beanName=sessionBean.getName();
   if (ejbJarDescription.hasComponent(beanName)) {
     final ComponentDescription description=eeModuleDescription.getComponentByName(beanName);
@@ -26,18 +27,24 @@
       }
     }
   }
-  final SessionType sessionType=sessionBean.getSessionType();
+  SessionType sessionType=sessionBean.getSessionType();
   if (sessionType == null && sessionBean instanceof GenericBeanMetaData) {
     final GenericBeanMetaData bean=(GenericBeanMetaData)sessionBean;
     if (bean.getEjbType() == EjbType.SESSION) {
-      throw EjbMessages.MESSAGES.sessionTypeNotSpecified(beanName);
+      sessionType=determineSessionType(sessionBean.getEjbClass(),compositeIndex);
+      if (sessionType == null) {
+        throw EjbMessages.MESSAGES.sessionTypeNotSpecified(beanName);
+      }
     }
  else {
       return;
     }
   }
  else   if (sessionType == null) {
-    throw EjbMessages.MESSAGES.sessionTypeNotSpecified(beanName);
+    sessionType=determineSessionType(sessionBean.getEjbClass(),compositeIndex);
+    if (sessionType == null) {
+      throw EjbMessages.MESSAGES.sessionTypeNotSpecified(beanName);
+    }
   }
   final String beanClassName=sessionBean.getEjbClass();
   final SessionBeanComponentDescription sessionBeanDescription;
