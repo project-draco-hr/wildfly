@@ -6,15 +6,19 @@
     final PathAddress address=PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,RemotingExtension.SUBSYSTEM_NAME),PathElement.pathElement("remote-outbound-connection",connectionName));
     addRemoteOutboundConnection.get(OP_ADDR).set(address.toModelNode());
     addRemoteOutboundConnection.get("outbound-socket-binding-ref").set(outboundSocketRef);
+    final ModelNode op=Util.getEmptyOperation(COMPOSITE,new ModelNode());
+    final ModelNode steps=op.get(STEPS);
+    steps.add(addRemoteOutboundConnection);
     if (!connectionCreationOptions.isEmpty()) {
-      final ModelNode connectionCreationOptionsModel=addRemoteOutboundConnection.get("connection-creation-options");
-      for (      final Map.Entry<String,String> entry : connectionCreationOptions.entrySet()) {
-        final String optionName=entry.getKey();
-        final String optionValue=entry.getValue();
-        connectionCreationOptionsModel.get(optionName).set(optionValue);
+      for (      Map.Entry<String,String> property : connectionCreationOptions.entrySet()) {
+        ModelNode propertyOp=new ModelNode();
+        propertyOp.get(OP).set(ADD);
+        propertyOp.get(OP_ADDR).set(address.toModelNode()).add("property",property.getKey());
+        propertyOp.get("value").set(property.getValue());
+        steps.add(propertyOp);
       }
     }
-    execute(modelControllerClient,addRemoteOutboundConnection);
+    execute(modelControllerClient,op);
   }
  catch (  IOException ioe) {
     throw new RuntimeException(ioe);
