@@ -8,27 +8,19 @@
     ROOT_LOGGER.noServerAvailable(serverName);
     return;
   }
-  final Channel channel;
   try {
-    channel=channelAssociation.getChannel();
+    final Channel channel=channelAssociation.getChannel();
+    channel.addCloseHandler(new CloseHandler<Channel>(){
+      public void handleClose(      final Channel closed,      final IOException exception){
+        server.callbackUnregistered();
+        domainController.unregisterRunningServer(server.getServerName());
+      }
+    }
+);
   }
  catch (  IOException e) {
     throw new RuntimeException(e);
   }
-  channel.addCloseHandler(new CloseHandler<Channel>(){
-    public void handleClose(    final Channel closed,    final IOException exception){
-      server.callbackUnregistered();
-      domainController.unregisterRunningServer(server.getServerName());
-    }
-  }
-);
-  server.callbackRegistered(new ManagedServer.TransitionTask(){
-    @Override public void execute(    ManagedServer server) throws Exception {
-      final PathElement element=PathElement.pathElement(RUNNING_SERVER,server.getServerName());
-      final RemoteProxyController serverController=RemoteProxyController.create(channelAssociation,PathAddress.pathAddress(PathElement.pathElement(HOST,domainController.getLocalHostInfo().getLocalHostName()),element),ProxyOperationAddressTranslator.SERVER);
-      callback.proxyOperationHandlerCreated(serverController);
-      domainController.registerRunningServer(serverController);
-    }
-  }
-,channelAssociation);
+  final RemoteProxyController serverController=server.channelRegistered(channelAssociation);
+  callback.proxyOperationHandlerCreated(serverController);
 }
