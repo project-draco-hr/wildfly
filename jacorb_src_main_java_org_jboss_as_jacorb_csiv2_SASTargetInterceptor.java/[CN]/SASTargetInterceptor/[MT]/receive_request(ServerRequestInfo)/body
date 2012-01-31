@@ -1,7 +1,5 @@
 {
-  if (traceEnabled) {
-    log.trace("receive_request " + ri.operation());
-  }
+  JacORBLogger.ROOT_LOGGER.traceReceiveRequest(ri.operation());
   CurrentRequestInfo threadLocal=(CurrentRequestInfo)threadLocalData.get();
   threadLocal.sasContextReceived=false;
   threadLocal.authenticationTokenReceived=false;
@@ -20,34 +18,30 @@
       if (contextBody.discriminator() == MTMessageInContext.value) {
         long contextId=contextBody.in_context_msg().client_context_id;
         threadLocal.sasReply=createMsgCtxError(contextId,4);
-        throw new NO_PERMISSION("SAS context does not exist.");
+        throw JacORBMessages.MESSAGES.missingSASContext();
       }
  else       if (contextBody.discriminator() == MTEstablishContext.value) {
         EstablishContext message=contextBody.establish_msg();
         threadLocal.contextId=message.client_context_id;
         threadLocal.sasContextReceived=true;
         if (message.client_authentication_token != null && message.client_authentication_token.length > 0) {
-          if (traceEnabled) {
-            log.trace("received client authentication token");
-          }
+          JacORBLogger.ROOT_LOGGER.authTokenReceived();
           InitialContextToken authToken=CSIv2Util.decodeInitialContextToken(message.client_authentication_token,codec);
           if (authToken == null) {
             threadLocal.sasReply=createMsgCtxError(message.client_context_id,2);
-            throw new NO_PERMISSION("Could not decode initial context token.");
+            throw JacORBMessages.MESSAGES.errorDecodingInitContextToken();
           }
           threadLocal.incomingUsername=authToken.username;
           threadLocal.incomingPassword=authToken.password;
           threadLocal.incomingTargetName=CSIv2Util.decodeGssExportedName(authToken.target_name);
           if (threadLocal.incomingTargetName == null) {
             threadLocal.sasReply=createMsgCtxError(message.client_context_id,2);
-            throw new NO_PERMISSION("Could not decode target name in initial context token.");
+            throw JacORBMessages.MESSAGES.errorDecodingTargetInContextToken();
           }
           threadLocal.authenticationTokenReceived=true;
         }
         if (message.identity_token != null) {
-          if (traceEnabled) {
-            log.trace("received identity token");
-          }
+          JacORBLogger.ROOT_LOGGER.identityTokenReceived();
           threadLocal.incomingIdentity=message.identity_token;
           if (message.identity_token.discriminator() == ITTPrincipalName.value) {
             Any a=codec.decode_value(message.identity_token.principal_name(),GSS_NT_ExportedNameHelper.type());
@@ -55,7 +49,7 @@
             threadLocal.incomingPrincipalName=CSIv2Util.decodeGssExportedName(encodedName);
             if (threadLocal.incomingPrincipalName == null) {
               threadLocal.sasReply=createMsgCtxError(message.client_context_id,2);
-              throw new NO_PERMISSION("Could not decode incoming principal name.");
+              throw JacORBMessages.MESSAGES.errorDecodingPrincipalName();
             }
           }
         }
@@ -67,9 +61,9 @@
  catch (  BAD_PARAM e) {
   }
 catch (  FormatMismatch e) {
-    throw new MARSHAL("Exception decoding context data in SASTargetInterceptor: " + e);
+    throw JacORBMessages.MESSAGES.errorDecodingContextData(this.name(),e);
   }
 catch (  TypeMismatch e) {
-    throw new MARSHAL("Exception decoding context data in SASTargetInterceptor: " + e);
+    throw JacORBMessages.MESSAGES.errorDecodingContextData(this.name(),e);
   }
 }
