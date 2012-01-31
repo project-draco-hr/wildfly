@@ -13,7 +13,17 @@
   startConfigAndAddDependency(dataSourceServiceBuilder,dataSourceService,dsName,serviceTarget,operation,verificationHandler);
   final String driverName=node.asString();
   final ServiceName driverServiceName=ServiceName.JBOSS.append("jdbc-driver",driverName.replaceAll("\\.","_"));
-  if (driverServiceName != null) {
+  if (!context.isBooting()) {
+    final ServiceRegistry registry=context.getServiceRegistry(true);
+    final ServiceController<?> dataSourceController=registry.getService(driverServiceName);
+    if (driverServiceName != null && dataSourceController != null) {
+      dataSourceServiceBuilder.addDependency(driverServiceName,Driver.class,dataSourceService.getDriverInjector());
+    }
+ else {
+      throw new OperationFailedException(MESSAGES.driverNotPresent(driverName));
+    }
+  }
+ else {
     dataSourceServiceBuilder.addDependency(driverServiceName,Driver.class,dataSourceService.getDriverInjector());
   }
   dataSourceServiceBuilder.setInitialMode(ServiceController.Mode.NEVER);
