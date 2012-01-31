@@ -9,13 +9,30 @@
   RunAs currentRunAs=current.getIncomingRunAs();
   boolean trusted=currentRunAs != null && currentRunAs instanceof RunAsIdentity;
   if (trusted == false) {
+    boolean authenticated=false;
     if (RemotingContext.isSet()) {
       SecurityContextUtil util=current.getUtil();
-      Principal p=new SimplePrincipal(UUID.randomUUID().toString());
-      String credential=UUID.randomUUID().toString();
+      UserInfo userInfo=RemotingContext.getConnection().getUserInfo();
+      Principal p=null;
+      String credential=null;
+      Subject subject=null;
+      if (userInfo instanceof SubjectUserInfo) {
+        SubjectUserInfo sinfo=(SubjectUserInfo)userInfo;
+        subject=sinfo.getSubject();
+        Set<PasswordCredential> pcSet=subject.getPrivateCredentials(PasswordCredential.class);
+        PasswordCredential pc=pcSet.iterator().next();
+        p=new SimplePrincipal(pc.getUserName());
+        credential=new String(pc.getCredential());
+      }
+      if (p == null || credential == null) {
+        p=new SimplePrincipal(UUID.randomUUID().toString());
+        credential=UUID.randomUUID().toString();
+      }
       util.createSubjectInfo(p,credential,null);
     }
-    boolean authenticated=authenticate(current);
+    if (authenticated == false) {
+      authenticated=authenticate(current);
+    }
     if (authenticated == false) {
       throw SecurityMessages.MESSAGES.invalidUserException();
     }
