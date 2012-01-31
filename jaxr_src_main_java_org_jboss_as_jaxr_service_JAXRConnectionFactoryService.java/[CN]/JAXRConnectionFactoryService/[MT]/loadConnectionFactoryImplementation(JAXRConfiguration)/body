@@ -1,0 +1,39 @@
+{
+  ConnectionFactory jaxrFactory=null;
+  String factoryName=SecurityActions.getSystemProperty(JAXRConstants.JAXR_FACTORY_IMPLEMENTATION,null);
+  if (factoryName != null) {
+    if (log.isDebugEnabled())     log.debug("Obtained the JAXR factory name from System Property " + JAXRConstants.JAXR_FACTORY_IMPLEMENTATION + " factory implementation class is "+ factoryName);
+  }
+ else {
+    factoryName=config.getConnectionFactoryImplementation();
+  }
+  if (factoryName != null) {
+    if (log.isDebugEnabled())     log.debug("Obtained the JAXR factory name from JBoss configuration: " + " factory implementation class is " + factoryName);
+  }
+ else {
+    ServiceLoader<ConnectionFactory> factoryLoader=ServiceLoader.load(ConnectionFactory.class);
+    if (factoryLoader != null) {
+      for (      ConnectionFactory factory : factoryLoader) {
+        if (log.isDebugEnabled())         log.debug("Obtained the JAXR factory name from the Service API: " + " using file META-INF/services/javax.xml.registry.ConnectionFactory=" + factory.getClass().getName());
+        return factory;
+      }
+    }
+  }
+  if (factoryName == null)   factoryName=JAXRConstants.DEFAULT_JAXR_FACTORY_IMPL;
+  if (log.isDebugEnabled())   log.debug("Using default JAXR factory name " + JAXRConstants.DEFAULT_JAXR_FACTORY_IMPL);
+  ClassLoader loader=Thread.currentThread().getContextClassLoader();
+  Class<?> factoryClass;
+  try {
+    try {
+      factoryClass=loader.loadClass(factoryName);
+    }
+ catch (    ClassNotFoundException e) {
+      factoryClass=this.getClass().getClassLoader().loadClass(factoryName);
+    }
+    jaxrFactory=(ConnectionFactory)factoryClass.newInstance();
+  }
+ catch (  Throwable e) {
+    throw new JAXRException("Failed to create instance of: " + factoryName,e);
+  }
+  return jaxrFactory;
+}
