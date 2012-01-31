@@ -1,17 +1,33 @@
 {
   final CountDownLatch timeoutNotifier=new CountDownLatch(1);
-  this.bean.createSingleActionTimer(300,new TimerConfig(null,false),timeoutNotifier);
+  final CountDownLatch timeoutWaiter=new CountDownLatch(1);
+  this.bean.createSingleActionTimer(300,new TimerConfig(null,false),timeoutNotifier,timeoutWaiter);
   final boolean timeoutInvoked=timeoutNotifier.await(5,TimeUnit.SECONDS);
-  Assert.assertTrue("Timeout method was not invoked (within 5 seconds)",timeoutInvoked);
+  Assert.assertTrue("timeout method was not invoked (within 5 seconds)",timeoutInvoked);
+  try {
+    bean.invokeTimeRemaining();
+    Assert.fail("Expecting exception " + NoMoreTimeoutsException.class.getSimpleName());
+  }
+ catch (  NoMoreTimeoutsException e) {
+    log.info("Expected exception " + e.getClass().getSimpleName() + " was thrown on method getTimeRemaining");
+  }
+  try {
+    bean.invokeGetNext();
+    Assert.fail("Expecting exception " + NoMoreTimeoutsException.class.getSimpleName());
+  }
+ catch (  NoMoreTimeoutsException e) {
+    log.info("Expected exception " + e.getClass().getSimpleName() + " was thrown on method getNextTimeout");
+  }
+  timeoutWaiter.countDown();
   int count=0;
   boolean passed=false;
   while (count < 20 && !passed) {
     try {
-      this.bean.invokeOnExpiredTimer();
+      bean.invokeTimeRemaining();
       Assert.fail("Expected to fail on invoking on an expired timer");
     }
  catch (    NoSuchObjectLocalException nsole) {
-      logger.info("Got the expected exception " + nsole);
+      log.info("Got the expected exception " + nsole);
       passed=true;
     }
 catch (    NoMoreTimeoutsException e) {
