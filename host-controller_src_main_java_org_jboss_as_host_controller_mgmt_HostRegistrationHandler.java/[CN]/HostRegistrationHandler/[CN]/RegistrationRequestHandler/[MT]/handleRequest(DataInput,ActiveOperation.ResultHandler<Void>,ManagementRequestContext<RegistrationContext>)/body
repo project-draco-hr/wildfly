@@ -1,0 +1,29 @@
+{
+  expectHeader(input,DomainControllerProtocol.PARAM_HOST_ID);
+  final String hostName=input.readUTF();
+  final ModelNode registrationParams=new ModelNode();
+  registrationParams.readExternal(input);
+  final RegistrationContext registration=context.getAttachment();
+  registration.initialize(hostName,context);
+  final ProxyController exiting=null;
+  if (exiting != null) {
+    registration.failed(createError(SlaveRegistrationException.ErrorCode.HOST_ALREADY_EXISTS,hostName));
+  }
+  context.executeAsync(new ManagementRequestContext.AsyncTask<RegistrationContext>(){
+    @Override public void execute(    ManagementRequestContext<RegistrationContext> context) throws Exception {
+      final ModelNode result;
+      try {
+        result=controller.execute(READ_DOMAIN_MODEL,OperationMessageHandler.logging,registration,OperationAttachments.EMPTY);
+      }
+ catch (      Exception e) {
+        final ModelNode failure=new ModelNode();
+        failure.get(OUTCOME).set(FAILED);
+        failure.get(FAILURE_DESCRIPTION).set(e.getClass().getName() + ":" + e.getMessage());
+        registration.failed(failure);
+        return;
+      }
+      registration.sendCompletedMessage(result);
+    }
+  }
+);
+}
