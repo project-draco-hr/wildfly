@@ -5,9 +5,24 @@
   result.add(JGroupsSubsystemAdd.createOperation(rootAddress.toModelNode(),subModel));
   if (subModel.hasDefined(ModelKeys.STACK)) {
     for (    final Property stack : subModel.get(ModelKeys.STACK).asPropertyList()) {
-      final ModelNode address=rootAddress.toModelNode();
-      address.add(ModelKeys.STACK,stack.getName());
-      result.add(ProtocolStackAdd.createOperation(address,stack.getValue()));
+      final ModelNode stackAddress=rootAddress.toModelNode();
+      stackAddress.add(ModelKeys.STACK,stack.getName());
+      result.add(ProtocolStackAdd.createOperation(stackAddress,stack.getValue()));
+      if (stack.getValue().get(ModelKeys.TRANSPORT,ModelKeys.TRANSPORT_NAME).isDefined()) {
+        ModelNode transport=stack.getValue().get(ModelKeys.TRANSPORT,ModelKeys.TRANSPORT_NAME);
+        ModelNode transportAddress=stackAddress.clone();
+        transportAddress.add(ModelKeys.TRANSPORT,ModelKeys.TRANSPORT_NAME);
+        result.add(StackConfigOperationHandlers.createOperation(CommonAttributes.TRANSPORT_ATTRIBUTES,transportAddress,transport));
+        addProtocolPropertyCommands(transport,transportAddress,result);
+      }
+      if (stack.getValue().get(ModelKeys.PROTOCOL).isDefined()) {
+        for (        Property protocol : ProtocolStackAdd.getOrderedProtocolPropertyList(stack.getValue())) {
+          result.add(StackConfigOperationHandlers.createProtocolOperation(CommonAttributes.PROTOCOL_ATTRIBUTES,stackAddress,protocol.getValue()));
+          ModelNode protocolAddress=stackAddress.clone();
+          protocolAddress.add(ModelKeys.PROTOCOL,protocol.getName());
+          addProtocolPropertyCommands(protocol.getValue(),protocolAddress,result);
+        }
+      }
     }
   }
   context.getResult().set(result);
