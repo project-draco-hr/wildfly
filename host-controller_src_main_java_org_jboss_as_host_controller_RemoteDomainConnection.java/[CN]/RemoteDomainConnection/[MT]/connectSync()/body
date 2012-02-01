@@ -1,0 +1,60 @@
+{
+  boolean ok=false;
+  try {
+    final ProtocolChannelClient client=ProtocolChannelClient.create(configuration);
+    CallbackHandler callbackHandler=null;
+    SSLContext sslContext=null;
+    if (realm != null) {
+      sslContext=realm.getSSLContext();
+      CallbackHandlerFactory handlerFactory=realm.getSecretCallbackHandlerFactory();
+      if (handlerFactory != null) {
+        callbackHandler=handlerFactory.getCallbackHandler(localHostName);
+      }
+    }
+    connection=client.connectSync(callbackHandler,Collections.<String,String>emptyMap(),sslContext);
+    connection.addCloseHandler(new CloseHandler<Connection>(){
+      @Override public void handleClose(      final Connection closed,      final IOException exception){
+synchronized (this) {
+          if (connection == closed) {
+            connection=null;
+            connectionClosed();
+          }
+        }
+      }
+    }
+);
+    channel=connection.openChannel(CHANNEL_SERVICE_TYPE,OptionMap.EMPTY).get();
+    channel.addCloseHandler(new CloseHandler<Channel>(){
+      @Override public void handleClose(      final Channel closed,      final IOException exception){
+        channelHandler.handleChannelClosed(closed,exception);
+synchronized (this) {
+          if (channel == closed) {
+            channel=null;
+            connectionClosed();
+          }
+        }
+      }
+    }
+);
+    channel.receiveMessage(channelHandler.getReceiver());
+    final RegistrationResult result;
+    try {
+      result=channelHandler.executeRequest(new RegisterHostControllerRequest(),null).getResult().get();
+    }
+ catch (    Exception e) {
+      if (e.getCause() instanceof IOException) {
+        throw (IOException)e;
+      }
+      throw new IOException(e);
+    }
+    ok=true;
+    reconnectionCount=0;
+    return result;
+  }
+  finally {
+    if (!ok) {
+      StreamUtils.safeClose(connection);
+      StreamUtils.safeClose(channel);
+    }
+  }
+}

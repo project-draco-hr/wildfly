@@ -1,16 +1,15 @@
 {
-  IllegalStateException ise=null;
   boolean connected=false;
   final long timeout=30000;
   final long endTime=System.currentTimeMillis() + timeout;
   int retries=0;
   while (!connected) {
+    RemoteDomainConnection.RegistrationResult result=null;
     try {
-      connect();
+      result=connection.connect();
       connected=true;
-      break;
     }
- catch (    IllegalStateException e) {
+ catch (    IOException e) {
       Throwable cause=e;
       while ((cause=cause.getCause()) != null) {
         if (cause instanceof SaslException) {
@@ -20,18 +19,25 @@
       if (System.currentTimeMillis() > endTime) {
         throw MESSAGES.connectionToMasterTimeout(e,retries,timeout);
       }
-      ise=e;
       try {
+        HostControllerLogger.ROOT_LOGGER.cannotConnect(localHostInfo.getRemoteDomainControllerHost(),localHostInfo.getRemoteDomainControllertPort());
         ReconnectPolicy.CONNECT.wait(retries);
       }
  catch (      InterruptedException ie) {
         throw MESSAGES.connectionToMasterInterrupted();
       }
     }
-catch (    HostAlreadyExistsException e) {
-      throw new IllegalStateException(e.getMessage());
-    }
+    if (result != null && !result.isOK()) {
+switch (result.getCode()) {
+case HOST_ALREADY_EXISTS:
+        throw new HostAlreadyExistsException(result.getMessage());
+default :
+      throw new RuntimeException(new SlaveRegistrationException(result.getCode(),result.getMessage()).marshal());
   }
-  this.connected.set(true);
-  registered.set(true);
+}
+}
+if (connected) {
+handler.addHandlerFactory(new TransactionalModelControllerOperationHandler(controller,handler));
+masterProxy=ExistingChannelModelControllerClient.createAndAdd(handler);
+}
 }

@@ -1,0 +1,41 @@
+{
+  if (!reconnect.get()) {
+    return;
+  }
+  final Connection connection=this.connection;
+  if (connection != null) {
+    if (channel == null) {
+      connection.closeAsync();
+    }
+  }
+ else {
+    HostControllerLogger.ROOT_LOGGER.lostRemoteDomainConnection();
+    executorService.execute(new Runnable(){
+      @Override public void run(){
+        final ReconnectPolicy policy=reconnectPolicy;
+        for (; ; ) {
+          try {
+            policy.wait(reconnectionCount++);
+            if (!reconnect.get()) {
+              return;
+            }
+            HostControllerLogger.ROOT_LOGGER.debugf("trying to reconnect to remote host-controller");
+            final RegistrationResult result=connectSync();
+            if (result.isOK()) {
+              HostControllerLogger.ROOT_LOGGER.reconnectedToMaster();
+              return;
+            }
+          }
+ catch (          IOException e) {
+            HostControllerLogger.ROOT_LOGGER.debugf(e,"failed to reconnect to the remote host-controller");
+          }
+catch (          InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+          }
+        }
+      }
+    }
+);
+  }
+}

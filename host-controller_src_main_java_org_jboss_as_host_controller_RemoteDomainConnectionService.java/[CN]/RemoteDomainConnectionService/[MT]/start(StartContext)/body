@@ -1,3 +1,28 @@
 {
-  futureClient.setClient(this);
+  final RemoteDomainConnection connection;
+  final ManagementChannelHandler handler;
+  try {
+    final ModelNode hostInfo=createLocalHostHostInfo(localHostInfo,productConfig);
+    final ProtocolChannelClient.Configuration configuration=new ProtocolChannelClient.Configuration();
+    configuration.setUri(new URI("remote://" + localHostInfo.getRemoteDomainControllerHost() + ":"+ localHostInfo.getRemoteDomainControllertPort()));
+    configuration.setEndpoint(endpointInjector.getValue());
+    final SecurityRealm realm=securityRealmInjector.getOptionalValue();
+    connection=new RemoteDomainConnection(localHostInfo.getLocalHostName(),hostInfo,configuration,realm,executor,new RemoteDomainConnection.HostRegistrationCallback(){
+      @Override public boolean applyDomainModel(      final List<ModelNode> bootOperations){
+        return applyRemoteDomainModel(bootOperations);
+      }
+      @Override public void registrationComplete(      ModelNode result,      ManagementChannelHandler handler){
+      }
+    }
+);
+    handler=connection.getHandler();
+  }
+ catch (  Exception e) {
+    throw new StartException(e);
+  }
+ finally {
+    futureClient.setClient(this);
+  }
+  this.connection=connection;
+  this.handler=handler;
 }

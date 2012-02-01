@@ -1,0 +1,60 @@
+{
+synchronized (this) {
+    if (domainController.isHostRegistered(hostName)) {
+      failed(SlaveRegistrationException.ErrorCode.HOST_ALREADY_EXISTS,hostName);
+      return;
+    }
+    try {
+      sendResponse(responseChannel,DomainControllerProtocol.PARAM_OK,result);
+    }
+ catch (    IOException e) {
+      ProtocolLogger.ROOT_LOGGER.debugf(e,"failed to process message");
+      failed(SlaveRegistrationException.ErrorCode.UNKNOWN,e.getClass().getName() + ":" + e.getMessage());
+      return;
+    }
+  }
+  try {
+    completedLatch.await();
+  }
+ catch (  InterruptedException e) {
+    failed(SlaveRegistrationException.ErrorCode.UNKNOWN,e.getClass().getName() + ":" + e.getMessage());
+    return;
+  }
+synchronized (this) {
+    if (failed) {
+      return;
+    }
+    final PathAddress addr=PathAddress.pathAddress(PathElement.pathElement(ModelDescriptionConstants.HOST,hostName));
+    final RemoteProxyController proxy=RemoteProxyController.create(handler,addr,ProxyOperationAddressTranslator.HOST);
+    try {
+      domainController.registerRemoteHost(proxy);
+    }
+ catch (    SlaveRegistrationException e) {
+      failed(e.getErrorCode(),e.getErrorMessage());
+      return;
+    }
+catch (    Exception e) {
+      failed(SlaveRegistrationException.ErrorCode.UNKNOWN,e.getClass().getName() + ":" + e.getMessage());
+      return;
+    }
+    if (!failed) {
+      transaction.commit();
+    }
+ else {
+      transaction.rollback();
+    }
+    final String productName;
+    if (hostInfo.hasDefined(PRODUCT_NAME)) {
+      final String name=hostInfo.get(PRODUCT_NAME).asString();
+      final String version1=hostInfo.get(PRODUCT_VERSION).asString();
+      final String version2=hostInfo.get(RELEASE_VERSION).asString();
+      productName=ProductConfig.getPrettyVersionString(name,version1,version2);
+    }
+ else {
+      String version1=hostInfo.get(RELEASE_VERSION).asString();
+      String version2=hostInfo.get(RELEASE_CODENAME).asString();
+      productName=ProductConfig.getPrettyVersionString(null,version1,version2);
+    }
+    DOMAIN_LOGGER.registeredRemoteSlaveHost(hostName,productName);
+  }
+}
