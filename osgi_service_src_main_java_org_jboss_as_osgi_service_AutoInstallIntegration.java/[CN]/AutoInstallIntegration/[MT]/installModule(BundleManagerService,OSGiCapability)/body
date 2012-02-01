@@ -1,13 +1,18 @@
 {
-  ModuleIdentifier identifier=moduleMetaData.getIdentifier();
+  String identifier=moduleMetaData.getIdentifier();
   Integer startLevel=moduleMetaData.getStartLevel();
-  File modulesFile=ModuleIdentityArtifactProvider.getRepositoryEntry(bundlesDir,identifier);
-  if (modulesFile != null) {
-    URL url=modulesFile.toURI().toURL();
-    return installBundleFromURL(bundleManager,url,startLevel);
+  if (isValidModuleIdentifier(identifier)) {
+    ModuleIdentifier moduleId=ModuleIdentifier.fromString(identifier);
+    File modulesFile=ModuleIdentityArtifactProvider.getRepositoryEntry(bundlesDir,moduleId);
+    if (modulesFile != null) {
+      URL url=modulesFile.toURI().toURL();
+      return installBundleFromURL(bundleManager,url,startLevel);
+    }
+    ModuleLoader moduleLoader=Module.getBootModuleLoader();
+    Module module=moduleLoader.loadModule(moduleId);
+    OSGiMetaData metadata=getModuleMetadata(module);
+    return bundleManager.registerModule(serviceTarget,module,metadata);
   }
-  ModuleLoader moduleLoader=Module.getBootModuleLoader();
-  Module module=moduleLoader.loadModule(identifier);
-  OSGiMetaData metadata=getModuleMetadata(module);
-  return bundleManager.registerModule(serviceTarget,module,metadata);
+  ROOT_LOGGER.cannotResolveCapability(identifier);
+  return null;
 }

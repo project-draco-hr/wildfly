@@ -2,24 +2,26 @@
   if (arg instanceof SubsystemState.ChangeEvent == false)   return;
   SubsystemState.ChangeEvent event=(ChangeEvent)arg;
   if (event.getType() != ChangeType.CAPABILITY)   return;
-  if (!event.isRemoved()) {
+  if (event.isRemoved() == false) {
     try {
       for (      final OSGiCapability module : injectedSubsystemState.getValue().getCapabilities()) {
         if (module.getIdentifier().toString().equals(event.getId())) {
           final ServiceName serviceName=installModule(injectedBundleManager.getValue(),module);
-          ServiceBuilder<Void> builder=serviceController.getServiceContainer().addService(ServiceName.of(Services.AUTOINSTALL_PROVIDER,"ModuleUpdater","" + updateServiceIdCounter.incrementAndGet()),new AbstractService<Void>(){
-            @Override public void start(            StartContext context) throws StartException {
-              try {
-                startBundle(serviceController.getServiceContainer(),serviceName,module);
-              }
+          if (serviceName != null) {
+            ServiceBuilder<Void> builder=serviceController.getServiceContainer().addService(ServiceName.of(Services.AUTOINSTALL_PROVIDER,"ModuleUpdater","" + updateServiceIdCounter.incrementAndGet()),new AbstractService<Void>(){
+              @Override public void start(              StartContext context) throws StartException {
+                try {
+                  startBundle(serviceController.getServiceContainer(),serviceName,module);
+                }
   finally {
-                context.getController().setMode(Mode.REMOVE);
+                  context.getController().setMode(Mode.REMOVE);
+                }
               }
             }
-          }
 );
-          builder.addDependency(serviceName);
-          builder.install();
+            builder.addDependency(serviceName);
+            builder.install();
+          }
           return;
         }
       }
