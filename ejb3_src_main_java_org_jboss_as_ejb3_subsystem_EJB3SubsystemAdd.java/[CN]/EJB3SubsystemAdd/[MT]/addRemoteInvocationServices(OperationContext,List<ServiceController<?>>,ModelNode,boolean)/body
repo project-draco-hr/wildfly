@@ -1,0 +1,18 @@
+{
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  final TCCLEJBClientContextSelectorService tcclBasedClientContextSelector=new TCCLEJBClientContextSelectorService();
+  context.getServiceTarget().addService(TCCLEJBClientContextSelectorService.TCCL_BASED_EJB_CLIENT_CONTEXT_SELECTOR_SERVICE_NAME,tcclBasedClientContextSelector).install();
+  final boolean lockEJBClientContextSelector=appclient ? false : true;
+  final DefaultEjbClientContextService clientContextService=new DefaultEjbClientContextService(lockEJBClientContextSelector);
+  final ServiceBuilder<EJBClientContext> clientContextServiceBuilder=context.getServiceTarget().addService(DefaultEjbClientContextService.DEFAULT_SERVICE_NAME,clientContextService).addDependency(TCCLEJBClientContextSelectorService.TCCL_BASED_EJB_CLIENT_CONTEXT_SELECTOR_SERVICE_NAME,TCCLEJBClientContextSelectorService.class,clientContextService.getTCCLBasedEJBClientContextSelectorInjector());
+  if (!appclient) {
+    final String nodeName=SecurityActions.getSystemProperty(ServerEnvironment.NODE_NAME);
+    final LocalEjbReceiver byValueLocalEjbReceiver=new LocalEjbReceiver(nodeName,false);
+    newControllers.add(serviceTarget.addService(LocalEjbReceiver.BY_VALUE_SERVICE_NAME,byValueLocalEjbReceiver).addDependency(DeploymentRepository.SERVICE_NAME,DeploymentRepository.class,byValueLocalEjbReceiver.getDeploymentRepository()).addDependency(ClusteredBackingCacheEntryStoreSourceService.CLIENT_MAPPING_REGISTRY_COLLECTOR_SERVICE_NAME,RegistryCollector.class,byValueLocalEjbReceiver.getClusterRegistryCollectorInjector()).install());
+    final LocalEjbReceiver byReferenceLocalEjbReceiver=new LocalEjbReceiver(nodeName,true);
+    newControllers.add(serviceTarget.addService(LocalEjbReceiver.BY_REFERENCE_SERVICE_NAME,byReferenceLocalEjbReceiver).addDependency(DeploymentRepository.SERVICE_NAME,DeploymentRepository.class,byReferenceLocalEjbReceiver.getDeploymentRepository()).addDependency(ClusteredBackingCacheEntryStoreSourceService.CLIENT_MAPPING_REGISTRY_COLLECTOR_SERVICE_NAME,RegistryCollector.class,byReferenceLocalEjbReceiver.getClusterRegistryCollectorInjector()).install());
+    EJBRemoteInvocationPassByValueWriteHandler.INSTANCE.updateDefaultLocalEJBReceiverService(context,ejbSubsytemModel,newControllers);
+    clientContextServiceBuilder.addDependency(LocalEjbReceiver.DEFAULT_LOCAL_EJB_RECEIVER_SERVICE_NAME,LocalEjbReceiver.class,clientContextService.getDefaultLocalEJBReceiverInjector());
+  }
+  newControllers.add(clientContextServiceBuilder.install());
+}

@@ -5,8 +5,6 @@
   }
   final EJBClientDescriptorMetaData ejbClientDescriptorMetaData=deploymentUnit.getAttachment(Attachments.EJB_CLIENT_METADATA);
   if (ejbClientDescriptorMetaData == null) {
-    logger.debug("Deployment unit " + deploymentUnit + " doesn't have any EJB client descriptor metadata associated. "+ "Falling back on the default "+ DefaultEjbClientContextService.DEFAULT_SERVICE_NAME+ " EJB client context service");
-    deploymentUnit.putAttachment(EjbDeploymentAttachmentKeys.EJB_CLIENT_CONTEXT_SERVICE_NAME,DefaultEjbClientContextService.DEFAULT_SERVICE_NAME);
     return;
   }
   final ServiceName ejbClientContextServiceName=DescriptorBasedEJBClientContextService.BASE_SERVICE_NAME.append(deploymentUnit.getName());
@@ -18,14 +16,17 @@
     service.addRemotingConnectionDependency(serviceBuilder,connectionDependencyService);
   }
   if (!ejbClientDescriptorMetaData.isLocalReceiverExcluded()) {
-    if (ejbClientDescriptorMetaData.isLocalReceiverPassByValue()) {
-      serviceBuilder.addDependency(LocalEjbReceiver.BY_VALUE_SERVICE_NAME,LocalEjbReceiver.class,service.getLocalEjbReceiverInjector());
+    final Boolean passByValue=ejbClientDescriptorMetaData.isLocalReceiverPassByValue();
+    if (passByValue != null) {
+      final ServiceName localEjbReceiverServiceName=passByValue == true ? LocalEjbReceiver.BY_VALUE_SERVICE_NAME : LocalEjbReceiver.BY_REFERENCE_SERVICE_NAME;
+      serviceBuilder.addDependency(localEjbReceiverServiceName,LocalEjbReceiver.class,service.getLocalEjbReceiverInjector());
     }
  else {
-      serviceBuilder.addDependency(LocalEjbReceiver.BY_REFERENCE_SERVICE_NAME,LocalEjbReceiver.class,service.getLocalEjbReceiverInjector());
+      serviceBuilder.addDependency(LocalEjbReceiver.DEFAULT_LOCAL_EJB_RECEIVER_SERVICE_NAME,LocalEjbReceiver.class,service.getLocalEjbReceiverInjector());
     }
   }
+  serviceBuilder.addDependency(TCCLEJBClientContextSelectorService.TCCL_BASED_EJB_CLIENT_CONTEXT_SELECTOR_SERVICE_NAME);
   serviceBuilder.install();
   logger.debug("Deployment unit " + deploymentUnit + " will use "+ ejbClientContextServiceName+ " as the EJB client context service");
-  deploymentUnit.putAttachment(EjbDeploymentAttachmentKeys.EJB_CLIENT_CONTEXT_SERVICE_NAME,ejbClientContextServiceName);
+  phaseContext.addDeploymentDependency(ejbClientContextServiceName,EjbDeploymentAttachmentKeys.EJB_CLIENT_CONTEXT);
 }
