@@ -3,15 +3,36 @@
   Integer startLevel=moduleMetaData.getStartLevel();
   if (isValidModuleIdentifier(identifier)) {
     ModuleIdentifier moduleId=ModuleIdentifier.fromString(identifier);
-    File modulesFile=ModuleIdentityArtifactProvider.getRepositoryEntry(bundlesDir,moduleId);
-    if (modulesFile != null) {
-      URL url=modulesFile.toURI().toURL();
-      return installBundleFromURL(bundleManager,url,startLevel);
+    File bundleFile=ModuleIdentityArtifactProvider.getRepositoryEntry(bundlesDir,moduleId);
+    if (bundleFile != null) {
+      URL bundleURL=bundleFile.toURI().toURL();
+      return installBundleFromURL(bundleManager,bundleURL,startLevel);
     }
-    ModuleLoader moduleLoader=Module.getBootModuleLoader();
-    Module module=moduleLoader.loadModule(moduleId);
-    OSGiMetaData metadata=getModuleMetadata(module);
-    return bundleManager.registerModule(serviceTarget,module,metadata);
+ else {
+      Module module=null;
+      try {
+        ModuleLoader moduleLoader=Module.getBootModuleLoader();
+        module=moduleLoader.loadModule(moduleId);
+      }
+ catch (      ModuleLoadException e) {
+        ROOT_LOGGER.debugf("Cannot load module: %s",moduleId);
+      }
+      if (module != null) {
+        OSGiMetaData metadata=getModuleMetadata(module);
+        return bundleManager.registerModule(serviceTarget,module,metadata);
+      }
+    }
+  }
+  if (isValidMavenIdentifier(identifier)) {
+    Repository repository=injectedRepository.getValue();
+    MavenCoordinates mavenId=MavenCoordinates.parse(identifier);
+    Requirement req=XRequirementBuilder.createArtifactRequirement(mavenId);
+    Collection<Capability> caps=repository.findProviders(req);
+    if (caps.isEmpty() == false) {
+      XIdentityCapability icap=(XIdentityCapability)caps.iterator().next();
+      URL bundleURL=(URL)icap.getAttribute(XResourceConstants.CONTENT_URL);
+      return installBundleFromURL(bundleManager,bundleURL,startLevel);
+    }
   }
   ROOT_LOGGER.cannotResolveCapability(identifier);
   return null;
