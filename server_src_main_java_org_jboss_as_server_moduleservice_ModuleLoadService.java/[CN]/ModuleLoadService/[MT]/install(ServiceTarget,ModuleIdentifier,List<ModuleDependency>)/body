@@ -1,7 +1,16 @@
 {
-  final Map<ModuleIdentifier,ServiceBuilder.DependencyType> deps=new HashMap<ModuleIdentifier,ServiceBuilder.DependencyType>();
-  for (  final ModuleDependency i : dependencies) {
-    deps.put(i.getIdentifier(),i.isOptional() ? ServiceBuilder.DependencyType.OPTIONAL : ServiceBuilder.DependencyType.REQUIRED);
+  final ModuleLoadService service=new ModuleLoadService(dependencies);
+  final ServiceName serviceName=ServiceModuleLoader.moduleServiceName(identifier);
+  final ServiceBuilder<Module> builder=target.addService(serviceName,service);
+  builder.addDependency(Services.JBOSS_SERVICE_MODULE_LOADER,ServiceModuleLoader.class,service.getServiceModuleLoader());
+  builder.addDependency(ServiceModuleLoader.moduleSpecServiceName(identifier),ModuleSpec.class,service.getModuleSpec());
+  for (  ModuleDependency dependency : dependencies) {
+    final ModuleIdentifier moduleIdentifier=dependency.getIdentifier();
+    if (moduleIdentifier.getName().startsWith(ServiceModuleLoader.MODULE_PREFIX)) {
+      builder.addDependency(dependency.isOptional() ? OPTIONAL : REQUIRED,ServiceModuleLoader.moduleSpecServiceName(moduleIdentifier));
+    }
   }
-  return installService(target,identifier,deps);
+  builder.setInitialMode(Mode.ON_DEMAND);
+  builder.install();
+  return serviceName;
 }
