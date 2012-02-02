@@ -4,23 +4,34 @@
     return;
   }
   final ManagementResourceRegistration deploymentsReg=deploymentsRegistration;
-  Map<String,SubsystemInformation> subsystems=extensionInfo.remove(moduleName);
-  if (subsystems != null) {
-synchronized (subsystems) {
-      Set<String> subsystemNames=subsystems.keySet();
+  ExtensionInfo extension=extensions.remove(moduleName);
+  if (extension != null) {
+synchronized (extension) {
+      Set<String> subsystemNames=extension.subsystems.keySet();
       for (      String subsystem : subsystemNames) {
         if (rootResource.getChild(PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,subsystem)) != null) {
-          extensionInfo.put(moduleName,subsystems);
+          extensions.put(moduleName,extension);
           throw MESSAGES.removingExtensionWithRegisteredSubsystem(moduleName,subsystem);
         }
       }
-      for (      String subsystem : subsystemNames) {
+      for (      Map.Entry<String,SubsystemInformation> entry : extension.subsystems.entrySet()) {
+        String subsystem=entry.getKey();
         profileReg.unregisterSubModel(PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,subsystem));
         if (deploymentsReg != null) {
           deploymentsReg.unregisterSubModel(PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,subsystem));
         }
+        if (extension.xmlMapper != null) {
+          SubsystemInformationImpl subsystemInformation=SubsystemInformationImpl.class.cast(entry.getValue());
+          for (          String namespace : subsystemInformation.getXMLNamespaces()) {
+            extension.xmlMapper.unregisterRootElement(new QName(namespace,SUBSYSTEM));
+          }
+        }
       }
-      unnamedParsers.remove(moduleName);
+      if (extension.xmlMapper != null) {
+        for (        String namespace : extension.unnamedParsers) {
+          extension.xmlMapper.unregisterRootElement(new QName(namespace,SUBSYSTEM));
+        }
+      }
     }
   }
 }
