@@ -12,12 +12,17 @@
   }
   this.handler=new TransactionalModelControllerOperationHandler(controller,executor);
   try {
+    SecurityRealm realm=securityRealmInjector.getOptionalValue();
     CallbackHandler handler=null;
-    CallbackHandlerFactory handlerFactory=callbackFactoryInjector.getOptionalValue();
-    if (handlerFactory != null) {
-      handler=handlerFactory.getCallbackHandler(name);
+    SSLContext sslContext=null;
+    if (realm != null) {
+      sslContext=realm.getSSLContext();
+      CallbackHandlerFactory handlerFactory=realm.getSecretCallbackHandlerFactory();
+      if (handlerFactory != null) {
+        handler=handlerFactory.getCallbackHandler(name);
+      }
     }
-    connection=client.connectSync(handler);
+    connection=client.connectSync(handler,Collections.<String,String>emptyMap(),sslContext);
     this.channelClient=client;
     channel=connection.openChannel(ManagementRemotingServices.DOMAIN_CHANNEL,OptionMap.EMPTY).get();
     channel.addCloseHandler(new CloseHandler<Channel>(){
