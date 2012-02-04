@@ -1,0 +1,30 @@
+{
+  final DeploymentUnit unit=phaseContext.getDeploymentUnit();
+  WebservicesMetaData webservicesMetaData=new WebservicesMetaData();
+  boolean modifiedWSMeta=false;
+  for (  String endpoint : getDeploymentClasses(unit)) {
+    try {
+      EndpointMetaData endpointMetaData=EndpointMetaData.build(unit,endpoint);
+      if (endpointMetaData.isTXFrameworkEnabled()) {
+        XTSDeploymentMarker.mark(unit);
+        if (endpointMetaData.isWebservice()) {
+          List<String> handlers=new ArrayList<String>();
+          TransactionalAnnotation TransactionalAnnotation=endpointMetaData.getTransactionalAnnotation();
+          if (shouldBridge(TransactionalAnnotation)) {
+            handlers.add(TX_BRIDGE_HANDLER);
+          }
+          handlers.add(TX_CONTEXT_HANDLER);
+          addHandlerToEndpoint(webservicesMetaData,endpointMetaData,endpoint,handlers);
+          registerHandlersWithAS(unit,endpoint,handlers);
+          modifiedWSMeta=true;
+        }
+      }
+    }
+ catch (    XTSException e) {
+      throw new DeploymentUnitProcessingException("Error processing endpoint '" + endpoint + "'",e);
+    }
+  }
+  if (modifiedWSMeta) {
+    unit.putAttachment(WSAttachmentKeys.WEBSERVICES_METADATA_KEY,webservicesMetaData);
+  }
+}
