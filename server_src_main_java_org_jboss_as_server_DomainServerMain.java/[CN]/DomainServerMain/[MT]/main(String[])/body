@@ -53,22 +53,10 @@
     boolean managementSubsystemEndpoint=StreamUtils.readBoolean(initialInput);
     byte[] asAuthKey=new byte[16];
     StreamUtils.readFully(initialInput,asAuthKey);
-    final CountDownLatch latch=new CountDownLatch(2);
-    final UninstallListener connectionListener=new UninstallListener(latch,HostControllerConnectionService.SERVICE_NAME);
-    final UninstallListener clientListener=new UninstallListener(latch,HostControllerServerClient.SERVICE_NAME);
     final ServiceContainer container=containerFuture.get();
-    final ServiceController<?> client=container.getRequiredService(HostControllerServerClient.SERVICE_NAME);
-    final String name=((HostControllerServerClient)client.getValue()).getServerName();
-    final String processName=((HostControllerServerClient)client.getValue()).getServerProcessName();
-    client.addListener(clientListener);
-    client.setMode(ServiceController.Mode.REMOVE);
-    final ServiceController<?> connection=container.getRequiredService(HostControllerConnectionService.SERVICE_NAME);
-    connection.addListener(connectionListener);
-    connection.setMode(ServiceController.Mode.REMOVE);
-    latch.await();
-    client.removeListener(clientListener);
-    connection.removeListener(connectionListener);
-    addCommunicationServices(container,name,processName,asAuthKey,new InetSocketAddress(InetAddress.getByName(hostName),port),managementSubsystemEndpoint,true);
+    final ServiceController<?> controller=container.getRequiredService(HostControllerServerClient.SERVICE_NAME);
+    final HostControllerServerClient client=(HostControllerServerClient)controller.getValue();
+    client.reconnect(hostName,port,asAuthKey);
   }
  catch (  InterruptedIOException e) {
     Thread.interrupted();

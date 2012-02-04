@@ -1,0 +1,37 @@
+{
+  boolean ok=false;
+  try {
+    final ProtocolChannelClient client=ProtocolChannelClient.create(configuration);
+    connection=client.connectSync(callbackHandler);
+    connection.addCloseHandler(new CloseHandler<Connection>(){
+      @Override public void handleClose(      final Connection closed,      final IOException exception){
+synchronized (this) {
+          if (connection == closed) {
+            connection=null;
+          }
+        }
+      }
+    }
+);
+    channel=connection.openChannel(SERVER_CHANNEL_TYPE,OptionMap.EMPTY).get();
+    channel.addCloseHandler(new CloseHandler<Channel>(){
+      @Override public void handleClose(      final Channel closed,      final IOException exception){
+        channelHandler.handleChannelClosed(closed,exception);
+synchronized (this) {
+          if (channel == closed) {
+            channel=null;
+          }
+        }
+      }
+    }
+);
+    channel.receiveMessage(channelHandler.getReceiver());
+    ok=true;
+  }
+  finally {
+    if (!ok) {
+      StreamUtils.safeClose(channel);
+      StreamUtils.safeClose(connection);
+    }
+  }
+}

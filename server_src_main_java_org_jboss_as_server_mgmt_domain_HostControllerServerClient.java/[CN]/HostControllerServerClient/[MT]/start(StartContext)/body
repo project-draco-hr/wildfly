@@ -1,12 +1,22 @@
 {
   final ModelController controller=this.controller.getValue();
-  final Channel channel=hcChannel.getValue();
-  handler=new ManagementChannelHandler(channel,executor);
-  handler.addHandlerFactory(new TransactionalModelControllerOperationHandler(controller,handler));
   context.asynchronous();
   try {
-    handler.executeRequest(new ServerRegisterRequest(),null,new ActiveOperation.CompletedCallback<Void>(){
+    final ProtocolChannelClient.Configuration configuration=new ProtocolChannelClient.Configuration();
+    configuration.setEndpoint(endpointInjector.getValue());
+    configuration.setConnectionTimeout(15000);
+    configuration.setUri(new URI("remote://" + hostName + ":"+ port));
+    final OptionMap original=configuration.getOptionMap();
+    OptionMap.Builder builder=OptionMap.builder();
+    builder.addAll(original);
+    builder.set(Options.SASL_DISALLOWED_MECHANISMS,Sequence.of(JBOSS_LOCAL_USER));
+    configuration.setOptionMap(builder.getMap());
+    final CallbackHandler callbackHandler=new ClientCallbackHandler(userName,authKey);
+    connection=new HostControllerServerConnection(serverProcessName,configuration,executor);
+    connection.connect(callbackHandler,new ActiveOperation.CompletedCallback<Void>(){
       @Override public void completed(      Void result){
+        final ManagementChannelHandler handler=connection.getChannelHandler();
+        handler.addHandlerFactory(new TransactionalModelControllerOperationHandler(controller,handler));
         remoteFileRepositoryValue.getValue().setRemoteFileRepositoryExecutor(new RemoteFileRepositoryExecutorImpl());
         context.complete();
         started();
@@ -19,9 +29,9 @@
       }
     }
 );
+    handler=connection.getChannelHandler();
   }
  catch (  Exception e) {
     throw ServerMessages.MESSAGES.failedToConnectToHC(e);
   }
-  channel.receiveMessage(handler.getReceiver());
 }
