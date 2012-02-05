@@ -1,0 +1,38 @@
+{
+  nameValidator.validate(operation);
+  final String attributeName=operation.require(NAME).asString();
+  ModelNode newValue=operation.hasDefined(VALUE) ? operation.get(VALUE) : new ModelNode();
+  final ModelNode submodel=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel();
+  AttributeDefinition attributeDefinition=null;
+  if (attributeName.equals(ModelKeys.MODE)) {
+    attributeDefinition=getAttributeDefinition(attributeName);
+    if (attributeDefinition != null) {
+      final ModelNode syntheticOp=new ModelNode();
+      syntheticOp.get(attributeName).set(newValue);
+      attributeDefinition.validateOperation(syntheticOp);
+    }
+    CacheMode mode=getCacheMode(operation);
+    submodel.get(ModelKeys.MODE).set(Mode.valueOf(newValue.asString()).apply(mode).name());
+  }
+ else {
+    attributeDefinition=getAttributeDefinition(attributeName);
+    if (attributeDefinition != null) {
+      final ModelNode syntheticOp=new ModelNode();
+      syntheticOp.get(attributeName).set(newValue);
+      attributeDefinition.validateAndSet(syntheticOp,submodel);
+    }
+ else {
+      submodel.get(attributeName).set(newValue);
+    }
+  }
+  if (requiresRuntime(context)) {
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        context.reloadRequired();
+        context.completeStep();
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.completeStep();
+}
