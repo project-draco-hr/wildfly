@@ -13,7 +13,7 @@
       }
       ModelNode step=steps.get(0).getValue();
       if (!step.has(Util.RESULT)) {
-        ctx.error("Failed to read the main resource info of the deployment.");
+        ctx.error("Failed to read the main resource info of the deployment: " + Util.getFailureDescription(step));
         return;
       }
       ModelNode stepResponse=step.get(Util.RESULT);
@@ -29,15 +29,20 @@
         ctx.error("Expected results for " + serverGroups.size() + " server groups but received "+ (steps.size() - 1));
         return;
       }
-      final String deploymentName=name.getValue(ctx.getParsedCommandLine());
       final SimpleTable groups=new SimpleTable(new String[]{"SERVER GROUP","ENABLED"});
       for (int i=1; i < steps.size(); ++i) {
         stepResponse=steps.get(i).getValue();
-        if (Util.listContains(stepResponse,deploymentName)) {
-          groups.addLine(new String[]{serverGroups.get(i - 1),"yes"});
+        if (stepResponse.hasDefined(Util.RESULT)) {
+          final ModelNode stepResult=stepResponse.get(Util.RESULT);
+          if (stepResult.hasDefined(Util.VALID)) {
+            groups.addLine(new String[]{serverGroups.get(i - 1),stepResult.get(Util.VALID).asString()});
+          }
+ else {
+            groups.addLine(new String[]{serverGroups.get(i - 1),"n/a"});
+          }
         }
  else {
-          groups.addLine(new String[]{serverGroups.get(i - 1),"no"});
+          groups.addLine(new String[]{serverGroups.get(i - 1),"no response"});
         }
       }
       ctx.printLine(groups.toString(true));
