@@ -1,17 +1,12 @@
 {
   ROOT_LOGGER.debugf("Starting Mod_cluster Extension");
   config=new ModClusterConfig();
-  boolean defaultavert=false;
-  try {
-    for (Enumeration<NetworkInterface> ni=NetworkInterface.getNetworkInterfaces(); ni.hasMoreElements(); ) {
-      NetworkInterface intf=ni.nextElement();
-      if (intf.isUp() && intf.supportsMulticast())       defaultavert=true;
-    }
-  }
- catch (  SocketException e) {
-  }
   if (!modelconf.hasDefined(CommonAttributes.PROXY_LIST)) {
-    config.setAdvertise(defaultavert);
+    try {
+      config.setAdvertise(this.isMulticastEnabled(Collections.list(NetworkInterface.getNetworkInterfaces())));
+    }
+ catch (    SocketException e) {
+    }
   }
   config.setAdvertisePort(23364);
   config.setAdvertiseGroupAddress("224.0.1.105");
@@ -19,13 +14,16 @@
   config.setAutoEnableContexts(true);
   config.setStopContextTimeout(10);
   config.setSocketTimeout(20000);
+  config.setExcludedContexts("ROOT,invoker,jbossws,juddi,console");
   if (modelconf.hasDefined(CommonAttributes.ADVERTISE_SOCKET)) {
     final SocketBinding binding=this.binding.getValue();
     if (binding != null) {
       config.setAdvertisePort(binding.getMulticastPort());
       config.setAdvertiseGroupAddress(binding.getMulticastSocketAddress().getHostName());
       config.setAdvertiseInterface(binding.getSocketAddress().getAddress().getHostAddress());
-      if (!defaultavert)       ROOT_LOGGER.multicastInterfaceNotAvailable();
+      if (!this.isMulticastEnabled(binding.getNetworkInterfaceBinding().getNetworkInterfaces())) {
+        ROOT_LOGGER.multicastInterfaceNotAvailable();
+      }
       config.setAdvertise(true);
     }
   }
