@@ -1,7 +1,11 @@
 {
   serviceController=context.getController();
   ROOT_LOGGER.debugf("Starting: %s in mode %s",serviceController.getName(),serviceController.getMode());
-  final Map<ServiceName,OSGiCapability> pendingServices=new LinkedHashMap<ServiceName,OSGiCapability>();
+  final Map<ServiceName,OSGiCapability> installedServices=new LinkedHashMap<ServiceName,OSGiCapability>();
+  final Set<ServiceName> resolvableServices=new LinkedHashSet<ServiceName>();
+  final BundleContext syscontext=injectedSystemBundle.getValue().getBundleContext();
+  final String slstr=syscontext.getProperty(Constants.FRAMEWORK_BEGINNING_STARTLEVEL);
+  final Integer beginningStartLevel=Integer.parseInt(slstr != null ? slstr : "1");
   try {
     final BundleManagerService bundleManager=injectedBundleManager.getValue();
     final ServiceContainer serviceContainer=serviceController.getServiceContainer();
@@ -18,29 +22,32 @@
     for (    OSGiCapability moduleMetaData : configcaps) {
       ServiceName serviceName=installModule(bundleManager,moduleMetaData);
       if (serviceName != null) {
-        pendingServices.put(serviceName,moduleMetaData);
+        installedServices.put(serviceName,moduleMetaData);
+        if (moduleMetaData.getStartLevel() <= beginningStartLevel) {
+          resolvableServices.add(serviceName);
+        }
       }
     }
-    ServiceName servicesInstalled=Services.AUTOINSTALL_PROVIDER.append("INSTALLED");
-    ServiceBuilder<Void> builder=serviceTarget.addService(servicesInstalled,new AbstractService<Void>(){
+    ServiceBuilder<Void> builder=serviceTarget.addService(Services.AUTOINSTALL_PROVIDER_COMPLETE,new AbstractService<Void>(){
       public void start(      StartContext context) throws StartException {
-        ROOT_LOGGER.debugf("Auto bundles installed");
-      }
-    }
-);
-    builder.addDependencies(pendingServices.keySet());
-    builder.install();
-    builder=serviceTarget.addService(Services.AUTOINSTALL_PROVIDER_COMPLETE,new AbstractService<Void>(){
-      public void start(      StartContext context) throws StartException {
-        for (        ServiceName serviceName : pendingServices.keySet()) {
-          OSGiCapability moduleMetaData=pendingServices.get(serviceName);
+        Set<Bundle> resolvableBundles=new LinkedHashSet<Bundle>();
+        for (        ServiceName serviceName : resolvableServices) {
+          ServiceController<?> requiredService=serviceContainer.getRequiredService(serviceName);
+          resolvableBundles.add((Bundle)requiredService.getValue());
+        }
+        Bundle[] bundleArr=resolvableBundles.toArray(new Bundle[resolvableBundles.size()]);
+        PackageAdmin packageAdmin=injectedPackageAdmin.getValue();
+        packageAdmin.resolveBundles(bundleArr);
+        for (        ServiceName serviceName : resolvableServices) {
+          OSGiCapability moduleMetaData=installedServices.get(serviceName);
           startBundle(serviceContainer,serviceName,moduleMetaData);
         }
         ROOT_LOGGER.debugf("Auto bundles bundles started");
       }
     }
 );
-    builder.addDependencies(servicesInstalled);
+    ServiceName[] serviceNameArray=resolvableServices.toArray(new ServiceName[resolvableServices.size()]);
+    builder.addDependencies(serviceNameArray);
     builder.install();
   }
  catch (  Exception ex) {
