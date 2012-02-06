@@ -1,0 +1,33 @@
+{
+  String destinationName="java:jboss/exported/queue/TestQueue";
+  Context ic=null;
+  ConnectionFactory cf=null;
+  Connection connection=null;
+  try {
+    ic=getInitialContext();
+    cf=(ConnectionFactory)ic.lookup("java:/ConnectionFactory");
+    Queue queue=(Queue)ic.lookup(destinationName);
+    connection=cf.createConnection("guest","guest");
+    connection.start();
+    Session session=connection.createSession(false,Session.AUTO_ACKNOWLEDGE);
+    MessageProducer sender=session.createProducer(queue);
+    TextMessage message=session.createTextMessage("hello goodbye");
+    TemporaryQueue replyQueue=session.createTemporaryQueue();
+    message.setJMSReplyTo(replyQueue);
+    sender.send(message);
+    MessageConsumer consumer=session.createConsumer(replyQueue);
+    TextMessage replyMsg=(TextMessage)consumer.receive(5000);
+    log.info("Message received:" + replyMsg);
+    return replyMsg.getText();
+  }
+  finally {
+    if (ic != null) {
+      try {
+        ic.close();
+      }
+ catch (      Exception ignore) {
+      }
+    }
+    closeConnection(connection);
+  }
+}

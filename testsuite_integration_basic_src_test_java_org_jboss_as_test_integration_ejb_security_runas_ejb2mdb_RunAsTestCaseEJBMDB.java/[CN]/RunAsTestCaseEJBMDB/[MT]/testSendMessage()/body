@@ -1,0 +1,37 @@
+{
+  InitialContext ctx=null;
+  ConnectionFactory cf=null;
+  Connection connection=null;
+  Session session=null;
+  try {
+    ctx=getInitialContext();
+    cf=(ConnectionFactory)ctx.lookup("jms/RemoteConnectionFactory");
+    Queue queue=(Queue)ctx.lookup(QUEUE_NAME);
+    connection=cf.createConnection("guest","guest");
+    connection.start();
+    session=connection.createSession(false,Session.AUTO_ACKNOWLEDGE);
+    MessageProducer sender=session.createProducer(queue);
+    TemporaryQueue replyQueue=session.createTemporaryQueue();
+    TextMessage message=session.createTextMessage("hello goodbye");
+    message.setJMSReplyTo(replyQueue);
+    sender.send(message);
+    log.info("testSendMessage(): Message sent!");
+    MessageConsumer consumer=session.createConsumer(replyQueue);
+    Message replyMsg=consumer.receive(5000);
+    Assert.assertNotNull(replyMsg);
+    Assert.assertTrue(replyMsg instanceof TextMessage);
+    String actual=((TextMessage)replyMsg).getText();
+    Assert.assertEquals("Howdy Fred! GoodBye user1",actual);
+  }
+  finally {
+    try {
+      ctx.close();
+    }
+ catch (    Exception ignore) {
+    }
+    if (session != null) {
+      session.close();
+    }
+    closeConnection(connection);
+  }
+}
