@@ -4,14 +4,20 @@
       ctx.error("The operation response came back w/o result: " + response);
       return;
     }
-    final ModelNode result=response.get(Util.RESULT);
+    ModelNode result=response.get(Util.RESULT);
     if (ctx.isDomainMode()) {
-      final List<Property> steps=result.asPropertyList();
-      if (steps.isEmpty()) {
-        ctx.error("Response for the main resource info of the deployment is missing.");
+      if (result.hasDefined(Util.DOMAIN_RESULTS)) {
+        result=result.get(Util.DOMAIN_RESULTS);
+      }
+      final Iterator<Property> steps=result.asPropertyList().iterator();
+      if (!steps.hasNext()) {
+        ctx.error("Response for the main resource info of the deployment is missing: " + result);
         return;
       }
-      ModelNode step=steps.get(0).getValue();
+      ModelNode step=steps.next().getValue();
+      if (step.has(Util.STEP_1)) {
+        step=step.get(Util.STEP_1);
+      }
       if (!step.has(Util.RESULT)) {
         ctx.error("Failed to read the main resource info of the deployment: " + Util.getFailureDescription(step));
         return;
@@ -21,28 +27,37 @@
       table.addCell(Util.NAME,stepResponse.get(Util.NAME).asString());
       table.addCell(Util.RUNTIME_NAME,stepResponse.get(Util.RUNTIME_NAME).asString());
       ctx.printLine(table.toString());
-      if (serverGroups == null) {
-        ctx.error("Server group list is lost.");
-        return;
+      final SimpleTable groups=new SimpleTable(new String[]{"SERVER GROUP","STATE"});
+      if (addedServerGroups == null) {
+        if (steps.hasNext()) {
+          ctx.error("Didn't expect results for server groups but received " + (result.asPropertyList().size() - 1) + " more steps.");
+          return;
+        }
       }
-      if (serverGroups.size() != steps.size() - 1) {
-        ctx.error("Expected results for " + serverGroups.size() + " server groups but received "+ (steps.size() - 1));
-        return;
-      }
-      final SimpleTable groups=new SimpleTable(new String[]{"SERVER GROUP","ENABLED"});
-      for (int i=1; i < steps.size(); ++i) {
-        stepResponse=steps.get(i).getValue();
-        if (stepResponse.hasDefined(Util.RESULT)) {
-          final ModelNode stepResult=stepResponse.get(Util.RESULT);
-          if (stepResult.hasDefined(Util.VALID)) {
-            groups.addLine(new String[]{serverGroups.get(i - 1),stepResult.get(Util.VALID).asString()});
+ else {
+        for (        String sg : addedServerGroups) {
+          final Property prop=steps.next();
+          stepResponse=prop.getValue();
+          if (stepResponse.has(prop.getName())) {
+            stepResponse=stepResponse.get(prop.getName());
+          }
+          if (stepResponse.hasDefined(Util.RESULT)) {
+            final ModelNode stepResult=stepResponse.get(Util.RESULT);
+            if (stepResult.hasDefined(Util.ENABLED)) {
+              groups.addLine(new String[]{sg,stepResult.get(Util.ENABLED).asBoolean() ? Util.ENABLED : "added"});
+            }
+ else {
+              groups.addLine(new String[]{sg,"n/a"});
+            }
           }
  else {
-            groups.addLine(new String[]{serverGroups.get(i - 1),"n/a"});
+            groups.addLine(new String[]{sg,"no response"});
           }
         }
- else {
-          groups.addLine(new String[]{serverGroups.get(i - 1),"no response"});
+      }
+      if (otherServerGroups != null) {
+        for (        String sg : otherServerGroups) {
+          groups.addLine(new String[]{sg,"not added"});
         }
       }
       ctx.printLine(groups.toString(true));
@@ -51,12 +66,14 @@
       final StrictSizeTable table=new StrictSizeTable(1);
       table.addCell(Util.NAME,result.get(Util.NAME).asString());
       table.addCell(Util.RUNTIME_NAME,result.get(Util.RUNTIME_NAME).asString());
+      table.addCell(Util.PERSISTENT,result.get(Util.PERSISTENT).asString());
       table.addCell(Util.ENABLED,result.get(Util.ENABLED).asString());
       table.addCell(Util.STATUS,result.get(Util.STATUS).asString());
       ctx.printLine(table.toString());
     }
   }
   finally {
-    serverGroups=null;
+    addedServerGroups=null;
+    otherServerGroups=null;
   }
 }
