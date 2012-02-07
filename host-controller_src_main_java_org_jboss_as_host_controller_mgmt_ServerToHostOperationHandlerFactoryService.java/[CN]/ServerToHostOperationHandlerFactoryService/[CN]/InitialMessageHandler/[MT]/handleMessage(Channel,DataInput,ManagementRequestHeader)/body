@@ -1,21 +1,41 @@
 {
+  final ServerInventory inventory=serverInventory.getValue();
   final byte type=header.getOperationId();
-  if (type == DomainServerProtocol.REGISTER_REQUEST || type == DomainServerProtocol.SERVER_RECONNECT_REQUEST) {
+  if (type == DomainServerProtocol.REGISTER_REQUEST) {
     expectHeader(input,DomainServerProtocol.PARAM_SERVER_NAME);
     final String serverName=input.readUTF();
-    CONTROLLER_MANAGEMENT_LOGGER.serverRegistered(serverName,channel);
-    executorService.execute(new Runnable(){
+    final Runnable task=new Runnable(){
       @Override public void run(){
+        CONTROLLER_MANAGEMENT_LOGGER.serverRegistered(serverName,channel);
         final ManagementChannelHandler handler=new ManagementChannelHandler(channel,executorService,new ServerHandlerFactory(serverName));
-        serverInventory.getValue().serverCommunicationRegistered(serverName,handler);
+        inventory.serverCommunicationRegistered(serverName,handler);
         safeWriteResponse(channel,header,null);
-        if (type == DomainServerProtocol.SERVER_RECONNECT_REQUEST) {
-          serverInventory.getValue().serverStarted(serverName);
-        }
         channel.receiveMessage(handler.getReceiver());
       }
     }
-);
+;
+    executorService.execute(task);
+  }
+ else   if (type == DomainServerProtocol.SERVER_RECONNECT_REQUEST) {
+    expectHeader(input,DomainServerProtocol.PARAM_SERVER_NAME);
+    final String serverName=input.readUTF();
+    final Runnable task=new Runnable(){
+      @Override public void run(){
+        CONTROLLER_MANAGEMENT_LOGGER.serverRegistered(serverName,channel);
+        final ManagementChannelHandler handler=new ManagementChannelHandler(channel,executorService,new ServerHandlerFactory(serverName));
+        final byte param;
+        if (inventory.serverReconnected(serverName,handler)) {
+          param=DomainServerProtocol.PARAM_OK;
+        }
+ else {
+          param=DomainServerProtocol.PARAM_RESTART_REQUIRED;
+        }
+        safeWriteResponse(channel,header,param);
+        channel.receiveMessage(handler.getReceiver());
+      }
+    }
+;
+    executorService.execute(task);
   }
  else {
     safeWriteResponse(channel,header,MESSAGES.unrecognizedType(type));
