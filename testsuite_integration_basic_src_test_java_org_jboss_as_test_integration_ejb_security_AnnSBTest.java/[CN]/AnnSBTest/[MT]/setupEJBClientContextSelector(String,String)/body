@@ -1,0 +1,25 @@
+{
+  final Endpoint endpoint=Remoting.createEndpoint("remoting-test",OptionMap.create(Options.THREAD_DAEMON,true));
+  endpoint.addConnectionProvider("remote",new RemoteConnectionProviderFactory(),OptionMap.create(Options.SSL_ENABLED,false));
+  final URI connectionURI;
+  try {
+    connectionURI=new URI("remote://localhost:4447");
+  }
+ catch (  URISyntaxException e) {
+    throw new IllegalStateException(e);
+  }
+  OptionMap.Builder builder=OptionMap.builder().set(Options.SASL_POLICY_NOANONYMOUS,true);
+  builder.set(Options.SASL_POLICY_NOPLAINTEXT,false);
+  if (password != null) {
+    builder.set(Options.SASL_DISALLOWED_MECHANISMS,Sequence.of("JBOSS-LOCAL-USER"));
+  }
+ else {
+    builder.set(Options.SASL_MECHANISMS,Sequence.of("JBOSS-LOCAL-USER"));
+  }
+  final IoFuture<Connection> futureConnection=endpoint.connect(connectionURI,builder.getMap(),new AuthenticationCallbackHandler(username,password));
+  final Connection connection=IoFutureHelper.get(futureConnection,5000,TimeUnit.MILLISECONDS);
+  final EJBReceiver receiver=new RemotingConnectionEJBReceiver(connection);
+  EJBClientContext context=EJBClientContext.create();
+  context.registerEJBReceiver(receiver);
+  return EJBClientContext.setSelector(new ClosableContextSelector(context,endpoint,connection,receiver));
+}
