@@ -7,5 +7,25 @@
     throw MESSAGES.couldNotConnect(e);
   }
   final Endpoint endpoint=this.endpointInjectedValue.getValue();
-  return endpoint.connect(uri,this.connectionCreationOptions,getCallbackHandler());
+  final CallbackHandler callbackHandler;
+  final CallbackHandlerFactory cbhFactory;
+  SSLContext sslContext=null;
+  SecurityRealm realm=securityRealmInjectedValue.getOptionalValue();
+  if (realm != null && (cbhFactory=realm.getSecretCallbackHandlerFactory()) != null && username != null) {
+    callbackHandler=cbhFactory.getCallbackHandler(username);
+  }
+ else {
+    callbackHandler=getCallbackHandler();
+  }
+  if (realm != null) {
+    sslContext=realm.getSSLContext();
+  }
+  OptionMap.Builder builder=OptionMap.builder();
+  builder.addAll(this.connectionCreationOptions);
+  builder.set(SASL_POLICY_NOANONYMOUS,Boolean.FALSE);
+  builder.set(SASL_POLICY_NOPLAINTEXT,Boolean.FALSE);
+  builder.set(Options.SASL_DISALLOWED_MECHANISMS,Sequence.of(JBOSS_LOCAL_USER));
+  builder.set(Options.SSL_ENABLED,true);
+  builder.set(Options.SSL_STARTTLS,true);
+  return endpoint.connect(uri,builder.getMap(),callbackHandler,sslContext);
 }
