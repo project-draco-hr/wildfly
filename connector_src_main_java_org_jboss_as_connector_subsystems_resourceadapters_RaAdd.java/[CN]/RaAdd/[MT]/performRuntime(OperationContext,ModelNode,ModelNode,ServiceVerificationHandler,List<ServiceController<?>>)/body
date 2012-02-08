@@ -1,0 +1,25 @@
+{
+  final ModelNode address=operation.require(OP_ADDR);
+  final String name=PathAddress.pathAddress(address).getLastElement().getValue();
+  String archiveName=model.get(ARCHIVE.getName()).asString();
+  if (name.startsWith(archiveName) && (name.substring(archiveName.length()).contains(ConnectorServices.RA_SERVICE_NAME_SEPARATOR) || name.equals(archiveName))) {
+    archiveName=name;
+  }
+ else {
+    Integer identifier=ConnectorServices.getResourceIdentifier(archiveName);
+    if (identifier != null && identifier != 0) {
+      archiveName=archiveName + ConnectorServices.RA_SERVICE_NAME_SEPARATOR + identifier;
+    }
+  }
+  model.get(ARCHIVE.getName()).set(archiveName);
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  ModifiableResourceAdapter resourceAdapter=RaOperationUtil.buildResourceAdaptersObject(context,operation);
+  final ServiceController<?> resourceAdaptersService=context.getServiceRegistry(false).getService(ConnectorServices.RESOURCEADAPTERS_SERVICE);
+  ServiceController<?> controller=null;
+  if (resourceAdaptersService == null) {
+    controller=serviceTarget.addService(ConnectorServices.RESOURCEADAPTERS_SERVICE,new ResourceAdaptersService()).setInitialMode(Mode.ACTIVE).addListener(verificationHandler).install();
+  }
+  ServiceName raServiceName=ServiceName.of(ConnectorServices.RA_SERVICE,name);
+  ResourceAdapterService raService=new ResourceAdapterService(resourceAdapter);
+  serviceTarget.addService(raServiceName,raService).setInitialMode(Mode.ACTIVE).addDependency(ConnectorServices.RESOURCEADAPTERS_SERVICE,ResourceAdaptersService.ModifiableResourceAdaptors.class,raService.getResourceAdaptersInjector()).addListener(verificationHandler).install();
+}

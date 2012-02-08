@@ -1,5 +1,6 @@
 {
   final ModelNode opAddr=operation.require(OP_ADDR);
+  final String raName=PathAddress.pathAddress(opAddr).getLastElement().getValue();
   final ModelNode model=context.readModel(PathAddress.EMPTY_ADDRESS);
   final String archive=model.get(ARCHIVE.getName()).asString();
   final ModelNode compensating=Util.getEmptyOperation(ADD,opAddr);
@@ -13,6 +14,14 @@
   context.addStep(new OperationStepHandler(){
     public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
       RaOperationUtil.deactivateIfActive(context,archive);
+      ServiceName raServiceName=ServiceName.of(ConnectorServices.RA_SERVICE,raName);
+      final List<ServiceName> serviceNameList=context.getServiceRegistry(false).getServiceNames();
+      for (      ServiceName name : serviceNameList) {
+        if (raServiceName.isParentOf(name)) {
+          context.removeService(name);
+        }
+        context.removeService(ServiceName.of(ConnectorServices.RA_SERVICE,raName));
+      }
       if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
       }
     }
