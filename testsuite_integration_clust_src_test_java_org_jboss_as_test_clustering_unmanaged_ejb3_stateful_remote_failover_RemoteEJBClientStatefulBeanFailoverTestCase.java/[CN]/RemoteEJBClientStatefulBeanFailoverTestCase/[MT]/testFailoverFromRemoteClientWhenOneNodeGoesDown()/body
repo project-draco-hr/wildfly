@@ -5,10 +5,12 @@
   this.deployer.deploy(ARQUILLIAN_DEPLOYMENT_NAME_FOR_CONTAINER2);
   final ContextSelector<EJBClientContext> previousSelector=this.setupEJBClientContextSelector();
   final String jndiName="ejb:" + "" + "/" + MODULE_NAME + "/"+ ""+ "/"+ CounterBean.class.getSimpleName()+ "!"+ RemoteCounter.class.getName()+ "?stateful";
+  final String destructionCounterJndiName="ejb:" + "" + "/" + MODULE_NAME + "/"+ ""+ "/"+ DestructionCounterSingleton.class.getSimpleName()+ "!"+ DestructionCounterRemote.class.getName();
   boolean container1Stopped=false;
   boolean container2Stopped=false;
   try {
     final RemoteCounter remoteCounter=(RemoteCounter)context.lookup(jndiName);
+    final DestructionCounterRemote destructionCounter=(DestructionCounterRemote)context.lookup(destructionCounterJndiName);
     final int NUM_TIMES=25;
     for (int i=0; i < NUM_TIMES; i++) {
       final CounterResult result=remoteCounter.increment();
@@ -17,6 +19,8 @@
     final CounterResult result=remoteCounter.getCount();
     Assert.assertNotNull("Result from remote stateful counter was null",result);
     Assert.assertEquals("Unexpected count from remote counter",NUM_TIMES,result.getCount());
+    Assert.assertEquals("Nothing should have been destroyed yet",0,destructionCounter.getCDIDestructionCount());
+    Assert.assertEquals("Nothing should have been destroyed yet",0,destructionCounter.getSFSBDestructionCount());
     final int totalCountBeforeShuttingDownANode=result.getCount();
     final String previousInvocationNodeName=result.getNodeName();
     if (previousInvocationNodeName.equals("node-udp-0")) {
@@ -47,6 +51,11 @@
     final String finalNodeName=finalResult.getNodeName();
     Assert.assertEquals("Result was received from an unexpected node, after shutting down a node",aliveNode,finalNodeName);
     Assert.assertEquals("Unexpected count from remote counter, after shutting down a node",countBeforeDecrementing - NUM_TIMES,finalCount);
+    Assert.assertEquals("Nothing should have been destroyed yet",0,destructionCounter.getCDIDestructionCount());
+    Assert.assertEquals("Nothing should have been destroyed yet",0,destructionCounter.getSFSBDestructionCount());
+    remoteCounter.remove();
+    Assert.assertEquals("CDI bean was not destroyed",1,destructionCounter.getCDIDestructionCount());
+    Assert.assertEquals("SFSB was not destroyed",1,destructionCounter.getSFSBDestructionCount());
   }
   finally {
     if (previousSelector != null) {
