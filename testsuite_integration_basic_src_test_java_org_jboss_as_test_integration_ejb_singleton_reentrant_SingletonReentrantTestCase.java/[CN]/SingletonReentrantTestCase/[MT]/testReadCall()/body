@@ -1,0 +1,28 @@
+{
+  final SingletonBean singleton=lookup(SingletonBean.class.getSimpleName(),SingletonBean.class);
+  singleton.resetCalled();
+  ExecutorService pool=Executors.newSingleThreadExecutor();
+  ExecutorService pool2=Executors.newSingleThreadExecutor();
+  final CountDownLatch oneWaiting=new CountDownLatch(1);
+  final CountDownLatch twoWaiting=new CountDownLatch(1);
+  Future<?> firstOne=pool.submit(new SingletonCallableRead(oneWaiting));
+  Future<?> otherOne=pool2.submit(new SingletonCallableRead(twoWaiting));
+  oneWaiting.countDown();
+  Assert.assertEquals(new Integer(1),(Integer)firstOne.get(WAITING_S,TimeUnit.SECONDS));
+  twoWaiting.countDown();
+  Assert.assertEquals(new Integer(2),(Integer)otherOne.get(WAITING_S,TimeUnit.SECONDS));
+  try {
+    firstOne=pool.submit(new SingletonCallableRead(null));
+    firstOne.get();
+    Assert.fail("Supposing " + IllegalLoopbackException.class.getName());
+  }
+ catch (  IllegalLoopbackException ile) {
+  }
+catch (  Exception e) {
+    if (!hasCause(e,IllegalLoopbackException.class)) {
+      Assert.fail("Supposed caused exception is " + IllegalLoopbackException.class.getName());
+    }
+  }
+  pool.shutdown();
+  pool2.shutdown();
+}
