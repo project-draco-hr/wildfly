@@ -1,5 +1,22 @@
 {
   final PathAddress address=PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR));
-  final String name=address.getLastElement().getValue();
-  context.removeService(EmbeddedCacheManagerService.getServiceName(name));
+  final String containerName=address.getLastElement().getValue();
+  for (  Property cache : remainingCaches) {
+    String cacheName=cache.getName();
+    ModelNode cacheModel=cache.getValue();
+    String jndiName=(cacheModel.hasDefined(ModelKeys.JNDI_NAME) ? InfinispanJndiName.toJndiName(cacheModel.get(ModelKeys.JNDI_NAME).asString()) : InfinispanJndiName.defaultCacheJndiName(containerName,cacheName)).getAbsoluteName();
+    ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndiName);
+    context.removeService(bindInfo.getBinderServiceName());
+    context.removeService(CacheConfigurationService.getServiceName(containerName,cacheName));
+    context.removeService(CacheService.getServiceName(containerName,cacheName));
+  }
+  String jndiName=(model.hasDefined(ModelKeys.JNDI_NAME) ? InfinispanJndiName.toJndiName(model.get(ModelKeys.JNDI_NAME).asString()) : InfinispanJndiName.defaultCacheContainerJndiName(containerName)).getAbsoluteName();
+  ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndiName);
+  context.removeService(bindInfo.getBinderServiceName());
+  context.removeService(EmbeddedCacheManagerService.getServiceName(containerName));
+  ServiceName channelServiceName=ChannelService.getServiceName(containerName);
+  ServiceController<?> channelServiceController=context.getServiceRegistry(false).getService(channelServiceName);
+  if (channelServiceController != null) {
+    context.removeService(channelServiceName);
+  }
 }
