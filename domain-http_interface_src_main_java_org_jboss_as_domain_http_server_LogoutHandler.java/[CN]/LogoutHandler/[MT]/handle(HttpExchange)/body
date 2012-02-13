@@ -1,0 +1,47 @@
+{
+  final Headers requestHeaders=exchange.getRequestHeaders();
+  final Headers responseHeaders=exchange.getResponseHeaders();
+  String authorization=requestHeaders.getFirst("Authorization");
+  String rawQuery=exchange.getRequestURI().getRawQuery();
+  boolean query=rawQuery != null && rawQuery.contains("logout");
+  String userAgent=requestHeaders.getFirst("User-Agent");
+  boolean opera=userAgent != null && userAgent.contains("Opera");
+  boolean win=!opera && userAgent != null && userAgent.contains("MSIE");
+  String referrer=responseHeaders.getFirst("Referrer");
+  String protocol="http";
+  String host=null;
+  if (referrer != null) {
+    try {
+      URI uri=new URI(referrer);
+      protocol=uri.getScheme();
+      host=uri.getHost() + (uri.getPort() == -1 ? "" : ":" + String.valueOf(uri.getPort()));
+    }
+ catch (    URISyntaxException e) {
+    }
+  }
+  if (host == null) {
+    host=requestHeaders.getFirst("Host");
+    if (host == null) {
+      exchange.sendResponseHeaders(500,-1);
+      return;
+    }
+  }
+  if (!win && (authorization == null || !authorization.contains("enter-login-here"))) {
+    if (!query) {
+      responseHeaders.set(LOCATION,protocol + "://enter-login-here:blah@" + host+ "/logout?logout");
+      exchange.sendResponseHeaders(307,-1);
+      return;
+    }
+    String realm=opera ? "HIT THE ESCAPE KEY" : this.realm;
+    DigestAuthenticator.DigestContext context=DigestAuthenticator.getOrCreateNegotiationContext(exchange,nonceFactory,false);
+    responseHeaders.add(WWW_AUTHENTICATE_HEADER,"Digest " + DigestAuthenticator.createChallenge(context,realm,false));
+    exchange.sendResponseHeaders(401,0);
+    PrintStream print=new PrintStream(exchange.getResponseBody());
+    print.println("<html><script type='text/javascript'>window.location=\"" + protocol + "://"+ host+ "/\";</script></html>");
+    print.flush();
+    print.close();
+    return;
+  }
+  responseHeaders.set(LOCATION,protocol + "://" + host+ "/");
+  exchange.sendResponseHeaders(307,-1);
+}
