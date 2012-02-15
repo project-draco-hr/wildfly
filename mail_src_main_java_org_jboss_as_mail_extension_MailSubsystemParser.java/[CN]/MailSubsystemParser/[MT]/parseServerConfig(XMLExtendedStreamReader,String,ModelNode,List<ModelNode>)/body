@@ -1,20 +1,25 @@
 {
+  final ModelNode address=parent.clone();
+  address.add(MailSubsystemModel.SERVER_TYPE,name);
+  address.protect();
+  final ModelNode operation=new ModelNode();
+  operation.get(OP_ADDR).set(address);
+  operation.get(OP).set(ADD);
+  list.add(operation);
   String socketBindingRef=null;
-  String username=null;
-  String password=null;
-  boolean ssl=false;
   for (int i=0; i < reader.getAttributeCount(); i++) {
     Attribute attr=Attribute.forName(reader.getAttributeLocalName(i));
     String value=reader.getAttributeValue(i);
     if (attr == Attribute.OUTBOUND_SOCKET_BINDING_REF) {
       socketBindingRef=value;
+      OUTBOUND_SOCKET_BINDING_REF.parseAndSetParameter(value,operation,reader);
     }
     if (attr == Attribute.SSL) {
-      ssl=Boolean.parseBoolean(value.trim());
+      SSL.parseAndSetParameter(value,operation,reader);
     }
   }
   if (socketBindingRef == null) {
-    throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.OUTBOUND_SOCKET_BINDING_REF.getLocalName()));
+    throw ParseUtils.missingRequired(reader,EnumSet.of(Attribute.OUTBOUND_SOCKET_BINDING_REF));
   }
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
     final Element element=Element.forName(reader.getLocalName());
@@ -23,11 +28,12 @@ case LOGIN:
 {
         for (int i=0; i < reader.getAttributeCount(); i++) {
           String att=reader.getAttributeLocalName(i);
+          String value=reader.getAttributeValue(i);
           if (att.equals(Attribute.USERNAME.getLocalName())) {
-            username=reader.getAttributeValue(i);
+            MailServerDefinition.USERNAME.parseAndSetParameter(value,operation,reader);
           }
  else           if (att.equals(Attribute.PASSWORD.getLocalName())) {
-            password=reader.getAttributeValue(i);
+            PASSWORD.parseAndSetParameter(value,operation,reader);
           }
         }
         ParseUtils.requireNoContent(reader);
@@ -35,5 +41,4 @@ case LOGIN:
       }
   }
 }
-return new MailSessionServer(socketBindingRef,username,password,ssl);
 }
