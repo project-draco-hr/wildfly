@@ -1,0 +1,73 @@
+{
+  if (value != null) {
+    DEPLOYMENT_CONNECTOR_LOGGER.debugf("Unregistering: %s",deploymentName);
+    if (registry != null && registry.getValue() != null) {
+      registry.getValue().unregisterResourceAdapterDeployment(value);
+    }
+    if (managementRepository != null && managementRepository.getValue() != null && value.getDeployment() != null && value.getDeployment().getConnector() != null) {
+      managementRepository.getValue().getConnectors().remove(value.getDeployment().getConnector());
+    }
+    if (mdr != null && mdr.getValue() != null && value.getDeployment() != null && value.getDeployment().getCfs() != null && value.getDeployment().getCfJndiNames() != null) {
+      for (int i=0; i < value.getDeployment().getCfs().length; i++) {
+        try {
+          String cf=value.getDeployment().getCfs()[i].getClass().getName();
+          String jndi=value.getDeployment().getCfJndiNames()[i];
+          mdr.getValue().unregisterJndiMapping(value.getDeployment().getURL().toExternalForm(),cf,jndi);
+        }
+ catch (        Throwable nfe) {
+          DEPLOYMENT_CONNECTOR_LOGGER.debug("Exception during JNDI unbinding",nfe);
+        }
+      }
+    }
+    if (mdr != null && mdr.getValue() != null && value.getDeployment().getAos() != null && value.getDeployment().getAoJndiNames() != null) {
+      for (int i=0; i < value.getDeployment().getAos().length; i++) {
+        try {
+          String ao=value.getDeployment().getAos()[i].getClass().getName();
+          String jndi=value.getDeployment().getAoJndiNames()[i];
+          mdr.getValue().unregisterJndiMapping(value.getDeployment().getURL().toExternalForm(),ao,jndi);
+        }
+ catch (        Throwable nfe) {
+          DEPLOYMENT_CONNECTOR_LOGGER.debug("Exception during JNDI unbinding",nfe);
+        }
+      }
+    }
+    if (value.getDeployment() != null && value.getDeployment().getRecovery() != null && txInt.getValue() != null) {
+      XAResourceRecoveryRegistry rr=txInt.getValue().getRecoveryRegistry();
+      if (rr != null) {
+        for (        XAResourceRecovery recovery : value.getDeployment().getRecovery()) {
+          rr.removeXAResourceRecovery(recovery);
+        }
+      }
+    }
+    if (value.getDeployment() != null && value.getDeployment().getConnectionManagers() != null) {
+      for (      ConnectionManager cm : value.getDeployment().getConnectionManagers()) {
+        cm.shutdown();
+      }
+    }
+    if (value.getDeployment() != null && value.getDeployment().getResourceAdapterKey() != null && raRepository != null && raRepository.getValue() != null) {
+      try {
+        raRepository.getValue().unregisterResourceAdapter(value.getDeployment().getResourceAdapterKey());
+      }
+ catch (      Throwable t) {
+      }
+    }
+    if (value.getDeployment() != null && value.getDeployment().getResourceAdapter() != null) {
+      ClassLoader old=SecurityActions.getThreadContextClassLoader();
+      try {
+        SecurityActions.setThreadContextClassLoader(value.getDeployment().getResourceAdapter().getClass().getClassLoader());
+        value.getDeployment().getResourceAdapter().stop();
+      }
+  finally {
+        SecurityActions.setThreadContextClassLoader(old);
+      }
+    }
+  }
+  if (mdr != null && mdr.getValue() != null && deploymentName != null) {
+    try {
+      mdr.getValue().unregisterResourceAdapter(deploymentName);
+    }
+ catch (    Throwable t) {
+      DEPLOYMENT_CONNECTOR_LOGGER.debug("Exception during unregistering deployment",t);
+    }
+  }
+}
