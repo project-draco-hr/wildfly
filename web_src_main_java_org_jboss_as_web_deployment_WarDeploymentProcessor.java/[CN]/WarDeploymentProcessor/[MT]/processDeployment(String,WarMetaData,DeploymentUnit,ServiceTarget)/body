@@ -10,10 +10,6 @@
   final StandardContext webContext=new StandardContext();
   final JBossContextConfig config=new JBossContextConfig(deploymentUnit);
   webContext.addValve(new SecurityContextAssociationValve(deploymentUnit));
-  List<ValveMetaData> valves=metaData.getValves();
-  if (valves == null) {
-    metaData.setValves(valves=new ArrayList<ValveMetaData>());
-  }
   try {
     webContext.setDocBase(deploymentRoot.getPhysicalFile().getAbsolutePath());
   }
@@ -44,10 +40,44 @@
   }
   final Loader loader=new WebCtxLoader(classLoader);
   webContext.setLoader(loader);
+  List<ValveMetaData> valves=metaData.getValves();
+  if (valves == null) {
+    metaData.setValves(valves=new ArrayList<ValveMetaData>());
+  }
+  for (  ValveMetaData valve : valves) {
+    Valve valveInstance=(Valve)getInstance(module,valve.getModule(),valve.getValveClass(),valve.getParams());
+    webContext.getPipeline().addValve(valveInstance);
+  }
+  List<ContainerListenerMetaData> listeners=metaData.getContainerListeners();
+  if (listeners != null) {
+    for (    ContainerListenerMetaData listener : listeners) {
+switch (listener.getListenerType()) {
+case CONTAINER:
+        ContainerListener containerListener=(ContainerListener)getInstance(module,listener.getModule(),listener.getListenerClass(),listener.getParams());
+      webContext.addContainerListener(containerListener);
+    break;
+case LIFECYCLE:
+  LifecycleListener lifecycleListener=(LifecycleListener)getInstance(module,listener.getModule(),listener.getListenerClass(),listener.getParams());
+if (webContext instanceof Lifecycle) {
+  ((Lifecycle)webContext).addLifecycleListener(lifecycleListener);
+}
+break;
+case SERVLET_INSTANCE:
+webContext.addInstanceListener(listener.getListenerClass());
+break;
+case SERVLET_CONTAINER:
+webContext.addWrapperListener(listener.getListenerClass());
+break;
+case SERVLET_LIFECYCLE:
+webContext.addWrapperLifecycle(listener.getListenerClass());
+break;
+}
+}
+}
 switch (metaData.getSessionCookies()) {
 case JBossWebMetaData.SESSION_COOKIES_ENABLED:
-    webContext.setCookies(true);
-  break;
+webContext.setCookies(true);
+break;
 case JBossWebMetaData.SESSION_COOKIES_DISABLED:
 webContext.setCookies(false);
 break;
