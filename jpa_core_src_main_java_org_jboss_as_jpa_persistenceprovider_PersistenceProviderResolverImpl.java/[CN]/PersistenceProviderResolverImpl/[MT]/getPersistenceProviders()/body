@@ -1,8 +1,29 @@
 {
   List<PersistenceProvider> providersCopy=new ArrayList<PersistenceProvider>(providers.size());
+synchronized (persistenceProviderPerClassLoader) {
+    if (persistenceProviderPerClassLoader.size() > 0) {
+      ClassLoader deploymentClassLoader=findParentModuleCl(SecurityActions.getContextClassLoader());
+      List<Class> deploymentSpecificPersistenceProviders=persistenceProviderPerClassLoader.get(deploymentClassLoader);
+      if (deploymentSpecificPersistenceProviders != null) {
+        for (        Class providerClass : deploymentSpecificPersistenceProviders) {
+          try {
+            ROOT_LOGGER.tracef("application has its own Persistence Provider %s",providerClass.getName());
+            providersCopy.add((PersistenceProvider)providerClass.newInstance());
+          }
+ catch (          InstantiationException e) {
+            throw JpaMessages.MESSAGES.couldNotCreateInstanceProvider(e,providerClass.getName());
+          }
+catch (          IllegalAccessException e) {
+            throw JpaMessages.MESSAGES.couldNotCreateInstanceProvider(e,providerClass.getName());
+          }
+        }
+      }
+    }
+  }
   for (  Class providerClass : providers) {
     try {
       providersCopy.add((PersistenceProvider)providerClass.newInstance());
+      ROOT_LOGGER.tracef("returning global (module) Persistence Provider %s",providerClass.getName());
     }
  catch (    InstantiationException e) {
       throw JpaMessages.MESSAGES.couldNotCreateInstanceProvider(e,providerClass.getName());
