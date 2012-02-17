@@ -1,11 +1,61 @@
 {
-  final ModelNode operation=getOperationForProxy(original);
-  final ExecuteRequestContext context=new ExecuteRequestContext(operation,attachments,handler,control);
-  try {
-    channelAssociation.executeRequest(new ExecuteRequest(),context,context);
-    context.awaitPreparedOrFailed();
+  final BlockingQueue<PreparedOperation<Operation>> queue=new ArrayBlockingQueue<PreparedOperation<Operation>>(1,true);
+  final OperationListener<Operation> operationListener=new OperationListener<Operation>(){
+    @Override public void operationPrepared(    PreparedOperation<Operation> prepared){
+      if (!queue.offer(prepared)) {
+        prepared.rollback();
+      }
+    }
+    @Override public void operationFailed(    Operation operation,    ModelNode result){
+      queue.offer(new TransactionalProtocolHandlers.FailedOperation<Operation>(operation,result));
+    }
+    @Override public void operationComplete(    Operation operation,    ModelNode result){
+      control.operationCompleted(result);
+    }
   }
- catch (  Exception e) {
+;
+  Future<ModelNode> futureResult=null;
+  try {
+    final ModelNode translated=getOperationForProxy(original);
+    futureResult=execute(operationListener,translated,messageHandler,attachments);
+    final PreparedOperation<Operation> prepared=queue.take();
+    if (prepared.isFailed()) {
+      control.operationFailed(prepared.getPreparedResult());
+      return;
+    }
+    control.operationPrepared(new ModelController.OperationTransaction(){
+      @Override public void commit(){
+        prepared.commit();
+        try {
+          prepared.getFinalResult().get();
+        }
+ catch (        InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+catch (        Exception e) {
+        }
+      }
+      @Override public void rollback(){
+        prepared.rollback();
+        try {
+          prepared.getFinalResult().get();
+        }
+ catch (        InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+catch (        Exception e) {
+        }
+      }
+    }
+,prepared.getPreparedResult());
+  }
+ catch (  InterruptedException e) {
+    if (futureResult != null) {
+      futureResult.cancel(false);
+    }
+    Thread.currentThread().interrupt();
+  }
+catch (  Exception e) {
     throw new RuntimeException(e);
   }
 }
