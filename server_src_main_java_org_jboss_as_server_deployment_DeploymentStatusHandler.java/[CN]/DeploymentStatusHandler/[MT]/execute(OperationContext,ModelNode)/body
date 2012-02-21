@@ -1,20 +1,27 @@
 {
   final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
   final PathElement element=address.getLastElement();
+  final ModelNode deployment=Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
+  final boolean isEnabled=deployment.get(ENABLED).asBoolean();
   context.addStep(new OperationStepHandler(){
     @Override public void execute(    final OperationContext context,    final ModelNode operation) throws OperationFailedException {
       final ModelNode result=context.getResult();
-      final ServiceController<?> controller=context.getServiceRegistry(false).getService(Services.deploymentUnitName(element.getValue()));
-      if (controller != null) {
-        if (controller.getSubstate() == ServiceController.Substate.WONT_START && controller.getState() == ServiceController.State.DOWN) {
-          result.set(AbstractDeploymentUnitService.DeploymentStatus.STOPPED.toString());
-        }
- else {
-          result.set(((AbstractDeploymentUnitService)controller.getService()).getStatus().toString());
-        }
+      if (!isEnabled) {
+        result.set(AbstractDeploymentUnitService.DeploymentStatus.STOPPED.toString());
       }
  else {
-        result.set(NO_METRICS);
+        final ServiceController<?> controller=context.getServiceRegistry(false).getService(Services.deploymentUnitName(element.getValue()));
+        if (controller != null) {
+          if (controller.getSubstate() == ServiceController.Substate.WONT_START && controller.getState() == ServiceController.State.DOWN) {
+            result.set(AbstractDeploymentUnitService.DeploymentStatus.STOPPED.toString());
+          }
+ else {
+            result.set(((AbstractDeploymentUnitService)controller.getService()).getStatus().toString());
+          }
+        }
+ else {
+          result.set(NO_METRICS);
+        }
       }
       context.completeStep();
     }
