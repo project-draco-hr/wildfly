@@ -7,18 +7,26 @@
   this.initialRunningMode=initialRunningMode == null ? RunningMode.NORMAL : initialRunningMode;
   this.hostControllerName=hostControllerName;
   if (standalone && hostControllerName != null) {
-    throw ServerMessages.MESSAGES.hostControllerNameNonNullInStandalone();
+    throw MESSAGES.hostControllerNameNonNullInStandalone();
   }
   if (!standalone && hostControllerName == null) {
-    throw ServerMessages.MESSAGES.hostControllerNameNullInDomain();
+    throw MESSAGES.hostControllerNameNullInDomain();
   }
   configureQualifiedHostName(props.getProperty(QUALIFIED_HOST_NAME),props.getProperty(HOST_NAME),props,env);
   javaExtDirs=getFilesFromProperty(JAVA_EXT_DIRS,props);
   homeDir=getFileFromProperty(HOME_DIR,props);
-  if (homeDir == null)   throw ServerMessages.MESSAGES.missingHomeDirConfiguration(HOME_DIR);
+  if (homeDir == null) {
+    throw MESSAGES.missingHomeDirConfiguration(HOME_DIR);
+  }
+  if (!homeDir.exists() || !homeDir.isDirectory()) {
+    throw MESSAGES.homeDirectoryDoesNotExist(homeDir);
+  }
   @SuppressWarnings("deprecation") File tmp=getFileFromProperty(MODULES_DIR,props);
   if (tmp == null) {
     tmp=new File(homeDir,"modules");
+  }
+ else   if (!tmp.exists() || !tmp.isDirectory()) {
+    throw MESSAGES.modulesDirectoryDoesNotExist(tmp);
   }
   modulesDir=tmp;
   configureBundlesDir(props.getProperty(BUNDLES_DIR),props);
@@ -26,12 +34,33 @@
   if (tmp == null) {
     tmp=new File(homeDir,standalone ? "standalone" : "domain/servers/" + serverName);
   }
+  if (standalone) {
+    if (!tmp.exists()) {
+      throw MESSAGES.serverBaseDirectoryDoesNotExist(tmp);
+    }
+ else     if (!tmp.isDirectory()) {
+      throw MESSAGES.serverBaseDirectoryIsNotADirectory(tmp);
+    }
+  }
+ else {
+    if (tmp.exists()) {
+      if (!tmp.isDirectory()) {
+        throw MESSAGES.serverBaseDirectoryIsNotADirectory(tmp);
+      }
+    }
+ else     if (!tmp.mkdirs()) {
+      throw MESSAGES.couldNotCreateServerBaseDirectory(tmp);
+    }
+  }
   serverBaseDir=tmp;
   tmp=getFileFromProperty(SERVER_CONFIG_DIR,props);
   if (tmp == null) {
     tmp=new File(serverBaseDir,"configuration");
   }
   serverConfigurationDir=tmp;
+  if (standalone && !serverConfigurationDir.exists() && !serverConfigurationDir.isDirectory()) {
+    throw MESSAGES.configDirectoryDoesNotExist(serverConfigurationDir);
+  }
   String defaultServerConfig=SecurityActions.getSystemProperty(JBOSS_SERVER_DEFAULT_CONFIG,"standalone.xml");
   serverConfigurationFile=standalone ? new ConfigurationFile(serverConfigurationDir,defaultServerConfig,serverConfig) : null;
   tmp=getFileFromProperty(SERVER_DATA_DIR,props);
@@ -39,6 +68,16 @@
     tmp=new File(serverBaseDir,"data");
   }
   serverDataDir=tmp;
+  if (serverDataDir.exists()) {
+    if (!serverDataDir.isDirectory()) {
+      throw MESSAGES.serverDataDirectoryIsNotDirectory(serverDataDir);
+    }
+  }
+ else {
+    if (!serverDataDir.mkdirs()) {
+      throw MESSAGES.couldNotCreateServerDataDirectory(serverDataDir);
+    }
+  }
   tmp=getFileFromProperty(SERVER_CONTENT_DIR,props);
   if (tmp == null) {
     @SuppressWarnings("deprecation") String deprecatedProp=SERVER_DEPLOY_DIR;
@@ -48,19 +87,54 @@
     tmp=new File(serverDataDir,"content");
   }
   serverContentDir=tmp;
+  if (serverContentDir.exists()) {
+    if (!serverContentDir.isDirectory()) {
+      throw MESSAGES.serverContentDirectoryIsNotDirectory(serverContentDir);
+    }
+  }
+ else   if (!serverContentDir.mkdirs()) {
+    throw MESSAGES.couldNotCreateServerContentDirectory(serverContentDir);
+  }
   tmp=getFileFromProperty(SERVER_LOG_DIR,props);
   if (tmp == null) {
     tmp=new File(serverBaseDir,"log");
   }
+  if (tmp.exists()) {
+    if (!tmp.isDirectory()) {
+      throw MESSAGES.logDirectoryIsNotADirectory(tmp);
+    }
+  }
+ else   if (!tmp.mkdirs()) {
+    throw MESSAGES.couldNotCreateLogDirectory(tmp);
+  }
   serverLogDir=tmp;
-  configureServerTempDir(props.getProperty(SERVER_TEMP_DIR),props);
+  tmp=configureServerTempDir(props.getProperty(SERVER_TEMP_DIR),props);
+  if (tmp.exists()) {
+    if (!tmp.isDirectory()) {
+      throw MESSAGES.serverTempDirectoryIsNotADirectory(tmp);
+    }
+  }
+ else   if (!tmp.mkdirs()) {
+    throw MESSAGES.couldNotCreateServerTempDirectory(tmp);
+  }
   tmp=getFileFromProperty(CONTROLLER_TEMP_DIR,props);
   if (tmp == null) {
     tmp=new File(serverBaseDir,"tmp");
   }
+  if (tmp.exists()) {
+    if (!tmp.isDirectory()) {
+      throw MESSAGES.controllerTempDirectoryIsNotADirectory(tmp);
+    }
+  }
+ else   if (!tmp.mkdirs()) {
+    throw MESSAGES.couldNotCreateControllerTempDirectory(tmp);
+  }
   controllerTempDir=tmp;
   tmp=getFileFromProperty(DOMAIN_BASE_DIR,props);
   if (tmp != null) {
+    if (!tmp.exists() || !tmp.isDirectory()) {
+      throw MESSAGES.domainBaseDirDoesNotExist(tmp);
+    }
     this.domainBaseDir=tmp;
   }
  else {
@@ -68,6 +142,9 @@
   }
   tmp=getFileFromProperty(DOMAIN_CONFIG_DIR,props);
   if (tmp != null) {
+    if (!tmp.exists() || !tmp.isDirectory()) {
+      throw MESSAGES.domainConfigDirDoesNotExist(tmp);
+    }
     this.domainConfigurationDir=tmp;
   }
  else {
