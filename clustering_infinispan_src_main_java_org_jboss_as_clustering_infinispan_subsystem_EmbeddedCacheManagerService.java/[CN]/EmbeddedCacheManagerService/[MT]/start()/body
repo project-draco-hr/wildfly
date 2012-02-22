@@ -1,58 +1,7 @@
 {
-  GlobalConfigurationBuilder globalBuilder=new GlobalConfigurationBuilder();
-  globalBuilder.shutdown().hookBehavior(ShutdownHookBehavior.DONT_REGISTER);
-  TransportConfiguration transport=this.dependencies.getTransportConfiguration();
-  TransportConfigurationBuilder transportBuilder=globalBuilder.transport();
-  if (transport != null) {
-    ChannelProvider.init(transportBuilder,transport.getChannel());
-    Long timeout=transport.getLockTimeout();
-    if (timeout != null) {
-      transportBuilder.distributedSyncTimeout(timeout.longValue());
-    }
-    Channel channel=transport.getChannel();
-    if (channel.getAddress() instanceof TopologyUUID) {
-      TopologyUUID topologyAddress=(TopologyUUID)channel.getAddress();
-      String site=topologyAddress.getSiteId();
-      if (site != null) {
-        transportBuilder.siteId(site);
-      }
-      String rack=topologyAddress.getRackId();
-      if (rack != null) {
-        transportBuilder.rackId(rack);
-      }
-      String machine=topologyAddress.getMachineId();
-      if (machine != null) {
-        transportBuilder.machineId(machine);
-      }
-    }
-    transportBuilder.clusterName(this.name);
-    Executor executor=transport.getExecutor();
-    if (executor != null) {
-      ExecutorProvider.initTransportExecutor(globalBuilder,executor);
-    }
-  }
-  Executor listenerExecutor=this.dependencies.getListenerExecutor();
-  if (listenerExecutor != null) {
-    ExecutorProvider.initListenerExecutor(globalBuilder,listenerExecutor);
-  }
-  ScheduledExecutorService evictionExecutor=this.dependencies.getEvictionExecutor();
-  if (evictionExecutor != null) {
-    ExecutorProvider.initEvictionExecutor(globalBuilder,evictionExecutor);
-  }
-  ScheduledExecutorService replicationQueueExecutor=this.dependencies.getReplicationQueueExecutor();
-  if (replicationQueueExecutor != null) {
-    ExecutorProvider.initReplicationQueueExecutor(globalBuilder,replicationQueueExecutor);
-  }
-  GlobalJmxStatisticsConfigurationBuilder jmxBuilder=globalBuilder.globalJmxStatistics().cacheManagerName(this.name);
-  MBeanServer server=this.dependencies.getMBeanServer();
-  if (server != null) {
-    jmxBuilder.enable().mBeanServerLookup(new MBeanServerProvider(server)).jmxDomain(SERVICE_NAME.getCanonicalName()).allowDuplicateDomains(true);
-  }
- else {
-    jmxBuilder.disable();
-  }
-  this.container=new DefaultEmbeddedCacheManager(globalBuilder.build(),this.defaultCache);
+  EmbeddedCacheManagerConfiguration config=this.config.getValue();
+  this.container=new DefaultEmbeddedCacheManager(config.getGlobalConfiguration(),config.getDefaultCache());
   this.container.addListener(this);
   this.container.start();
-  log.debugf("%s cache container started",this.name);
+  log.debugf("%s cache container started",config.getName());
 }

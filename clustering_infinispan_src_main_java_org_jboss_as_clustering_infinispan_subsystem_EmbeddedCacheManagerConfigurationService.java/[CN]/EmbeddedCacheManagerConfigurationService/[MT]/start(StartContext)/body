@@ -1,0 +1,60 @@
+{
+  GlobalConfigurationBuilder builder=new GlobalConfigurationBuilder();
+  ClassLoader loader=this.dependencies.getClassLoader();
+  if (loader == null) {
+    loader=EmbeddedCacheManagerConfiguration.class.getClassLoader();
+  }
+  builder.classLoader(loader);
+  builder.shutdown().hookBehavior(ShutdownHookBehavior.DONT_REGISTER);
+  TransportConfiguration transport=this.dependencies.getTransportConfiguration();
+  TransportConfigurationBuilder transportBuilder=builder.transport();
+  if (transport != null) {
+    ChannelProvider.init(transportBuilder,transport.getChannel());
+    Long timeout=transport.getLockTimeout();
+    if (timeout != null) {
+      transportBuilder.distributedSyncTimeout(timeout.longValue());
+    }
+    Channel channel=transport.getChannel();
+    if (channel.getAddress() instanceof TopologyUUID) {
+      TopologyUUID topologyAddress=(TopologyUUID)channel.getAddress();
+      String site=topologyAddress.getSiteId();
+      if (site != null) {
+        transportBuilder.siteId(site);
+      }
+      String rack=topologyAddress.getRackId();
+      if (rack != null) {
+        transportBuilder.rackId(rack);
+      }
+      String machine=topologyAddress.getMachineId();
+      if (machine != null) {
+        transportBuilder.machineId(machine);
+      }
+    }
+    transportBuilder.clusterName(this.name);
+    Executor executor=transport.getExecutor();
+    if (executor != null) {
+      ExecutorProvider.initTransportExecutor(builder,executor);
+    }
+  }
+  Executor listenerExecutor=this.dependencies.getListenerExecutor();
+  if (listenerExecutor != null) {
+    ExecutorProvider.initListenerExecutor(builder,listenerExecutor);
+  }
+  ScheduledExecutorService evictionExecutor=this.dependencies.getEvictionExecutor();
+  if (evictionExecutor != null) {
+    ExecutorProvider.initEvictionExecutor(builder,evictionExecutor);
+  }
+  ScheduledExecutorService replicationQueueExecutor=this.dependencies.getReplicationQueueExecutor();
+  if (replicationQueueExecutor != null) {
+    ExecutorProvider.initReplicationQueueExecutor(builder,replicationQueueExecutor);
+  }
+  GlobalJmxStatisticsConfigurationBuilder jmxBuilder=builder.globalJmxStatistics().cacheManagerName(this.name);
+  MBeanServer server=this.dependencies.getMBeanServer();
+  if (server != null) {
+    jmxBuilder.enable().mBeanServerLookup(new MBeanServerProvider(server)).jmxDomain(EmbeddedCacheManagerService.getServiceName(null).getCanonicalName()).allowDuplicateDomains(true);
+  }
+ else {
+    jmxBuilder.disable();
+  }
+  this.config=builder.build();
+}

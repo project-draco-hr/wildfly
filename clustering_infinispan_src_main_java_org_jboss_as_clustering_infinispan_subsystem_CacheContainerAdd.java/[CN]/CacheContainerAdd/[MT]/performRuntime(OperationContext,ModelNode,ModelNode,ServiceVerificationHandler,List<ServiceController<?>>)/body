@@ -14,14 +14,18 @@
       aliases[i]=EmbeddedCacheManagerService.getServiceName(list.get(i).asString());
     }
   }
-  ServiceController.Mode initialMode=model.hasDefined(ModelKeys.START) ? StartMode.valueOf(model.get(ModelKeys.START).asString()).getMode() : ServiceController.Mode.ON_DEMAND;
   ServiceTarget target=context.getServiceTarget();
-  ServiceName serviceName=EmbeddedCacheManagerService.getServiceName(name);
-  ServiceBuilder<EmbeddedCacheManager> containerBuilder=target.addService(serviceName,new EmbeddedCacheManagerService(name,defaultCache,dependencies)).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,dependencies.getMBeanServerInjector()).addAliases(aliases).setInitialMode(initialMode);
+  ServiceName configServiceName=EmbeddedCacheManagerConfigurationService.getServiceName(name);
+  ServiceBuilder<EmbeddedCacheManagerConfiguration> configBuilder=target.addService(configServiceName,new EmbeddedCacheManagerConfigurationService(name,defaultCache,dependencies)).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,dependencies.getMBeanServerInjector()).addDependency(DependencyType.OPTIONAL,EmbeddedCacheManagerConfigurationService.getClassLoaderServiceName(name),ClassLoader.class,dependencies.getClassLoaderInjector()).setInitialMode(ServiceController.Mode.ON_DEMAND);
+  ServiceController.Mode initialMode=model.hasDefined(ModelKeys.START) ? StartMode.valueOf(model.get(ModelKeys.START).asString()).getMode() : ServiceController.Mode.ON_DEMAND;
+  ServiceName containerServiceName=EmbeddedCacheManagerService.getServiceName(name);
+  InjectedValue<EmbeddedCacheManagerConfiguration> config=new InjectedValue<EmbeddedCacheManagerConfiguration>();
+  ServiceBuilder<EmbeddedCacheManager> containerBuilder=target.addService(containerServiceName,new EmbeddedCacheManagerService(config)).addDependency(configServiceName,EmbeddedCacheManagerConfiguration.class,config).addAliases(aliases).setInitialMode(initialMode);
+  newControllers.add(containerBuilder.install());
   String jndiName=(model.hasDefined(ModelKeys.JNDI_NAME) ? InfinispanJndiName.toJndiName(model.get(ModelKeys.JNDI_NAME).asString()) : InfinispanJndiName.defaultCacheContainerJndiName(name)).getAbsoluteName();
   ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndiName);
   BinderService binder=new BinderService(bindInfo.getBindName());
-  ServiceBuilder<ManagedReferenceFactory> binderBuilder=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jndiName)).addDependency(serviceName,CacheContainer.class,new ManagedReferenceInjector<CacheContainer>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(ServiceController.Mode.PASSIVE);
+  ServiceBuilder<ManagedReferenceFactory> binderBuilder=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jndiName)).addDependency(containerServiceName,CacheContainer.class,new ManagedReferenceInjector<CacheContainer>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(ServiceController.Mode.PASSIVE);
   newControllers.add(binderBuilder.install());
   if (hasTransport) {
     String stack=null;
@@ -32,16 +36,16 @@
     if (transport.hasDefined(ModelKeys.LOCK_TIMEOUT)) {
       transportConfig.setLockTimeout(transport.get(ModelKeys.LOCK_TIMEOUT).asLong());
     }
-    addExecutorDependency(containerBuilder,transport,ModelKeys.EXECUTOR,transportConfig.getExecutorInjector());
+    addExecutorDependency(configBuilder,transport,ModelKeys.EXECUTOR,transportConfig.getExecutorInjector());
     ServiceName channelServiceName=ChannelService.getServiceName(name);
-    containerBuilder.addDependency(channelServiceName,Channel.class,transportConfig.getChannelInjector());
+    configBuilder.addDependency(channelServiceName,Channel.class,transportConfig.getChannelInjector());
     InjectedValue<ChannelFactory> channelFactory=new InjectedValue<ChannelFactory>();
     ServiceBuilder<Channel> channelBuilder=target.addService(channelServiceName,new ChannelService(name,channelFactory)).addDependency(ChannelFactoryService.getServiceName(stack),ChannelFactory.class,channelFactory).setInitialMode(ServiceController.Mode.ON_DEMAND);
     newControllers.add(channelBuilder.install());
   }
-  addExecutorDependency(containerBuilder,model,ModelKeys.LISTENER_EXECUTOR,dependencies.getListenerExecutorInjector());
-  addScheduledExecutorDependency(containerBuilder,model,ModelKeys.EVICTION_EXECUTOR,dependencies.getEvictionExecutorInjector());
-  addScheduledExecutorDependency(containerBuilder,model,ModelKeys.REPLICATION_QUEUE_EXECUTOR,dependencies.getReplicationQueueExecutorInjector());
-  newControllers.add(containerBuilder.install());
+  addExecutorDependency(configBuilder,model,ModelKeys.LISTENER_EXECUTOR,dependencies.getListenerExecutorInjector());
+  addScheduledExecutorDependency(configBuilder,model,ModelKeys.EVICTION_EXECUTOR,dependencies.getEvictionExecutorInjector());
+  addScheduledExecutorDependency(configBuilder,model,ModelKeys.REPLICATION_QUEUE_EXECUTOR,dependencies.getReplicationQueueExecutorInjector());
+  newControllers.add(configBuilder.install());
   log.debugf("%s cache container installed",name);
 }

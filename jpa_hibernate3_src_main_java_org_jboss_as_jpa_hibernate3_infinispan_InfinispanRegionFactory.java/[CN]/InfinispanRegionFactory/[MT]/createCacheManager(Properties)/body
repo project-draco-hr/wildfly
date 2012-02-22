@@ -1,0 +1,28 @@
+{
+  String container=properties.getProperty(CACHE_CONTAINER,DEFAULT_CACHE_CONTAINER);
+  ServiceName serviceName=EmbeddedCacheManagerConfigurationService.getServiceName(container);
+  ServiceRegistry registry=CurrentServiceContainer.getServiceContainer();
+  @SuppressWarnings("unchecked") ServiceController<EmbeddedCacheManagerConfiguration> service=(ServiceController<EmbeddedCacheManagerConfiguration>)registry.getRequiredService(serviceName);
+  ServiceListener<EmbeddedCacheManagerConfiguration> listener=new NotifyingListener<EmbeddedCacheManagerConfiguration>();
+  service.addListener(listener);
+synchronized (listener) {
+    service.setMode(ServiceController.Mode.PASSIVE);
+    try {
+      while (EnumSet.of(ServiceController.State.DOWN,ServiceController.State.STARTING).contains(service.getState())) {
+        listener.wait();
+      }
+    }
+ catch (    InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+  }
+  service.removeListener(listener);
+  if (service.getState() != ServiceController.State.UP) {
+    throw new CacheException(service.getStartException());
+  }
+  EmbeddedCacheManagerConfiguration config=service.getValue();
+  GlobalConfiguration global=new GlobalConfigurationBuilder().read(config.getGlobalConfiguration()).classLoader(this.getClass().getClassLoader()).build();
+  EmbeddedCacheManager manager=new DefaultEmbeddedCacheManager(global,config.getDefaultCache());
+  manager.start();
+  return manager;
+}
