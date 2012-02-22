@@ -4,21 +4,6 @@
   final ApplicationClientMetaData appClientData=deploymentUnit.getAttachment(AppClientAttachments.APPLICATION_CLIENT_META_DATA);
   final DeploymentReflectionIndex deploymentReflectionIndex=deploymentUnit.getAttachment(Attachments.REFLECTION_INDEX);
   final DeploymentClassIndex classIndex=deploymentUnit.getAttachment(Attachments.CLASS_INDEX);
-  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
-  Boolean activate=deploymentUnit.getAttachment(AppClientAttachments.START_APP_CLIENT);
-  if (activate == null || !activate) {
-    return;
-  }
-  final Class<?> mainClass=deploymentUnit.getAttachment(AppClientAttachments.MAIN_CLASS);
-  if (mainClass == null) {
-    throw MESSAGES.cannotStartAppClient(deploymentUnit.getName());
-  }
-  final ApplicationClientComponentDescription component=deploymentUnit.getAttachment(AppClientAttachments.APPLICATION_CLIENT_COMPONENT);
-  ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(mainClass);
-  Method method=index.getMethod(void.class,"main",String[].class);
-  if (method == null) {
-    throw MESSAGES.cannotStartAppClient(deploymentUnit.getName(),mainClass);
-  }
   final CallbackHandler callbackHandler;
   if (appClientData != null && appClientData.getCallbackHandler() != null && !appClientData.getCallbackHandler().isEmpty()) {
     try {
@@ -35,7 +20,73 @@ catch (    Exception e) {
  else {
     callbackHandler=new DefaultApplicationClientCallbackHandler();
   }
+  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+  Boolean activate=deploymentUnit.getAttachment(AppClientAttachments.START_APP_CLIENT);
+  if (activate == null || !activate) {
+    return;
+  }
+  final Class<?> mainClass=deploymentUnit.getAttachment(AppClientAttachments.MAIN_CLASS);
+  if (mainClass == null) {
+    throw MESSAGES.cannotStartAppClient(deploymentUnit.getName());
+  }
+  final ApplicationClientComponentDescription component=deploymentUnit.getAttachment(AppClientAttachments.APPLICATION_CLIENT_COMPONENT);
+  ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(mainClass);
+  Method method=index.getMethod(void.class,"main",String[].class);
+  if (method == null) {
+    throw MESSAGES.cannotStartAppClient(deploymentUnit.getName(),mainClass);
+  }
+  final ApplicationClientStartService startService;
   final List<SetupAction> setupActions=deploymentUnit.getAttachmentList(org.jboss.as.ee.component.Attachments.OTHER_EE_SETUP_ACTIONS);
-  final ApplicationClientStartService startService=new ApplicationClientStartService(method,parameters,hostUrl,moduleDescription.getNamespaceContextSelector(),module.getClassLoader(),callbackHandler,setupActions);
+  if (connectionPropertiesUrl != null) {
+    EJBClientConfiguration configuration;
+    try {
+      final File file=new File(connectionPropertiesUrl);
+      final URL url;
+      if (file.exists()) {
+        url=file.toURI().toURL();
+      }
+ else {
+        url=new URL(connectionPropertiesUrl);
+      }
+      Properties properties=new Properties();
+      InputStream stream=null;
+      try {
+        stream=url.openStream();
+        properties.load(stream);
+      }
+  finally {
+        if (stream != null) {
+          try {
+            stream.close();
+          }
+ catch (          IOException e) {
+          }
+        }
+      }
+      final ClassLoader oldTccl=SecurityActions.getContextClassLoader();
+      try {
+        SecurityActions.setContextClassLoader(module.getClassLoader());
+        configuration=new PropertiesBasedEJBClientConfiguration(properties);
+        if (!properties.contains("username") && !properties.contains("callback.handler.class")) {
+          configuration=new ForwardingEjbClientConfiguration(configuration){
+            @Override public CallbackHandler getCallbackHandler(){
+              return callbackHandler;
+            }
+          }
+;
+        }
+        startService=new ApplicationClientStartService(method,parameters,moduleDescription.getNamespaceContextSelector(),module.getClassLoader(),setupActions,configuration);
+      }
+  finally {
+        SecurityActions.setContextClassLoader(oldTccl);
+      }
+    }
+ catch (    Exception e) {
+      throw AppClientMessages.MESSAGES.exceptionLoadingEjbClientPropertiesURL(connectionPropertiesUrl,e);
+    }
+  }
+ else {
+    startService=new ApplicationClientStartService(method,parameters,moduleDescription.getNamespaceContextSelector(),module.getClassLoader(),setupActions,hostUrl,callbackHandler);
+  }
   phaseContext.getServiceTarget().addService(deploymentUnit.getServiceName().append(ApplicationClientStartService.SERVICE_NAME),startService).addDependency(ApplicationClientDeploymentService.SERVICE_NAME,ApplicationClientDeploymentService.class,startService.getApplicationClientDeploymentServiceInjectedValue()).addDependency(component.getCreateServiceName(),Component.class,startService.getApplicationClientComponent()).install();
 }
