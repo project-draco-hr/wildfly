@@ -11,13 +11,11 @@
     ParserUtil.parseOperationRequest(typePath,callback);
   }
  catch (  CommandFormatException e) {
-    ctx.error("Failed to validate input: " + e.getLocalizedMessage());
-    return false;
+    throw new CommandFormatException("Failed to validate input: " + e.getLocalizedMessage());
   }
   OperationRequestAddress typeAddress=callback.getAddress();
   if (!typeAddress.endsOnType()) {
-    ctx.error("Node path '" + typePath + "' doesn't appear to end on a type.");
-    return false;
+    throw new CommandFormatException("Node path '" + typePath + "' doesn't appear to end on a type.");
   }
   final String typeName=typeAddress.toParentNode().getType();
   for (  OperationRequestAddress.Node node : typeAddress) {
@@ -29,12 +27,10 @@
     result=ctx.getModelControllerClient().execute(request);
   }
  catch (  IOException e) {
-    ctx.error("Failed to validate input: " + e.getLocalizedMessage());
-    return false;
+    throw new CommandFormatException("Failed to validate input: " + e.getLocalizedMessage());
   }
   if (!result.hasDefined(Util.RESULT)) {
-    ctx.error("Failed to validate input: operation response doesn't contain result info.");
-    return false;
+    throw new CommandFormatException("Failed to validate input: operation response doesn't contain result info.");
   }
   boolean pathValid=false;
   for (  ModelNode typeNode : result.get(Util.RESULT).asList()) {
@@ -44,8 +40,7 @@
     }
   }
   if (!pathValid) {
-    ctx.error("Type '" + typeName + "' not found among child types of '"+ ctx.getPrefixFormatter().format(typeAddress)+ "'");
-    return false;
+    throw new CommandFormatException("Type '" + typeName + "' not found among child types of '"+ ctx.getPrefixFormatter().format(typeAddress)+ "'");
   }
   address.add(typeName,"?");
   request.get(Util.OPERATION).set(Util.READ_RESOURCE_DESCRIPTION);
@@ -53,33 +48,28 @@
     result=ctx.getModelControllerClient().execute(request);
   }
  catch (  IOException e) {
-    ctx.error(e.getLocalizedMessage());
-    return false;
+    throw new CommandFormatException(e.getLocalizedMessage());
   }
   if (!result.hasDefined(Util.RESULT)) {
-    ctx.error("Failed to validate input: operation response doesn't contain result info.");
-    return false;
+    throw new CommandFormatException("Failed to validate input: operation response doesn't contain result info.");
   }
   result=result.get(Util.RESULT);
   if (!result.hasDefined("attributes")) {
-    ctx.error("Failed to validate input: description of attributes is missing for " + typePath);
-    return false;
+    throw new CommandFormatException("Failed to validate input: description of attributes is missing for " + typePath);
   }
   if (propertyName != null) {
     for (    Property prop : result.get(Util.ATTRIBUTES).asPropertyList()) {
       if (prop.getName().equals(propertyName)) {
         ModelNode value=prop.getValue();
         if (value.has(Util.ACCESS_TYPE) && Util.READ_ONLY.equals(value.get(Util.ACCESS_TYPE).asString())) {
-          return true;
+          return;
         }
-        ctx.error("Property " + propertyName + " is not read-only.");
-        return false;
+        throw new CommandFormatException("Property " + propertyName + " is not read-only.");
       }
     }
   }
  else {
-    return true;
+    return;
   }
-  ctx.error("Property '" + propertyName + "' wasn't found among the properties of "+ typePath);
-  return false;
+  throw new CommandFormatException("Property '" + propertyName + "' wasn't found among the properties of "+ typePath);
 }
