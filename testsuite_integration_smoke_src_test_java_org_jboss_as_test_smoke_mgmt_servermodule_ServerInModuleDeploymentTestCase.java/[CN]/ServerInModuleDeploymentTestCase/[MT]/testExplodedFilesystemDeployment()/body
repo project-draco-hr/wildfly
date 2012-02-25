@@ -1,80 +1,66 @@
 {
   final File deployDir=createDeploymentDir("exploded-deployments");
-  ModelControllerClient client=ModelControllerClient.Factory.create(InetAddress.getByName("localhost"),9999,getCallbackHandler());
+  ModelControllerClient client=managementClient.getControllerClient();
   final String scannerName="exploded";
   addDeploymentScanner(deployDir,client,scannerName,false);
   final JavaArchive archive=ShrinkWrapUtils.createJavaArchive("servermodule/test-deployment.sar",Simple.class.getPackage());
   final File dir=new File("target/archives");
   dir.mkdirs();
   archive.as(ExplodedExporter.class).exportExploded(deployDir);
-  try {
-    final File deployed=new File(deployDir,"test-deployment.sar.deployed");
-    Assert.assertFalse(deployed.exists());
-    testDeployments(client,new DeploymentExecutor(){
-      @Override public void initialDeploy() throws IOException {
-        final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
-        final OutputStream out=new BufferedOutputStream(new FileOutputStream(dodeploy));
+  final File deployed=new File(deployDir,"test-deployment.sar.deployed");
+  Assert.assertFalse(deployed.exists());
+  testDeployments(client,new DeploymentExecutor(){
+    @Override public void initialDeploy() throws IOException {
+      final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
+      final OutputStream out=new BufferedOutputStream(new FileOutputStream(dodeploy));
+      try {
+        out.write("test-deployment.sar".getBytes());
+      }
+  finally {
+        StreamUtils.safeClose(out);
+      }
+      Assert.assertTrue(dodeploy.exists());
+    }
+    @Override public void fullReplace() throws IOException {
+      final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
+      final File isdeploying=new File(deployDir,"test-deployment.sar.isdeploying");
+      for (int i=0; i < 500; i++) {
+        if (!dodeploy.exists() && !isdeploying.exists()) {
+          break;
+        }
         try {
-          out.write("test-deployment.sar".getBytes());
+          Thread.sleep(10);
         }
-  finally {
-          StreamUtils.safeClose(out);
+ catch (        InterruptedException e) {
+          Thread.currentThread().interrupt();
+          break;
         }
-        Assert.assertTrue(dodeploy.exists());
       }
-      @Override public void fullReplace() throws IOException {
-        final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
-        final File isdeploying=new File(deployDir,"test-deployment.sar.isdeploying");
-        for (int i=0; i < 500; i++) {
-          if (!dodeploy.exists() && !isdeploying.exists()) {
-            break;
-          }
-          try {
-            Thread.sleep(10);
-          }
- catch (          InterruptedException e) {
-            Thread.currentThread().interrupt();
-            break;
-          }
-        }
-        if (dodeploy.exists()) {
-          Assert.fail("initialDeploy step did not complete in a reasonably timely fashion");
-        }
-        initialDeploy();
+      if (dodeploy.exists()) {
+        Assert.fail("initialDeploy step did not complete in a reasonably timely fashion");
       }
-      @Override public void undeploy(){
-        final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
-        final File isdeploying=new File(deployDir,"test-deployment.sar.isdeploying");
-        for (int i=0; i < 500; i++) {
-          if (!dodeploy.exists() && !isdeploying.exists() && deployed.exists()) {
-            break;
-          }
-          try {
-            Thread.sleep(10);
-          }
- catch (          InterruptedException e) {
-            Thread.currentThread().interrupt();
-            break;
-          }
-        }
-        if (dodeploy.exists() || !deployed.exists()) {
-          Assert.fail("fullReplace step did not complete in a reasonably timely fashion");
-        }
-        deployed.delete();
-      }
+      initialDeploy();
     }
+    @Override public void undeploy(){
+      final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
+      final File isdeploying=new File(deployDir,"test-deployment.sar.isdeploying");
+      for (int i=0; i < 500; i++) {
+        if (!dodeploy.exists() && !isdeploying.exists() && deployed.exists()) {
+          break;
+        }
+        try {
+          Thread.sleep(10);
+        }
+ catch (        InterruptedException e) {
+          Thread.currentThread().interrupt();
+          break;
+        }
+      }
+      if (dodeploy.exists() || !deployed.exists()) {
+        Assert.fail("fullReplace step did not complete in a reasonably timely fashion");
+      }
+      deployed.delete();
+    }
+  }
 );
-  }
-  finally {
-    try {
-      removeDeploymentScanner(client,scannerName);
-    }
- catch (    Exception e) {
-    }
-    try {
-      client.close();
-    }
- catch (    Exception e) {
-    }
-  }
 }
