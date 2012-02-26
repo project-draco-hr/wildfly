@@ -1,0 +1,20 @@
+{
+  this.reconnectAttemptCount++;
+  final ServiceController serviceController=this.serviceRegistry.getService(this.outboundConnectionServiceName);
+  if (serviceController == null) {
+    logger.debug("Unregistering " + this + " since "+ this.outboundConnectionServiceName+ " is no longer available");
+    this.clientContext.unregisterReconnectHandler(this);
+    return;
+  }
+  final AbstractOutboundConnectionService outboundConnectionService=(AbstractOutboundConnectionService)serviceController.getValue();
+  try {
+    final IoFuture<Connection> futureConnection=outboundConnectionService.connect();
+    final Connection connection=IoFutureHelper.get(futureConnection,DEFAULT_CONNECTION_TIMEOUT,TimeUnit.MILLISECONDS);
+    logger.debug("Successful reconnect attempt#" + this.reconnectAttemptCount + " to outbound connection "+ this.outboundConnectionServiceName);
+    this.clientContext.unregisterReconnectHandler(this);
+    this.clientContext.registerConnection(connection);
+  }
+ catch (  Exception e) {
+    logger.debug("Reconnect attempt#" + this.reconnectAttemptCount + " failed for outbound connection "+ this.outboundConnectionServiceName,e);
+  }
+}
