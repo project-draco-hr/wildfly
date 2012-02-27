@@ -13,15 +13,24 @@
   if (setup == null) {
     return;
   }
-  if (current == null) {
-    Constructor<? extends ServerSetupTask> ctor=setup.value().getDeclaredConstructor();
-    ctor.setAccessible(true);
-    current=ctor.newInstance();
+  final Class<? extends ServerSetupTask>[] classes=setup.value();
+  if (current.isEmpty()) {
+    for (    Class<? extends ServerSetupTask> clazz : classes) {
+      Constructor<? extends ServerSetupTask> ctor=clazz.getDeclaredConstructor();
+      ctor.setAccessible(true);
+      current.add(ctor.newInstance());
+    }
   }
- else   if (current.getClass() != setup.value()) {
-    throw new RuntimeException("Mismatched ServerSetupTask current is " + current + " but "+ currentClass+ " is expecting "+ setup.value());
+ else {
+    for (int i=0; i < current.size(); ++i) {
+      if (classes[i] != current.get(i).getClass()) {
+        throw new RuntimeException("Mismatched ServerSetupTask current is " + current + " but "+ currentClass+ " is expecting "+ Arrays.asList(classes));
+      }
+    }
   }
   final ManagementClient client=managementClient.get();
-  current.setup(client);
+  for (  ServerSetupTask instance : current) {
+    instance.setup(client);
+  }
   active.add(client);
 }
