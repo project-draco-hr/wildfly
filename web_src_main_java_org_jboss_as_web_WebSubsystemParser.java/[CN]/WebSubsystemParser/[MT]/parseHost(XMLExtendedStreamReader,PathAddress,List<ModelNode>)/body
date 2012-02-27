@@ -1,0 +1,76 @@
+{
+  String name=null;
+  final ModelNode host=new ModelNode();
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    requireNoNamespaceAttribute(reader,i);
+    final String value=reader.getAttributeValue(i);
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+      name=value;
+    break;
+case DEFAULT_WEB_MODULE:
+  WebVirtualHostDefinition.DEFAULT_WEB_MODULE.parseAndSetParameter(value,host,reader);
+break;
+case ENABLE_WELCOME_ROOT:
+WebVirtualHostDefinition.ENABLE_WELCOME_ROOT.parseAndSetParameter(value,host,reader);
+break;
+default :
+throw unexpectedAttribute(reader,i);
+}
+}
+if (name == null) {
+throw missingRequired(reader,Collections.singleton(Attribute.NAME));
+}
+final PathAddress address=PathAddress.pathAddress(parent,PathElement.pathElement(VIRTUAL_SERVER,name));
+host.get(OP).set(ADD);
+host.get(OP_ADDR).set(address.toModelNode());
+list.add(host);
+int rewriteCount=0;
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+switch (Namespace.forUri(reader.getNamespaceURI())) {
+case WEB_1_0:
+{
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case ALIAS:
+host.get(ALIAS).add(readStringAttributeElement(reader,Attribute.NAME.getLocalName()));
+break;
+case ACCESS_LOG:
+parseHostAccessLog(reader,address,list);
+break;
+case REWRITE:
+parseHostRewrite(reader,address,list,++rewriteCount);
+break;
+default :
+throw unexpectedElement(reader);
+}
+break;
+}
+case WEB_1_1:
+{
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case ALIAS:
+host.get(ALIAS).add(readStringAttributeElement(reader,Attribute.NAME.getLocalName()));
+break;
+case ACCESS_LOG:
+parseHostAccessLog(reader,address,list);
+break;
+case REWRITE:
+parseHostRewrite(reader,address,list,++rewriteCount);
+break;
+case SSO:
+parseSso(reader,address,list);
+break;
+default :
+throw unexpectedElement(reader);
+}
+break;
+}
+default :
+throw unexpectedElement(reader);
+}
+}
+}

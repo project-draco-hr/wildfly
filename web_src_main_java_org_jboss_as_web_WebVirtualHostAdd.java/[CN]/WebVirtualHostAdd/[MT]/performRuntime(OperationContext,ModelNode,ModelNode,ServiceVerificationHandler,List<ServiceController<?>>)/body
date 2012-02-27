@@ -1,21 +1,22 @@
 {
-  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  ModelNode operation=Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
+  final PathAddress address=PathAddress.pathAddress(baseOperation.require(OP_ADDR));
   final String name=address.getLastElement().getValue();
-  boolean welcome=operation.hasDefined(Constants.ENABLE_WELCOME_ROOT) && operation.get(Constants.ENABLE_WELCOME_ROOT).asBoolean();
+  boolean welcome=WebVirtualHostDefinition.ENABLE_WELCOME_ROOT.resolveModelAttribute(context,operation).asBoolean();
   final ServiceTarget serviceTarget=context.getServiceTarget();
   final WebVirtualHostService service=new WebVirtualHostService(name,aliases(operation),welcome);
-  final ServiceBuilder<?> serviceBuilder=serviceTarget.addService(WebSubsystemServices.JBOSS_WEB_HOST.append(name),service).addDependency(AbstractPathService.pathNameOf(TEMP_DIR),String.class,service.getTempPathInjector()).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,service.getWebServer());
-  if (operation.hasDefined(Constants.ACCESS_LOG)) {
-    final ModelNode accessLog=operation.get(Constants.ACCESS_LOG);
+  final ServiceBuilder<?> serviceBuilder=serviceTarget.addService(WebSubsystemServices.JBOSS_WEB_HOST.append(name),service).addDependency(AbsolutePathService.pathNameOf(TEMP_DIR),String.class,service.getTempPathInjector()).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,service.getWebServer());
+  if (operation.get(ACCESS_LOG_PATH.getKey(),ACCESS_LOG_PATH.getValue()).isDefined()) {
+    final ModelNode accessLog=operation.get(ACCESS_LOG_PATH.getKey(),ACCESS_LOG_PATH.getValue());
     service.setAccessLog(accessLog.clone());
-    accessLogService(name,accessLog,serviceTarget,newControllers,verificationHandler);
+    accessLogService(context,name,accessLog,serviceTarget,newControllers,verificationHandler);
     serviceBuilder.addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(name,Constants.ACCESS_LOG),String.class,service.getAccessLogPathInjector());
   }
   if (operation.hasDefined(Constants.REWRITE)) {
     service.setRewrite(operation.get(Constants.REWRITE).clone());
   }
-  if (operation.hasDefined(Constants.SSO)) {
-    ModelNode sso=operation.get(Constants.SSO).clone();
+  if (operation.get(SSO_PATH.getKey(),SSO_PATH.getValue()).isDefined()) {
+    ModelNode sso=operation.get(SSO_PATH.getKey(),SSO_PATH.getValue()).clone();
     service.setSso(sso);
     if (sso.hasDefined(Constants.CACHE_CONTAINER)) {
       ServiceName ssoName=WebSubsystemServices.JBOSS_WEB_HOST.append(name,Constants.SSO);
@@ -32,13 +33,15 @@
     }
   }
   if (operation.hasDefined(Constants.DEFAULT_WEB_MODULE)) {
-    if (welcome)     throw new OperationFailedException(new ModelNode().set(MESSAGES.noRootWebappWithWelcomeWebapp()));
+    if (welcome) {
+      throw new OperationFailedException(new ModelNode().set(MESSAGES.noRootWebappWithWelcomeWebapp()));
+    }
     service.setDefaultWebModule(operation.get(Constants.DEFAULT_WEB_MODULE).asString());
   }
   serviceBuilder.addListener(verificationHandler);
   newControllers.add(serviceBuilder.install());
   if (welcome) {
     final WelcomeContextService welcomeService=new WelcomeContextService();
-    newControllers.add(context.getServiceTarget().addService(WebSubsystemServices.JBOSS_WEB.append(name).append("welcome"),welcomeService).addDependency(AbstractPathService.pathNameOf(HOME_DIR),String.class,welcomeService.getPathInjector()).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(name),VirtualHost.class,welcomeService.getHostInjector()).addDependency(ServiceBuilder.DependencyType.OPTIONAL,HttpManagementService.SERVICE_NAME,HttpManagement.class,welcomeService.getHttpManagementInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+    newControllers.add(context.getServiceTarget().addService(WebSubsystemServices.JBOSS_WEB.append(name).append("welcome"),welcomeService).addDependency(AbsolutePathService.pathNameOf(HOME_DIR),String.class,welcomeService.getPathInjector()).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(name),VirtualHost.class,welcomeService.getHostInjector()).addDependency(ServiceBuilder.DependencyType.OPTIONAL,HttpManagementService.SERVICE_NAME,HttpManagement.class,welcomeService.getHttpManagementInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
   }
 }

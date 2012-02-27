@@ -1,0 +1,50 @@
+{
+  PathAddress address=PathAddress.pathAddress(parent,WebExtension.CONTAINER_PATH);
+  final ModelNode config=new ModelNode();
+  config.get(OP).set(ADD);
+  config.get(OP_ADDR).set(address.toModelNode());
+  list.add(config);
+  if (reader.getAttributeCount() > 0) {
+    throw unexpectedAttribute(reader,0);
+  }
+  boolean staticResourcesConfigured=false;
+  boolean jspConfigured=false;
+  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+    final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case STATIC_RESOURCES:
+{
+        parseStaticResources(reader,parent,list);
+        staticResourcesConfigured=true;
+        break;
+      }
+case JSP_CONFIGURATION:
+{
+      parseJSPConfiguration(reader,parent,list);
+      jspConfigured=true;
+      break;
+    }
+case MIME_MAPPING:
+{
+    final String[] array=requireAttributes(reader,Attribute.NAME.getLocalName(),Attribute.VALUE.getLocalName());
+    config.get(MIME_MAPPING).get(array[0]).set(array[1]);
+    requireNoContent(reader);
+    break;
+  }
+case WELCOME_FILE:
+{
+  final String welcomeFile=reader.getElementText().trim();
+  config.get(WELCOME_FILE).add(welcomeFile);
+  break;
+}
+default :
+throw unexpectedElement(reader);
+}
+}
+if (!staticResourcesConfigured) {
+addDefaultStaticConfiguration(parent,list);
+}
+if (!jspConfigured) {
+addDefaultJSPConfiguration(parent,list);
+}
+}
