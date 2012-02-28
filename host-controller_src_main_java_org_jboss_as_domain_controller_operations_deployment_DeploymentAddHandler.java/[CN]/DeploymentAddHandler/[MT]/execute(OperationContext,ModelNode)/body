@@ -9,7 +9,19 @@
   if (contentItemNode.hasDefined(HASH)) {
     managedContentValidator.validate(contentItemNode);
     hash=contentItemNode.require(HASH).asBytes();
-    if (contentRepository != null && !contentRepository.hasContent(hash))     throw createFailureException(MESSAGES.noDeploymentContentWithHash(HashUtil.bytesToHexString(hash)));
+    if (contentRepository != null && !contentRepository.hasContent(hash)) {
+      if (context.isBooting()) {
+        if (context.getRunningMode() == RunningMode.ADMIN_ONLY) {
+          DomainControllerLogger.HOST_CONTROLLER_LOGGER.reportAdminOnlyMissingDeploymentContent(HashUtil.bytesToHexString(hash),name);
+        }
+ else {
+          throw createFailureException(MESSAGES.noDeploymentContentWithHashAtBoot(HashUtil.bytesToHexString(hash),name));
+        }
+      }
+ else {
+        throw createFailureException(MESSAGES.noDeploymentContentWithHash(HashUtil.bytesToHexString(hash)));
+      }
+    }
   }
  else   if (hasValidContentAdditionParameterDefined(contentItemNode)) {
     if (contentRepository == null) {
@@ -38,5 +50,5 @@
   subModel.get(NAME).set(name);
   subModel.get(RUNTIME_NAME).set(runtimeName);
   subModel.get(CONTENT).set(content);
-  context.completeStep();
+  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
 }

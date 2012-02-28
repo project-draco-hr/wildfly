@@ -1,58 +1,83 @@
 {
   final ServiceTarget serviceTarget=context.getServiceTarget();
+  boolean ok=false;
+  boolean reachedServers=false;
   try {
-    boot(hostControllerConfigurationPersister.load());
+    ok=boot(hostControllerConfigurationPersister.load(),true);
     final RunningMode currentRunningMode=runningModeControl.getRunningMode();
-    ManagementRemotingServices.installRemotingEndpoint(serviceTarget,ManagementRemotingServices.MANAGEMENT_ENDPOINT,hostControllerInfo.getLocalHostName(),EndpointService.EndpointType.MANAGEMENT,null,null);
-    ManagementChannelRegistryService.addService(serviceTarget);
-    Future<ServerInventory> inventoryFuture=ServerInventoryService.install(serviceTarget,this,runningModeControl,environment,hostControllerInfo.getNativeManagementInterface(),hostControllerInfo.getNativeManagementPort());
-    if (!hostControllerInfo.isMasterDomainController() && !environment.isUseCachedDc()) {
-      serverInventory=getFuture(inventoryFuture);
-      if (hostControllerInfo.getRemoteDomainControllerHost() != null) {
-        Future<MasterDomainControllerClient> clientFuture=RemoteDomainConnectionService.install(serviceTarget,getValue(),hostControllerInfo,environment.getProductConfig(),hostControllerInfo.getRemoteDomainControllerSecurityRealm(),remoteFileRepository);
-        MasterDomainControllerClient masterDomainControllerClient=getFuture(clientFuture);
-        try {
-          masterDomainControllerClient.register();
+    if (ok) {
+      ManagementRemotingServices.installRemotingEndpoint(serviceTarget,ManagementRemotingServices.MANAGEMENT_ENDPOINT,hostControllerInfo.getLocalHostName(),EndpointService.EndpointType.MANAGEMENT,null,null);
+      ManagementChannelRegistryService.addService(serviceTarget);
+      Future<ServerInventory> inventoryFuture=ServerInventoryService.install(serviceTarget,this,runningModeControl,environment,hostControllerInfo.getNativeManagementInterface(),hostControllerInfo.getNativeManagementPort());
+      if (!hostControllerInfo.isMasterDomainController() && !environment.isUseCachedDc()) {
+        serverInventory=getFuture(inventoryFuture);
+        if (hostControllerInfo.getRemoteDomainControllerHost() != null) {
+          Future<MasterDomainControllerClient> clientFuture=RemoteDomainConnectionService.install(serviceTarget,getValue(),hostControllerInfo,environment.getProductConfig(),hostControllerInfo.getRemoteDomainControllerSecurityRealm(),remoteFileRepository);
+          MasterDomainControllerClient masterDomainControllerClient=getFuture(clientFuture);
+          try {
+            masterDomainControllerClient.register();
+          }
+ catch (          Exception e) {
+            ROOT_LOGGER.cannotConnectToMaster(e);
+            System.exit(ExitCodes.HOST_CONTROLLER_ABORT_EXIT_CODE);
+          }
         }
- catch (        Exception e) {
-          ROOT_LOGGER.cannotConnectToMaster(e);
+ else         if (currentRunningMode != RunningMode.ADMIN_ONLY) {
+          ROOT_LOGGER.noDomainControllerConfigurationProvided(currentRunningMode,CommandLineConstants.ADMIN_ONLY,RunningMode.ADMIN_ONLY);
           System.exit(ExitCodes.HOST_CONTROLLER_ABORT_EXIT_CODE);
         }
       }
- else       if (currentRunningMode != RunningMode.ADMIN_ONLY) {
-        ROOT_LOGGER.noDomainControllerConfigurationProvided(currentRunningMode,CommandLineConstants.ADMIN_ONLY,RunningMode.ADMIN_ONLY);
-        System.exit(ExitCodes.HOST_CONTROLLER_ABORT_EXIT_CODE);
+ else {
+        if (environment.isUseCachedDc()) {
+          remoteFileRepository.setRemoteFileRepositoryExecutor(new RemoteDomainConnectionService.RemoteFileRepositoryExecutor(){
+            @Override public File getFile(            String relativePath,            byte repoId,            HostFileRepository localFileRepository){
+              return localFileRepository.getFile(relativePath);
+            }
+          }
+);
+        }
+        ConfigurationPersister domainPersister=hostControllerConfigurationPersister.getDomainPersister();
+        ok=boot(domainPersister.load(),false);
+        if (!ok && runningModeControl.getRunningMode().equals(RunningMode.ADMIN_ONLY)) {
+          ROOT_LOGGER.reportAdminOnlyDomainXmlFailure();
+          ok=true;
+        }
+        if (ok) {
+          ManagementRemotingServices.installManagementChannelServices(serviceTarget,ManagementRemotingServices.MANAGEMENT_ENDPOINT,new MasterDomainControllerOperationHandlerService(this),DomainModelControllerService.SERVICE_NAME,ManagementRemotingServices.DOMAIN_CHANNEL,null,null);
+          serverInventory=getFuture(inventoryFuture);
+        }
+      }
+    }
+    if (ok) {
+      ServerToHostOperationHandlerFactoryService.install(serviceTarget,ServerInventoryService.SERVICE_NAME,proxyExecutor,localFileRepository);
+      NativeManagementAddHandler.installNativeManagementServices(serviceTarget,hostControllerInfo,null,null);
+      if (hostControllerInfo.getHttpManagementInterface() != null) {
+        HttpManagementAddHandler.installHttpManagementServices(currentRunningMode,serviceTarget,hostControllerInfo,environment,null);
+      }
+      reachedServers=true;
+      if (currentRunningMode == RunningMode.NORMAL) {
+        startServers();
+      }
+    }
+  }
+ catch (  Exception e) {
+    ROOT_LOGGER.caughtExceptionDuringBoot(e);
+    if (!reachedServers) {
+      ok=false;
+    }
+  }
+ finally {
+    if (ok) {
+      try {
+        finishBoot();
+      }
+  finally {
+        bootstrapListener.tick();
       }
     }
  else {
-      if (environment.isUseCachedDc()) {
-        remoteFileRepository.setRemoteFileRepositoryExecutor(new RemoteDomainConnectionService.RemoteFileRepositoryExecutor(){
-          @Override public File getFile(          String relativePath,          byte repoId,          HostFileRepository localFileRepository){
-            return localFileRepository.getFile(relativePath);
-          }
-        }
-);
-      }
-      ConfigurationPersister domainPersister=hostControllerConfigurationPersister.getDomainPersister();
-      boot(domainPersister.load());
-      ManagementRemotingServices.installManagementChannelServices(serviceTarget,ManagementRemotingServices.MANAGEMENT_ENDPOINT,new MasterDomainControllerOperationHandlerService(this),DomainModelControllerService.SERVICE_NAME,ManagementRemotingServices.DOMAIN_CHANNEL,null,null);
-      serverInventory=getFuture(inventoryFuture);
-    }
-    ServerToHostOperationHandlerFactoryService.install(serviceTarget,ServerInventoryService.SERVICE_NAME,proxyExecutor,localFileRepository);
-    NativeManagementAddHandler.installNativeManagementServices(serviceTarget,hostControllerInfo,null,null);
-    if (hostControllerInfo.getHttpManagementInterface() != null) {
-      HttpManagementAddHandler.installHttpManagementServices(currentRunningMode,serviceTarget,hostControllerInfo,environment,null);
-    }
-    if (currentRunningMode == RunningMode.NORMAL) {
-      startServers();
-    }
-  }
-  finally {
-    try {
-      finishBoot();
-    }
-  finally {
-      bootstrapListener.tick();
+      ROOT_LOGGER.unsuccessfulBoot();
+      System.exit(ExitCodes.HOST_CONTROLLER_ABORT_EXIT_CODE);
     }
   }
 }

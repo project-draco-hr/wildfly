@@ -1,0 +1,22 @@
+{
+  EnumSet<OperationContextImpl.ContextFlag> contextFlags=rollbackOnRuntimeFailure ? EnumSet.of(OperationContextImpl.ContextFlag.ROLLBACK_ON_FAIL) : EnumSet.noneOf(OperationContextImpl.ContextFlag.class);
+  final OperationContextImpl context=new OperationContextImpl(this,processType,runningModeControl.getRunningMode(),contextFlags,handler,null,model,control,processState,bootingFlag.get());
+  List<ParsedBootOp> postExtensionOps=organizeBootOperations(bootList,context);
+  OperationContext.ResultAction resultAction=context.completeStep();
+  if (resultAction == OperationContext.ResultAction.KEEP && postExtensionOps != null) {
+    final OperationContextImpl postExtContext=new OperationContextImpl(this,processType,runningModeControl.getRunningMode(),contextFlags,handler,null,model,control,processState,bootingFlag.get());
+    for (    ParsedBootOp parsedOp : postExtensionOps) {
+      final OperationStepHandler stepHandler=parsedOp.handler == null ? rootRegistration.getOperationHandler(parsedOp.address,parsedOp.operationName) : parsedOp.handler;
+      if (stepHandler == null) {
+        ROOT_LOGGER.noHandler(parsedOp.operationName,parsedOp.address);
+        postExtContext.setRollbackOnly();
+        break;
+      }
+ else {
+        postExtContext.addStep(parsedOp.response,parsedOp.operation,stepHandler,OperationContext.Stage.MODEL);
+      }
+    }
+    resultAction=postExtContext.completeStep();
+  }
+  return resultAction == OperationContext.ResultAction.KEEP;
+}
