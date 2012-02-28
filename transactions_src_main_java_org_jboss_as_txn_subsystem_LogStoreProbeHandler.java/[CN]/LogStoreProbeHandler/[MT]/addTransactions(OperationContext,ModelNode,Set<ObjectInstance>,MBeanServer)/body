@@ -1,0 +1,20 @@
+{
+  for (  ObjectInstance oi : transactions) {
+    String transactionId=oi.getObjectName().getCanonicalName();
+    if (!transactionId.contains("puid") && transactionId.contains("itype")) {
+      final ModelNode transactionAddress=operation.get("address").clone();
+      final ModelNode transactionOperation=new ModelNode();
+      Map<String,String> tAttributes=getMBeanValues(mbs,oi.getObjectName(),LogStoreConstants.TXN_JMX_NAMES);
+      String txnId=tAttributes.get("Id");
+      operation.get(OP).set(ADD);
+      transactionAddress.add(LogStoreConstants.TRANSACTIONS,txnId);
+      transactionOperation.get(OP_ADDR).set(transactionAddress);
+      addAttributes(transactionOperation,LogStoreConstants.MODEL_TO_JMX_TXN_NAMES,tAttributes);
+      transactionOperation.get(LogStoreConstants.JMX_ON_ATTRIBUTE).set(transactionId);
+      context.addStep(transactionOperation,LogStoreTransactionAddHandler.INSTANCE,OperationContext.Stage.MODEL);
+      String participantQuery=transactionId + ",puid=*";
+      Set<ObjectInstance> participants=mbs.queryMBeans(new ObjectName(participantQuery),null);
+      addParticipants(context,operation,transactionAddress,participants,mbs);
+    }
+  }
+}
