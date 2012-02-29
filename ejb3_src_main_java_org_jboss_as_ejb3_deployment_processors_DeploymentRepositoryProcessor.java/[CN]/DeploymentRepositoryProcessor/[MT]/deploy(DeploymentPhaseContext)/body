@@ -16,17 +16,30 @@
       final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)component;
       final InjectedValue<EJBComponent> componentInjectedValue=new InjectedValue<EJBComponent>();
       injectedValues.put(component.getCreateServiceName(),componentInjectedValue);
-      final Map<String,InjectedValue<ComponentView>> views=new HashMap<String,InjectedValue<ComponentView>>();
-      for (      ViewDescription view : ejbComponentDescription.getViews()) {
+      final Map<String,InjectedValue<ComponentView>> remoteViews=new HashMap<String,InjectedValue<ComponentView>>();
+      final Map<String,InjectedValue<ComponentView>> localViews=new HashMap<String,InjectedValue<ComponentView>>();
+      for (      final ViewDescription view : ejbComponentDescription.getViews()) {
+        boolean remoteView=false;
+        if (view instanceof EJBViewDescription) {
+          final MethodIntf viewType=((EJBViewDescription)view).getMethodIntf();
+          if (viewType == MethodIntf.HOME || viewType == MethodIntf.REMOTE) {
+            remoteView=true;
+          }
+        }
         final InjectedValue<ComponentView> componentViewInjectedValue=new InjectedValue<ComponentView>();
-        views.put(view.getViewClassName(),componentViewInjectedValue);
+        if (remoteView) {
+          remoteViews.put(view.getViewClassName(),componentViewInjectedValue);
+        }
+ else {
+          localViews.put(view.getViewClassName(),componentViewInjectedValue);
+        }
         injectedValues.put(view.getServiceName(),componentViewInjectedValue);
       }
       final InjectedValue<EjbIIOPService> iorFactory=new InjectedValue<EjbIIOPService>();
       if (ejbComponentDescription.isExposedViaIiop()) {
         injectedValues.put(ejbComponentDescription.getServiceName().append(EjbIIOPService.SERVICE_NAME),iorFactory);
       }
-      EjbDeploymentInformation info=new EjbDeploymentInformation(ejbComponentDescription.getEJBName(),componentInjectedValue,views,module.getClassLoader(),iorFactory);
+      final EjbDeploymentInformation info=new EjbDeploymentInformation(ejbComponentDescription.getEJBName(),componentInjectedValue,remoteViews,localViews,module.getClassLoader(),iorFactory);
       deploymentInformationMap.put(ejbComponentDescription.getEJBName(),info);
     }
   }
