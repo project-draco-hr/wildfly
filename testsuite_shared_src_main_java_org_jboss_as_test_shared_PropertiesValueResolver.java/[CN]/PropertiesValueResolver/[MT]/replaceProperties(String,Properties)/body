@@ -1,0 +1,132 @@
+{
+  final StringBuilder builder=new StringBuilder();
+  final int len=value.length();
+  int state=INITIAL;
+  int start=-1;
+  int nameStart=-1;
+  String resolvedValue=null;
+  for (int i=0; i < len; i=value.offsetByCodePoints(i,1)) {
+    final int ch=value.codePointAt(i);
+switch (state) {
+case INITIAL:
+{
+switch (ch) {
+case '$':
+{
+            state=GOT_DOLLAR;
+            continue;
+          }
+default :
+{
+          builder.appendCodePoint(ch);
+          continue;
+        }
+    }
+  }
+case GOT_DOLLAR:
+{
+switch (ch) {
+case '$':
+{
+      builder.appendCodePoint(ch);
+      state=INITIAL;
+      continue;
+    }
+case '{':
+{
+    start=i + 1;
+    nameStart=start;
+    state=GOT_OPEN_BRACE;
+    continue;
+  }
+default :
+{
+  builder.append('$').appendCodePoint(ch);
+  state=INITIAL;
+  continue;
+}
+}
+}
+case GOT_OPEN_BRACE:
+{
+switch (ch) {
+case ':':
+case '}':
+case ',':
+{
+final String name=value.substring(nameStart,i).trim();
+if ("/".equals(name)) {
+builder.append(File.separator);
+state=ch == '}' ? INITIAL : RESOLVED;
+continue;
+}
+ else if (":".equals(name)) {
+builder.append(File.pathSeparator);
+state=ch == '}' ? INITIAL : RESOLVED;
+continue;
+}
+String val=(String)properties.get(name);
+if (val == null && name.startsWith("env.")) val=System.getenv(name.substring(4));
+if (val != null) {
+builder.append(val);
+resolvedValue=val;
+state=ch == '}' ? INITIAL : RESOLVED;
+continue;
+}
+ else if (ch == ',') {
+nameStart=i + 1;
+continue;
+}
+ else if (ch == ':') {
+start=i + 1;
+state=DEFAULT;
+continue;
+}
+ else {
+throw new IllegalStateException("Failed to resolve expression: " + value.substring(start - 2,i + 1));
+}
+}
+default :
+{
+continue;
+}
+}
+}
+case RESOLVED:
+{
+if (ch == '}') {
+state=INITIAL;
+}
+continue;
+}
+case DEFAULT:
+{
+if (ch == '}') {
+state=INITIAL;
+builder.append(value.substring(start,i));
+}
+continue;
+}
+default :
+throw new IllegalStateException("Unexpected char seen: " + ch);
+}
+}
+switch (state) {
+case GOT_DOLLAR:
+{
+builder.append('$');
+break;
+}
+case DEFAULT:
+{
+builder.append(value.substring(start - 2));
+break;
+}
+case GOT_OPEN_BRACE:
+{
+if (resolvedValue == null) throw new IllegalStateException("Incomplete expression: " + builder.toString());
+break;
+}
+}
+return builder.toString();
+}
