@@ -1,0 +1,22 @@
+{
+  final ModelNode model=resource.getModel();
+  if (isCacheStoreDefined(context,operation)) {
+    String storeName=getDefinedCacheStore(context,operation);
+    throw new OperationFailedException(new ModelNode().set("cache store " + storeName + " is already defined"));
+  }
+  for (  final AttributeDefinition attribute : attributes) {
+    if (attribute.getName().equals(CommonAttributes.PROPERTIES.getName()))     continue;
+    attribute.validateAndSet(operation,model);
+  }
+  populateSubclassModel(context,operation,model);
+  if (operation.hasDefined(ModelKeys.PROPERTIES)) {
+    for (    Property property : operation.get(ModelKeys.PROPERTIES).asPropertyList()) {
+      final Resource param=context.createResource(PathAddress.pathAddress(PathElement.pathElement(ModelKeys.PROPERTY,property.getName())));
+      final ModelNode value=property.getValue();
+      if (!value.isDefined()) {
+        throw new OperationFailedException(new ModelNode().set("property " + property.getName() + " not defined"));
+      }
+      param.getModel().get(ModelDescriptionConstants.VALUE).set(value);
+    }
+  }
+}
