@@ -42,7 +42,18 @@
       boolean completeRollback=domainOperationContext.isCompleteRollback();
       for (      Map.Entry<ServerIdentity,ProxyTask> entry : tasks.entrySet()) {
         boolean rollback=completeRollback || domainOperationContext.isServerGroupRollback(entry.getKey().getServerGroupName());
-        entry.getValue().finalizeTransaction(!rollback);
+        final ProxyTask task=entry.getValue();
+        if (!task.finalizeTransaction(!rollback)) {
+          try {
+            final ServerIdentity identity=entry.getKey();
+            final ModelNode result=task.getUncommittedResult();
+            final ProxyController proxy=task.getProxyController();
+            final Future<ModelNode> future=executorService.submit(new ServerRequireRestartTask(identity,proxy,result));
+            futures.put(entry.getKey(),future);
+          }
+ catch (          Exception ignore) {
+          }
+        }
       }
       boolean interrupted=false;
       try {
