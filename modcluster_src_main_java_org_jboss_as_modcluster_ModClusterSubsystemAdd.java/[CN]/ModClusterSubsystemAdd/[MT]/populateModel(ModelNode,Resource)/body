@@ -9,16 +9,32 @@
     }
     resource.registerChild(confPath,Resource.Factory.create());
     final Resource conf=resource.getChild(confPath);
+    final ModelNode confModel=conf.getModel();
     for (    final String attribute : configuration.keys()) {
       if (attribute.equals(CommonAttributes.SSL)) {
         conf.registerChild(SSLPath,Resource.Factory.create());
         final Resource ssl=conf.getChild(SSLPath);
         ModelNode sslnode;
-        if (configuration.get(attribute).hasDefined(CommonAttributes.CONFIGURATION))         sslnode=configuration.get(attribute).get(CommonAttributes.CONFIGURATION);
- else         sslnode=configuration.get(attribute);
-        populateConf(ssl.getModel(),sslnode);
+        if (configuration.get(attribute).hasDefined(CommonAttributes.CONFIGURATION)) {
+          sslnode=configuration.get(attribute).get(CommonAttributes.CONFIGURATION);
+        }
+ else {
+          sslnode=configuration.get(attribute);
+        }
+        final ModelNode sslModel=ssl.getModel();
+        for (        AttributeDefinition sslAttr : ModClusterSSLResourceDefinition.ATTRIBUTES) {
+          sslAttr.validateAndSet(sslnode,sslModel);
+        }
       }
- else       conf.getModel().get(attribute).set(configuration.get(attribute));
+ else       if (attribute.equals(CommonAttributes.DYNAMIC_LOAD_PROVIDER) || attribute.equals(CommonAttributes.SIMPLE_LOAD_PROVIDER)) {
+        confModel.get(attribute).set(configuration.get(attribute));
+      }
+ else {
+        AttributeDefinition ad=ModClusterConfigResourceDefinition.ATTRIBUTES_BY_NAME.get(attribute);
+        if (ad != null) {
+          ad.validateAndSet(configuration,confModel);
+        }
+      }
     }
   }
 }

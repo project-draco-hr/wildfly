@@ -1,21 +1,13 @@
 {
-  String bindingRef=null;
-  ModelNode node=operation.get(CommonAttributes.MOD_CLUSTER_CONFIG);
-  if (operation.hasDefined(CommonAttributes.MOD_CLUSTER_CONFIG)) {
-    if (operation.get(CommonAttributes.MOD_CLUSTER_CONFIG).hasDefined(CommonAttributes.CONFIGURATION))     node=operation.get(CommonAttributes.MOD_CLUSTER_CONFIG).get(CommonAttributes.CONFIGURATION);
-    if (node.hasDefined(CommonAttributes.ADVERTISE_SOCKET)) {
-      bindingRef=node.get(CommonAttributes.ADVERTISE_SOCKET).asString();
-    }
+  final ModelNode fullModel=Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
+  final ModelNode unresolvedConfig=fullModel.get(ModClusterExtension.configurationPath.getKey(),ModClusterExtension.configurationPath.getValue());
+  final ModelNode resolvedConfig=resolveConfig(context,unresolvedConfig);
+  final ModClusterService service=new ModClusterService(resolvedConfig);
+  final ServiceBuilder<ModCluster> serviceBuilder=context.getServiceTarget().addService(ModClusterService.NAME,service).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,service.getWebServer()).addDependency(SocketBindingManager.SOCKET_BINDING_MANAGER,SocketBindingManager.class,service.getBindingManager()).addListener(verificationHandler).setInitialMode(Mode.ACTIVE);
+  final ModelNode bindingRefNode=resolvedConfig.get(ModClusterConfigResourceDefinition.ADVERTISE_SOCKET.getName());
+  final String bindingRef=bindingRefNode.isDefined() ? bindingRefNode.asString() : null;
+  if (bindingRef != null) {
+    serviceBuilder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(bindingRef),SocketBinding.class,service.getBinding());
   }
-  try {
-    final ModelNode resolved=context.resolveExpressions(node.clone());
-    final ModClusterService service=new ModClusterService(resolved);
-    final ServiceBuilder<ModCluster> serviceBuilder=context.getServiceTarget().addService(ModClusterService.NAME,service).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,service.getWebServer()).addDependency(SocketBindingManager.SOCKET_BINDING_MANAGER,SocketBindingManager.class,service.getBindingManager()).addListener(verificationHandler).setInitialMode(Mode.ACTIVE);
-    if (bindingRef != null)     serviceBuilder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(bindingRef),SocketBinding.class,service.getBinding());
-    newControllers.add(serviceBuilder.install());
-  }
- catch (  Throwable t) {
-    ROOT_LOGGER.debugf("Error: %s",t);
-    throw new OperationFailedException(new ModelNode().set(t.getLocalizedMessage()));
-  }
+  newControllers.add(serviceBuilder.install());
 }
