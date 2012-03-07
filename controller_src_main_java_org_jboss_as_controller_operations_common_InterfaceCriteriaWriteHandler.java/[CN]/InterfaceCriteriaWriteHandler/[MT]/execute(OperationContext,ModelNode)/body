@@ -1,14 +1,17 @@
 {
-  final Resource resource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
-  final ModelNode model=resource.getModel();
-  final String name=operation.require(ModelDescriptionConstants.NAME).asString();
-  final AttributeDefinition def=ATTRIBUTES.get(name);
-  if (def == null) {
-    throw new OperationFailedException(new ModelNode().set(MESSAGES.unknownAttribute(name)));
+  nameValidator.validate(operation);
+  final String attributeName=operation.require(NAME).asString();
+  final ModelNode newValue=operation.hasDefined(VALUE) ? operation.get(VALUE) : new ModelNode();
+  final ModelNode submodel=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel();
+  final AttributeDefinition attributeDefinition=ATTRIBUTES.get(attributeName);
+  if (attributeDefinition != null) {
+    final ModelNode syntheticOp=new ModelNode();
+    syntheticOp.get(attributeName).set(newValue);
+    attributeDefinition.validateAndSet(syntheticOp,submodel);
   }
-  final ModelNode value=operation.get(ModelDescriptionConstants.VALUE);
-  def.getValidator().validateParameter(name,value);
-  model.get(name).set(value);
+ else {
+    throw new OperationFailedException(new ModelNode().set(MESSAGES.unknownAttribute(attributeName)));
+  }
   context.reloadRequired();
   context.addStep(VERIFY_HANDLER,OperationContext.Stage.MODEL);
   if (context.completeStep() != OperationContext.ResultAction.KEEP) {
