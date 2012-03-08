@@ -1,0 +1,65 @@
+{
+  final Set<Attribute> required=EnumSet.of(Attribute.NAME);
+  final int count=reader.getAttributeCount();
+  String nodeName=null;
+  long connectTimeout=5000;
+  String userName=null;
+  String securityRealm=null;
+  for (int i=0; i < count; i++) {
+    final Attribute attribute=Attribute.of(reader.getAttributeName(i));
+    required.remove(attribute);
+switch (attribute) {
+case NAME:
+      nodeName=reader.getAttributeValue(i).trim();
+    break;
+case CONNECT_TIMEOUT:
+  connectTimeout=reader.getLongAttributeValue(i);
+break;
+case USERNAME:
+userName=reader.getAttributeValue(i).trim();
+break;
+case SECURITY_REALM:
+securityRealm=reader.getAttributeValue(i).trim();
+break;
+default :
+unexpectedContent(reader);
+}
+}
+if (!required.isEmpty()) {
+missingAttributes(reader.getLocation(),required);
+}
+final EJBClientDescriptorMetaData.ClusterNodeConfig clusterNodeConfig=clusterConfig.newClusterNode(nodeName);
+clusterNodeConfig.setConnectTimeout(connectTimeout);
+clusterNodeConfig.setSecurityRealm(securityRealm);
+clusterNodeConfig.setUserName(userName);
+while (reader.hasNext()) {
+switch (reader.nextTag()) {
+case END_ELEMENT:
+{
+return;
+}
+case START_ELEMENT:
+{
+final Element element=Element.of(reader.getName());
+switch (element) {
+case CONNECTION_CREATION_OPTIONS:
+final Properties connectionCreationOptions=this.parseConnectionCreationOptions(reader);
+clusterNodeConfig.setConnectionOptions(connectionCreationOptions);
+break;
+case CHANNEL_CREATION_OPTIONS:
+final Properties channelCreationOptions=this.parseChannelCreationOptions(reader);
+clusterNodeConfig.setChannelCreationOptions(channelCreationOptions);
+break;
+default :
+this.unexpectedElement(reader);
+}
+break;
+}
+default :
+{
+unexpectedContent(reader);
+}
+}
+}
+unexpectedEndOfDocument(reader.getLocation());
+}
