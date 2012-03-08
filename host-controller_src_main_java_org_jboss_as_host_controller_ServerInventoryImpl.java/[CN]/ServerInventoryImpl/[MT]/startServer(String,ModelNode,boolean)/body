@@ -1,0 +1,22 @@
+{
+  if (shutdown || connectionFinished) {
+    throw HostControllerMessages.MESSAGES.hostAlreadyShutdown();
+  }
+  final ManagedServer existing=servers.get(serverName);
+  if (existing != null) {
+    ROOT_LOGGER.existingServerWithState(serverName,existing.getState());
+    return determineServerStatus(serverName);
+  }
+  final ManagedServer server=createManagedServer(serverName,domainModel);
+  if (servers.putIfAbsent(serverName,server) != null) {
+    return determineServerStatus(serverName);
+  }
+  server.start();
+synchronized (shutdownCondition) {
+    shutdownCondition.notifyAll();
+  }
+  if (blocking) {
+    server.awaitState(ManagedServer.InternalState.SERVER_STARTED);
+  }
+  return server.getState();
+}
