@@ -3,9 +3,11 @@
   final Pool<MockBean> pool=new StrictMaxPool<MockBean>(factory,10,60,TimeUnit.SECONDS);
   pool.start();
   final CountDownLatch in=new CountDownLatch(1);
+  final CountDownLatch ready=new CountDownLatch(10);
   Callable<Void> task=new Callable<Void>(){
     public Void call() throws Exception {
       MockBean bean=pool.get();
+      ready.countDown();
       in.await();
       pool.release(bean);
       bean=null;
@@ -19,6 +21,7 @@
   for (int i=0; i < results.length; i++) {
     results[i]=service.submit(task);
   }
+  ready.await(120,TimeUnit.SECONDS);
   in.countDown();
   for (  Future<?> result : results) {
     result.get(5,TimeUnit.SECONDS);
