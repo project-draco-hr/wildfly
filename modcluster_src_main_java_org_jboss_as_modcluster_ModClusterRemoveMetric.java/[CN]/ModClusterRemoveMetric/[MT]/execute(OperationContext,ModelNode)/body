@@ -1,32 +1,12 @@
 {
-  final ModelNode dynamicLoadProvider=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel().get(CommonAttributes.DYNAMIC_LOAD_PROVIDER);
-  String type=null;
-  if (dynamicLoadProvider.isDefined()) {
-    List<Property> list=operation.asPropertyList();
-    Iterator<Property> it=list.iterator();
-    while (it.hasNext()) {
-      Property prop=it.next();
-      if (prop.getName().equals("type")) {
-        type=prop.getValue().asString();
-        break;
-      }
-    }
-    if (type != null) {
-      removeMetric(dynamicLoadProvider,type);
-    }
-    if (!dynamicLoadProvider.get(CommonAttributes.LOAD_METRIC).isDefined() && !dynamicLoadProvider.get(CommonAttributes.CUSTOM_LOAD_METRIC).isDefined()) {
-      context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel().remove(CommonAttributes.DYNAMIC_LOAD_PROVIDER);
-    }
+  PathAddress parent=PathAddress.pathAddress(ModClusterExtension.SUBSYSTEM_PATH,ModClusterExtension.CONFIGURATION_PATH,ModClusterExtension.DYNAMIC_LOAD_PROVIDER);
+  String type=LoadMetricDefinition.TYPE.resolveModelAttribute(context,operation).asString();
+  String name=getMetricName(context,type);
+  if (name == null) {
+    context.setRollbackOnly();
+    return;
   }
-  if (context.isNormalServer()) {
-    context.reloadRequired();
-  }
-  context.completeStep(new OperationContext.RollbackHandler(){
-    @Override public void handleRollback(    OperationContext context,    ModelNode operation){
-      if (context.isNormalServer()) {
-        context.revertReloadRequired();
-      }
-    }
-  }
-);
+  ModelNode targetOperation=Util.createRemoveOperation(parent.append(PathElement.pathElement(ModClusterExtension.LOAD_METRIC.getKey(),name)));
+  context.addStep(targetOperation,new ReloadRequiredRemoveStepHandler(),OperationContext.Stage.IMMEDIATE);
+  context.completeStep();
 }

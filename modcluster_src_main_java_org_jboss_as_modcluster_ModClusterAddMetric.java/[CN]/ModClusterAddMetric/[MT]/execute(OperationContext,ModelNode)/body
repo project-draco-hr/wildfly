@@ -1,36 +1,10 @@
 {
-  final ModelNode dynamicLoadProvider=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel().get(CommonAttributes.DYNAMIC_LOAD_PROVIDER);
-  final ModelNode metric=new ModelNode();
-  List<Property> list=operation.asPropertyList();
-  Iterator<Property> it=list.iterator();
-  while (it.hasNext()) {
-    Property prop=it.next();
-    if (prop.getName().equals("property")) {
-      String properties=prop.getValue().asString();
-      ModelNode props=ModelNode.fromString(properties);
-      metric.get("property").set(props);
-    }
- else     if (prop.getName().equals("type")) {
-      metric.get(prop.getName()).set(prop.getValue().asString());
-    }
+  PathAddress parent=PathAddress.pathAddress(ModClusterExtension.SUBSYSTEM_PATH,ModClusterExtension.CONFIGURATION_PATH,ModClusterExtension.DYNAMIC_LOAD_PROVIDER);
+  String name=getNextMetricName(context);
+  ModelNode targetOperation=Util.createAddOperation(parent.append(PathElement.pathElement(ModClusterExtension.LOAD_METRIC.getKey(),name)));
+  for (  AttributeDefinition def : LoadMetricDefinition.ATTRIBUTES) {
+    targetOperation.get(def.getName()).set(operation.get(def.getName()));
   }
-  if (!metric.get("type").isDefined()) {
-    throw new OperationFailedException(new ModelNode().set(MESSAGES.typeAttributeRequired("add-metric")));
-  }
-  if (!dynamicLoadProvider.isDefined()) {
-    dynamicLoadProvider.get(CommonAttributes.HISTORY).set(9);
-    dynamicLoadProvider.get(CommonAttributes.DECAY).set(2);
-  }
-  replaceMetric(dynamicLoadProvider,metric);
-  if (context.isNormalServer()) {
-    context.reloadRequired();
-  }
-  context.completeStep(new OperationContext.RollbackHandler(){
-    @Override public void handleRollback(    OperationContext context,    ModelNode operation){
-      if (context.isNormalServer()) {
-        context.revertReloadRequired();
-      }
-    }
-  }
-);
+  context.addStep(targetOperation,LoadMetricAdd.INSTANCE,OperationContext.Stage.IMMEDIATE);
+  context.completeStep();
 }
