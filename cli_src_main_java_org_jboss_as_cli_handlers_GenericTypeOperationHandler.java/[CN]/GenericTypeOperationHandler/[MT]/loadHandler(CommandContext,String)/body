@@ -1,0 +1,127 @@
+{
+  if (op == null) {
+    if (writePropHandler == null) {
+      writePropHandler=new WritePropertyHandler();
+      List<Property> propList;
+      try {
+        propList=getNodeProperties(ctx);
+      }
+ catch (      CommandFormatException e) {
+        propList=Collections.emptyList();
+      }
+      for (int i=0; i < propList.size(); ++i) {
+        final Property prop=propList.get(i);
+        final ModelNode propDescr=prop.getValue();
+        if (propDescr.has(Util.ACCESS_TYPE) && Util.READ_WRITE.equals(propDescr.get(Util.ACCESS_TYPE).asString())) {
+          ModelType type=null;
+          CommandLineCompleter valueCompleter=null;
+          ArgumentValueConverter valueConverter=null;
+          if (propConverters != null) {
+            valueConverter=propConverters.get(prop.getName());
+          }
+          if (valueCompleters != null) {
+            valueCompleter=valueCompleters.get(prop.getName());
+          }
+          if (valueConverter == null) {
+            valueConverter=ArgumentValueConverter.DEFAULT;
+            if (propDescr.has(Util.TYPE)) {
+              type=propDescr.get(Util.TYPE).asType();
+              if (ModelType.BOOLEAN == type) {
+                if (valueCompleter == null) {
+                  valueCompleter=SimpleTabCompleter.BOOLEAN;
+                }
+              }
+ else               if (prop.getName().endsWith("properties")) {
+                valueConverter=ArgumentValueConverter.PROPERTIES;
+              }
+ else               if (ModelType.LIST == type) {
+                if (propDescr.hasDefined(Util.VALUE_TYPE) && propDescr.get(Util.VALUE_TYPE).asType() == ModelType.PROPERTY) {
+                  valueConverter=ArgumentValueConverter.PROPERTIES;
+                }
+ else {
+                  valueConverter=ArgumentValueConverter.LIST;
+                }
+              }
+ else               if (ModelType.OBJECT == type) {
+                valueConverter=ArgumentValueConverter.OBJECT;
+              }
+            }
+          }
+          final CommandArgument arg=new ArgumentWithValue(GenericTypeOperationHandler.this,valueCompleter,valueConverter,"--" + prop.getName());
+          writePropHandler.addArgument(arg);
+        }
+      }
+    }
+    return writePropHandler;
+  }
+ else {
+    if (customHandlers != null && customHandlers.containsKey(op)) {
+      final OperationCommand opHandler=customHandlers.get(op);
+      if (opHandler != null) {
+        return opHandler;
+      }
+    }
+    if (opHandlers != null) {
+      OperationCommand opHandler=opHandlers.get(op);
+      if (opHandler != null) {
+        return opHandler;
+      }
+    }
+    final ModelNode descr;
+    try {
+      descr=getOperationDescription(ctx,op);
+    }
+ catch (    CommandFormatException e1) {
+      return null;
+    }
+    if (opHandlers == null) {
+      opHandlers=new HashMap<String,OperationCommand>();
+    }
+    final OpHandler opHandler=new OpHandler(op);
+    opHandlers.put(op,opHandler);
+    opHandler.addArgument(this.headers);
+    if (descr != null && descr.has(Util.REQUEST_PROPERTIES)) {
+      final List<Property> propList=descr.get(Util.REQUEST_PROPERTIES).asPropertyList();
+      for (      Property prop : propList) {
+        final ModelNode propDescr=prop.getValue();
+        ModelType type=null;
+        CommandLineCompleter valueCompleter=null;
+        ArgumentValueConverter valueConverter=null;
+        if (propConverters != null) {
+          valueConverter=propConverters.get(prop.getName());
+        }
+        if (valueCompleters != null) {
+          valueCompleter=valueCompleters.get(prop.getName());
+        }
+        if (valueConverter == null) {
+          valueConverter=ArgumentValueConverter.DEFAULT;
+          if (propDescr.has(Util.TYPE)) {
+            type=propDescr.get(Util.TYPE).asType();
+            if (ModelType.BOOLEAN == type) {
+              if (valueCompleter == null) {
+                valueCompleter=SimpleTabCompleter.BOOLEAN;
+              }
+            }
+ else             if (prop.getName().endsWith("properties")) {
+              valueConverter=ArgumentValueConverter.PROPERTIES;
+            }
+ else             if (ModelType.LIST == type) {
+              if (propDescr.hasDefined(Util.VALUE_TYPE) && propDescr.get(Util.VALUE_TYPE).asType() == ModelType.PROPERTY) {
+                valueConverter=ArgumentValueConverter.PROPERTIES;
+              }
+ else {
+                valueConverter=ArgumentValueConverter.LIST;
+              }
+            }
+ else             if (ModelType.OBJECT == type) {
+              valueConverter=ArgumentValueConverter.OBJECT;
+            }
+          }
+        }
+        final CommandArgument arg=new ArgumentWithValue(GenericTypeOperationHandler.this,valueCompleter,valueConverter,"--" + prop.getName());
+        opHandler.addArgument(arg);
+      }
+    }
+    return opHandler;
+  }
+}
