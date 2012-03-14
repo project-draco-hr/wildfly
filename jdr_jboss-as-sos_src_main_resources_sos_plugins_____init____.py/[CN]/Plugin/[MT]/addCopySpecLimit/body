@@ -1,5 +1,5 @@
 def addCopySpecLimit(self, fname, sizelimit=None, sub=None):
-    'Add a file specification (with limits)\n        '
+    'Add a file or glob but limit it to sizelimit megabytes. If fname is\n        a single file the file will be tailed to meet sizelimit. If the first\n        file in a glob is too large it will be tailed to meet the sizelimit.\n        '
     if (not (fname and len(fname))):
         return False
     files = glob.glob(fname)
@@ -7,6 +7,7 @@ def addCopySpecLimit(self, fname, sizelimit=None, sub=None):
     cursize = 0
     limit_reached = False
     sizelimit *= (1024 * 1024)
+    flog = None
     for flog in files:
         cursize += os.stat(flog)[ST_SIZE]
         if (sizelimit and (cursize > sizelimit)):
@@ -14,4 +15,8 @@ def addCopySpecLimit(self, fname, sizelimit=None, sub=None):
             break
         self.addCopySpec(flog, sub)
     if ((flog == files[0]) and limit_reached):
-        self.collectExtOutput(('tail -c%d %s' % (sizelimit, flog)), ('tail_' + os.path.basename(flog)), (flog[1:] + '.tailed'))
+        flog_name = flog
+        if sub:
+            (old, new) = sub
+            flog_name = flog.replace(old, new)
+        self.addStringAsFile(tail(flog, sizelimit), (flog_name.replace(os.path.sep, '.') + '.tailed'))
