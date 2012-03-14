@@ -1,0 +1,39 @@
+{
+  setupEJBClientContextSelector();
+  final String jndiName="ejb:" + "" + "/" + ARCHIVE_NAME + "//"+ StatefulBean.class.getSimpleName()+ "!"+ StatefulBeanRemote.class.getName()+ "?stateful";
+  final StatefulBeanRemote statefulBeanRemote=(StatefulBeanRemote)ctx.lookup(jndiName);
+  log.info("oochoaloup: Passivated (" + (isPassivation ? "TRUE" : "FALSE") + ") by on start: "+ statefulBeanRemote.getPassivatedBy());
+  int clientNumber=40;
+  String calledNodeFirst=statefulBeanRemote.setNumber(clientNumber);
+  statefulBeanRemote.setPassivationNode(calledNodeFirst);
+  log.info("Called node name first: " + calledNodeFirst);
+  Thread.sleep(WAIT_FOR_PASSIVATION_MS);
+  statefulBeanRemote.incrementNumber();
+  EJBClientContext.requireCurrent().getClusterContext(CLUSTER_NAME).removeClusterNode(calledNodeFirst);
+  Assert.assertEquals(++clientNumber,statefulBeanRemote.getNumber());
+  if (isPassivation) {
+    Assert.assertEquals(calledNodeFirst,statefulBeanRemote.getPassivatedBy());
+  }
+ else {
+    Assert.assertNull("We suppose that the passivation is not provided.",statefulBeanRemote.getPassivatedBy());
+  }
+  String calledNodeSecond=statefulBeanRemote.incrementNumber();
+  statefulBeanRemote.setPassivationNode(calledNodeSecond);
+  log.info("Called node name second: " + calledNodeSecond);
+  Thread.sleep(WAIT_FOR_PASSIVATION_MS);
+  setupEJBClientContextSelector();
+  waitForClusterContext();
+  deployer.undeploy(node2deployment.get(calledNodeSecond));
+  controller.stop(node2container.get(calledNodeSecond));
+  Assert.assertEquals(++clientNumber,statefulBeanRemote.getNumber());
+  String calledNode=statefulBeanRemote.incrementNumber();
+  Assert.assertEquals(calledNodeFirst,calledNode);
+  if (isPassivation) {
+    Assert.assertEquals(calledNodeSecond,statefulBeanRemote.getPassivatedBy());
+  }
+ else {
+    Assert.assertNull("We suppose that the passivation is not provided.",statefulBeanRemote.getPassivatedBy());
+  }
+  Thread.sleep(WAIT_FOR_PASSIVATION_MS);
+  Assert.assertEquals(++clientNumber,statefulBeanRemote.getNumber());
+}
