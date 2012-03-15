@@ -2,12 +2,30 @@
   final MBeanServerConnection mbeanServer=JMXConnectorFactory.connect(managementClient.getRemoteJMXURL()).getMBeanServerConnection();
   final ObjectName name=new ObjectName("jboss.test:service=testdeployments");
   try {
+    Set<String> initialHashes=null;
+    if (!fromFile) {
+      initialHashes=getAllDeploymentHashesFromContentDir(true);
+    }
     deploymentExecutor.initialDeploy();
     PollingUtils.retryWithTimeout(10000,new PollingUtils.WaitForMBeanTask(mbeanServer,name));
     Assert.assertNotNull(mbeanServer.getMBeanInfo(name));
+    Set<String> currentHashes=null;
+    String initialDeploymentHash=null;
+    if (!fromFile) {
+      currentHashes=getAllDeploymentHashesFromContentDir(false);
+      currentHashes.removeAll(initialHashes);
+      Assert.assertEquals(1,currentHashes.size());
+      initialDeploymentHash=currentHashes.iterator().next();
+    }
     deploymentExecutor.fullReplace();
     PollingUtils.retryWithTimeout(10000,new PollingUtils.WaitForMBeanTask(mbeanServer,name));
     Assert.assertNotNull(mbeanServer.getMBeanInfo(name));
+    if (!fromFile) {
+      currentHashes=getAllDeploymentHashesFromContentDir(false);
+      Assert.assertFalse(currentHashes.contains(initialDeploymentHash));
+      currentHashes.removeAll(initialHashes);
+      Assert.assertEquals(1,currentHashes.size());
+    }
     deploymentExecutor.undeploy();
     try {
       long start=System.currentTimeMillis();
@@ -18,6 +36,9 @@
       Assert.fail("Should not have found MBean");
     }
  catch (    Exception expected) {
+    }
+    if (!fromFile) {
+      Assert.assertEquals(initialHashes,getAllDeploymentHashesFromContentDir(false));
     }
   }
   finally {
