@@ -1,0 +1,27 @@
+{
+  cli.sendLine("deploy " + warFile.getAbsolutePath() + " --all-server-groups");
+  cli.waitForPrompt(WAIT_TIMEOUT);
+  checkURL("main-one",false,"/RolloutPlanTestCase/RolloutServlet");
+  checkURL("main-two",false,"/RolloutPlanTestCase/RolloutServlet");
+  checkURL("main-three",false,"/RolloutPlanTestCase/RolloutServlet");
+  checkURL("test-one",false,"/RolloutPlanTestCase/RolloutServlet");
+  cli.sendLine("/socket-binding-group=standard-sockets/socket-binding=test-binding:add(interface=public,port=" + TEST_PORT + ")");
+  String[] serverGroups=CLITestSuite.serverGroups.keySet().toArray(new String[]{});
+  RolloutPlanBuilder planBuilder=new RolloutPlanBuilder();
+  planBuilder.addGroup(serverGroups[0],new RolloutPlanBuilder.RolloutPolicy(true,null,1));
+  planBuilder.addGroup(serverGroups[1],new RolloutPlanBuilder.RolloutPolicy(true,null,1));
+  planBuilder.addGroup(serverGroups[2],new RolloutPlanBuilder.RolloutPolicy(true,null,1));
+  planBuilder.setRollBackAcrossGroups(true);
+  String rolloutPlan=planBuilder.buildAsString();
+  cli.sendLine("rollout-plan add --name=groupsRollbackPlan --content=" + rolloutPlan);
+  checkURL("main-one",false,"/RolloutPlanTestCase/RolloutServlet?operation=bind&bindPort=" + TEST_PORT);
+  checkURL("main-three",false,"/RolloutPlanTestCase/RolloutServlet?operation=bind&bindPort=" + String.valueOf(TEST_PORT + CLITestSuite.portOffsets.get("main-three")));
+  CLIOpResult ret=testAddConnector("groupsRollbackPlan");
+  Assert.assertFalse(ret.isIsOutcomeSuccess());
+  Assert.assertFalse(getServerStatus("main-one",ret));
+  Assert.assertFalse(getServerStatus("main-two",ret));
+  Assert.assertFalse(getServerStatus("main-three",ret));
+  Assert.assertFalse(getServerStatus("test-one",ret));
+  cli.sendLine("undeploy RolloutPlanTestCase.war --all-relevant-server-groups");
+  cli.sendLine("/socket-binding-group=standard-sockets/socket-binding=test-binding:remove");
+}
