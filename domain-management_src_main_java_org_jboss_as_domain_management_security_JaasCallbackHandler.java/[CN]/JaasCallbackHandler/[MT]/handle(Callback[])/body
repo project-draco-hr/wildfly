@@ -36,34 +36,53 @@
     throw MESSAGES.noPassword();
   }
   final char[] password=verifyPasswordCallback.getPassword().toCharArray();
-  try {
-    Subject subject=subjectCallback != null && subjectCallback.getSubject() != null ? subjectCallback.getSubject() : new Subject();
-    LoginContext ctx=new LoginContext(name,subject,new CallbackHandler(){
-      public void handle(      Callback[] callbacks) throws IOException, UnsupportedCallbackException {
-        for (        Callback current : callbacks) {
-          if (current instanceof NameCallback) {
-            NameCallback ncb=(NameCallback)current;
-            ncb.setName(userName);
-          }
- else           if (current instanceof PasswordCallback) {
-            PasswordCallback pcb=(PasswordCallback)current;
-            pcb.setPassword(password);
-          }
+  Subject subject=subjectCallback != null && subjectCallback.getSubject() != null ? subjectCallback.getSubject() : new Subject();
+  ServerSecurityManager securityManager;
+  if ((securityManager=securityManagerValue.getOptionalValue()) != null) {
+    try {
+      securityManager.push(name,userName,password,subject);
+      verifyPasswordCallback.setVerified(true);
+      subject.getPrivateCredentials().add(new PasswordCredential(userName,password));
+      if (subjectCallback != null) {
+        subjectCallback.setSubject(subject);
+      }
+    }
+ catch (    SecurityException e) {
+      verifyPasswordCallback.setVerified(false);
+    }
+ finally {
+      securityManager.pop();
+    }
+  }
  else {
-            throw new UnsupportedCallbackException(current);
+    try {
+      LoginContext ctx=new LoginContext(name,subject,new CallbackHandler(){
+        public void handle(        Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+          for (          Callback current : callbacks) {
+            if (current instanceof NameCallback) {
+              NameCallback ncb=(NameCallback)current;
+              ncb.setName(userName);
+            }
+ else             if (current instanceof PasswordCallback) {
+              PasswordCallback pcb=(PasswordCallback)current;
+              pcb.setPassword(password);
+            }
+ else {
+              throw new UnsupportedCallbackException(current);
+            }
           }
         }
       }
-    }
 );
-    ctx.login();
-    verifyPasswordCallback.setVerified(true);
-    subject.getPrivateCredentials().add(new PasswordCredential(userName,password));
-    if (subjectCallback != null) {
-      subjectCallback.setSubject(subject);
+      ctx.login();
+      verifyPasswordCallback.setVerified(true);
+      subject.getPrivateCredentials().add(new PasswordCredential(userName,password));
+      if (subjectCallback != null) {
+        subjectCallback.setSubject(subject);
+      }
     }
-  }
- catch (  LoginException e) {
-    verifyPasswordCallback.setVerified(false);
+ catch (    LoginException e) {
+      verifyPasswordCallback.setVerified(false);
+    }
   }
 }
