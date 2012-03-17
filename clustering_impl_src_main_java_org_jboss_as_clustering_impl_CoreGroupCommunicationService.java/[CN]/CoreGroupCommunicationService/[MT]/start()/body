@@ -1,26 +1,18 @@
 {
-  if (state == State.STARTING || state == State.STARTED || state == State.STOPPING) {
-    log.debugf("Ignoring start call; current state is %s",this.state);
-    return;
+  if (this.channel == null) {
+    throw ClusteringImplMessages.MESSAGES.channelNotDefined();
   }
-  if (state != State.CREATED && state != State.STOPPED && state != State.FAILED) {
-    log.debug("Start requested before create, calling create now");
-    create();
+  if (!this.channel.isConnected()) {
+    throw ClusteringImplMessages.MESSAGES.channelNotConnected(this.channel.getName());
   }
-  state=State.STARTING;
-  try {
-    startService();
-    state=State.STARTED;
-  }
- catch (  Throwable t) {
-    state=State.FAILED;
-    if (this.channel != null && this.channelSelfConnected) {
-      this.log.debugf("Caught exception after channel connected; closing channel -- %s",t.getLocalizedMessage());
-      this.channel.close();
-      this.channel=null;
-    }
-    if (t instanceof Exception)     throw (Exception)t;
- else     if (t instanceof Error)     throw (Error)t;
- else     throw new RuntimeException(t);
-  }
+  this.stateIdPrefix=this.getClass().getName() + "." + this.scopeId+ ".";
+  MembershipListener meml=new MembershipListenerImpl();
+  MessageListener msgl=this.stateIdPrefix == null ? null : new MessageListenerImpl();
+  this.dispatcher=new RpcHandler(this.scopeId,this.channel,msgl,meml,new RequestMarshallerImpl(),new ResponseMarshallerImpl());
+  meml.viewAccepted(this.channel.getView());
+  this.flushBlockGate.open();
+  this.directlyInvokeLocal=this.channel.getDiscardOwnMessages();
+  this.me=this.nodeFactory.getClusterNode(this.channel.getAddress());
+  this.verifyNodeIsUnique();
+  this.asynchHandler.start();
 }
