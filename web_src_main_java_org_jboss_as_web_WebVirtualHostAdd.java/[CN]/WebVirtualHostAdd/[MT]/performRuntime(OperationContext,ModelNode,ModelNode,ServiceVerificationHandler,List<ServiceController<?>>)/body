@@ -4,13 +4,12 @@
   final String name=address.getLastElement().getValue();
   boolean welcome=WebVirtualHostDefinition.ENABLE_WELCOME_ROOT.resolveModelAttribute(context,operation).asBoolean();
   final ServiceTarget serviceTarget=context.getServiceTarget();
-  final WebVirtualHostService service=new WebVirtualHostService(name,aliases(operation),welcome);
-  final ServiceBuilder<?> serviceBuilder=serviceTarget.addService(WebSubsystemServices.JBOSS_WEB_HOST.append(name),service).addDependency(AbsolutePathService.pathNameOf(TEMP_DIR),String.class,service.getTempPathInjector()).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,service.getWebServer());
+  final WebVirtualHostService service=new WebVirtualHostService(name,aliases(operation),welcome,TEMP_DIR);
+  final ServiceBuilder<?> serviceBuilder=serviceTarget.addService(WebSubsystemServices.JBOSS_WEB_HOST.append(name),service).addDependency(PathManagerService.SERVICE_NAME,PathManager.class,service.getPathManagerInjector()).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,service.getWebServer());
   if (operation.get(ACCESS_LOG_PATH.getKey(),ACCESS_LOG_PATH.getValue()).isDefined()) {
     final ModelNode accessLog=operation.get(ACCESS_LOG_PATH.getKey(),ACCESS_LOG_PATH.getValue());
     service.setAccessLog(accessLog.clone());
-    accessLogService(context,name,accessLog,serviceTarget,newControllers,verificationHandler);
-    serviceBuilder.addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(name,Constants.ACCESS_LOG),String.class,service.getAccessLogPathInjector());
+    service.setAccessLogPaths(getPath(context,accessLog,name),getRelativeTo(context,accessLog,name));
   }
   if (operation.hasDefined(Constants.REWRITE)) {
     service.setRewrite(operation.get(Constants.REWRITE).clone());
@@ -41,7 +40,7 @@
   serviceBuilder.addListener(verificationHandler);
   newControllers.add(serviceBuilder.install());
   if (welcome) {
-    final WelcomeContextService welcomeService=new WelcomeContextService();
-    newControllers.add(context.getServiceTarget().addService(WebSubsystemServices.JBOSS_WEB.append(name).append("welcome"),welcomeService).addDependency(AbsolutePathService.pathNameOf(HOME_DIR),String.class,welcomeService.getPathInjector()).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(name),VirtualHost.class,welcomeService.getHostInjector()).addDependency(ServiceBuilder.DependencyType.OPTIONAL,HttpManagementService.SERVICE_NAME,HttpManagement.class,welcomeService.getHttpManagementInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
+    final WelcomeContextService welcomeService=new WelcomeContextService(HOME_DIR);
+    newControllers.add(context.getServiceTarget().addService(WebSubsystemServices.JBOSS_WEB.append(name).append("welcome"),welcomeService).addDependency(PathManagerService.SERVICE_NAME,PathManager.class,welcomeService.getPathManagerInjector()).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(name),VirtualHost.class,welcomeService.getHostInjector()).addDependency(ServiceBuilder.DependencyType.OPTIONAL,HttpManagementService.SERVICE_NAME,HttpManagement.class,welcomeService.getHttpManagementInjector()).addListener(verificationHandler).setInitialMode(ServiceController.Mode.ACTIVE).install());
   }
 }
