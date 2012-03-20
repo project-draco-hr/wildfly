@@ -9,33 +9,43 @@
     }
   }
  else {
-    HostControllerLogger.ROOT_LOGGER.lostRemoteDomainConnection();
-    executorService.execute(new Runnable(){
-      @Override public void run(){
-        final ReconnectPolicy policy=reconnectPolicy;
-        for (; ; ) {
+    if (reconnecting.compareAndSet(false,true)) {
+      HostControllerLogger.ROOT_LOGGER.lostRemoteDomainConnection();
+      executorService.execute(new Runnable(){
+        @Override public void run(){
           try {
-            policy.wait(reconnectionCount++);
-            if (!reconnect.get()) {
+            reconnect();
+          }
+  finally {
+            reconnecting.set(false);
+          }
+        }
+        private void reconnect(){
+          final ReconnectPolicy policy=reconnectPolicy;
+          for (; ; ) {
+            try {
+              policy.wait(reconnectionCount++);
+              if (!reconnect.get()) {
+                return;
+              }
+              HostControllerLogger.ROOT_LOGGER.debugf("trying to reconnect to remote host-controller");
+              final RegistrationResult result=connectSync();
+              if (result.isOK()) {
+                HostControllerLogger.ROOT_LOGGER.reconnectedToMaster();
+                return;
+              }
+            }
+ catch (            InterruptedException e) {
+              Thread.currentThread().interrupt();
               return;
             }
-            HostControllerLogger.ROOT_LOGGER.debugf("trying to reconnect to remote host-controller");
-            final RegistrationResult result=connectSync();
-            if (result.isOK()) {
-              HostControllerLogger.ROOT_LOGGER.reconnectedToMaster();
-              return;
+catch (            Exception e) {
+              HostControllerLogger.ROOT_LOGGER.debugf(e,"failed to reconnect to the remote host-controller");
             }
-          }
- catch (          IOException e) {
-            HostControllerLogger.ROOT_LOGGER.debugf(e,"failed to reconnect to the remote host-controller");
-          }
-catch (          InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return;
           }
         }
       }
-    }
 );
+    }
   }
 }
