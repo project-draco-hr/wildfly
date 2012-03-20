@@ -4,14 +4,17 @@
   if (event.getType() != ChangeType.CAPABILITY)   return;
   if (event.isRemoved() == false) {
     try {
-      for (      final OSGiCapability module : injectedSubsystemState.getValue().getCapabilities()) {
-        if (module.getIdentifier().toString().equals(event.getId())) {
-          final ServiceName serviceName=installModule(injectedBundleManager.getValue(),module);
+      for (      final OSGiCapability moduleMetaData : injectedSubsystemState.getValue().getCapabilities()) {
+        if (moduleMetaData.getIdentifier().toString().equals(event.getId())) {
+          final ServiceName serviceName=installModule(injectedBundleManager.getValue(),moduleMetaData);
           if (serviceName != null) {
-            ServiceBuilder<Void> builder=serviceController.getServiceContainer().addService(ServiceName.of(Services.AUTOINSTALL_PROVIDER,"ModuleUpdater","" + updateServiceIdCounter.incrementAndGet()),new AbstractService<Void>(){
+            final ServiceContainer serviceContainer=serviceController.getServiceContainer();
+            ServiceBuilder<Void> builder=serviceContainer.addService(ServiceName.of(Services.AUTOINSTALL_PROVIDER,"ModuleUpdater","" + updateServiceIdCounter.incrementAndGet()),new AbstractService<Void>(){
               @Override public void start(              StartContext context) throws StartException {
                 try {
-                  startBundle(serviceController.getServiceContainer(),serviceName,module);
+                  ServiceController<?> controller=serviceContainer.getRequiredService(serviceName);
+                  Bundle bundle=(Bundle)controller.getValue();
+                  startBundle(bundle,moduleMetaData.getStartLevel());
                 }
   finally {
                   context.getController().setMode(Mode.REMOVE);
