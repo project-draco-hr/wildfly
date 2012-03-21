@@ -8,6 +8,28 @@
     ROOT_LOGGER.debugf("Cannot unbind %s since no binding exists with that name",name);
     return;
   }
+  final CountDownLatch removedLatch=new CountDownLatch(1);
+  final ServiceListener listener=new AbstractServiceListener(){
+    @Override public void transition(    ServiceController controller,    Transition transition){
+      if (transition.getAfter() == ServiceController.Substate.REMOVED) {
+        removedLatch.countDown();
+      }
+    }
+  }
+;
+  bindingService.addListener(listener);
   bindingService.setMode(ServiceController.Mode.REMOVE);
-  ROOT_LOGGER.unboundJndiName(bindInfo.getAbsoluteJndiName());
+  try {
+    if (!removedLatch.await(5,SECONDS)) {
+      ROOT_LOGGER.failedToUnbindJndiName(name,5,SECONDS.toString().toLowerCase(Locale.US));
+      return;
+    }
+    ROOT_LOGGER.unboundJndiName(bindInfo.getAbsoluteJndiName());
+  }
+ catch (  InterruptedException e) {
+    ROOT_LOGGER.failedToUnbindJndiName(name,5,SECONDS.toString().toLowerCase(Locale.US));
+  }
+ finally {
+    bindingService.removeListener(listener);
+  }
 }
