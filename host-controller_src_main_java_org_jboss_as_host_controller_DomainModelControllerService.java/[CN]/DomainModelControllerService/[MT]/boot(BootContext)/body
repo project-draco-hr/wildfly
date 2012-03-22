@@ -3,11 +3,10 @@
   boolean ok=false;
   boolean reachedServers=false;
   try {
+    ServerInventoryCallbackService.install(serviceTarget);
     ok=boot(hostControllerConfigurationPersister.load(),true);
     final RunningMode currentRunningMode=runningModeControl.getRunningMode();
     if (ok) {
-      ManagementRemotingServices.installRemotingEndpoint(serviceTarget,ManagementRemotingServices.MANAGEMENT_ENDPOINT,hostControllerInfo.getLocalHostName(),EndpointService.EndpointType.MANAGEMENT,null,null);
-      ManagementChannelRegistryService.addService(serviceTarget);
       Future<ServerInventory> inventoryFuture=ServerInventoryService.install(serviceTarget,this,runningModeControl,environment,hostControllerInfo.getNativeManagementInterface(),hostControllerInfo.getNativeManagementPort());
       if (!hostControllerInfo.isMasterDomainController() && !environment.isUseCachedDc()) {
         serverInventory=getFuture(inventoryFuture);
@@ -50,10 +49,8 @@
     }
     if (ok) {
       ServerToHostOperationHandlerFactoryService.install(serviceTarget,ServerInventoryService.SERVICE_NAME,proxyExecutor,localFileRepository);
-      NativeManagementAddHandler.installNativeManagementServices(serviceTarget,hostControllerInfo,null,null);
-      if (hostControllerInfo.getHttpManagementInterface() != null) {
-        HttpManagementAddHandler.installHttpManagementServices(currentRunningMode,serviceTarget,hostControllerInfo,environment,null);
-      }
+      serviceTarget.addService(ServiceName.JBOSS.append("native-mgmt-startup"),Service.NULL).addDependency(ManagementRemotingServices.channelServiceName(ManagementRemotingServices.MANAGEMENT_ENDPOINT,ManagementRemotingServices.SERVER_CHANNEL)).setInitialMode(ServiceController.Mode.ACTIVE).install();
+      serviceTarget.addService(ServiceName.JBOSS.append("http-mgmt-startup"),Service.NULL).addDependency(ServiceBuilder.DependencyType.OPTIONAL,HttpManagementService.SERVICE_NAME).setInitialMode(ServiceController.Mode.ACTIVE).install();
       reachedServers=true;
       if (currentRunningMode == RunningMode.NORMAL) {
         startServers();
