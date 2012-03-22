@@ -1,43 +1,4 @@
 {
   model=Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
-  final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
-  final String name=address.getLastElement().getValue();
-  protocolStackSanityCheck(name,model);
-  ModelNode transport=model.get(ModelKeys.TRANSPORT,ModelKeys.TRANSPORT_NAME);
-  ModelNode resolvedValue=null;
-  final String type=((resolvedValue=CommonAttributes.TYPE.resolveModelAttribute(context,transport)).isDefined()) ? resolvedValue.asString() : null;
-  final boolean shared=CommonAttributes.SHARED.resolveModelAttribute(context,transport).asBoolean();
-  final String machine=((resolvedValue=CommonAttributes.MACHINE.resolveModelAttribute(context,transport)).isDefined()) ? resolvedValue.asString() : null;
-  final String rack=((resolvedValue=CommonAttributes.RACK.resolveModelAttribute(context,transport)).isDefined()) ? resolvedValue.asString() : null;
-  final String site=((resolvedValue=CommonAttributes.SITE.resolveModelAttribute(context,transport)).isDefined()) ? resolvedValue.asString() : null;
-  final String timerExecutor=((resolvedValue=CommonAttributes.TIMER_EXECUTOR.resolveModelAttribute(context,transport)).isDefined()) ? resolvedValue.asString() : null;
-  final String threadFactory=((resolvedValue=CommonAttributes.THREAD_FACTORY.resolveModelAttribute(context,transport)).isDefined()) ? resolvedValue.asString() : null;
-  final String diagnosticsSocketBinding=((resolvedValue=CommonAttributes.DIAGNOSTICS_SOCKET_BINDING.resolveModelAttribute(context,transport)).isDefined()) ? resolvedValue.asString() : null;
-  final String defaultExecutor=((resolvedValue=CommonAttributes.DEFAULT_EXECUTOR.resolveModelAttribute(context,transport)).isDefined()) ? resolvedValue.asString() : null;
-  final String oobExecutor=((resolvedValue=CommonAttributes.OOB_EXECUTOR.resolveModelAttribute(context,transport)).isDefined()) ? resolvedValue.asString() : null;
-  Transport transportConfig=new Transport(type);
-  ProtocolStack stackConfig=new ProtocolStack(name,transportConfig);
-  ServiceBuilder<ChannelFactory> builder=context.getServiceTarget().addService(ChannelFactoryService.getServiceName(name),new ChannelFactoryService(stackConfig)).addDependency(ProtocolDefaultsService.SERVICE_NAME,ProtocolDefaults.class,stackConfig.getDefaultsInjector()).addDependency(MBeanServerService.SERVICE_NAME,MBeanServer.class,stackConfig.getMBeanServerInjector()).addDependency(ServerEnvironmentService.SERVICE_NAME,ServerEnvironment.class,stackConfig.getEnvironmentInjector());
-  transportConfig.setShared(shared);
-  transportConfig.setTopology(site,rack,machine);
-  build(builder,context,transport,transportConfig);
-  addSocketBindingDependency(builder,diagnosticsSocketBinding,transportConfig.getDiagnosticsSocketBindingInjector());
-  addExecutorDependency(builder,defaultExecutor,transportConfig.getDefaultExecutorInjector());
-  addExecutorDependency(builder,oobExecutor,transportConfig.getOOBExecutorInjector());
-  if (timerExecutor != null) {
-    builder.addDependency(ThreadsServices.executorName(timerExecutor),ScheduledExecutorService.class,transportConfig.getTimerExecutorInjector());
-  }
-  if (threadFactory != null) {
-    builder.addDependency(ThreadsServices.threadFactoryName(threadFactory),ThreadFactory.class,transportConfig.getThreadFactoryInjector());
-  }
-  List<Property> orderedProtocols=getOrderedProtocolPropertyList(model);
-  for (  Property protocol : orderedProtocols) {
-    ModelNode typeModelNode=null;
-    final String theType=((typeModelNode=CommonAttributes.TYPE.resolveModelAttribute(context,protocol.getValue())).isDefined()) ? typeModelNode.asString() : null;
-    Protocol protocolConfig=new Protocol(theType);
-    build(builder,context,protocol.getValue(),protocolConfig);
-    stackConfig.getProtocols().add(protocolConfig);
-  }
-  builder.setInitialMode(ServiceController.Mode.ON_DEMAND);
-  newControllers.add(builder.install());
+  installRuntimeServices(context,operation,model,verificationHandler,newControllers);
 }
