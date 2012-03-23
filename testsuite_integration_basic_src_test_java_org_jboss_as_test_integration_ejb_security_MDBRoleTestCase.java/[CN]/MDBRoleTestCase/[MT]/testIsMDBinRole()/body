@@ -1,0 +1,19 @@
+{
+  final InitialContext ctx=new InitialContext();
+  final QueueConnectionFactory factory=(QueueConnectionFactory)ctx.lookup("java:/JmsXA");
+  final QueueConnection connection=factory.createQueueConnection();
+  connection.start();
+  final QueueSession session=connection.createQueueSession(false,Session.AUTO_ACKNOWLEDGE);
+  final Queue replyDestination=session.createTemporaryQueue();
+  final QueueReceiver receiver=session.createReceiver(replyDestination);
+  final Message message=session.createTextMessage("Let's test it!");
+  message.setJMSReplyTo(replyDestination);
+  final Destination destination=(Destination)ctx.lookup("queue/myAwesomeQueue");
+  final MessageProducer producer=session.createProducer(destination);
+  producer.send(message);
+  producer.close();
+  final Message reply=receiver.receive(TimeoutUtil.adjust(5000));
+  assertNotNull(reply);
+  final String result=((TextMessage)reply).getText();
+  assertEquals(SimpleSLSB.SUCCESS,result);
+}
