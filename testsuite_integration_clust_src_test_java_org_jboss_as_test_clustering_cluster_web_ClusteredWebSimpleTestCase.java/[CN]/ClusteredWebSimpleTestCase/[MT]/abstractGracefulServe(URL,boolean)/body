@@ -8,14 +8,30 @@
   ExecutorService executor=Executors.newSingleThreadExecutor();
   Future<HttpResponse> future=executor.submit(new RequestTask(client,longRunningUrl));
   Thread.sleep(1000);
-  controller.stop(CONTAINER_1);
+  if (undeployOnly) {
+    deployer.undeploy(DEPLOYMENT_1);
+  }
+ else {
+    controller.stop(CONTAINER_1);
+  }
   try {
     response=future.get();
-    Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+    Assert.assertEquals("Request should succeed since it initiated before undeply or shutdown.",HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
     response.getEntity().getContent().close();
   }
  catch (  ExecutionException e) {
     e.printStackTrace(System.err);
     Assert.fail(e.getCause().getMessage());
+  }
+  if (undeployOnly) {
+    response=client.execute(new HttpGet(url1));
+    Assert.assertEquals("If we are only undeploying, then subsequent requests should return 404.",HttpServletResponse.SC_NOT_FOUND,response.getStatusLine().getStatusCode());
+    response.getEntity().getContent().close();
+  }
+  if (undeployOnly) {
+    deployer.deploy(DEPLOYMENT_1);
+  }
+ else {
+    controller.start(CONTAINER_1);
   }
 }
