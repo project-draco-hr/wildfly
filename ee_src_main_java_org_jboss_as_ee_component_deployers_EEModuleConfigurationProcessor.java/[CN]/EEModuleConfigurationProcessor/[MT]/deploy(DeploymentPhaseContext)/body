@@ -12,30 +12,37 @@
   final Set<ServiceName> failed=new HashSet<ServiceName>();
   final EEModuleConfiguration moduleConfiguration=new EEModuleConfiguration(moduleDescription);
   deploymentUnit.putAttachment(Attachments.EE_MODULE_CONFIGURATION,moduleConfiguration);
-  final Iterator<ComponentDescription> iterator=moduleDescription.getComponentDescriptions().iterator();
-  while (iterator.hasNext()) {
-    final ComponentDescription componentDescription=iterator.next();
-    ROOT_LOGGER.debugf("Configuring component class: %s named %s",componentDescription.getComponentClassName(),componentDescription.getComponentName());
-    final ComponentConfiguration componentConfiguration;
-    try {
-      componentConfiguration=componentDescription.createConfiguration(classIndex.classIndex(componentDescription.getComponentClassName()),module.getClassLoader(),module.getModuleLoader());
-      for (      final ComponentConfigurator componentConfigurator : componentDescription.getConfigurators()) {
-        componentConfigurator.configure(phaseContext,componentDescription,componentConfiguration);
+  final ClassLoader oldCl=SecurityActions.getContextClassLoader();
+  try {
+    SecurityActions.setContextClassLoader(module.getClassLoader());
+    final Iterator<ComponentDescription> iterator=moduleDescription.getComponentDescriptions().iterator();
+    while (iterator.hasNext()) {
+      final ComponentDescription componentDescription=iterator.next();
+      ROOT_LOGGER.debugf("Configuring component class: %s named %s",componentDescription.getComponentClassName(),componentDescription.getComponentName());
+      final ComponentConfiguration componentConfiguration;
+      try {
+        componentConfiguration=componentDescription.createConfiguration(classIndex.classIndex(componentDescription.getComponentClassName()),module.getClassLoader(),module.getModuleLoader());
+        for (        final ComponentConfigurator componentConfigurator : componentDescription.getConfigurators()) {
+          componentConfigurator.configure(phaseContext,componentDescription,componentConfiguration);
+        }
+        moduleConfiguration.addComponentConfiguration(componentConfiguration);
       }
-      moduleConfiguration.addComponentConfiguration(componentConfiguration);
-    }
- catch (    Exception e) {
-      if (componentDescription.isOptional()) {
-        ROOT_LOGGER.componentInstallationFailure(e,componentDescription.getComponentName());
-        failed.add(componentDescription.getStartServiceName());
-        failed.add(componentDescription.getCreateServiceName());
-        failed.add(componentDescription.getServiceName());
-        iterator.remove();
-      }
+ catch (      Exception e) {
+        if (componentDescription.isOptional()) {
+          ROOT_LOGGER.componentInstallationFailure(e,componentDescription.getComponentName());
+          failed.add(componentDescription.getStartServiceName());
+          failed.add(componentDescription.getCreateServiceName());
+          failed.add(componentDescription.getServiceName());
+          iterator.remove();
+        }
  else {
-        throw MESSAGES.cannotConfigureComponent(e,componentDescription.getComponentName());
+          throw MESSAGES.cannotConfigureComponent(e,componentDescription.getComponentName());
+        }
       }
     }
+    deploymentUnit.putAttachment(Attachments.FAILED_COMPONENTS,Collections.synchronizedSet(failed));
   }
-  deploymentUnit.putAttachment(Attachments.FAILED_COMPONENTS,Collections.synchronizedSet(failed));
+  finally {
+    SecurityActions.setContextClassLoader(oldCl);
+  }
 }
