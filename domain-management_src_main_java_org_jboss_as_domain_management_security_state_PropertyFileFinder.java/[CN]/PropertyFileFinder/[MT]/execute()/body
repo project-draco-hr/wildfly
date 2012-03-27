@@ -1,0 +1,42 @@
+{
+  stateValues.setKnownRoles(new HashMap<String,String>());
+  String jbossHome=System.getenv("JBOSS_HOME");
+  if (jbossHome == null) {
+    return new ErrorState(theConsole,MESSAGES.jbossHomeNotSet(),null,stateValues);
+  }
+  List<File> foundFiles=new ArrayList<File>(2);
+  final String fileName=stateValues.isManagement() ? MGMT_USERS_PROPERTIES : APPLICATION_USERS_PROPERTIES;
+  if (!findFiles(jbossHome,foundFiles,fileName)) {
+    return new ErrorState(theConsole,MESSAGES.propertiesFileNotFound(fileName),null,stateValues);
+  }
+  if (!stateValues.isManagement()) {
+    List<File> foundRoleFiles=new ArrayList<File>(2);
+    if (!findFiles(jbossHome,foundRoleFiles,APPLICATION_ROLES_PROPERTIES)) {
+      return new ErrorState(theConsole,MESSAGES.propertiesFileNotFound(APPLICATION_ROLES_PROPERTIES),null,stateValues);
+    }
+    stateValues.setRoleFiles(foundRoleFiles);
+    try {
+      stateValues.setKnownRoles(loadAllRoles(foundRoleFiles));
+    }
+ catch (    Exception e) {
+      return new ErrorState(theConsole,MESSAGES.propertiesFileNotFound(APPLICATION_ROLES_PROPERTIES),null,stateValues);
+    }
+  }
+  stateValues.setPropertiesFiles(foundFiles);
+  Set<String> foundUsers=new HashSet<String>();
+  for (  File current : stateValues.getPropertiesFiles()) {
+    try {
+      foundUsers.addAll(loadUserNames(current));
+    }
+ catch (    IOException e) {
+      return new ErrorState(theConsole,MESSAGES.unableToLoadUsers(current.getAbsolutePath(),e.getMessage()),null,stateValues);
+    }
+  }
+  stateValues.setKnownUsers(foundUsers);
+  if (stateValues == null) {
+    return new PromptNewUserState(theConsole);
+  }
+ else {
+    return new PromptNewUserState(theConsole,stateValues);
+  }
+}
