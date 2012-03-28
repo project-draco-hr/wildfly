@@ -6,14 +6,24 @@
   final Channel.Key key=channel.addCloseHandler(new CloseHandler<Channel>(){
     @Override public void handleClose(    Channel closed,    IOException exception){
       handler.shutdown();
+      boolean interrupted=false;
       try {
-        handler.awaitCompletion(100,TimeUnit.MILLISECONDS);
+        if (!handler.awaitCompletion(CHANNEL_SHUTDOWN_TIMEOUT,TimeUnit.MILLISECONDS)) {
+          ROOT_LOGGER.gracefulManagementChannelHandlerShutdownTimedOut(CHANNEL_SHUTDOWN_TIMEOUT);
+        }
       }
- catch (      Exception e) {
+ catch (      InterruptedException e) {
+        interrupted=true;
+        ROOT_LOGGER.serviceShutdownIncomplete(e);
+      }
+catch (      Exception e) {
         ROOT_LOGGER.serviceShutdownIncomplete(e);
       }
  finally {
         handler.shutdownNow();
+        if (interrupted) {
+          Thread.currentThread().interrupt();
+        }
       }
     }
   }
