@@ -3,7 +3,19 @@
   final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
   try {
     final ObjectName on=LogStoreResource.getObjectName(resource);
-    mbs.invoke(on,"remove",null,null);
+    Object res=mbs.invoke(on,"remove",null,null);
+    try {
+      mbs.getObjectInstance(on);
+      String reason=res != null ? res.toString() : LOG_DELETE_FAILURE_MESSAGE;
+      throw new OperationFailedException(reason);
+    }
+ catch (    InstanceNotFoundException e) {
+      final PathAddress address=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR));
+      final PathElement element=address.getLastElement();
+      context.acquireControllerLock();
+      logStoreResource.removeChild(element);
+      context.completeStep();
+    }
   }
  catch (  Exception e) {
     throw new OperationFailedException(e.getMessage());
