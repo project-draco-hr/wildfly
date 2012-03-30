@@ -1,0 +1,32 @@
+{
+  final String realm=options.containsKey(REALM_OPTION) ? (String)options.get(REALM_OPTION) : DEFAULT_REALM;
+  super.initialize(subject,callbackHandler,sharedState,options);
+  securityRealm=AccessController.doPrivileged(new PrivilegedAction<SecurityRealm>(){
+    public SecurityRealm run(){
+      return SecurityRealmRegistry.lookup(realm);
+    }
+  }
+);
+  if (securityRealm == null) {
+    throw SecurityMessages.MESSAGES.realmNotFound(realm);
+  }
+  Class[] supportedCallbacks=securityRealm.getCallbackHandler().getSupportedCallbacks();
+  if (contains(VerifyPasswordCallback.class,supportedCallbacks)) {
+    validationMode=ValidationMode.VALIDATION;
+  }
+ else   if (contains(DigestHashCallback.class,supportedCallbacks)) {
+    validationMode=ValidationMode.DIGEST;
+    try {
+      hashUtil=new UsernamePasswordHashUtil();
+    }
+ catch (    NoSuchAlgorithmException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+ else   if (contains(PasswordCallback.class,supportedCallbacks)) {
+    validationMode=ValidationMode.PASSWORD;
+  }
+ else {
+    throw SecurityMessages.MESSAGES.noPasswordValidationAvailable(realm);
+  }
+}
