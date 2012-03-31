@@ -1,11 +1,13 @@
 {
   GlobalConfigurationBuilder builder=new GlobalConfigurationBuilder();
-  ClassLoader loader=this.dependencies.getClassLoader();
-  if (loader == null) {
-    loader=EmbeddedCacheManagerConfiguration.class.getClassLoader();
+  ModuleLoader moduleLoader=this.dependencies.getModuleLoader();
+  try {
+    builder.classLoader((this.moduleId != null) ? moduleLoader.loadModule(this.moduleId).getClassLoader() : EmbeddedCacheManagerConfiguration.class.getClassLoader());
   }
-  builder.classLoader(loader);
-  builder.serialization().classResolver(ModularClassResolver.getInstance(this.dependencies.getModuleLoader()));
+ catch (  ModuleLoadException e) {
+    throw new StartException(e);
+  }
+  builder.serialization().classResolver(ModularClassResolver.getInstance(moduleLoader));
   builder.shutdown().hookBehavior(ShutdownHookBehavior.DONT_REGISTER);
   TransportConfiguration transport=this.dependencies.getTransportConfiguration();
   TransportConfigurationBuilder transportBuilder=builder.transport();
@@ -58,4 +60,5 @@
     jmxBuilder.disable();
   }
   this.config=builder.build();
+  System.out.println(this.name + " cache container will use " + this.config.classLoader());
 }
