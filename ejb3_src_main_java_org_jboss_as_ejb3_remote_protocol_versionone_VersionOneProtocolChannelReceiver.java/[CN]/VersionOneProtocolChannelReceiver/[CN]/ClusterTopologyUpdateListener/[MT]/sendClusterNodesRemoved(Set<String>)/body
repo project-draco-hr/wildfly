@@ -1,11 +1,20 @@
 {
-  final DataOutputStream outputStream=new DataOutputStream(this.channelReceiver.channel.writeMessage());
+  final DataOutputStream outputStream;
+  final MessageOutputStream messageOutputStream;
+  try {
+    messageOutputStream=channelAssociation.acquireChannelMessageOutputStream();
+  }
+ catch (  Exception e) {
+    throw EjbMessages.MESSAGES.failedToOpenMessageOutputStream(e);
+  }
+  outputStream=new DataOutputStream(messageOutputStream);
   final ClusterTopologyWriter clusterTopologyWriter=new ClusterTopologyWriter();
   try {
-    logger.debug(removedNodes.size() + " nodes removed from cluster " + clusterName+ ", writing a protocol message to channel "+ this.channelReceiver.channel);
+    logger.debug(removedNodes.size() + " nodes removed from cluster " + clusterName+ ", writing a protocol message to channel "+ this.channelReceiver.channelAssociation.getChannel());
     clusterTopologyWriter.writeNodesRemoved(outputStream,clusterName,removedNodes);
   }
   finally {
+    channelAssociation.releaseChannelMessageOutputStream(messageOutputStream);
     outputStream.close();
   }
 }
