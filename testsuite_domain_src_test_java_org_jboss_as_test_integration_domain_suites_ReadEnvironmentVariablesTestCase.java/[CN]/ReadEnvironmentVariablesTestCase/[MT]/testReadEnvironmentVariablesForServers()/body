@@ -1,0 +1,35 @@
+{
+  DomainClient client=domainMasterLifecycleUtil.createDomainClient();
+  DomainDeploymentManager manager=client.getDeploymentManager();
+  try {
+    WebArchive archive=ShrinkWrap.create(WebArchive.class,"env-test.war").addClass(EnvironmentTestServlet.class);
+    archive.addAsResource(new StringAsset("Manifest-Version: 1.0\nDependencies: org.jboss.dmr \n"),"META-INF/MANIFEST.MF");
+    System.out.println(archive.toString(true));
+    final InputStream contents=archive.as(ZipExporter.class).exportAsInputStream();
+    try {
+      DeploymentPlan plan=manager.newDeploymentPlan().add("env-test.war",contents).deploy("env-test.war").toServerGroup("main-server-group").toServerGroup("other-server-group").build();
+      DeploymentPlanResult result=manager.execute(plan).get();
+      Assert.assertTrue(result.isValid());
+    }
+  finally {
+      IoUtils.safeClose(contents);
+    }
+    Map<String,String> env=getEnvironmentVariables(client,"master","main-one","standard-sockets");
+    checkEnvironmentVariable(env,"DOMAIN_TEST_MAIN_GROUP","main_group");
+    checkEnvironmentVariable(env,"DOMAIN_TEST_SERVER","server");
+    checkEnvironmentVariable(env,"DOMAIN_TEST_JVM","jvm");
+    env=getEnvironmentVariables(client,"slave","main-three","standard-sockets");
+    checkEnvironmentVariable(env,"DOMAIN_TEST_MAIN_GROUP","main_group");
+    Assert.assertFalse(env.containsKey("DOMAIN_TEST_SERVER"));
+    Assert.assertFalse(env.containsKey("DOMAIN_TEST_JVM"));
+    env=getEnvironmentVariables(client,"slave","other-two","osgi-sockets");
+    Assert.assertFalse(env.containsKey("DOMAIN_TEST_MAIN_GROUP"));
+    Assert.assertFalse(env.containsKey("DOMAIN_TEST_SERVER"));
+    Assert.assertFalse(env.containsKey("DOMAIN_TEST_JVM"));
+  }
+  finally {
+    DeploymentPlanResult result=manager.execute(manager.newDeploymentPlan().undeploy("env-test.war").build()).get();
+    Assert.assertTrue(result.isValid());
+    IoUtils.safeClose(client);
+  }
+}
