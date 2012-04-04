@@ -1,30 +1,35 @@
 {
   InputStream in=null;
-  String message="";
   if (operation.hasDefined(INPUT_STREAM_INDEX)) {
     int streamIndex=operation.get(INPUT_STREAM_INDEX).asInt();
-    message="Null stream at index " + streamIndex;
+    int maxIndex=context.getAttachmentStreamCount();
+    if (streamIndex > maxIndex) {
+      throw ServerMessages.MESSAGES.invalidStreamIndex(INPUT_STREAM_INDEX,streamIndex,maxIndex);
+    }
     in=context.getAttachmentStream(streamIndex);
   }
  else   if (operation.hasDefined(BYTES)) {
-    message="Invalid byte stream.";
-    in=new ByteArrayInputStream(operation.get(BYTES).asBytes());
+    try {
+      in=new ByteArrayInputStream(operation.get(BYTES).asBytes());
+    }
+ catch (    IllegalArgumentException iae) {
+      throw ServerMessages.MESSAGES.invalidStreamBytes(BYTES);
+    }
   }
  else   if (operation.hasDefined(URL)) {
     final String urlSpec=operation.get(URL).asString();
     try {
-      message="Invalid url stream.";
       in=new URL(urlSpec).openStream();
     }
  catch (    MalformedURLException e) {
-      throw createFailureException(message);
+      throw ServerMessages.MESSAGES.invalidStreamURL(e,urlSpec);
     }
 catch (    IOException e) {
-      throw createFailureException(message);
+      throw ServerMessages.MESSAGES.invalidStreamURL(e,urlSpec);
     }
   }
   if (in == null) {
-    throw createFailureException(message);
+    throw new IllegalStateException();
   }
   return in;
 }
