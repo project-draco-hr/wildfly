@@ -1,0 +1,23 @@
+{
+  context.acquireControllerLock();
+  final Resource root=context.readResource(PathAddress.EMPTY_ADDRESS);
+  final ModelNode hostInfo=registrationContext.hostInfo;
+  boolean as711=hostInfo.get(MANAGEMENT_MAJOR_VERSION).asInt() == 1 && hostInfo.get(MANAGEMENT_MINOR_VERSION).asInt() == 1;
+  final ModelNode subsystems;
+  if (as711) {
+    throw new OperationFailedException("Host controller version too old, Only 7.1.2 or higer are supported!");
+  }
+ else {
+    final ModelNode extensions=new ModelNode();
+    final Collection<Resource.ResourceEntry> resources=root.getChildren(EXTENSION);
+    for (    final Resource.ResourceEntry entry : resources) {
+      extensions.add(entry.getName());
+    }
+    subsystems=registrationContext.resolveSubsystemVersions(extensions);
+  }
+  final ReadMasterDomainModelHandler handler=new ReadMasterDomainModelHandler(registrationContext.transformers);
+  final ModelNode op=READ_DOMAIN_MODEL.clone();
+  op.get(SUBSYSTEM).set(subsystems);
+  context.addStep(op,handler,OperationContext.Stage.MODEL);
+  context.completeStep();
+}

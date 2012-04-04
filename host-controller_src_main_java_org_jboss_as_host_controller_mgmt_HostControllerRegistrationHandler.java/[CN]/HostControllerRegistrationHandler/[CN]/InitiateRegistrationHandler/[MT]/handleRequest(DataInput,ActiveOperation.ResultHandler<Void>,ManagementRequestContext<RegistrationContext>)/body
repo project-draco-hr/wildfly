@@ -1,0 +1,36 @@
+{
+  expectHeader(input,DomainControllerProtocol.PARAM_HOST_ID);
+  final String hostName=input.readUTF();
+  final ModelNode hostInfo=new ModelNode();
+  hostInfo.readExternal(input);
+  final RegistrationContext registration=context.getAttachment();
+  registration.initialize(hostName,hostInfo,context);
+  if (domainController.isHostRegistered(hostName)) {
+    registration.failed(SlaveRegistrationException.ErrorCode.HOST_ALREADY_EXISTS,DomainControllerMessages.MESSAGES.slaveAlreadyRegistered(hostName));
+  }
+  context.executeAsync(new ManagementRequestContext.AsyncTask<RegistrationContext>(){
+    @Override public void execute(    ManagementRequestContext<RegistrationContext> context) throws Exception {
+      final Channel channel=context.getChannel();
+      final ModelNode result;
+      try {
+        final OperationStepHandler handler=new HostRegistrationStepHandler(registration);
+        operationExecutor.execute(READ_DOMAIN_MODEL,OperationMessageHandler.logging,registration,OperationAttachments.EMPTY,handler);
+      }
+ catch (      Exception e) {
+        registration.failed(SlaveRegistrationException.ErrorCode.UNKNOWN,e.getClass().getName() + ":" + e.getMessage());
+        return;
+      }
+      registration.sendCompletedMessage();
+      channel.addCloseHandler(new CloseHandler<Channel>(){
+        @Override public void handleClose(        Channel closed,        IOException exception){
+          if (domainController.isHostRegistered(hostName)) {
+            DOMAIN_LOGGER.lostConnectionToRemoteHost(hostName);
+          }
+          domainController.unregisterRemoteHost(hostName);
+        }
+      }
+);
+    }
+  }
+);
+}

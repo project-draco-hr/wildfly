@@ -1,0 +1,34 @@
+{
+synchronized (this) {
+    if (domainController.isHostRegistered(hostName)) {
+      failed(SlaveRegistrationException.ErrorCode.HOST_ALREADY_EXISTS,DomainControllerMessages.MESSAGES.slaveAlreadyRegistered(hostName));
+      throw new IllegalStateException();
+    }
+    try {
+      sendResponse(responseChannel,DomainControllerProtocol.PARAM_OK,extensions);
+    }
+ catch (    IOException e) {
+      ProtocolLogger.ROOT_LOGGER.debugf(e,"failed to process message");
+      failed(SlaveRegistrationException.ErrorCode.UNKNOWN,e.getClass().getName() + ":" + e.getMessage());
+      throw new IllegalStateException(e);
+    }
+  }
+  try {
+    subsystemsLatch.await();
+  }
+ catch (  InterruptedException e) {
+    failed(SlaveRegistrationException.ErrorCode.UNKNOWN,e.getClass().getName() + ":" + e.getMessage());
+    throw new IllegalStateException(e);
+  }
+  if (failed) {
+    throw new IllegalStateException();
+  }
+  final ModelNode subsystems;
+synchronized (this) {
+    subsystems=this.subsystems;
+  }
+  if (subsystems == null) {
+    throw new IllegalStateException();
+  }
+  return subsystems;
+}

@@ -1,0 +1,53 @@
+{
+  boolean subsystem=address.size() > 0 && !ModelDescriptionConstants.EXTENSION.equals(address.getElement(0).getKey()) && ModelDescriptionConstants.SUBSYSTEM.equals(address.getLastElement().getKey());
+  if (subsystem) {
+    String subsystemName=address.getLastElement().getValue();
+    if (subsystemVersions.containsKey(subsystemName)) {
+      String[] version=subsystemVersions.get(subsystemName).split("\\.");
+      int major=Integer.parseInt(version[0]);
+      int minor=Integer.parseInt(version[1]);
+      SubsystemInformation info=extensionRegistry.getSubsystemInfo(subsystemName);
+      if (info.getManagementInterfaceMajorVersion() == major && info.getManagementInterfaceMinorVersion() == minor) {
+        return resource;
+      }
+      log.info("transforming subsystem: " + subsystem + ", to model version: "+ subsystemVersions.get(subsystemName));
+      SubsystemTransformer transformer=extensionRegistry.getTransformerRegistry().getSubsystemTransformer(subsystemName,major,minor);
+      if (transformer != null) {
+        ResourceDefinition rd=TransformerRegistry.loadSubsystemDefinition(subsystemName,major,minor);
+        ManagementResourceRegistration targetDefinition=ManagementResourceRegistration.Factory.create(rd);
+        ModelNode fullSubsystemModel=Resource.Tools.readModel(resource);
+        ModelNode transformed=transformer.transformModel(null,fullSubsystemModel);
+        return TransformerRegistry.modelToResource(targetDefinition,transformed);
+      }
+ else {
+        log.warn("We have no transformer for subsystem: " + subsystemName + "-"+ major+ "."+ minor+ " model transfer can break!");
+      }
+    }
+    return resource;
+  }
+  for (  PathElement element : registration.getChildAddresses(PathAddress.EMPTY_ADDRESS)) {
+    if (element.isMultiTarget()) {
+      final String childType=element.getKey();
+      for (      final Resource.ResourceEntry entry : resource.getChildren(childType)) {
+        final ImmutableManagementResourceRegistration childRegistration=registration.getSubModel(PathAddress.pathAddress(PathElement.pathElement(childType,entry.getName())));
+        Resource res=resolveRecursive(entry,childRegistration,address.append(entry.getPathElement()),subsystemVersions);
+        if (!res.equals(entry)) {
+          resource.removeChild(entry.getPathElement());
+          resource.registerChild(entry.getPathElement(),res);
+        }
+      }
+    }
+ else {
+      final Resource child=resource.getChild(element);
+      final ImmutableManagementResourceRegistration childRegistration=registration.getSubModel(PathAddress.pathAddress(element));
+      if (child != null) {
+        Resource res=resolveRecursive(child,childRegistration,address.append(element),subsystemVersions);
+        if (!res.equals(child)) {
+          resource.removeChild(element);
+          resource.registerChild(element,res);
+        }
+      }
+    }
+  }
+  return resource;
+}
