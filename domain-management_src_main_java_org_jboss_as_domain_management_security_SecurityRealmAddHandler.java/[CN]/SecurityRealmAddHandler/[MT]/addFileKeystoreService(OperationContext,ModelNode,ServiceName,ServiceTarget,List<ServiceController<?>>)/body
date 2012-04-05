@@ -1,6 +1,12 @@
 {
-  char[] password=unmaskPassword(context,ssl.require(KEYSTORE_PASSWORD));
-  FileKeystoreService fileKeystoreService=new FileKeystoreService(ssl.require(KEYSTORE_PATH).asString(),password);
+  char[] keystorePassword=unmaskPassword(context,ssl.require(KEYSTORE_PASSWORD));
+  char[] keyPassword=null;
+  if (ssl.hasDefined(KEY_PASSWORD)) {
+    keyPassword=unmaskPassword(context,ssl.require(KEY_PASSWORD));
+  }
+  String path=ssl.require(KEYSTORE_PATH).asString();
+  String alias=ssl.hasDefined(ALIAS) ? ssl.require(ALIAS).asString() : null;
+  FileKeystoreService fileKeystoreService=new FileKeystoreService(path,keystorePassword,alias,keyPassword);
   ServiceBuilder<?> serviceBuilder=serviceTarget.addService(serviceName,fileKeystoreService);
   if (ssl.hasDefined(KEYSTORE_RELATIVE_TO)) {
     serviceBuilder.addDependency(pathName(ssl.require(KEYSTORE_RELATIVE_TO).asString()),String.class,fileKeystoreService.getRelativeToInjector());
@@ -9,5 +15,8 @@
   if (newControllers != null) {
     newControllers.add(serviceController);
   }
-  return password;
+  KeyPair pair=new KeyPair();
+  pair.keystorePassword=keystorePassword;
+  pair.keyPassword=keyPassword;
+  return pair;
 }
