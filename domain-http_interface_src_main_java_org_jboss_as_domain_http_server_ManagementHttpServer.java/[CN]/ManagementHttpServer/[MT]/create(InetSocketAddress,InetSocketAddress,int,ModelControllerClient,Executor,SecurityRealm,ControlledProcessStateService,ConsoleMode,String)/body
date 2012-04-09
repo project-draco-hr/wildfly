@@ -1,0 +1,82 @@
+{
+  Map<String,String> configuration=Collections.emptyMap();
+  Authenticator auth=null;
+  final CertAuth certAuthMode;
+  if (securityRealm != null) {
+    DomainCallbackHandler callbackHandler=securityRealm.getCallbackHandler();
+    Class<Callback>[] supportedCallbacks=callbackHandler.getSupportedCallbacks();
+    if (DigestAuthenticator.requiredCallbacksSupported(supportedCallbacks)) {
+      auth=new DigestAuthenticator(new AuthenticationProvider(securityRealm),securityRealm.getName(),contains(DigestHashCallback.class,supportedCallbacks));
+    }
+ else     if (BasicAuthenticator.requiredCallbacksSupported(supportedCallbacks)) {
+      auth=new BasicAuthenticator(new AuthenticationProvider(securityRealm),securityRealm.getName());
+    }
+    if (securityRealm.hasTrustStore()) {
+      if (auth == null) {
+        certAuthMode=CertAuth.NEED;
+        auth=new ClientCertAuthenticator(new AuthenticationProvider(securityRealm),securityRealm.getName());
+      }
+ else {
+        certAuthMode=CertAuth.WANT;
+      }
+    }
+ else {
+      certAuthMode=CertAuth.NONE;
+    }
+  }
+ else {
+    certAuthMode=CertAuth.NONE;
+  }
+  HttpServer httpServer=null;
+  if (bindAddress != null) {
+    httpServer=HttpServer.create(bindAddress,backlog,configuration);
+    httpServer.setExecutor(executor);
+  }
+  HttpsServer secureHttpServer=null;
+  if (secureBindAddress != null) {
+    secureHttpServer=HttpsServer.create(secureBindAddress,backlog,configuration);
+    final SSLContext context=securityRealm.getSSLContext();
+    if (context != null) {
+      secureHttpServer.setHttpsConfigurator(new HttpsConfigurator(context){
+        @Override public void configure(        HttpsParameters params){
+          SSLParameters sslparams=context.getDefaultSSLParameters();
+switch (certAuthMode) {
+case NEED:
+            sslparams.setNeedClientAuth(true);
+          break;
+case WANT:
+        sslparams.setWantClientAuth(true);
+      break;
+  }
+  params.setSSLParameters(sslparams);
+}
+}
+);
+secureHttpServer.setExecutor(executor);
+}
+ else {
+ROOT_LOGGER.sslConfigurationNotFound();
+}
+}
+ManagementHttpServer managementHttpServer=new ManagementHttpServer(httpServer,secureHttpServer,securityRealm);
+ResourceHandler consoleHandler=null;
+try {
+consoleHandler=consoleMode.createConsoleHandler(consoleSlot);
+}
+ catch (ModuleLoadException e) {
+HttpServerLogger.ROOT_LOGGER.consoleModuleNotFound(consoleSlot == null ? "main" : consoleSlot);
+}
+managementHttpServer.addHandler(new RootHandler(consoleHandler));
+managementHttpServer.addHandler(new DomainApiHandler(modelControllerClient,auth,controlledProcessStateService));
+if (consoleHandler != null) {
+managementHttpServer.addHandler(consoleHandler);
+}
+try {
+managementHttpServer.addHandler(new ErrorHandler(consoleSlot));
+}
+ catch (ModuleLoadException e) {
+throw new IOException("Unable to load resource handler",e);
+}
+managementHttpServer.addHandler(new LogoutHandler());
+return managementHttpServer;
+}
