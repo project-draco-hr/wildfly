@@ -1,11 +1,9 @@
 {
-  final List<ModelNode> attrUpdates=new ArrayList<ModelNode>();
+  ModelNode addOp=new ModelNode();
+  addOp.get(OP).set(ADD);
   String name=null;
-  String type=null;
-  String home=null;
   Boolean debugEnabled=null;
   String debugOptions=null;
-  Boolean envClasspathIgnored=null;
   final int count=reader.getAttributeCount();
   for (int i=0; i < count; i++) {
     final String value=reader.getAttributeValue(i);
@@ -26,17 +24,13 @@ case NAME:
         }
 case JAVA_HOME:
 {
-        if (home != null)         throw ParseUtils.duplicateAttribute(reader,attribute.getLocalName());
-        home=value;
-        final ModelNode update=Util.getWriteAttributeOperation(null,JVMHandlers.JVM_JAVA_HOME,home);
-        attrUpdates.add(update);
+        JvmAttributes.JAVA_HOME.parseAndSetParameter(value,addOp,reader);
         break;
       }
 case TYPE:
 {
       try {
-        Enum.valueOf(JvmType.class,value);
-        type=value;
+        JvmAttributes.TYPE.parseAndSetParameter(value,addOp,reader);
       }
  catch (      final IllegalArgumentException e) {
         throw ParseUtils.invalidAttributeValue(reader,i);
@@ -48,12 +42,8 @@ case DEBUG_ENABLED:
     if (!server) {
       throw ParseUtils.unexpectedAttribute(reader,i);
     }
-    if (debugEnabled != null) {
-      throw ParseUtils.duplicateAttribute(reader,attribute.getLocalName());
-    }
     debugEnabled=Boolean.valueOf(value);
-    final ModelNode update=Util.getWriteAttributeOperation(null,JVMHandlers.JVM_DEBUG_ENABLED,debugEnabled);
-    attrUpdates.add(update);
+    JvmAttributes.DEBUG_ENABLED.parseAndSetParameter(value,addOp,reader);
     break;
   }
 case DEBUG_OPTIONS:
@@ -61,20 +51,13 @@ case DEBUG_OPTIONS:
   if (!server) {
     throw ParseUtils.unexpectedAttribute(reader,i);
   }
-  if (debugOptions != null) {
-    throw ParseUtils.duplicateAttribute(reader,attribute.getLocalName());
-  }
   debugOptions=value;
-  final ModelNode update=Util.getWriteAttributeOperation(null,JVMHandlers.JVM_DEBUG_OPTIONS,debugOptions);
-  attrUpdates.add(update);
+  JvmAttributes.DEBUG_OPTIONS.parseAndSetParameter(value,addOp,reader);
   break;
 }
 case ENV_CLASSPATH_IGNORED:
 {
-if (envClasspathIgnored != null) throw ParseUtils.duplicateAttribute(reader,attribute.getLocalName());
-envClasspathIgnored=Boolean.valueOf(value);
-final ModelNode update=Util.getWriteAttributeOperation(null,JVMHandlers.JVM_ENV_CLASSPATH_IGNORED,envClasspathIgnored);
-attrUpdates.add(update);
+JvmAttributes.ENV_CLASSPATH_IGNORED.parseAndSetParameter(value,addOp,reader);
 break;
 }
 default :
@@ -90,13 +73,8 @@ throw ParseUtils.missingRequired(reader,EnumSet.of(Attribute.DEBUG_OPTIONS));
 }
 final ModelNode address=parentAddress.clone();
 address.add(ModelDescriptionConstants.JVM,name);
-final ModelNode addUpdate=Util.getEmptyOperation(ADD,address);
-if (type != null) addUpdate.get(JVM_TYPE).set(type);
-updates.add(addUpdate);
-for (final ModelNode attrUpdate : attrUpdates) {
-attrUpdate.get(OP_ADDR).set(address);
-updates.add(attrUpdate);
-}
+addOp.get(OP_ADDR).set(address);
+updates.add(addOp);
 boolean hasJvmOptions=false;
 boolean hasEnvironmentVariables=false;
 while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
@@ -105,32 +83,32 @@ final Element element=Element.forName(reader.getLocalName());
 switch (element) {
 case HEAP:
 {
-parseHeap(reader,address,updates);
+parseHeap(reader,address,addOp);
 break;
 }
 case PERMGEN:
 {
-parsePermgen(reader,address,updates);
+parsePermgen(reader,address,addOp);
 break;
 }
 case STACK:
 {
-parseStack(reader,address,updates);
+parseStack(reader,address,addOp);
 break;
 }
 case AGENT_LIB:
 {
-parseAgentLib(reader,address,updates);
+parseAgentLib(reader,address,addOp);
 break;
 }
 case AGENT_PATH:
 {
-parseAgentPath(reader,address,updates);
+parseAgentPath(reader,address,addOp);
 break;
 }
 case JAVA_AGENT:
 {
-parseJavaagent(reader,address,updates);
+parseJavaagent(reader,address,addOp);
 break;
 }
 case ENVIRONMENT_VARIABLES:
@@ -138,7 +116,7 @@ case ENVIRONMENT_VARIABLES:
 if (hasEnvironmentVariables) {
 throw MESSAGES.alreadyDefined(element.getLocalName(),reader.getLocation());
 }
-updates.add(Util.getWriteAttributeOperation(address,JVMHandlers.JVM_ENV_VARIABLES,CommonXml.parseEnvironmentVariables(reader,expectedNs)));
+parseEnvironmentVariables(reader,expectedNs,addOp);
 hasEnvironmentVariables=true;
 break;
 }
@@ -147,7 +125,7 @@ case JVM_OPTIONS:
 if (hasJvmOptions) {
 throw MESSAGES.alreadyDefined(element.getLocalName(),reader.getLocation());
 }
-parseJvmOptions(reader,address,expectedNs,updates);
+parseJvmOptions(reader,address,expectedNs,addOp);
 hasJvmOptions=true;
 break;
 }
