@@ -1,34 +1,30 @@
 {
-  serviceController=context.getController();
+  ServiceController<?> serviceController=context.getController();
   LOGGER.debugf("Starting: %s in mode %s",serviceController.getName(),serviceController.getMode());
-  final Map<ServiceName,OSGiCapability> installedServices=new LinkedHashMap<ServiceName,OSGiCapability>();
+  final Map<ServiceName,Deployment> installedBundles=new LinkedHashMap<ServiceName,Deployment>();
   final Set<ServiceName> resolvableServices=new LinkedHashSet<ServiceName>();
   final BundleContext syscontext=injectedSystemBundle.getValue().getBundleContext();
-  final String slstr=syscontext.getProperty(Constants.FRAMEWORK_BEGINNING_STARTLEVEL);
-  final Integer beginningStartLevel=Integer.parseInt(slstr != null ? slstr : "1");
+  final String startLevelProp=syscontext.getProperty(Constants.FRAMEWORK_BEGINNING_STARTLEVEL);
+  final int beginningStartLevel=startLevelProp != null ? Integer.parseInt(startLevelProp) : 1;
   try {
-    final BundleManagerService bundleManager=injectedBundleManager.getValue();
-    final ServiceContainer serviceContainer=serviceController.getServiceContainer();
-    serviceTarget=context.getChildTarget();
+    ServiceTarget serviceTarget=context.getChildTarget();
     ServerEnvironment serverEnvironment=injectedServerEnvironment.getValue();
     bundlesDir=serverEnvironment.getBundlesDir();
-    if (bundlesDir.isDirectory() == false)     throw MESSAGES.cannotFindBundleDir(bundlesDir);
-    injectedSubsystemState.getValue().addObserver(this);
+    if (bundlesDir.isDirectory() == false)     throw MESSAGES.illegalStateCannotFindBundleDir(bundlesDir);
     List<OSGiCapability> configcaps=new ArrayList<OSGiCapability>();
     configcaps.add(new OSGiCapability("org.osgi.enterprise",null));
     configcaps.addAll(injectedSubsystemState.getValue().getCapabilities());
     for (    OSGiCapability moduleMetaData : configcaps) {
-      ServiceName serviceName=installModule(bundleManager,moduleMetaData);
-      if (serviceName != null) {
-        installedServices.put(serviceName,moduleMetaData);
-        if (moduleMetaData.getStartLevel() <= beginningStartLevel) {
-          resolvableServices.add(serviceName);
-        }
+      ServiceName serviceName=installCapability(serviceTarget,moduleMetaData,installedBundles);
+      int startLevel=moduleMetaData.getStartLevel() != null ? moduleMetaData.getStartLevel() : 1;
+      if (serviceName != null && startLevel <= beginningStartLevel) {
+        resolvableServices.add(serviceName);
       }
     }
-    ServiceBuilder<Void> builder=serviceTarget.addService(Services.AUTOINSTALL_PROVIDER_COMPLETE,new AbstractService<Void>(){
-      public void start(      StartContext context) throws StartException {
+    AutoInstallProviderComplete installComplete=new AutoInstallProviderComplete(installedBundles){
+      @Override public void start(      StartContext context) throws StartException {
         Set<Bundle> resolvableBundles=new LinkedHashSet<Bundle>();
+        ServiceContainer serviceContainer=context.getController().getServiceContainer();
         for (        ServiceName serviceName : resolvableServices) {
           ServiceController<?> requiredService=serviceContainer.getRequiredService(serviceName);
           resolvableBundles.add((Bundle)requiredService.getValue());
@@ -36,21 +32,13 @@
         Bundle[] bundleArr=resolvableBundles.toArray(new Bundle[resolvableBundles.size()]);
         PackageAdmin packageAdmin=injectedPackageAdmin.getValue();
         packageAdmin.resolveBundles(bundleArr);
-        for (        ServiceName serviceName : resolvableServices) {
-          OSGiCapability moduleMetaData=installedServices.get(serviceName);
-          ServiceController<?> controller=serviceContainer.getRequiredService(serviceName);
-          Bundle bundle=(Bundle)controller.getValue();
-          startBundle(bundle,moduleMetaData.getStartLevel());
-        }
-        LOGGER.debugf("Auto bundles bundles started");
+        super.start(context);
       }
     }
-);
-    ServiceName[] serviceNameArray=resolvableServices.toArray(new ServiceName[resolvableServices.size()]);
-    builder.addDependencies(serviceNameArray);
-    builder.install();
+;
+    installComplete.install(serviceTarget);
   }
  catch (  Exception ex) {
-    throw new StartException(MESSAGES.failedToCreateAutoInstallList(),ex);
+    throw MESSAGES.startFailedToProcessInitialCapabilites(ex);
   }
 }
