@@ -2,12 +2,18 @@
   List<String> mechanisms=new LinkedList<String>();
   Set<Property> properties=new HashSet<Property>();
   Builder builder=OptionMap.builder();
-  mechanisms.add(JBOSS_LOCAL_USER);
-  builder.set(SASL_POLICY_NOPLAINTEXT,false);
-  properties.add(Property.of(LOCAL_DEFAULT_USER,DOLLAR_LOCAL));
-  if (tokensDir != null) {
-    properties.add(Property.of(LOCAL_USER_CHALLENGE_PATH,tokensDir));
+  LocalCallbackHandler localHandler=realm != null ? realm.getLocalCallbackHandler() : null;
+  if (localHandler != null) {
+    mechanisms.add(JBOSS_LOCAL_USER);
+    String defaultUser=localHandler.getDefaultUser();
+    if (defaultUser != null) {
+      properties.add(Property.of(LOCAL_DEFAULT_USER,defaultUser));
+    }
+    if (tokensDir != null) {
+      properties.add(Property.of(LOCAL_USER_CHALLENGE_PATH,tokensDir));
+    }
   }
+  builder.set(SASL_POLICY_NOPLAINTEXT,false);
   if (digestMd5Supported()) {
     mechanisms.add(DIGEST_MD5);
     properties.add(Property.of(REALM_PROPERTY,realm.getName()));
@@ -38,7 +44,7 @@ mechanisms.add(0,EXTERNAL);
 builder.set(SSL_CLIENT_AUTH_MODE,REQUESTED);
 break;
 }
-if (mechanisms.size() == 1) {
+if (mechanisms.size() == 0) {
 throw MESSAGES.noSupportingMechanismsForRealm();
 }
 builder.set(SASL_MECHANISMS,Sequence.of(mechanisms));
