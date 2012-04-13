@@ -1,8 +1,8 @@
 {
   requireSingleAttribute(reader,CommonAttributes.NAME);
   String name=reader.getAttributeValue(0);
-  ModelNode bridgeAdd=org.jboss.as.controller.operations.common.Util.getEmptyOperation(ADD,address.clone().add(CommonAttributes.BRIDGE,name));
-  EnumSet<Element> required=EnumSet.of(Element.QUEUE_NAME);
+  ModelNode clusterConnectionAdd=getEmptyOperation(ADD,address.clone().add(CommonAttributes.CLUSTER_CONNECTION,name));
+  EnumSet<Element> required=EnumSet.of(Element.ADDRESS,Element.CONNECTOR_REF);
   Set<Element> seen=EnumSet.noneOf(Element.class);
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
     final Element element=Element.forName(reader.getLocalName());
@@ -11,35 +11,37 @@
     }
     required.remove(element);
 switch (element) {
-case QUEUE_NAME:
-case HA:
-case TRANSFORMER_CLASS_NAME:
-case RETRY_INTERVAL_MULTIPLIER:
-case FAILOVER_ON_SERVER_SHUTDOWN:
+case CALL_TIMEOUT:
 case CONFIRMATION_WINDOW_SIZE:
-case USER:
-case PASSWORD:
-      handleElementText(reader,element,bridgeAdd);
+case FORWARD_WHEN_NO_CONSUMERS:
+case MAX_HOPS:
+case MIN_LARGE_MESSAGE_SIZE:
+      handleElementText(reader,element,clusterConnectionAdd);
     break;
-case FILTER:
+case ADDRESS:
 {
-    String string=readStringAttributeElement(reader,CommonAttributes.STRING);
-    FILTER.parseAndSetParameter(string,bridgeAdd,reader);
+    handleElementText(reader,element,CommonAttributes.CLUSTER_CONNECTION_ADDRESS.getName(),clusterConnectionAdd);
     break;
   }
-case RETRY_INTERVAL:
-handleElementText(reader,element,"default",bridgeAdd);
-break;
-case FORWARDING_ADDRESS:
+case CONNECTOR_REF:
+{
+  handleElementText(reader,element,"simple",clusterConnectionAdd);
+  break;
+}
+case CHECK_PERIOD:
+case CONNECTION_TTL:
+case MAX_RETRY_INTERVAL:
 case RECONNECT_ATTEMPTS:
+case RETRY_INTERVAL:
+case RETRY_INTERVAL_MULTIPLIER:
 case USE_DUPLICATE_DETECTION:
-handleElementText(reader,element,"bridge",bridgeAdd);
+handleElementText(reader,element,"cluster",clusterConnectionAdd);
 break;
 case STATIC_CONNECTORS:
 if (seen.contains(Element.DISCOVERY_GROUP_REF)) {
 throw new XMLStreamException(MESSAGES.illegalElement(STATIC_CONNECTORS,DISCOVERY_GROUP_REF),reader.getLocation());
 }
-processStaticConnectors(reader,bridgeAdd,false);
+processStaticConnectors(reader,clusterConnectionAdd,true);
 break;
 case DISCOVERY_GROUP_REF:
 {
@@ -47,7 +49,7 @@ if (seen.contains(Element.STATIC_CONNECTORS)) {
 throw new XMLStreamException(MESSAGES.illegalElement(DISCOVERY_GROUP_REF,STATIC_CONNECTORS),reader.getLocation());
 }
 final String groupRef=readStringAttributeElement(reader,DISCOVERY_GROUP_NAME.getXmlName());
-DISCOVERY_GROUP_NAME.parseAndSetParameter(groupRef,bridgeAdd,reader);
+DISCOVERY_GROUP_NAME.parseAndSetParameter(groupRef,clusterConnectionAdd,reader);
 break;
 }
 default :
@@ -56,11 +58,8 @@ throw ParseUtils.unexpectedElement(reader);
 }
 }
 }
-if (!seen.contains(Element.STATIC_CONNECTORS) && !seen.contains(Element.DISCOVERY_GROUP_REF)) {
-throw new XMLStreamException(MESSAGES.required(Element.STATIC_CONNECTORS.getLocalName(),Element.DISCOVERY_GROUP_REF.getLocalName()),reader.getLocation());
-}
 if (!required.isEmpty()) {
 missingRequired(reader,required);
 }
-updates.add(bridgeAdd);
+updates.add(clusterConnectionAdd);
 }
