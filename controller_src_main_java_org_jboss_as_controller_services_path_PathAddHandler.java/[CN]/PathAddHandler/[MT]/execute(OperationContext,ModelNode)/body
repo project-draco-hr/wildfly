@@ -9,12 +9,14 @@
   if (services) {
     final String path=getPathValue(context,PATH_SPECIFIED,model);
     final String relativeTo=getPathValue(context,RELATIVE_TO,model);
+    final PathEventContextImpl pathEventContext=pathManager.checkRestartRequired(context,name,Event.ADDED);
+    if (pathEventContext.isInstallServices()) {
+      pathManager.addPathEntry(name,path,relativeTo,false);
+    }
     context.addStep(new OperationStepHandler(){
       public void execute(      final OperationContext context,      final ModelNode operation) throws OperationFailedException {
-        final PathEventContextImpl pathEventContext=pathManager.checkRestartRequired(context,name,Event.ADDED);
         final ServiceController<?> legacyService;
         if (pathEventContext.isInstallServices()) {
-          pathManager.addPathEntry(name,path,relativeTo,false);
           final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
           final ServiceTarget target=context.getServiceTarget();
           if (relativeTo == null) {
@@ -35,12 +37,6 @@
               if (legacyService != null) {
                 context.removeService(legacyService.getName());
               }
-              try {
-                pathManager.removePathEntry(name,false);
-              }
- catch (              OperationFailedException e) {
-                throw new RuntimeException(e);
-              }
             }
  else {
               pathEventContext.revert();
@@ -51,6 +47,21 @@
       }
     }
 ,OperationContext.Stage.RUNTIME);
+    context.completeStep(new OperationContext.RollbackHandler(){
+      public void handleRollback(      OperationContext context,      ModelNode operation){
+        if (pathEventContext.isInstallServices()) {
+          try {
+            pathManager.removePathEntry(name,false);
+          }
+ catch (          OperationFailedException e) {
+            throw new RuntimeException(e);
+          }
+        }
+      }
+    }
+);
   }
-  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+ else {
+    context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+  }
 }
