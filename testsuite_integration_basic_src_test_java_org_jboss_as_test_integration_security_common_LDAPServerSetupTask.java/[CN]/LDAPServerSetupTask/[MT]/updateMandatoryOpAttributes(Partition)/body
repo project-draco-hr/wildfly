@@ -1,0 +1,52 @@
+{
+  CoreSession session=directoryService.getAdminSession();
+  String adminDn=session.getEffectivePrincipal().getName();
+  ExprNode filter=new PresenceNode(SchemaConstants.OBJECT_CLASS_AT);
+  EntryFilteringCursor cursor=session.search(partition.getSuffixDn(),SearchScope.SUBTREE,filter,AliasDerefMode.NEVER_DEREF_ALIASES,new HashSet<AttributeTypeOptions>(MANDATORY_ENTRY_ATOP_MAP.values()));
+  cursor.beforeFirst();
+  List<Modification> mods=new ArrayList<Modification>();
+  while (cursor.next()) {
+    Entry entry=cursor.get();
+    AttributeType atType=MANDATORY_ENTRY_ATOP_MAP.get(SchemaConstants.ENTRY_UUID_AT).getAttributeType();
+    Attribute uuidAt=entry.get(atType);
+    String uuid=(uuidAt == null ? null : uuidAt.getString());
+    if (!uuidChecker.isValidSyntax(uuid)) {
+      uuidAt=new DefaultAttribute(atType,UUID.randomUUID().toString());
+    }
+    Modification uuidMod=new DefaultModification(ModificationOperation.REPLACE_ATTRIBUTE,uuidAt);
+    mods.add(uuidMod);
+    atType=MANDATORY_ENTRY_ATOP_MAP.get(SchemaConstants.ENTRY_CSN_AT).getAttributeType();
+    Attribute csnAt=entry.get(atType);
+    String csn=(csnAt == null ? null : csnAt.getString());
+    if (!csnChecker.isValidSyntax(csn)) {
+      csnAt=new DefaultAttribute(atType,directoryService.getCSN().toString());
+    }
+    Modification csnMod=new DefaultModification(ModificationOperation.REPLACE_ATTRIBUTE,csnAt);
+    mods.add(csnMod);
+    atType=MANDATORY_ENTRY_ATOP_MAP.get(SchemaConstants.CREATORS_NAME_AT).getAttributeType();
+    Attribute creatorAt=entry.get(atType);
+    String creator=(creatorAt == null ? "" : creatorAt.getString().trim());
+    if ((creator.length() == 0) || (!Dn.isValid(creator))) {
+      creatorAt=new DefaultAttribute(atType,adminDn);
+    }
+    Modification creatorMod=new DefaultModification(ModificationOperation.REPLACE_ATTRIBUTE,creatorAt);
+    mods.add(creatorMod);
+    atType=MANDATORY_ENTRY_ATOP_MAP.get(SchemaConstants.CREATE_TIMESTAMP_AT).getAttributeType();
+    Attribute createdTimeAt=entry.get(atType);
+    String createdTime=(createdTimeAt == null ? null : createdTimeAt.getString());
+    if (!timeChecker.isValidSyntax(createdTime)) {
+      createdTimeAt=new DefaultAttribute(atType,DateUtils.getGeneralizedTime());
+    }
+    Modification createdMod=new DefaultModification(ModificationOperation.REPLACE_ATTRIBUTE,createdTimeAt);
+    mods.add(createdMod);
+    if (!mods.isEmpty()) {
+      ModifyOperationContext modifyContext=new ModifyOperationContext(session);
+      modifyContext.setEntry(entry);
+      modifyContext.setDn(entry.getDn());
+      modifyContext.setModItems(mods);
+      partition.modify(modifyContext);
+    }
+    mods.clear();
+  }
+  cursor.close();
+}
