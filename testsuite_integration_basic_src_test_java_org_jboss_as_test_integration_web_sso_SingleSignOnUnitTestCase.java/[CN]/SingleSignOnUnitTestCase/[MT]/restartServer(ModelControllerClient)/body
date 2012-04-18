@@ -1,0 +1,29 @@
+{
+  try {
+    applyUpdates(Arrays.asList(createOpNode(null,"reload")),client);
+  }
+ catch (  Exception e) {
+    throw new RuntimeException("Restart operation not successful. " + e.getMessage());
+  }
+  try {
+    RetryTaskExecutor<Boolean> rte=new RetryTaskExecutor<Boolean>();
+    rte.retryTask(new Callable<Boolean>(){
+      public Boolean call() throws Exception {
+        ModelNode result=client.execute(new OperationBuilder(createOpNode(null,READ_RESOURCE_OPERATION)).build());
+        if (result.hasDefined("outcome") && "success".equals(result.get("outcome").asString())) {
+          if (result.hasDefined("result"))           log.info(result.get("result"));
+          return true;
+        }
+ else {
+          log.info("Server is down.");
+          throw new Exception("Connector not available.");
+        }
+      }
+    }
+);
+  }
+ catch (  TimeoutException e) {
+    throw new RuntimeException("Timeout on restart operation. " + e.getMessage());
+  }
+  log.info("Server is up.");
+}
