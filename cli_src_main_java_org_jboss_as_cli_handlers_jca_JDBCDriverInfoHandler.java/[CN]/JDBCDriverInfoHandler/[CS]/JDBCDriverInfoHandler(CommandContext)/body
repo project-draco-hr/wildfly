@@ -1,6 +1,76 @@
 {
   super(ctx,"jdbc-driver-info",true);
   addRequiredPath("/subsystem=datasources");
+  host=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
+    @Override public Collection<String> getAllCandidates(    CommandContext ctx){
+      final ModelControllerClient client=ctx.getModelControllerClient();
+      if (client == null) {
+        return Collections.emptyList();
+      }
+      final ModelNode req=new ModelNode();
+      req.get(Util.ADDRESS).setEmptyList();
+      req.get(Util.OPERATION).set(Util.READ_CHILDREN_NAMES);
+      req.get(Util.CHILD_TYPE).set(Util.HOST);
+      final ModelNode response;
+      try {
+        response=client.execute(req);
+      }
+ catch (      IOException e) {
+        return Collections.emptyList();
+      }
+      final ModelNode result=response.get(Util.RESULT);
+      if (!result.isDefined()) {
+        return Collections.emptyList();
+      }
+      final List<ModelNode> list=result.asList();
+      final List<String> names=new ArrayList<String>(list.size());
+      for (      ModelNode node : list) {
+        names.add(node.asString());
+      }
+      return names;
+    }
+  }
+),"--host"){
+    @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
+      return ctx.isDomainMode() && super.canAppearNext(ctx);
+    }
+  }
+;
+  server=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
+    @Override public Collection<String> getAllCandidates(    CommandContext ctx){
+      final ModelControllerClient client=ctx.getModelControllerClient();
+      if (client == null) {
+        return Collections.emptyList();
+      }
+      final ModelNode req=new ModelNode();
+      req.get(Util.ADDRESS).add(Util.HOST,host.getValue(ctx.getParsedCommandLine()));
+      req.get(Util.OPERATION).set(Util.READ_CHILDREN_NAMES);
+      req.get(Util.CHILD_TYPE).set(Util.SERVER);
+      final ModelNode response;
+      try {
+        response=client.execute(req);
+      }
+ catch (      IOException e) {
+        return Collections.emptyList();
+      }
+      final ModelNode result=response.get(Util.RESULT);
+      if (!result.isDefined()) {
+        return Collections.emptyList();
+      }
+      final List<ModelNode> list=result.asList();
+      final List<String> names=new ArrayList<String>(list.size());
+      for (      ModelNode node : list) {
+        names.add(node.asString());
+      }
+      return names;
+    }
+  }
+),"--server"){
+    @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
+      return host.isPresent(ctx.getParsedCommandLine()) && super.canAppearNext(ctx);
+    }
+  }
+;
   name=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
     @Override public Collection<String> getAllCandidates(    CommandContext ctx){
       try {
@@ -25,5 +95,13 @@
       }
     }
   }
-),0,"--name");
+),0,"--name"){
+    @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
+      if (ctx.isDomainMode()) {
+        return host.isPresent(ctx.getParsedCommandLine()) && server.isPresent(ctx.getParsedCommandLine()) && super.canAppearNext(ctx);
+      }
+      return super.canAppearNext(ctx);
+    }
+  }
+;
 }
