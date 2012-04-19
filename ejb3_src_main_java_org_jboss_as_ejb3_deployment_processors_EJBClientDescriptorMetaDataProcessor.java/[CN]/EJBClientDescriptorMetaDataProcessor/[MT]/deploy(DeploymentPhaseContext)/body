@@ -16,9 +16,21 @@
   final EJBClientConfiguration ejbClientConfiguration=this.createClientConfiguration(phaseContext.getServiceRegistry(),module.getClassLoader(),ejbClientDescriptorMetaData);
   final DescriptorBasedEJBClientContextService service=new DescriptorBasedEJBClientContextService(ejbClientConfiguration);
   final ServiceBuilder serviceBuilder=serviceTarget.addService(ejbClientContextServiceName,service);
-  for (  final String connectionRef : ejbClientDescriptorMetaData.getRemotingReceiverConnectionRefs()) {
+  for (  final EJBClientDescriptorMetaData.RemotingReceiverConfiguration remotingReceiverConfiguration : ejbClientDescriptorMetaData.getRemotingReceiverConfigurations()) {
+    final String connectionRef=remotingReceiverConfiguration.getOutboundConnectionRef();
     final ServiceName connectionDependencyService=AbstractOutboundConnectionService.OUTBOUND_CONNECTION_BASE_SERVICE_NAME.append(connectionRef);
     service.addRemotingConnectionDependency(serviceBuilder,connectionDependencyService);
+    final Properties channelCreationProps=remotingReceiverConfiguration.getChannelCreationOptions();
+    final OptionMap channelCreationOpts;
+    if (channelCreationProps == null) {
+      channelCreationOpts=OptionMap.EMPTY;
+    }
+ else {
+      channelCreationOpts=this.getOptionMapFromProperties(channelCreationProps,this.getClass().getClassLoader());
+    }
+    logger.debug("Channel creation options for connection " + connectionRef + " are "+ channelCreationOpts);
+    service.setChannelCreationOptions(connectionRef,channelCreationOpts);
+    service.setConnectionCreationTimeout(connectionRef,remotingReceiverConfiguration.getConnectionTimeout());
   }
   if (!ejbClientDescriptorMetaData.isLocalReceiverExcluded()) {
     final Boolean passByValue=ejbClientDescriptorMetaData.isLocalReceiverPassByValue();
