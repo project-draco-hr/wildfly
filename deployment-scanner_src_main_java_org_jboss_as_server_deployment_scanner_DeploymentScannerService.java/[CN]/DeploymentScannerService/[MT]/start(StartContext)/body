@@ -1,5 +1,11 @@
 {
   try {
+    final DeploymentOperations.Factory factory=new DeploymentOperations.Factory(){
+      @Override public DeploymentOperations create(){
+        return new DefaultDeploymentOperations(controllerValue.getValue().createClient(scheduledExecutorValue.getValue()));
+      }
+    }
+;
     if (scanner == null) {
       final PathManager pathManager=pathManagerValue.getValue();
       final String pathName=pathManager.resolveRelativePathEntry(path,relativeTo);
@@ -8,7 +14,7 @@
         relativePath=new File(pathManager.getPathEntry(relativeTo).resolvePath());
         callbackHandle=pathManager.registerCallback(pathName,PathManager.ReloadServerCallback.create(),PathManager.Event.UPDATED,PathManager.Event.REMOVED);
       }
-      final FileSystemDeploymentService scanner=new FileSystemDeploymentService(relativeTo,new File(pathName),relativePath,scheduledExecutorValue.getValue());
+      final FileSystemDeploymentService scanner=new FileSystemDeploymentService(relativeTo,new File(pathName),relativePath,factory,scheduledExecutorValue.getValue());
       scanner.setScanInterval(unit.toMillis(interval));
       scanner.setAutoDeployExplodedContent(autoDeployExploded);
       scanner.setAutoDeployZippedContent(autoDeployZipped);
@@ -18,8 +24,11 @@
       }
       this.scanner=scanner;
     }
+ else {
+      this.scanner.setDeploymentOperationsFactory(factory);
+    }
     if (enabled) {
-      scanner.startScanner(new DefaultDeploymentOperations(controllerValue.getValue().createClient(scheduledExecutorValue.getValue())));
+      scanner.startScanner();
     }
   }
  catch (  Exception e) {
