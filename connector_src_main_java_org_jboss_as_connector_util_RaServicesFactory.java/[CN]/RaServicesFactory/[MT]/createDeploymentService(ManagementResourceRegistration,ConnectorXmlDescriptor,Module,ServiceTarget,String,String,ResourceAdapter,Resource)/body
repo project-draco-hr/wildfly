@@ -16,6 +16,7 @@ synchronized (registration) {
                   if (poolStats.getNames().size() != 0) {
                     DescriptionProvider statsResourceDescriptionProvider=new StatisticsDescriptionProvider(ResourceAdaptersSubsystemProviders.RESOURCE_NAME,"statistics",poolStats);
                     PathElement pe=PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,ResourceAdaptersExtension.SUBSYSTEM_NAME);
+                    PathElement peStats=PathElement.pathElement(Constants.STATISTICS_NAME,Constants.STATISTICS_NAME);
                     PathElement peCD=PathElement.pathElement(Constants.CONNECTIONDEFINITIONS_NAME,cm.getJndiName());
                     ManagementResourceRegistration overrideRegistration=registration;
                     if (registration.isAllowsOverride() && registration.getOverrideModel(deploymentUnitName) == null) {
@@ -31,14 +32,20 @@ synchronized (registration) {
                     }
                     ManagementResourceRegistration subRegistration=overrideRegistration.getSubModel(PathAddress.pathAddress(pe));
                     if (subRegistration == null) {
-                      subRegistration=overrideRegistration.registerSubModel(pe,new SubSystemExtensionDescriptionProvider(ResourceAdaptersSubsystemProviders.RESOURCE_NAME,"statistics"));
+                      subRegistration=overrideRegistration.registerSubModel(pe,new SubSystemExtensionDescriptionProvider(ResourceAdaptersSubsystemProviders.RESOURCE_NAME,"deployment-subsystem"));
                     }
-                    final IronJacamarResource subsystemResource=new IronJacamarResource();
+                    final Resource subsystemResource=new IronJacamarResource.IronJacamarRuntimeResource();
                     deploymentResource.registerChild(pe,subsystemResource);
-                    if (subRegistration.getSubModel(PathAddress.pathAddress(peCD)) == null) {
-                      ManagementResourceRegistration cdSubRegistration=subRegistration.registerSubModel(peCD,statsResourceDescriptionProvider);
-                      final IronJacamarResource cdResource=new IronJacamarResource();
-                      subsystemResource.registerChild(peCD,cdResource);
+                    ManagementResourceRegistration statsRegistration=subRegistration.getSubModel(PathAddress.pathAddress(peStats));
+                    if (statsRegistration == null) {
+                      statsRegistration=subRegistration.registerSubModel(peStats,new StatisticsElementDescriptionProvider(ResourceAdaptersSubsystemProviders.RESOURCE_NAME,"statistics"));
+                    }
+                    final Resource statisticsResource=new IronJacamarResource.IronJacamarRuntimeResource();
+                    subsystemResource.registerChild(peStats,statisticsResource);
+                    if (statsRegistration.getSubModel(PathAddress.pathAddress(peCD)) == null) {
+                      ManagementResourceRegistration cdSubRegistration=statsRegistration.registerSubModel(peCD,statsResourceDescriptionProvider);
+                      final Resource cdResource=new IronJacamarResource.IronJacamarRuntimeResource();
+                      statisticsResource.registerChild(peCD,cdResource);
                       for (                      String statName : poolStats.getNames()) {
                         cdSubRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(poolStats));
                       }
