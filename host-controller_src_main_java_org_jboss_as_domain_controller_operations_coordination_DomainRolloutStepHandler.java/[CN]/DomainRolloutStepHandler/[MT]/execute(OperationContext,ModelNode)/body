@@ -32,24 +32,36 @@
   }
   if (pushToServers) {
     domainOperationContext.setCompleteRollback(false);
-    final Map<ServerIdentity,ProxyTask> tasks=new HashMap<ServerIdentity,ProxyTask>();
-    final Map<ServerIdentity,Future<ModelNode>> futures=new HashMap<ServerIdentity,Future<ModelNode>>();
+    final Map<ServerIdentity,ServerRolloutTaskHandler.ServerExecutedRequest> submittedTasks=new HashMap<ServerIdentity,ServerRolloutTaskHandler.ServerExecutedRequest>();
+    final List<ServerRolloutTaskHandler.ServerPreparedResponse> preparedResults=new ArrayList<ServerRolloutTaskHandler.ServerPreparedResponse>();
+    final ServerRolloutTaskHandler rolloutHandler=new ServerRolloutTaskHandler(submittedTasks,preparedResults);
     try {
-      pushToServers(context,tasks,futures);
+      pushToServers(context,rolloutHandler);
       context.completeStep();
     }
   finally {
       boolean completeRollback=domainOperationContext.isCompleteRollback();
-      for (      Map.Entry<ServerIdentity,ProxyTask> entry : tasks.entrySet()) {
-        boolean rollback=completeRollback || domainOperationContext.isServerGroupRollback(entry.getKey().getServerGroupName());
-        final ProxyTask task=entry.getValue();
-        if (!task.finalizeTransaction(!rollback)) {
+      final String localHostName=domainOperationContext.getLocalHostInfo().getLocalHostName();
+      for (      final ServerRolloutTaskHandler.ServerPreparedResponse preparedResult : preparedResults) {
+        boolean rollback=completeRollback || domainOperationContext.isServerGroupRollback(preparedResult.getServerGroupName());
+        if (!preparedResult.finalizeTransaction(!rollback)) {
+          final ServerIdentity identity=preparedResult.getServerIdentity();
           try {
-            final ServerIdentity identity=entry.getKey();
-            final ModelNode result=task.getUncommittedResult();
-            final ProxyController proxy=task.getProxyController();
+            final ModelNode result=preparedResult.getPreparedOperation().getPreparedResult();
+            ProxyController proxy=hostProxies.get(identity.getHostName());
+            if (proxy == null) {
+              if (localHostName.equals(identity.getHostName())) {
+                proxy=serverProxies.get(identity.getServerName());
+                if (proxy == null) {
+                  if (trace) {
+                    HOST_CONTROLLER_LOGGER.tracef("No proxy for %s",identity);
+                  }
+                  continue;
+                }
+              }
+            }
             final Future<ModelNode> future=executorService.submit(new ServerRequireRestartTask(identity,proxy,result));
-            futures.put(entry.getKey(),future);
+            submittedTasks.put(identity,new ServerRolloutTaskHandler.ServerExecutedRequest(identity,future));
           }
  catch (          Exception ignore) {
           }
@@ -57,8 +69,8 @@
       }
       boolean interrupted=false;
       try {
-        for (        Map.Entry<ServerIdentity,Future<ModelNode>> entry : futures.entrySet()) {
-          Future<ModelNode> future=entry.getValue();
+        for (        Map.Entry<ServerIdentity,ServerRolloutTaskHandler.ServerExecutedRequest> entry : submittedTasks.entrySet()) {
+          Future<ModelNode> future=entry.getValue().getFinalResult();
           try {
             ModelNode finalResult=future.isCancelled() ? getCancelledResult() : future.get();
             domainOperationContext.addServerResult(entry.getKey(),finalResult);

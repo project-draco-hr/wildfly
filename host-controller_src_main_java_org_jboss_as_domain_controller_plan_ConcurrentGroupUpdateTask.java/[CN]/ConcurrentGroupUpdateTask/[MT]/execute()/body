@@ -1,0 +1,30 @@
+{
+  final Set<ServerIdentity> outstanding=new HashSet<ServerIdentity>();
+  final ServerTaskExecutor.ServerOperationListener listener=new ServerTaskExecutor.ServerOperationListener();
+  for (  final ServerTask task : tasks) {
+    final ServerIdentity identity=task.getServerIdentity();
+    if (updatePolicy.canUpdateServer(identity)) {
+      if (executor.executeTask(listener,task)) {
+        outstanding.add(task.getServerIdentity());
+      }
+    }
+ else {
+      sendCancelledResponse(identity);
+    }
+  }
+  boolean interrupted=false;
+  while (!outstanding.isEmpty()) {
+    try {
+      final TransactionalProtocolClient.PreparedOperation<ServerTaskExecutor.ServerOperation> prepared=listener.retrievePreparedOperation();
+      final ServerIdentity identity=prepared.getOperation().getIdentity();
+      recordPreparedOperation(identity,prepared);
+      outstanding.remove(identity);
+    }
+ catch (    InterruptedException e) {
+      interrupted=true;
+    }
+  }
+  if (interrupted) {
+    Thread.currentThread().interrupt();
+  }
+}

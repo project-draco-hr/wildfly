@@ -1,0 +1,18 @@
+{
+  if (client == null) {
+    return false;
+  }
+  final OperationMessageHandler messageHandler=new DelegatingMessageHandler(context);
+  final OperationAttachments operationAttachments=new DelegatingOperationAttachments(context);
+  final ServerOperation serverOperation=new ServerOperation(identity,operation,messageHandler,operationAttachments);
+  try {
+    final Future<ModelNode> result=client.execute(listener,serverOperation);
+    rolloutHandler.recordExecutedRequest(new ServerRolloutTaskHandler.ServerExecutedRequest(identity,result));
+  }
+ catch (  IOException e) {
+    final TransactionalProtocolClient.PreparedOperation<ServerOperation> result=BlockingQueueOperationListener.FailedOperation.create(serverOperation,e);
+    listener.operationPrepared(result);
+    rolloutHandler.recordExecutedRequest(new ServerRolloutTaskHandler.ServerExecutedRequest(identity,result.getFinalResult()));
+  }
+  return true;
+}
