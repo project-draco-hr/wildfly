@@ -1,4 +1,5 @@
 {
+  final CountDownLatch completed=new CountDownLatch(1);
   final BlockingQueue<TransactionalProtocolClient.PreparedOperation<TransactionalProtocolClient.Operation>> queue=new ArrayBlockingQueue<TransactionalProtocolClient.PreparedOperation<TransactionalProtocolClient.Operation>>(1,true);
   final TransactionalProtocolClient.TransactionalOperationListener<TransactionalProtocolClient.Operation> operationListener=new TransactionalProtocolClient.TransactionalOperationListener<TransactionalProtocolClient.Operation>(){
     @Override public void operationPrepared(    TransactionalProtocolClient.PreparedOperation<TransactionalProtocolClient.Operation> prepared){
@@ -7,10 +8,20 @@
       }
     }
     @Override public void operationFailed(    TransactionalProtocolClient.Operation operation,    ModelNode result){
-      queue.offer(new BlockingQueueOperationListener.FailedOperation<TransactionalProtocolClient.Operation>(operation,result));
+      try {
+        queue.offer(new BlockingQueueOperationListener.FailedOperation<TransactionalProtocolClient.Operation>(operation,result));
+      }
+  finally {
+        completed.countDown();
+      }
     }
     @Override public void operationComplete(    TransactionalProtocolClient.Operation operation,    ModelNode result){
-      control.operationCompleted(result);
+      try {
+        control.operationCompleted(result);
+      }
+  finally {
+        completed.countDown();
+      }
     }
   }
 ;
@@ -27,7 +38,7 @@
       @Override public void commit(){
         prepared.commit();
         try {
-          prepared.getFinalResult().get();
+          completed.await();
         }
  catch (        InterruptedException e) {
           Thread.currentThread().interrupt();
@@ -38,7 +49,7 @@ catch (        Exception e) {
       @Override public void rollback(){
         prepared.rollback();
         try {
-          prepared.getFinalResult().get();
+          completed.await();
         }
  catch (        InterruptedException e) {
           Thread.currentThread().interrupt();

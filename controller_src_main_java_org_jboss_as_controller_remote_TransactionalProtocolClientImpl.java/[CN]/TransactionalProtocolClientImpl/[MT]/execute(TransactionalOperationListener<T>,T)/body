@@ -1,33 +1,18 @@
 {
   final ExecuteRequestContext context=new ExecuteRequestContext(new OperationWrapper<T>(listener,operation));
-  final ActiveOperation<ModelNode,ExecuteRequestContext> op=channelAssociation.executeRequest(new ExecuteRequest(),context,context);
-  final Future<ModelNode> result=context.getResult();
-  return new Future<ModelNode>(){
-    @Override public boolean cancel(    boolean mayInterruptIfRunning){
+  final ActiveOperation<ModelNode,ExecuteRequestContext> op=channelAssociation.initializeOperation(context,context);
+  final AsyncFuture<ModelNode> result=new AbstractDelegatingAsyncFuture<ModelNode>(op.getResult()){
+    @Override public void asyncCancel(    boolean interruptionDesired){
       try {
         channelAssociation.executeRequest(op,new CompleteTxRequest(ModelControllerProtocol.PARAM_ROLLBACK));
-        op.getResult().await();
       }
- catch (      InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-catch (      Exception e) {
+ catch (      Exception e) {
         throw new RuntimeException(e);
       }
-      return isCancelled();
-    }
-    @Override public boolean isCancelled(){
-      return op.getResult().isCancelled();
-    }
-    @Override public boolean isDone(){
-      return result.isDone();
-    }
-    @Override public ModelNode get() throws InterruptedException, ExecutionException {
-      return result.get();
-    }
-    @Override public ModelNode get(    long timeout,    TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-      return result.get(timeout,unit);
     }
   }
 ;
+  context.initialize(result);
+  channelAssociation.executeRequest(op,new ExecuteRequest());
+  return result;
 }
