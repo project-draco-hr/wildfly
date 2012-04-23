@@ -1,17 +1,23 @@
 {
   ModelNode cacheName=attribute.resolveModelAttribute(context,model);
   ServiceRegistry registry=context.getServiceRegistry(true);
-  ServiceController<?> existingService=registry.getService(serviceName);
-  if (existingService != null) {
-    context.removeService(existingService);
+  if (registry.getService(this.serviceName) != null) {
+    context.removeService(this.serviceName);
+  }
+  if ((this.clusterNameServiceName != null) && (registry.getService(this.clusterNameServiceName) != null)) {
+    context.removeService(this.clusterNameServiceName);
   }
   ServiceName dependency=cacheName.isDefined() ? CacheFactoryService.getServiceName(cacheName.asString()) : this.defaultServiceName;
   if (dependency != null) {
-    @SuppressWarnings("rawtypes") InjectedValue<CacheFactory> factory=new InjectedValue<CacheFactory>();
-    @SuppressWarnings("rawtypes") ValueService<CacheFactory> service=new ValueService<CacheFactory>(factory);
-    ServiceController<?> newController=context.getServiceTarget().addService(serviceName,service).addDependency(dependency,CacheFactory.class,factory).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+    ServiceController<?> controller=this.installValueService(context,this.serviceName,CacheFactory.class,dependency);
     if (newControllers != null) {
-      newControllers.add(newController);
+      newControllers.add(controller);
+    }
+    if ((this.clusterNameServiceName != null) && cacheName.isDefined()) {
+      controller=this.installValueService(context,this.clusterNameServiceName,String.class,ClusteredBackingCacheEntryStoreSourceService.getCacheFactoryClusterNameServiceName(cacheName.asString()));
+      if (newControllers != null) {
+        newControllers.add(controller);
+      }
     }
   }
 }

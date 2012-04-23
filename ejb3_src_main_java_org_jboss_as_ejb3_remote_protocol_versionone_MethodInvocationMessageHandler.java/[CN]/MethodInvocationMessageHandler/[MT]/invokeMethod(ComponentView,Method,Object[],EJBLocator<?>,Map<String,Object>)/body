@@ -1,0 +1,47 @@
+{
+  final InterceptorContext interceptorContext=new InterceptorContext();
+  interceptorContext.setParameters(args);
+  interceptorContext.setMethod(method);
+  interceptorContext.setContextData(new HashMap<String,Object>());
+  interceptorContext.putPrivateData(Component.class,componentView.getComponent());
+  interceptorContext.putPrivateData(ComponentView.class,componentView);
+  interceptorContext.putPrivateData(InvocationType.class,InvocationType.REMOTE);
+  if (attachments != null) {
+    for (    final Map.Entry<String,Object> attachment : attachments.entrySet()) {
+      if (attachment == null) {
+        continue;
+      }
+      final String key=attachment.getKey();
+      final Object value=attachment.getValue();
+      interceptorContext.putPrivateData(key,value);
+    }
+  }
+  if (ejbLocator instanceof StatefulEJBLocator) {
+    interceptorContext.putPrivateData(SessionID.class,((StatefulEJBLocator<?>)ejbLocator).getSessionId());
+  }
+ else   if (ejbLocator instanceof EntityEJBLocator) {
+    final Object primaryKey=((EntityEJBLocator<?>)ejbLocator).getPrimaryKey();
+    interceptorContext.putPrivateData(EntityBeanComponent.PRIMARY_KEY_CONTEXT_KEY,primaryKey);
+  }
+  if (componentView.isAsynchronous(method)) {
+    final Component component=componentView.getComponent();
+    if (!(component instanceof SessionBeanComponent)) {
+      logger.warn("Asynchronous invocations are only supported on session beans. Bean class " + component.getComponentClass() + " is not a session bean, invocation on method "+ method+ " will have no asynchronous semantics");
+      return componentView.invoke(interceptorContext);
+    }
+    final SessionBeanComponent sessionBeanComponent=(SessionBeanComponent)componentView.getComponent();
+    final CancellationFlag cancellationFlag=new CancellationFlag();
+    interceptorContext.putPrivateData(CancellationFlag.class,cancellationFlag);
+    final AsyncInvocationTask asyncInvocationTask=new AsyncInvocationTask(cancellationFlag){
+      @Override protected Object runInvocation() throws Exception {
+        return componentView.invoke(interceptorContext);
+      }
+    }
+;
+    sessionBeanComponent.getAsynchronousExecutor().submit(asyncInvocationTask);
+    return asyncInvocationTask.get();
+  }
+ else {
+    return componentView.invoke(interceptorContext);
+  }
+}

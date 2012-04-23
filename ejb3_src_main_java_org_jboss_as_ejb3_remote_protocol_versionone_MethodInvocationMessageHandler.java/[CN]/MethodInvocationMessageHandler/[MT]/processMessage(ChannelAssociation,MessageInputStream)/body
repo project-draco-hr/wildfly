@@ -35,9 +35,9 @@
   try {
     SecurityActions.setContextClassLoader(ejbDeploymentInformation.getDeploymentClassLoader());
     classResolver.switchClassLoader(ejbDeploymentInformation.getDeploymentClassLoader());
-    final EJBLocator locator;
+    final EJBLocator<?> locator;
     try {
-      locator=(EJBLocator)unmarshaller.readObject();
+      locator=(EJBLocator<?>)unmarshaller.readObject();
     }
  catch (    ClassNotFoundException e) {
       throw EjbMessages.MESSAGES.classNotFoundException(e);
@@ -106,12 +106,17 @@
           RemotingContext.clear();
         }
         try {
+          Affinity weakAffinity=null;
           if (locator instanceof StatefulEJBLocator && componentView.getComponent() instanceof StatefulSessionComponent) {
             final StatefulSessionComponent statefulSessionComponent=(StatefulSessionComponent)componentView.getComponent();
-            final Affinity weakAffinity=MethodInvocationMessageHandler.this.getWeakAffinity(statefulSessionComponent,(StatefulEJBLocator)locator);
-            if (weakAffinity != null) {
-              attachments.put(Affinity.WEAK_AFFINITY_CONTEXT_KEY,weakAffinity);
-            }
+            weakAffinity=MethodInvocationMessageHandler.this.getWeakAffinity(statefulSessionComponent,(StatefulEJBLocator<?>)locator);
+          }
+ else           if (componentView.getComponent() instanceof StatelessSessionComponent) {
+            final StatelessSessionComponent statelessSessionComponent=(StatelessSessionComponent)componentView.getComponent();
+            weakAffinity=statelessSessionComponent.getWeakAffinity();
+          }
+          if (weakAffinity != null) {
+            attachments.put(Affinity.WEAK_AFFINITY_CONTEXT_KEY,weakAffinity);
           }
           writeMethodInvocationResponse(channelAssociation,invocationId,result,attachments);
         }
