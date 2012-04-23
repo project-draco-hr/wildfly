@@ -6,33 +6,56 @@
   }
   final Set<String> outstanding=new HashSet<String>(hostProxies.keySet());
   final List<TransactionalProtocolClient.PreparedOperation<HostControllerUpdateTask.ProxyOperation>> results=new ArrayList<TransactionalProtocolClient.PreparedOperation<HostControllerUpdateTask.ProxyOperation>>();
-  final Map<String,Future<ModelNode>> finalResults=new HashMap<String,Future<ModelNode>>();
+  final Map<String,AsyncFuture<ModelNode>> finalResults=new HashMap<String,AsyncFuture<ModelNode>>();
   final HostControllerUpdateTask.ProxyOperationListener listener=new HostControllerUpdateTask.ProxyOperationListener();
   for (  Map.Entry<String,ProxyController> entry : hostProxies.entrySet()) {
     final String host=entry.getKey();
     final TransactionalProtocolClient client=((RemoteProxyController)entry.getValue()).getTransactionalProtocolClient();
     final HostControllerUpdateTask task=new HostControllerUpdateTask(host,operation.clone(),context,client);
-    final Future<ModelNode> finalResult=task.execute(listener);
+    final AsyncFuture<ModelNode> finalResult=task.execute(listener);
     finalResults.put(host,finalResult);
   }
   boolean interrupted=false;
   try {
-    while (outstanding.size() > 0) {
-      try {
+    try {
+      while (outstanding.size() > 0) {
         final TransactionalProtocolClient.PreparedOperation<HostControllerUpdateTask.ProxyOperation> prepared=listener.retrievePreparedOperation();
-        final String name=prepared.getOperation().getName();
-        if (!outstanding.remove(name)) {
+        final String hostName=prepared.getOperation().getName();
+        if (!outstanding.remove(hostName)) {
           continue;
         }
         final ModelNode preparedResult=prepared.getPreparedResult();
         if (HOST_CONTROLLER_LOGGER.isTraceEnabled()) {
-          HOST_CONTROLLER_LOGGER.tracef("Preliminary result for remote host %s is %s",name,preparedResult);
+          HOST_CONTROLLER_LOGGER.tracef("Preliminary result for remote host %s is %s",hostName,preparedResult);
         }
-        domainOperationContext.addHostControllerResult(name,preparedResult);
+        domainOperationContext.addHostControllerResult(hostName,preparedResult);
         results.add(prepared);
       }
- catch (      InterruptedException e) {
-        interrupted=true;
+    }
+ catch (    InterruptedException ie) {
+      interrupted=true;
+      domainOperationContext.setFailureReported(true);
+      for (      final AsyncFuture<ModelNode> finalResult : finalResults.values()) {
+        finalResult.asyncCancel(false);
+      }
+      for (      final Map.Entry<String,AsyncFuture<ModelNode>> entry : finalResults.entrySet()) {
+        final String hostName=entry.getKey();
+        try {
+          final ModelNode result=entry.getValue().get();
+          domainOperationContext.addHostControllerResult(hostName,result);
+        }
+ catch (        Exception e) {
+          final ModelNode result=new ModelNode();
+          result.get(OUTCOME).set(FAILED);
+          if (e instanceof InterruptedException) {
+            result.get(FAILURE_DESCRIPTION).set(MESSAGES.interruptedAwaitingResultFromHost(entry.getKey()));
+            interrupted=true;
+          }
+ else {
+            result.get(FAILURE_DESCRIPTION).set(MESSAGES.exceptionAwaitingResultFromHost(entry.getKey(),e.getMessage()));
+          }
+          domainOperationContext.addHostControllerResult(hostName,result);
+        }
       }
     }
     context.completeStep();
@@ -41,7 +64,7 @@
     try {
       boolean rollback=domainOperationContext.isCompleteRollback();
       for (      final TransactionalProtocolClient.PreparedOperation<HostControllerUpdateTask.ProxyOperation> prepared : results) {
-        if (prepared.isFailed()) {
+        if (prepared.isDone()) {
           continue;
         }
         if (!rollback) {
@@ -52,20 +75,20 @@
         }
       }
       for (      final TransactionalProtocolClient.PreparedOperation<HostControllerUpdateTask.ProxyOperation> prepared : results) {
-        final String name=prepared.getOperation().getName();
+        final String hostName=prepared.getOperation().getName();
         try {
           final ModelNode finalResult=prepared.getFinalResult().get();
-          domainOperationContext.addHostControllerResult(name,finalResult);
+          domainOperationContext.addHostControllerResult(hostName,finalResult);
           if (HOST_CONTROLLER_LOGGER.isTraceEnabled()) {
-            HOST_CONTROLLER_LOGGER.tracef("Final result for remote host %s is %s",name,finalResult);
+            HOST_CONTROLLER_LOGGER.tracef("Final result for remote host %s is %s",hostName,finalResult);
           }
         }
  catch (        InterruptedException e) {
           interrupted=true;
-          CONTROLLER_LOGGER.interruptedAwaitingFinalResponse(name);
+          CONTROLLER_LOGGER.interruptedAwaitingFinalResponse(hostName);
         }
 catch (        ExecutionException e) {
-          CONTROLLER_LOGGER.caughtExceptionAwaitingFinalResponse(e.getCause(),name);
+          CONTROLLER_LOGGER.caughtExceptionAwaitingFinalResponse(e.getCause(),hostName);
         }
       }
     }
