@@ -1,0 +1,23 @@
+{
+  boolean interrupted=false;
+  final ServerTaskExecutor.ServerOperationListener listener=new ServerTaskExecutor.ServerOperationListener();
+  for (  final ServerUpdateTask task : tasks) {
+    final ServerIdentity identity=task.getServerIdentity();
+    if (interrupted || !updatePolicy.canUpdateServer(identity)) {
+      sendCancelledResponse(identity);
+      continue;
+    }
+    if (executor.executeTask(listener,task)) {
+      try {
+        final TransactionalProtocolClient.PreparedOperation<ServerTaskExecutor.ServerOperation> prepared=listener.retrievePreparedOperation();
+        recordPreparedOperation(identity,prepared);
+      }
+ catch (      InterruptedException e) {
+        interrupted=true;
+      }
+    }
+  }
+  if (interrupted) {
+    Thread.currentThread().interrupt();
+  }
+}
