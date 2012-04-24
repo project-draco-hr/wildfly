@@ -1,0 +1,25 @@
+{
+  String identifier=osgicap.getIdentifier();
+  Integer level=osgicap.getStartLevel();
+  if (isValidModuleIdentifier(identifier)) {
+    ModuleIdentifier moduleId=ModuleIdentifier.fromString(identifier);
+    File bundleFile=ModuleIdentityArtifactProvider.getRepositoryEntry(bundlesDir,moduleId);
+    if (bundleFile != null) {
+      URL bundleURL=bundleFile.toURI().toURL();
+      return installBundleFromURL(serviceTarget,bundleURL,level,listener);
+    }
+  }
+ else   if (isValidMavenIdentifier(identifier)) {
+    Repository repository=injectedRepository.getValue();
+    MavenCoordinates mavenId=MavenCoordinates.parse(identifier);
+    Requirement req=XRequirementBuilder.createArtifactRequirement(mavenId);
+    Collection<Capability> caps=repository.findProviders(Collections.singleton(req)).get(req);
+    if (caps.isEmpty() == false) {
+      XIdentityCapability icap=(XIdentityCapability)caps.iterator().next();
+      URL bundleURL=(URL)icap.getAttribute(XResourceConstants.CONTENT_URL);
+      return installBundleFromURL(serviceTarget,bundleURL,level,listener);
+    }
+  }
+  LOGGER.warnCannotResolveCapability(identifier);
+  return null;
+}

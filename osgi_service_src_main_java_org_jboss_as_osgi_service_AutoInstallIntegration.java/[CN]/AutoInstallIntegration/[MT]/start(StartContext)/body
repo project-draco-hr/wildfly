@@ -1,8 +1,6 @@
 {
   ServiceController<?> serviceController=context.getController();
   LOGGER.debugf("Starting: %s in mode %s",serviceController.getName(),serviceController.getMode());
-  final Map<ServiceName,Deployment> installedBundles=new LinkedHashMap<ServiceName,Deployment>();
-  final Set<ServiceName> resolvableServices=new LinkedHashSet<ServiceName>();
   final BundleContext syscontext=injectedSystemBundle.getValue().getBundleContext();
   final String startLevelProp=syscontext.getProperty(Constants.FRAMEWORK_BEGINNING_STARTLEVEL);
   final int beginningStartLevel=startLevelProp != null ? Integer.parseInt(startLevelProp) : 1;
@@ -11,17 +9,19 @@
     ServerEnvironment serverEnvironment=injectedServerEnvironment.getValue();
     bundlesDir=serverEnvironment.getBundlesDir();
     if (bundlesDir.isDirectory() == false)     throw MESSAGES.illegalStateCannotFindBundleDir(bundlesDir);
-    List<OSGiCapability> configcaps=new ArrayList<OSGiCapability>();
+    final List<OSGiCapability> configcaps=new ArrayList<OSGiCapability>();
     configcaps.add(new OSGiCapability("org.osgi.enterprise",null));
     configcaps.addAll(injectedSubsystemState.getValue().getCapabilities());
-    for (    OSGiCapability moduleMetaData : configcaps) {
-      ServiceName serviceName=installCapability(serviceTarget,moduleMetaData,installedBundles);
-      int startLevel=moduleMetaData.getStartLevel() != null ? moduleMetaData.getStartLevel() : 1;
-      if (serviceName != null && startLevel <= beginningStartLevel) {
-        resolvableServices.add(serviceName);
-      }
+    Iterator<OSGiCapability> iterator=configcaps.iterator();
+    while (iterator.hasNext()) {
+      OSGiCapability configcap=iterator.next();
+      if (installModuleCapability(serviceTarget,configcap))       iterator.remove();
     }
-    AutoInstallHandlerComplete installComplete=new AutoInstallHandlerComplete(installedBundles){
+    final Set<ServiceName> resolvableServices=new LinkedHashSet<ServiceName>();
+    AutoInstallComplete installComplete=new AutoInstallComplete(){
+      @Override protected boolean allServicesAdded(      Set<ServiceName> trackedServices){
+        return configcaps.size() == trackedServices.size();
+      }
       @Override public void start(      StartContext context) throws StartException {
         Set<Bundle> resolvableBundles=new LinkedHashSet<Bundle>();
         ServiceContainer serviceContainer=context.getController().getServiceContainer();
@@ -37,6 +37,14 @@
     }
 ;
     installComplete.install(serviceTarget);
+    ServiceListener<Bundle> listener=installComplete.getListener();
+    for (    OSGiCapability configcap : configcaps) {
+      ServiceName serviceName=installCapability(serviceTarget,configcap,listener);
+      int startLevel=configcap.getStartLevel() != null ? configcap.getStartLevel() : 1;
+      if (serviceName != null && startLevel <= beginningStartLevel) {
+        resolvableServices.add(serviceName);
+      }
+    }
   }
  catch (  Exception ex) {
     throw MESSAGES.startFailedToProcessInitialCapabilites(ex);
