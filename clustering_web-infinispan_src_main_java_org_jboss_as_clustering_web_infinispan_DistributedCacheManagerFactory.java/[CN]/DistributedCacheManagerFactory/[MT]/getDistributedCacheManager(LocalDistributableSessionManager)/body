@@ -1,17 +1,11 @@
 {
-  EmbeddedCacheManager container=this.container.getValue();
   @SuppressWarnings("unchecked") Registry<String,Void> jvmRouteRegistry=this.registry.getValue();
-  Configuration config=this.config.getValue();
-  if (!config.invocationBatching().enabled()) {
+  @SuppressWarnings("unchecked") AdvancedCache<String,Map<Object,Object>> cache=this.cache.getValue().getAdvancedCache();
+  if (!cache.getCacheConfiguration().invocationBatching().enabled()) {
     ServiceName cacheServiceName=this.getCacheServiceName(manager.getReplicationConfig());
     throw new ClusteringNotSupportedException(MESSAGES.failedToConfigureWebApp(cacheServiceName.getParent().getSimpleName(),cacheServiceName.getSimpleName()));
   }
-  String name=manager.getName();
-  ConfigurationBuilder builder=new ConfigurationBuilder().read(config);
-  builder.storeAsBinary().enable().storeKeysAsBinary(false).storeValuesAsBinary(true);
-  container.defineConfiguration(name,builder.build());
-  AdvancedCache<String,Map<Object,Object>> sessionCache=container.<String,Map<Object,Object>>getCache(name).getAdvancedCache();
-  BatchingManager batchingManager=new TransactionBatchingManager(sessionCache.getTransactionManager());
+  BatchingManager batchingManager=new TransactionBatchingManager(cache.getTransactionManager());
   SessionAttributeStorage<T> storage=this.storageFactory.createStorage(manager.getReplicationConfig().getReplicationGranularity(),this.marshallerFactory.createMarshaller(manager));
-  return new DistributedCacheManager<T>(manager,new AtomicMapCache<String,Object,Object>(sessionCache),jvmRouteRegistry,this.lockManager.getOptionalValue(),storage,batchingManager,this.invoker,this.affinityFactory);
+  return new DistributedCacheManager<T>(manager,new AtomicMapCache<String,Object,Object>(cache),jvmRouteRegistry,this.lockManager.getOptionalValue(),storage,batchingManager,this.invoker,this.affinityFactory);
 }
