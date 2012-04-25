@@ -2,26 +2,13 @@
   ROOT_LOGGER.debug("Initializing Transactions Extension");
   final LogStoreResource resource=new LogStoreResource();
   final boolean registerRuntimeOnly=context.isRuntimeOnlyRegistrationValid();
-  final SubsystemRegistration subsystem=context.registerSubsystem(SUBSYSTEM_NAME,1,0);
+  final SubsystemRegistration subsystem=context.registerSubsystem(SUBSYSTEM_NAME,1,1);
   final ManagementResourceRegistration registration=subsystem.registerSubsystemModel(new TransactionSubsystemRootResourceDefinition(registerRuntimeOnly));
   registration.registerOperationHandler(DESCRIBE,GenericSubsystemDescribeHandler.INSTANCE,GenericSubsystemDescribeHandler.INSTANCE,false,OperationEntry.EntryType.PRIVATE);
-  PathElement logStorePath=PathElement.pathElement(LogStoreConstants.LOG_STORE,LogStoreConstants.LOG_STORE);
-  ManagementResourceRegistration logStoreChild=registration.registerSubModel(logStorePath,LogStoreProviders.LOG_STORE_MODEL_CHILD);
-  logStoreChild.registerOperationHandler(ModelDescriptionConstants.ADD,new LogStoreAddHandler(resource),LogStoreProviders.ADD_LOG_STORE_MODEL_CHILD);
-  logStoreChild.registerOperationHandler(ModelDescriptionConstants.REMOVE,ReloadRequiredRemoveStepHandler.INSTANCE,LogStoreProviders.REMOVE_LOG_STORE_MODEL_CHILD);
-  logStoreChild.registerOperationHandler(LogStoreConstants.PROBE,LogStoreProbeHandler.INSTANCE,LogStoreProviders.PROBE_OPERATION);
-  if (context.isRuntimeOnlyRegistrationValid()) {
-    PathElement transactionPath=PathElement.pathElement(LogStoreConstants.TRANSACTIONS);
-    ManagementResourceRegistration transactionChild=logStoreChild.registerSubModel(transactionPath,LogStoreProviders.TRANSACTION_CHILD);
-    transactionChild.registerOperationHandler(LogStoreConstants.DELETE,new LogStoreTransactionDeleteHandler(resource),LogStoreProviders.DELETE_OPERATION);
-    PathElement partecipantPath=PathElement.pathElement(LogStoreConstants.PARTICIPANTS);
-    ManagementResourceRegistration partecipantChild=transactionChild.registerSubModel(partecipantPath,LogStoreProviders.PARTECIPANT_CHILD);
-    for (    final SimpleAttributeDefinition attribute : LogStoreProviders.PARTECIPANT_RW_ATTRIBUTE) {
-      partecipantChild.registerReadWriteAttribute(attribute,null,new ParticipantWriteAttributeHandler(attribute));
-    }
-    final LogStoreParticipantRefreshHandler refreshHandler=LogStoreParticipantRefreshHandler.INSTANCE;
-    partecipantChild.registerOperationHandler(LogStoreConstants.REFRESH,refreshHandler,LogStoreProviders.REFRESH_OPERATION);
-    partecipantChild.registerOperationHandler(LogStoreConstants.RECOVER,new LogStoreParticipantRecoveryHandler(refreshHandler),LogStoreProviders.RECOVER_OPERATION);
+  ManagementResourceRegistration logStoreChild=registration.registerSubModel(new LogStoreDefinition(resource));
+  if (registerRuntimeOnly) {
+    ManagementResourceRegistration transactionChild=logStoreChild.registerSubModel(new LogStoreTransactionDefinition(resource));
+    ManagementResourceRegistration partecipantChild=transactionChild.registerSubModel(LogStoreTransactionParticipantDefinition.INSTANCE);
   }
   subsystem.registerXMLElementWriter(TransactionSubsystem12Parser.INSTANCE);
 }
