@@ -9,18 +9,8 @@
         if (!localAnnotations.getClassLevelAnnotations().isEmpty()) {
           localHome=localAnnotations.getClassLevelAnnotations().get(0);
           if (description.getEjbLocalView() == null) {
-            final Class localHomeClass=module.getClassLoader().loadClass(localHome);
-            final ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(localHomeClass);
-            Class<?> localClass=null;
-            for (            final Method method : index.getMethods()) {
-              if (method.getName().startsWith("create")) {
-                if (localClass != null && localClass != method.getReturnType()) {
-                  throw MESSAGES.multipleCreateMethod(localHomeClass);
-                }
-                localClass=method.getReturnType();
-              }
-            }
-            description.addEjbLocalObjectView(localClass.getName());
+            final String localClassName=this.inferLocalInterfaceFromLocalHome(localHome,module,deploymentReflectionIndex,description);
+            description.addEjbLocalObjectView(localClassName);
           }
         }
       }
@@ -29,21 +19,8 @@
         if (!remoteAnnotations.getClassLevelAnnotations().isEmpty()) {
           home=remoteAnnotations.getClassLevelAnnotations().get(0);
           if (description.getEjbRemoteView() == null) {
-            final Class homeClass=module.getClassLoader().loadClass(home);
-            final ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(homeClass);
-            Class<?> remote=null;
-            for (            final Method method : index.getMethods()) {
-              if (method.getName().startsWith("create")) {
-                if (remote != null && remote != method.getReturnType()) {
-                  throw MESSAGES.multipleCreateMethod(homeClass);
-                }
-                remote=method.getReturnType();
-              }
-            }
-            if (remote == null) {
-              throw new DeploymentUnitProcessingException("Could not determine remove interface type from home " + homeClass + " for bean "+ description.getEJBName());
-            }
-            description.addEjbObjectView(remote.getName());
+            final String remoteClassName=this.inferRemoteInterfaceFromHome(home,module,deploymentReflectionIndex,description);
+            description.addEjbObjectView(remoteClassName);
           }
         }
       }
@@ -63,5 +40,13 @@
   }
   if (home != null) {
     description.addRemoteHome(home);
+  }
+  if (description.getEjbHomeView() != null && description.getEjbRemoteView() == null) {
+    final String remoteClassName=this.inferRemoteInterfaceFromHome(description.getEjbHomeView().getViewClassName(),module,deploymentReflectionIndex,description);
+    description.addEjbObjectView(remoteClassName);
+  }
+  if (description.getEjbLocalHomeView() != null && description.getEjbLocalView() == null) {
+    final String localClassName=this.inferLocalInterfaceFromLocalHome(description.getEjbLocalHomeView().getViewClassName(),module,deploymentReflectionIndex,description);
+    description.addEjbLocalObjectView(localClassName);
   }
 }
