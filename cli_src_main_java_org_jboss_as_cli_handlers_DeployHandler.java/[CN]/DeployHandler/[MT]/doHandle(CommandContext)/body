@@ -21,6 +21,24 @@
  else {
     f=null;
   }
+  if (isCliArchive(f)) {
+    final ModelNode request=buildRequest(ctx);
+    if (request == null) {
+      throw new CommandFormatException("Operation request wasn't built.");
+    }
+    try {
+      final ModelNode result=client.execute(request);
+      if (Util.isSuccess(result)) {
+        return;
+      }
+ else {
+        throw new CommandFormatException("Failed to execute archive script: " + Util.getFailureDescription(result));
+      }
+    }
+ catch (    IOException e) {
+      throw new CommandFormatException("Failed to execute archive script: " + e.getLocalizedMessage(),e);
+    }
+  }
   String name=this.name.getValue(args);
   if (name == null) {
     if (f == null) {
@@ -33,16 +51,12 @@
   final boolean disabled=this.disabled.isPresent(args);
   final String serverGroups=this.serverGroups.getValue(args);
   final boolean allServerGroups=this.allServerGroups.isPresent(args);
-  final boolean archive=isCliArchive(f);
   if (force) {
     if (f == null) {
       throw new CommandFormatException(this.force.getFullName() + " requires a filesystem path of the deployment to be added to the deployment repository.");
     }
     if (disabled || serverGroups != null || allServerGroups) {
       throw new CommandFormatException(this.force.getFullName() + " only replaces the content in the deployment repository and can't be used in combination with any of " + this.disabled.getFullName()+ ", "+ this.serverGroups.getFullName()+ " or "+ this.allServerGroups.getFullName()+ '.');
-    }
-    if (archive) {
-      throw new OperationFormatException(this.force.getFullName() + " can't be used in combination with a CLI archive.");
     }
     if (Util.isDeploymentInRepository(name,client)) {
       replaceDeployment(ctx,f,name,runtimeName);
@@ -61,39 +75,12 @@
     if (serverGroups != null || allServerGroups) {
       throw new CommandFormatException(this.serverGroups.getFullName() + " and " + this.allServerGroups.getFullName()+ " can't be used in combination with "+ this.disabled.getFullName()+ '.');
     }
-    if (archive) {
-      throw new OperationFormatException(this.disabled.getFullName() + " can't be used in combination with a CLI archive.");
-    }
     if (Util.isDeploymentInRepository(name,client)) {
       throw new CommandFormatException("'" + name + "' already exists in the deployment repository (use "+ this.force.getFullName()+ " to replace the existing content in the repository).");
     }
     final ModelNode request=buildAddRequest(ctx,f,name,runtimeName,unmanaged);
     execute(ctx,request,f,unmanaged);
     return;
-  }
-  if (archive) {
-    ModelNode request;
-    try {
-      request=buildRequest(ctx);
-    }
- catch (    CommandFormatException e1) {
-      throw new CommandFormatException(e1.getLocalizedMessage());
-    }
-    if (request == null) {
-      throw new CommandFormatException("Operation request wasn't built.");
-    }
-    try {
-      ModelNode result=client.execute(request);
-      if (Util.isSuccess(result)) {
-        return;
-      }
- else {
-        throw new CommandFormatException("Failed to execute archive script: " + Util.getFailureDescription(result));
-      }
-    }
- catch (    Exception e) {
-      throw new CommandFormatException("Failed to execute archive script: " + e.getLocalizedMessage());
-    }
   }
   final ModelNode deployRequest;
   if (ctx.isDomainMode()) {
@@ -163,7 +150,7 @@
       throw new CommandFormatException(Util.getFailureDescription(result));
     }
   }
- catch (  Exception e) {
-    throw new CommandFormatException("Failed to deploy: " + e.getLocalizedMessage());
+ catch (  IOException e) {
+    throw new CommandFormatException("Failed to deploy: " + e.getLocalizedMessage(),e);
   }
 }
