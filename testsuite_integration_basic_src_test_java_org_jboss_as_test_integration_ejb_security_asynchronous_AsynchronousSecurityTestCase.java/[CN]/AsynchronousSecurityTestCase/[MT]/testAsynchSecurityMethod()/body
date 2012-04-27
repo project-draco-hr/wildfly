@@ -1,0 +1,59 @@
+{
+  SecuredStatelessRemote securedBean=lookupInterface(SecuredStatelessBean.class,SecuredStatelessRemote.class);
+  boolean result=false;
+  Future<Boolean> future;
+  SecuredStatelessBean.reset();
+  LoginContext lc=Util.getCLMLoginContext("somebody","password");
+  lc.login();
+  try {
+    future=securedBean.method();
+    SecuredStatelessBean.startLatch.countDown();
+    result=future.get();
+  }
+  finally {
+    lc.logout();
+  }
+  Assert.assertTrue(result);
+  SecuredStatelessBean.reset();
+  future=null;
+  result=false;
+  lc=Util.getCLMLoginContext("rolefail","password");
+  lc.login();
+  try {
+    future=securedBean.method();
+    SecuredStatelessBean.startLatch.countDown();
+    result=future.get();
+  }
+ catch (  ExecutionException ee) {
+    if (!(ee.getCause() instanceof EJBAccessException)) {
+      Assert.fail("Exception cause was not EJBAccessException and was " + ee);
+    }
+  }
+catch (  EJBAccessException ejbe) {
+  }
+ finally {
+    lc.logout();
+  }
+  Assert.assertFalse(result);
+  SecuredStatelessBean.reset();
+  future=null;
+  result=false;
+  lc=Util.getCLMLoginContext("nosuchuser","password");
+  lc.login();
+  try {
+    future=securedBean.method();
+    SecuredStatelessBean.startLatch.countDown();
+    result=future.get();
+  }
+ catch (  ExecutionException ee) {
+    if (!(ee.getCause() instanceof EJBAccessException)) {
+      Assert.fail("Exception cause was not EJBAccessException and was " + ee);
+    }
+  }
+catch (  EJBAccessException ejbe) {
+  }
+ finally {
+    lc.logout();
+  }
+  Assert.assertFalse(result);
+}

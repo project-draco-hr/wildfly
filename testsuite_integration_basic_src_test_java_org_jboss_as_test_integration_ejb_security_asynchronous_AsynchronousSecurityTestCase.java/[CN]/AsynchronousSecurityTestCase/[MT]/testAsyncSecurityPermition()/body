@@ -1,0 +1,31 @@
+{
+  SecuredStatelessBean.reset();
+  SecuredStatelessRemote securedBean=lookupInterface(SecuredStatelessBean.class,SecuredStatelessRemote.class);
+  LoginContext lc=Util.getCLMLoginContext("rolefail","password");
+  lc.login();
+  try {
+    Future<Boolean> future=securedBean.uncheckedMethod();
+    SecuredStatelessBean.startLatch.countDown();
+    boolean result=future.get();
+    Assert.assertTrue(result);
+    future=null;
+    result=false;
+    SecuredStatelessBean.reset();
+    try {
+      future=securedBean.excludedMethod();
+      SecuredStatelessBean.startLatch.countDown();
+      result=future.get();
+    }
+ catch (    ExecutionException ee) {
+      if (!(ee.getCause() instanceof EJBAccessException)) {
+        Assert.fail("Exception cause was not EJBAccessException and was " + ee);
+      }
+    }
+catch (    EJBAccessException ejbe) {
+    }
+    Assert.assertFalse(result);
+  }
+  finally {
+    lc.logout();
+  }
+}
