@@ -1,11 +1,20 @@
 {
   context.acquireControllerLock();
+  if (domainController.isHostRegistered(registrationContext.hostName)) {
+    final String failureDescription=DomainControllerMessages.MESSAGES.slaveAlreadyRegistered(registrationContext.hostName);
+    registrationContext.failed(SlaveRegistrationException.ErrorCode.HOST_ALREADY_EXISTS,failureDescription);
+    context.getFailureDescription().set(failureDescription);
+    context.completeStep();
+    return;
+  }
   final Resource root=context.readResource(PathAddress.EMPTY_ADDRESS);
   final ModelNode hostInfo=registrationContext.hostInfo;
   boolean as711=hostInfo.get(MANAGEMENT_MAJOR_VERSION).asInt() == 1 && hostInfo.get(MANAGEMENT_MINOR_VERSION).asInt() == 1;
-  final ModelNode subsystems;
+  final Transformers transformers;
   if (as711) {
-    throw HostControllerMessages.MESSAGES.unsupportedManagementVersionForHost(hostInfo.get(MANAGEMENT_MAJOR_VERSION).asInt(),hostInfo.get(MANAGEMENT_MINOR_VERSION).asInt(),1,2);
+    final OperationFailedException failure=HostControllerMessages.MESSAGES.unsupportedManagementVersionForHost(hostInfo.get(MANAGEMENT_MAJOR_VERSION).asInt(),hostInfo.get(MANAGEMENT_MINOR_VERSION).asInt(),1,2);
+    registrationContext.failed(failure);
+    throw failure;
   }
  else {
     final ModelNode extensions=new ModelNode();
@@ -13,11 +22,9 @@
     for (    final Resource.ResourceEntry entry : resources) {
       extensions.add(entry.getName());
     }
-    subsystems=registrationContext.resolveSubsystemVersions(extensions);
+    transformers=registrationContext.createTransfomers(extensions);
   }
-  final ReadMasterDomainModelHandler handler=new ReadMasterDomainModelHandler(registrationContext.transformers);
-  final ModelNode op=READ_DOMAIN_MODEL.clone();
-  op.get(SUBSYSTEM).set(subsystems);
-  context.addStep(op,handler,OperationContext.Stage.MODEL);
-  context.completeStep();
+  final ReadMasterDomainModelHandler handler=new ReadMasterDomainModelHandler(transformers);
+  context.addStep(READ_DOMAIN_MODEL,handler,OperationContext.Stage.MODEL);
+  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
 }

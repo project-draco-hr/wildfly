@@ -1,43 +1,18 @@
 {
-synchronized (this) {
-    if (domainController.isHostRegistered(hostName)) {
-      failed(SlaveRegistrationException.ErrorCode.HOST_ALREADY_EXISTS,DomainControllerMessages.MESSAGES.slaveAlreadyRegistered(hostName));
-      return;
-    }
-    try {
-      sendResponse(responseChannel,DomainControllerProtocol.PARAM_OK,result);
-    }
- catch (    IOException e) {
-      ProtocolLogger.ROOT_LOGGER.debugf(e,"failed to process message");
-      failed(SlaveRegistrationException.ErrorCode.UNKNOWN,e.getClass().getName() + ":" + e.getMessage());
-      return;
+  final Boolean registered=executeBlocking(new IOTask<Boolean>(){
+    @Override void sendMessage(    final FlushableDataOutput output) throws IOException {
+      sendResponse(output,DomainControllerProtocol.PARAM_OK,result);
     }
   }
-  try {
-    completedLatch.await();
-  }
- catch (  InterruptedException e) {
-    failed(SlaveRegistrationException.ErrorCode.UNKNOWN,e.getClass().getName() + ":" + e.getMessage());
-    Thread.currentThread().interrupt();
+);
+  if (!registered) {
+    transaction.rollback();
     return;
   }
 synchronized (this) {
-    if (failed) {
-      return;
-    }
     final PathAddress addr=PathAddress.pathAddress(PathElement.pathElement(ModelDescriptionConstants.HOST,hostName));
-    final RemoteProxyController proxy=RemoteProxyController.create(handler,addr,ProxyOperationAddressTranslator.HOST);
-    try {
-      domainController.registerRemoteHost(proxy);
-    }
- catch (    SlaveRegistrationException e) {
-      failed(e.getErrorCode(),e.getErrorMessage());
-      return;
-    }
-catch (    Exception e) {
-      failed(SlaveRegistrationException.ErrorCode.UNKNOWN,e.getClass().getName() + ":" + e.getMessage());
-      return;
-    }
+    final TransformingProxyController transforming=TransformingProxyController.Factory.create(handler,transformers,addr,ProxyOperationAddressTranslator.HOST);
+    domainController.registerRemoteHost(transforming);
     if (!failed) {
       transaction.commit();
     }
