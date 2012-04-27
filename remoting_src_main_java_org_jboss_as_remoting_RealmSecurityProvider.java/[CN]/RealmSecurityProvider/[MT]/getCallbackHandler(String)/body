@@ -1,2 +1,82 @@
 {
+  if (ANONYMOUS.equals(mechanismName) && realm == null) {
+    return new RealmCallbackHandler(new org.jboss.as.domain.management.AuthorizingCallbackHandler(){
+      public void handle(      Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+        for (        Callback current : callbacks) {
+          throw MESSAGES.anonymousMechanismNotExpected(current);
+        }
+      }
+      public SubjectUserInfo createSubjectUserInfo(      Collection<Principal> remotingPrincipals) throws IOException {
+        final Subject subject=new Subject();
+        Collection<Principal> allPrincipals=subject.getPrincipals();
+        for (        Principal userPrincipal : remotingPrincipals) {
+          allPrincipals.add(userPrincipal);
+          if (userPrincipal instanceof UserPrincipal) {
+            allPrincipals.add(new RealmUser(userPrincipal.getName()));
+          }
+        }
+        final String userName=subject.getPrincipals(RealmUser.class).iterator().next().getName();
+        return new SubjectUserInfo(){
+          public String getUserName(){
+            return userName;
+          }
+          public Subject getSubject(){
+            return subject;
+          }
+          public Collection<Principal> getPrincipals(){
+            return subject.getPrincipals();
+          }
+        }
+;
+      }
+    }
+);
+  }
+  if (JBOSS_LOCAL_USER.equals(mechanismName)) {
+    return new RealmCallbackHandler(realm.getAuthorizingCallbackHandler(AuthenticationMechanism.LOCAL));
+  }
+  if (EXTERNAL.equals(mechanismName)) {
+    return new RealmCallbackHandler(realm.getAuthorizingCallbackHandler(AuthenticationMechanism.CLIENT_CERT));
+  }
+  final RealmCallbackHandler realmCallbackHandler;
+  if (DIGEST_MD5.equals(mechanismName)) {
+    realmCallbackHandler=new RealmCallbackHandler(realm.getAuthorizingCallbackHandler(AuthenticationMechanism.DIGEST));
+  }
+ else   if (PLAIN.equals(mechanismName)) {
+    realmCallbackHandler=new RealmCallbackHandler(realm.getAuthorizingCallbackHandler(AuthenticationMechanism.PLAIN));
+  }
+ else {
+    return null;
+  }
+  if (serverCallbackHandler == null) {
+    return realmCallbackHandler;
+  }
+  return new AuthorizingCallbackHandler(){
+    public void handle(    Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+      serverCallbackHandler.handle(callbacks);
+      if (handled(callbacks) == false) {
+        realmCallbackHandler.handle(callbacks);
+      }
+    }
+    private boolean handled(    Callback[] callbacks){
+      for (      Callback current : callbacks) {
+        if (current instanceof PasswordCallback) {
+          PasswordCallback pcb=(PasswordCallback)current;
+          char[] password=pcb.getPassword();
+          return (password != null && password.length > 0);
+        }
+ else         if (current instanceof VerifyPasswordCallback) {
+          return ((VerifyPasswordCallback)current).isVerified();
+        }
+ else         if (current instanceof DigestHashCallback) {
+          return ((DigestHashCallback)current).getHash() != null;
+        }
+      }
+      return false;
+    }
+    public UserInfo createUserInfo(    Collection<Principal> remotingPrincipals) throws IOException {
+      return realmCallbackHandler.createUserInfo(remotingPrincipals);
+    }
+  }
+;
 }

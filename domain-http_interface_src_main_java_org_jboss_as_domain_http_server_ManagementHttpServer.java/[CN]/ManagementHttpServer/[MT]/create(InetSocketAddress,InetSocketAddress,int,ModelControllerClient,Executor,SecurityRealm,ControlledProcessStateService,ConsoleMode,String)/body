@@ -3,18 +3,22 @@
   Authenticator auth=null;
   final CertAuth certAuthMode;
   if (securityRealm != null) {
-    DomainCallbackHandler callbackHandler=securityRealm.getCallbackHandler();
-    Class<Callback>[] supportedCallbacks=callbackHandler.getSupportedCallbacks();
-    if (DigestAuthenticator.requiredCallbacksSupported(supportedCallbacks)) {
-      auth=new DigestAuthenticator(new AuthenticationProvider(securityRealm),securityRealm.getName(),contains(DigestHashCallback.class,supportedCallbacks));
+    Set<AuthenticationMechanism> authenticationMechanisms=securityRealm.getSupportedAuthenticationMechanisms();
+    if (authenticationMechanisms.contains(AuthenticationMechanism.DIGEST)) {
+      Map<String,String> mechConfig=securityRealm.getMechanismConfig(AuthenticationMechanism.DIGEST);
+      boolean plainTextDigest=true;
+      if (mechConfig.containsKey(DIGEST_PLAIN_TEXT)) {
+        plainTextDigest=Boolean.parseBoolean(mechConfig.get(DIGEST_PLAIN_TEXT));
+      }
+      auth=new DigestAuthenticator(securityRealm,plainTextDigest == false);
     }
- else     if (BasicAuthenticator.requiredCallbacksSupported(supportedCallbacks)) {
-      auth=new BasicAuthenticator(new AuthenticationProvider(securityRealm),securityRealm.getName());
+ else     if (authenticationMechanisms.contains(AuthenticationMechanism.PLAIN)) {
+      auth=new BasicAuthenticator(securityRealm);
     }
-    if (securityRealm.hasTrustStore()) {
+    if (authenticationMechanisms.contains(AuthenticationMechanism.CLIENT_CERT)) {
       if (auth == null) {
         certAuthMode=CertAuth.NEED;
-        auth=new ClientCertAuthenticator(new AuthenticationProvider(securityRealm),securityRealm.getName());
+        auth=new ClientCertAuthenticator(securityRealm);
       }
  else {
         certAuthMode=CertAuth.WANT;

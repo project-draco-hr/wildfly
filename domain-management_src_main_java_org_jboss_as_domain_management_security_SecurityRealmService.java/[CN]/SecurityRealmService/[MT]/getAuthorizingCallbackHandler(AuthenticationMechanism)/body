@@ -1,0 +1,44 @@
+{
+  final CallbackHandlerService handlerService=getCallbackHandlerService(mechanism);
+  return new AuthorizingCallbackHandler(){
+    CallbackHandler handler=handlerService.getCallbackHandler();
+    Map<String,String> options=handlerService.getConfigurationOptions();
+    final boolean subjectCallbackSupported;
+{
+      if (options.containsKey(SUBJECT_CALLBACK_SUPPORTED)) {
+        subjectCallbackSupported=Boolean.parseBoolean(options.get(SUBJECT_CALLBACK_SUPPORTED));
+      }
+ else {
+        subjectCallbackSupported=false;
+      }
+    }
+    Subject subject;
+    public void handle(    Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+      if (subjectCallbackSupported) {
+        Callback[] newCallbacks=new Callback[callbacks.length + 1];
+        System.arraycopy(callbacks,0,newCallbacks,0,callbacks.length);
+        SubjectCallback subjectCallBack=new SubjectCallback();
+        newCallbacks[newCallbacks.length - 1]=subjectCallBack;
+        handler.handle(newCallbacks);
+        subject=subjectCallBack.getSubject();
+      }
+ else {
+        handler.handle(callbacks);
+      }
+    }
+    public SubjectUserInfo createSubjectUserInfo(    Collection<Principal> userPrincipals) throws IOException {
+      Subject subject=this.subject == null ? new Subject() : this.subject;
+      Collection<Principal> allPrincipals=subject.getPrincipals();
+      for (      Principal userPrincipal : userPrincipals) {
+        allPrincipals.add(userPrincipal);
+        allPrincipals.add(new RealmUser(getName(),userPrincipal.getName()));
+      }
+      SubjectSupplemental subjectSupplemental=getSubjectSupplemental();
+      if (subjectSupplemental != null) {
+        subjectSupplemental.supplementSubject(subject);
+      }
+      return new RealmSubjectUserInfo(subject);
+    }
+  }
+;
+}

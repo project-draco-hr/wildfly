@@ -10,23 +10,38 @@
   if (securityRealm == null) {
     throw SecurityMessages.MESSAGES.realmNotFound(realm);
   }
-  Class[] supportedCallbacks=securityRealm.getCallbackHandler().getSupportedCallbacks();
-  if (contains(VerifyPasswordCallback.class,supportedCallbacks)) {
-    validationMode=ValidationMode.VALIDATION;
+  Set<AuthenticationMechanism> authMechs=securityRealm.getSupportedAuthenticationMechanisms();
+  if (authMechs.contains(AuthenticationMechanism.DIGEST)) {
+    chosenMech=AuthenticationMechanism.DIGEST;
   }
- else   if (contains(DigestHashCallback.class,supportedCallbacks)) {
-    validationMode=ValidationMode.DIGEST;
-    try {
-      hashUtil=new UsernamePasswordHashUtil();
-    }
- catch (    NoSuchAlgorithmException e) {
-      throw new IllegalStateException(e);
-    }
-  }
- else   if (contains(PasswordCallback.class,supportedCallbacks)) {
-    validationMode=ValidationMode.PASSWORD;
+ else   if (authMechs.contains(AuthenticationMechanism.PLAIN)) {
+    chosenMech=AuthenticationMechanism.PLAIN;
   }
  else {
     throw SecurityMessages.MESSAGES.noPasswordValidationAvailable(realm);
+  }
+  Map<String,String> mechOpts=securityRealm.getMechanismConfig(chosenMech);
+  if (mechOpts.containsKey(VERIFY_PASSWORD_CALLBACK_SUPPORTED) && Boolean.parseBoolean(mechOpts.get(VERIFY_PASSWORD_CALLBACK_SUPPORTED))) {
+    validationMode=ValidationMode.VALIDATION;
+  }
+ else {
+    if (chosenMech == AuthenticationMechanism.DIGEST) {
+      boolean plainTextDigest=true;
+      if (mechOpts.containsKey(DIGEST_PLAIN_TEXT) && Boolean.parseBoolean(mechOpts.get(DIGEST_PLAIN_TEXT))) {
+        validationMode=ValidationMode.PASSWORD;
+      }
+ else {
+        validationMode=ValidationMode.DIGEST;
+        try {
+          hashUtil=new UsernamePasswordHashUtil();
+        }
+ catch (        NoSuchAlgorithmException e) {
+          throw new IllegalStateException(e);
+        }
+      }
+    }
+ else {
+      validationMode=ValidationMode.PASSWORD;
+    }
   }
 }
