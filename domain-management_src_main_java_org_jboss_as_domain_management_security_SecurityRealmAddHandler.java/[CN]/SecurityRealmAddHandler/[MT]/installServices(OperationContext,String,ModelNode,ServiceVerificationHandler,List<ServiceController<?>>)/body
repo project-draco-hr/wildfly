@@ -1,4 +1,5 @@
 {
+  final ModelNode plugIns=model.hasDefined(PLUG_IN) ? model.get(PLUG_IN) : null;
   final ModelNode authentication=model.hasDefined(AUTHENTICATION) ? model.get(AUTHENTICATION) : null;
   final ModelNode authorization=model.hasDefined(AUTHORIZATION) ? model.get(AUTHORIZATION) : null;
   final ModelNode serverIdentities=model.hasDefined(SERVER_IDENTITY) ? model.get(SERVER_IDENTITY) : null;
@@ -6,9 +7,13 @@
   final SecurityRealmService securityRealmService=new SecurityRealmService(realmName);
   final ServiceName realmServiceName=SecurityRealmService.BASE_SERVICE_NAME.append(realmName);
   ServiceBuilder<?> realmBuilder=serviceTarget.addService(realmServiceName,securityRealmService);
+  ServiceName plugInLoaderName=null;
   ServiceName authenticationName=null;
   ServiceName authorizationName=null;
   ModelNode authTruststore=null;
+  if (plugIns != null) {
+    plugInLoaderName=addPlugInLoaderService(realmServiceName,plugIns,serviceTarget,newControllers);
+  }
   if (authentication != null) {
     if (authentication.hasDefined(TRUSTSTORE)) {
       authTruststore=authentication.require(TRUSTSTORE);
@@ -24,6 +29,9 @@
     }
  else     if (authentication.hasDefined(LDAP)) {
       authenticationName=addLdapService(authentication.require(LDAP),realmServiceName,securityRealmService,serviceTarget,newControllers);
+    }
+ else     if (authentication.hasDefined(PLUG_IN)) {
+      authenticationName=addPlugInAuthenticationService(authentication.require(PLUG_IN),realmServiceName,plugInLoaderName,securityRealmService,serviceTarget,newControllers);
     }
  else     if (authentication.hasDefined(PROPERTIES)) {
       authenticationName=addPropertiesAuthenticationService(authentication.require(PROPERTIES),realmServiceName,realmName,securityRealmService,serviceTarget,newControllers);

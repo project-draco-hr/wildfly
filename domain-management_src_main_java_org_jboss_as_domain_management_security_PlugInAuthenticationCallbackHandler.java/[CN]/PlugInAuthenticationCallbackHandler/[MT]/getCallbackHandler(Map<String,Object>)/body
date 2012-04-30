@@ -1,0 +1,108 @@
+{
+  final AuthenticationPlugIn ap=plugInLoader.getValue().loadAuthenticationPlugIn(name);
+  if (ap instanceof PlugInConfigurationSupport) {
+    PlugInConfigurationSupport pcf=(PlugInConfigurationSupport)ap;
+    try {
+      pcf.init(configurationProperties,sharedState);
+    }
+ catch (    IOException e) {
+      throw MESSAGES.unableToInitialisePlugIn(name,e.getMessage());
+    }
+  }
+  return new CallbackHandler(){
+    public void handle(    Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+      List<Callback> toRespondTo=new LinkedList<Callback>();
+      String userName=null;
+      Credential credential=null;
+      for (      Callback current : callbacks) {
+        if (current instanceof AuthorizeCallback) {
+          toRespondTo.add(current);
+        }
+ else         if (current instanceof NameCallback) {
+          NameCallback nameCallback=(NameCallback)current;
+          userName=nameCallback.getDefaultName();
+          Identity identity=ap.loadIdentity(userName,realmName);
+          if (identity != null) {
+            credential=identity.getCredential();
+          }
+        }
+ else         if (current instanceof PasswordCallback) {
+          toRespondTo.add(current);
+        }
+ else         if (current instanceof DigestHashCallback) {
+          toRespondTo.add(current);
+        }
+ else         if (current instanceof VerifyPasswordCallback) {
+          toRespondTo.add(current);
+        }
+ else         if (current instanceof RealmCallback) {
+          String realm=((RealmCallback)current).getDefaultText();
+          if (realmName.equals(realm) == false) {
+            throw MESSAGES.invalidRealm(realm,realmName);
+          }
+        }
+ else {
+          throw new UnsupportedCallbackException(current);
+        }
+      }
+      for (      Callback current : toRespondTo) {
+        if (current instanceof AuthorizeCallback) {
+          AuthorizeCallback authorizeCallback=(AuthorizeCallback)current;
+          authorizeCallback.setAuthorized(authorizeCallback.getAuthenticationID().equals(authorizeCallback.getAuthorizationID()));
+        }
+ else         if (current instanceof PasswordCallback) {
+          if (credential == null) {
+            throw new UserNotFoundException(userName);
+          }
+          if (credential instanceof PasswordCredential) {
+            ((PasswordCallback)current).setPassword(((PasswordCredential)credential).getPassword());
+          }
+ else {
+            throw new UnsupportedCallbackException(current);
+          }
+        }
+ else         if (current instanceof DigestHashCallback) {
+          if (credential == null) {
+            throw new UserNotFoundException(userName);
+          }
+          if (credential instanceof DigestCredential) {
+            ((DigestHashCallback)current).setHexHash(((DigestCredential)credential).getHash());
+          }
+ else           if (credential instanceof PasswordCredential) {
+            UsernamePasswordHashUtil hashUtil=getHashUtil();
+            String hash;
+synchronized (hashUtil) {
+              hash=hashUtil.generateHashedHexURP(userName,realmName,((PasswordCredential)credential).getPassword());
+            }
+            ((DigestHashCallback)current).setHexHash(hash);
+          }
+ else {
+            throw new UnsupportedCallbackException(current);
+          }
+        }
+ else         if (current instanceof VerifyPasswordCallback) {
+          if (credential == null) {
+            throw new UserNotFoundException(userName);
+          }
+          VerifyPasswordCallback vpc=(VerifyPasswordCallback)current;
+          if (credential instanceof PasswordCredential) {
+            vpc.setVerified(Arrays.equals(((PasswordCredential)credential).getPassword(),vpc.getPassword().toCharArray()));
+          }
+ else           if (credential instanceof DigestCredential) {
+            UsernamePasswordHashUtil hashUtil=getHashUtil();
+            String hash;
+synchronized (hashUtil) {
+              hash=hashUtil.generateHashedHexURP(userName,realmName,vpc.getPassword().toCharArray());
+            }
+            String expected=((DigestCredential)credential).getHash();
+            vpc.setVerified(expected.equals(hash));
+          }
+ else           if (credential instanceof ValidatePasswordCredential) {
+            vpc.setVerified(((ValidatePasswordCredential)credential).validatePassword(vpc.getPassword().toCharArray()));
+          }
+        }
+      }
+    }
+  }
+;
+}
