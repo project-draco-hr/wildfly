@@ -1,0 +1,26 @@
+{
+  Assert.assertNotNull(statefulBean);
+  int clientNumber=40;
+  String calledNodeFirst=statefulBean.setNumber(clientNumber);
+  statefulBean.setPassivationNode(calledNodeFirst);
+  statefulBean.incrementNumber();
+  Assert.assertEquals(++clientNumber,statefulBean.getNumber());
+  log.info("Called node name first: " + calledNodeFirst);
+  Thread.sleep(WAIT_FOR_PASSIVATION_MS);
+  EJBClientContext.requireCurrent().getClusterContext(CLUSTER_NAME).removeClusterNode(calledNodeFirst);
+  Assert.assertEquals("Supposing to get passivation node which was set",calledNodeFirst,statefulBean.getPassivatedBy());
+  String calledNodeSecond=statefulBean.incrementNumber();
+  statefulBean.setPassivationNode(calledNodeSecond);
+  log.info("Called node name second: " + calledNodeSecond);
+  Thread.sleep(WAIT_FOR_PASSIVATION_MS);
+  setupEJBClientContextSelector();
+  waitForClusterContext();
+  deployer.undeploy(node2deployment.get(calledNodeSecond));
+  controller.stop(node2container.get(calledNodeSecond));
+  Assert.assertEquals(++clientNumber,statefulBean.getNumber());
+  String calledNode=statefulBean.incrementNumber();
+  Assert.assertEquals("It can't be node " + calledNodeSecond + " because is switched off",calledNodeFirst,calledNode);
+  Assert.assertEquals("Supposing to get passivation node which was set",calledNodeSecond,statefulBean.getPassivatedBy());
+  Thread.sleep(WAIT_FOR_PASSIVATION_MS);
+  Assert.assertEquals(++clientNumber,statefulBean.getNumber());
+}
