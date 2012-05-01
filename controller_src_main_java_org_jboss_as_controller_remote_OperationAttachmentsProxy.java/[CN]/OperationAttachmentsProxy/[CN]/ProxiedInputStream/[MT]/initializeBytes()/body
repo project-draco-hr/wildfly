@@ -1,6 +1,8 @@
 {
-  if (bytes == null) {
+  if (!initialized) {
+    initialized=true;
     try {
+      final PipedOutputStream os=new PipedOutputStream(pipe);
       channelAssociation.executeRequest(batchId,new AbstractManagementRequest<Object,Object>(){
         @Override public byte getOperationType(){
           return ModelControllerProtocol.GET_INPUTSTREAM_REQUEST;
@@ -10,23 +12,30 @@
           output.writeInt(index);
         }
         @Override public void handleRequest(        DataInput input,        ActiveOperation.ResultHandler<Object> resultHandler,        ManagementRequestContext<Object> context) throws IOException {
-synchronized (ProxiedInputStream.this) {
+          try {
             ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_INPUTSTREAM_LENGTH);
             final int size=input.readInt();
             ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_INPUTSTREAM_CONTENTS);
-            final byte[] buf=new byte[size];
-            for (int i=0; i < size; i++) {
-              buf[i]=input.readByte();
+            final byte[] buffer=new byte[BUFFER_SIZE];
+            int totalRead=0;
+            while (totalRead < size) {
+              int len=Math.min((int)(size - totalRead),buffer.length);
+              input.readFully(buffer,0,len);
+              os.write(buffer,0,len);
+              totalRead+=len;
             }
-            bytes=buf;
-            ProxiedInputStream.this.notifyAll();
+            os.close();
+          }
+ catch (          IOException e) {
+            shutdown(e);
+            throw e;
           }
         }
       }
 );
     }
  catch (    IOException e) {
-      error=e;
+      shutdown(e);
     }
   }
 }
