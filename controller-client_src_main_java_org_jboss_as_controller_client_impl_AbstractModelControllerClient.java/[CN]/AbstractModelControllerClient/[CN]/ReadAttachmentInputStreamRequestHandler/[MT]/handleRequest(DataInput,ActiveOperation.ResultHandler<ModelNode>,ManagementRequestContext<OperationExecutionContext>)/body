@@ -6,23 +6,25 @@
       final OperationExecutionContext exec=context.getAttachment();
       final ManagementRequestHeader header=ManagementRequestHeader.class.cast(context.getRequestHeader());
       final ManagementResponseHeader response=new ManagementResponseHeader(header.getVersion(),header.getRequestId(),null);
-      final InputStream is=exec.getOperation().getInputStreams().get(index);
-      try {
-        final ByteArrayOutputStream bout=copyStream(is);
-        final FlushableDataOutput output=context.writeMessage(response);
+      final InputStreamEntry entry=exec.getStream(index);
+synchronized (entry) {
+        final int size=entry.initialize();
         try {
-          output.writeByte(ModelControllerProtocol.PARAM_INPUTSTREAM_LENGTH);
-          output.writeInt(bout.size());
-          output.writeByte(ModelControllerProtocol.PARAM_INPUTSTREAM_CONTENTS);
-          output.write(bout.toByteArray());
-          output.writeByte(ManagementProtocol.RESPONSE_END);
-          output.close();
+          final FlushableDataOutput output=context.writeMessage(response);
+          try {
+            output.writeByte(ModelControllerProtocol.PARAM_INPUTSTREAM_LENGTH);
+            output.writeInt(size);
+            output.writeByte(ModelControllerProtocol.PARAM_INPUTSTREAM_CONTENTS);
+            entry.copyStream(output);
+            output.writeByte(ManagementProtocol.RESPONSE_END);
+            output.close();
+          }
+  finally {
+            StreamUtils.safeClose(output);
+          }
         }
   finally {
-          StreamUtils.safeClose(output);
         }
-      }
-  finally {
       }
     }
   }
