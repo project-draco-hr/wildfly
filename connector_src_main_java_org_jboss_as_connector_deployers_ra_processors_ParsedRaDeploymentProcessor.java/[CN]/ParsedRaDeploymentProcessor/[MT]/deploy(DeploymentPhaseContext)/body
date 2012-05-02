@@ -1,0 +1,53 @@
+{
+  final ConnectorXmlDescriptor connectorXmlDescriptor=phaseContext.getDeploymentUnit().getAttachment(ConnectorXmlDescriptor.ATTACHMENT_KEY);
+  final ManagementResourceRegistration registration;
+  final ManagementResourceRegistration baseRegistration=phaseContext.getDeploymentUnit().getAttachment(DeploymentModelUtils.MUTABLE_REGISTRATION_ATTACHMENT);
+  final Resource deploymentResource=phaseContext.getDeploymentUnit().getAttachment(DeploymentModelUtils.DEPLOYMENT_RESOURCE);
+  if (connectorXmlDescriptor == null) {
+    return;
+  }
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (deploymentUnit.getParent() != null) {
+    registration=baseRegistration.getSubModel(PathAddress.pathAddress(PathElement.pathElement("subdeployment")));
+  }
+ else {
+    registration=baseRegistration;
+  }
+  final IronJacamarXmlDescriptor ironJacamarXmlDescriptor=deploymentUnit.getAttachment(IronJacamarXmlDescriptor.ATTACHMENT_KEY);
+  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+  if (module == null)   throw MESSAGES.failedToGetModuleAttachment(phaseContext.getDeploymentUnit());
+  final ClassLoader classLoader=module.getClassLoader();
+  Connector cmd=connectorXmlDescriptor != null ? connectorXmlDescriptor.getConnector() : null;
+  final IronJacamar ijmd=ironJacamarXmlDescriptor != null ? ironJacamarXmlDescriptor.getIronJacamar() : null;
+  try {
+    Annotations annotator=new Annotations();
+    Map<ResourceRoot,Index> indexes=AnnotationIndexUtils.getAnnotationIndexes(deploymentUnit);
+    for (    Entry<ResourceRoot,Index> entry : indexes.entrySet()) {
+      AnnotationRepository repository=new JandexAnnotationRepositoryImpl(entry.getValue(),classLoader);
+      cmd=annotator.merge(cmd,repository,classLoader);
+    }
+    if (cmd != null) {
+      cmd.validate();
+      cmd=(new Merger()).mergeConnectorWithCommonIronJacamar(ijmd,cmd);
+    }
+    final ServiceName deployerServiceName=ConnectorServices.RESOURCE_ADAPTER_DEPLOYER_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName());
+    final ResourceAdapterDeploymentService raDeploymentService=new ResourceAdapterDeploymentService(connectorXmlDescriptor,cmd,ijmd,module,null);
+    final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+    ServiceBuilder builder=serviceTarget.addService(deployerServiceName,raDeploymentService).addDependency(ConnectorServices.IRONJACAMAR_MDR,AS7MetadataRepository.class,raDeploymentService.getMdrInjector()).addDependency(ConnectorServices.RA_REPOSITORY_SERVICE,ResourceAdapterRepository.class,raDeploymentService.getRaRepositoryInjector()).addDependency(ConnectorServices.MANAGEMENT_REPOSITORY_SERVICE,ManagementRepository.class,raDeploymentService.getManagementRepositoryInjector()).addDependency(ConnectorServices.RESOURCE_ADAPTER_REGISTRY_SERVICE,ResourceAdapterDeploymentRegistry.class,raDeploymentService.getRegistryInjector()).addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,raDeploymentService.getTxIntegrationInjector()).addDependency(ConnectorServices.CONNECTOR_CONFIG_SERVICE,JcaSubsystemConfiguration.class,raDeploymentService.getConfigInjector()).addDependency(SubjectFactoryService.SERVICE_NAME,SubjectFactory.class,raDeploymentService.getSubjectFactoryInjector()).addDependency(ConnectorServices.CCM_SERVICE,CachedConnectionManager.class,raDeploymentService.getCcmInjector()).addDependency(ConnectorServices.IDLE_REMOVER_SERVICE).addDependency(ConnectorServices.CONNECTION_VALIDATOR_SERVICE).addDependency(NamingService.SERVICE_NAME);
+    builder.addListener(new AbstractResourceAdapterDeploymentServiceListener(registration,deploymentUnit.getName(),deploymentResource){
+      @Override protected void registerIronjacamar(      final ServiceController<? extends Object> controller,      final ManagementResourceRegistration subRegistration,      final Resource subsystemResource){
+        new IronJacamarRegistrator(subRegistration).invoke();
+        AS7MetadataRepository mdr=((ResourceAdapterDeploymentService)controller.getService()).getMdr();
+        IronJacamarResourceCreator.INSTANCE.execute(subsystemResource,mdr);
+      }
+      @Override protected CommonDeployment getDeploymentMetadata(      final ServiceController<? extends Object> controller){
+        return ((ResourceAdapterDeploymentService)controller.getService()).getRaDeployment();
+      }
+    }
+);
+    builder.setInitialMode(Mode.ACTIVE).install();
+  }
+ catch (  Throwable t) {
+    throw new DeploymentUnitProcessingException(t);
+  }
+}

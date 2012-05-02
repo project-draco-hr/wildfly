@@ -1,0 +1,85 @@
+{
+switch (transition) {
+case STARTING_to_UP:
+{
+      CommonDeployment deploymentMD=getDeploymentMetadata(controller);
+      if (deploymentMD.getConnectionManagers() != null) {
+        for (        ConnectionManager cm : deploymentMD.getConnectionManagers()) {
+          if (cm.getPool() != null) {
+            StatisticsPlugin poolStats=cm.getPool().getStatistics();
+            if (poolStats.getNames().size() != 0) {
+              DescriptionProvider statsResourceDescriptionProvider=new StatisticsDescriptionProvider(ResourceAdaptersSubsystemProviders.RESOURCE_NAME,"statistics",poolStats);
+              PathElement pe=PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,ResourceAdaptersExtension.SUBSYSTEM_NAME);
+              PathElement peStats=PathElement.pathElement(Constants.STATISTICS_NAME,Constants.STATISTICS_NAME);
+              PathElement peCD=PathElement.pathElement(Constants.CONNECTIONDEFINITIONS_NAME,cm.getJndiName());
+              ManagementResourceRegistration overrideRegistration=registration;
+              if (registration.isAllowsOverride() && registration.getOverrideModel(deploymentUnitName) == null) {
+                overrideRegistration=registration.registerOverrideModel(deploymentUnitName,new OverrideDescriptionProvider(){
+                  @Override public Map<String,ModelNode> getAttributeOverrideDescriptions(                  Locale locale){
+                    return Collections.emptyMap();
+                  }
+                  @Override public Map<String,ModelNode> getChildTypeOverrideDescriptions(                  Locale locale){
+                    return Collections.emptyMap();
+                  }
+                }
+);
+              }
+ else {
+                overrideRegistration=registration.getOverrideModel(deploymentUnitName);
+              }
+              ManagementResourceRegistration subRegistration=overrideRegistration.getSubModel(PathAddress.pathAddress(pe));
+              if (subRegistration == null) {
+                subRegistration=overrideRegistration.registerSubModel(pe,new SubSystemExtensionDescriptionProvider(ResourceAdaptersSubsystemProviders.RESOURCE_NAME,"deployment-subsystem"));
+              }
+              final Resource subsystemResource=new IronJacamarResource.IronJacamarRuntimeResource();
+              deploymentResource.registerChild(pe,subsystemResource);
+              ManagementResourceRegistration statsRegistration=subRegistration.getSubModel(PathAddress.pathAddress(peStats));
+              if (statsRegistration == null) {
+                statsRegistration=subRegistration.registerSubModel(peStats,new StatisticsElementDescriptionProvider(ResourceAdaptersSubsystemProviders.RESOURCE_NAME,"statistics"));
+              }
+              final Resource statisticsResource=new IronJacamarResource.IronJacamarRuntimeResource();
+              subsystemResource.registerChild(peStats,statisticsResource);
+              if (statsRegistration.getSubModel(PathAddress.pathAddress(peCD)) == null) {
+                ManagementResourceRegistration cdSubRegistration=statsRegistration.registerSubModel(peCD,statsResourceDescriptionProvider);
+                final Resource cdResource=new IronJacamarResource.IronJacamarRuntimeResource();
+                statisticsResource.registerChild(peCD,cdResource);
+                for (                String statName : poolStats.getNames()) {
+                  cdSubRegistration.registerMetric(statName,new PoolMetrics.ParametrizedPoolMetricsHandler(poolStats));
+                }
+                cdSubRegistration.registerOperationHandler("clear-statistics",new ClearStatisticsHandler(poolStats),ResourceAdaptersSubsystemProviders.CLEAR_STATISTICS_DESC,false);
+              }
+              registerIronjacamar(controller,subRegistration,subsystemResource);
+            }
+          }
+        }
+      }
+      break;
+    }
+case UP_to_STOP_REQUESTED:
+{
+    PathElement pe=PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,ResourceAdaptersExtension.SUBSYSTEM_NAME);
+    PathElement ijPe=PathElement.pathElement(Constants.IRONJACAMAR_NAME,Constants.IRONJACAMAR_NAME);
+    PathElement peStats=PathElement.pathElement(Constants.STATISTICS_NAME,Constants.STATISTICS_NAME);
+    PathElement peCD=PathElement.pathElement(Constants.CONNECTIONDEFINITIONS_NAME);
+    ManagementResourceRegistration overrideRegistration=registration;
+    if (registration.isAllowsOverride() && registration.getOverrideModel(deploymentUnitName) != null) {
+      overrideRegistration=registration.getOverrideModel(deploymentUnitName);
+    }
+    ManagementResourceRegistration subsystemReg=overrideRegistration.getSubModel(PathAddress.pathAddress(pe));
+    if (subsystemReg != null) {
+      if (subsystemReg.getSubModel(PathAddress.pathAddress(ijPe)) != null) {
+        subsystemReg.unregisterSubModel(ijPe);
+      }
+      ManagementResourceRegistration statsReg=subsystemReg.getSubModel(PathAddress.pathAddress(peStats));
+      if (statsReg != null) {
+        if (statsReg.getSubModel(PathAddress.pathAddress(peCD)) != null) {
+          statsReg.unregisterSubModel(peCD);
+        }
+        subsystemReg.unregisterSubModel(peStats);
+      }
+      overrideRegistration.unregisterSubModel(pe);
+    }
+    deploymentResource.removeChild(pe);
+  }
+}
+}
