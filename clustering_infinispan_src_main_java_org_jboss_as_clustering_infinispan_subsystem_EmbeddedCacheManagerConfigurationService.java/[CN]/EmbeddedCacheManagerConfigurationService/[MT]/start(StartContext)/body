@@ -1,13 +1,18 @@
 {
   GlobalConfigurationBuilder builder=new GlobalConfigurationBuilder();
   ModuleLoader moduleLoader=this.dependencies.getModuleLoader();
+  builder.serialization().classResolver(ModularClassResolver.getInstance(moduleLoader));
   try {
-    builder.classLoader((this.moduleId != null) ? moduleLoader.loadModule(this.moduleId).getClassLoader() : EmbeddedCacheManagerConfiguration.class.getClassLoader());
+    ClassLoader loader=(this.moduleId != null) ? moduleLoader.loadModule(this.moduleId).getClassLoader() : EmbeddedCacheManagerConfiguration.class.getClassLoader();
+    builder.classLoader(loader);
+    int id=Ids.MAX_ID;
+    for (    SimpleExternalizer<?> externalizer : ServiceLoader.load(SimpleExternalizer.class,loader)) {
+      builder.serialization().addAdvancedExternalizer(id++,externalizer);
+    }
   }
  catch (  ModuleLoadException e) {
     throw new StartException(e);
   }
-  builder.serialization().classResolver(ModularClassResolver.getInstance(moduleLoader));
   builder.shutdown().hookBehavior(ShutdownHookBehavior.DONT_REGISTER);
   TransportConfiguration transport=this.dependencies.getTransportConfiguration();
   TransportConfigurationBuilder transportBuilder=builder.transport();
