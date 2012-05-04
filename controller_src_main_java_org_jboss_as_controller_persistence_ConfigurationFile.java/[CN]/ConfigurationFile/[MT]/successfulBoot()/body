@@ -3,23 +3,41 @@ synchronized (this) {
     if (doneBootup.get()) {
       return;
     }
+    final File copySource;
+    if (persistOriginal) {
+      copySource=mainFile;
+    }
+ else {
+      copySource=new File(mainFile.getParentFile(),mainFile.getName() + ".boot");
+      FilePersistenceUtils.deleteFile(copySource);
+      copySource.deleteOnExit();
+    }
     try {
-      if (!bootFile.equals(mainFile)) {
-        FileUtils.copyFile(bootFile,mainFile);
+      if (!bootFile.equals(copySource)) {
+        FilePersistenceUtils.copyFile(bootFile,copySource);
       }
       createHistoryDirectory();
       final File historyBase=new File(historyRoot,mainFile.getName());
-      final File last=addSuffixToFile(historyBase,LAST);
+      lastFile=addSuffixToFile(historyBase,LAST);
       final File boot=addSuffixToFile(historyBase,BOOT);
       final File initial=addSuffixToFile(historyBase,INITIAL);
       if (!initial.exists()) {
-        FileUtils.copyFile(mainFile,initial);
+        FilePersistenceUtils.copyFile(copySource,initial);
       }
-      FileUtils.copyFile(mainFile,last);
-      FileUtils.copyFile(mainFile,boot);
+      FilePersistenceUtils.copyFile(copySource,lastFile);
+      FilePersistenceUtils.copyFile(copySource,boot);
     }
  catch (    IOException e) {
       throw MESSAGES.failedToCreateConfigurationBackup(e,bootFile);
+    }
+ finally {
+      if (!persistOriginal) {
+        try {
+          FilePersistenceUtils.deleteFile(copySource);
+        }
+ catch (        Exception ignore) {
+        }
+      }
     }
     doneBootup.set(true);
   }

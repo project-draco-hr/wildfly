@@ -1,20 +1,19 @@
 {
   context.addStep(new OperationStepHandler(){
     @Override public void execute(    final OperationContext context,    final ModelNode operation) throws OperationFailedException {
-      final boolean adminOnly=ADMIN_ONLY.resolveModelAttribute(context,operation).asBoolean(false);
-      final boolean restartServers=RESTART_SERVERS.resolveModelAttribute(context,operation).asBoolean(true);
+      final ReloadContext<T> reloadContext=initializeReloadContext(context,operation);
       final ServiceController<?> service=context.getServiceRegistry(true).getRequiredService(rootService);
       if (context.completeStep() == OperationContext.ResultAction.KEEP) {
         service.addListener(new AbstractServiceListener<Object>(){
           public void listenerAdded(          final ServiceController<?> controller){
-            reloadInitiated(runningModeControl,adminOnly,restartServers);
+            reloadContext.reloadInitiated(runningModeControl);
             processState.setStopping();
             controller.setMode(ServiceController.Mode.NEVER);
           }
           public void transition(          final ServiceController<? extends Object> controller,          final ServiceController.Transition transition){
             if (transition == ServiceController.Transition.STOPPING_to_DOWN) {
               controller.removeListener(this);
-              doReload(runningModeControl,adminOnly,restartServers);
+              reloadContext.doReload(runningModeControl);
               controller.setMode(ServiceController.Mode.ACTIVE);
             }
           }
