@@ -1,0 +1,27 @@
+{
+  this.container.start(CONTAINER_1);
+  containerOneStarted=true;
+  this.container.start(CONTAINER_2);
+  containerTwoStarted=true;
+  this.deployer.deploy(CLIENT_ARQ_DEPLOYMENT);
+  clientAppDeployed=true;
+  this.deployer.deploy(NODE_NAME_ARQ_DEPLOYMENT_CONTAINER_1);
+  nodeNameAppDeployedOnContainerOne=true;
+  this.deployer.deploy(NODE_NAME_ARQ_DEPLOYMENT_CONTAINER_2);
+  nodeNameAppDeployedOnContainerTwo=true;
+  final ContextSelector<EJBClientContext> previousSelector=EJBClientContextSelector.setup("cluster/ejb3/stateful/failover/local-ejb-sfsb-failover-jboss-ejb-client.properties");
+  try {
+    final ClientSFSBRemote clientSFSB=(ClientSFSBRemote)jndiContext.lookup("ejb:/" + CLIENT_APP_MODULE_NAME + "//"+ ClientSFSB.class.getSimpleName()+ "!"+ ClientSFSBRemote.class.getName()+ "?stateful");
+    final String sfsbNodeName=clientSFSB.invokeAndFetchNodeNameFromClusteredSFSBRemoteBean();
+    Assert.assertEquals("Clustered SFSB created on unexpected node",ClusteringTestConstants.NODE_2,sfsbNodeName);
+    this.deployer.undeploy(NODE_NAME_ARQ_DEPLOYMENT_CONTAINER_2);
+    nodeNameAppDeployedOnContainerTwo=false;
+    final String sfsbNodeNameAfterUndeployment=clientSFSB.invokeAndFetchNodeNameFromClusteredSFSBRemoteBean();
+    Assert.assertEquals("Clustered SFSB did not failover to remote node even after the local app was undeployed",ClusteringTestConstants.NODE_1,sfsbNodeNameAfterUndeployment);
+  }
+  finally {
+    if (previousSelector != null) {
+      EJBClientContext.setSelector(previousSelector);
+    }
+  }
+}
