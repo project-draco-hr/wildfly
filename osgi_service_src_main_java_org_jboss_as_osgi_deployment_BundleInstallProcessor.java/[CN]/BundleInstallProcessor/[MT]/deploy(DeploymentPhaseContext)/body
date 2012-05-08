@@ -1,18 +1,23 @@
 {
-  final DeploymentUnit depUnit=context.getDeploymentUnit();
-  final Deployment deployment=OSGiDeploymentAttachment.getDeployment(depUnit);
+  final DeploymentUnit depUnit=phaseContext.getDeploymentUnit();
+  final Deployment deployment=depUnit.getAttachment(OSGiConstants.DEPLOYMENT_KEY);
   if (deployment != null) {
-    if (frameworkActivated.compareAndSet(false,true)) {
-      activateFramework(context);
-    }
     ServiceName serviceName;
-    if (!deploymentTracker.isClosed() && deploymentTracker.hasDeploymentName(depUnit.getName())) {
-      serviceName=PersistentBundleInstallService.addService(deploymentTracker,context,deployment);
-      deploymentTracker.registerBundleInstallService(serviceName);
-    }
+    try {
+      final BundleManager bundleManager=depUnit.getAttachment(OSGiConstants.BUNDLE_MANAGER_KEY);
+      if (!deploymentTracker.isClosed() && deploymentTracker.hasDeploymentName(depUnit.getName())) {
+        restoreStorageState(phaseContext,deployment);
+        serviceName=bundleManager.installBundle(deployment,deploymentTracker.getBundleInstallListener());
+        deploymentTracker.registerBundleInstallService(serviceName);
+      }
  else {
-      serviceName=BundleInstallService.addService(context,deployment);
+        serviceName=bundleManager.installBundle(deployment,null);
+      }
     }
-    depUnit.putAttachment(INSTALL_SERVICE_NAME_KEY,serviceName);
+ catch (    BundleException ex) {
+      throw new DeploymentUnitProcessingException(ex);
+    }
+    phaseContext.addDeploymentDependency(serviceName,OSGiConstants.INSTALLED_BUNDLE_KEY);
+    depUnit.putAttachment(BUNDLE_INSTALL_SERVICE,serviceName);
   }
 }
