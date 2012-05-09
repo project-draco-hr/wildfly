@@ -1,0 +1,79 @@
+{
+  if (securityConfigurations == null) {
+    LOGGER.info("No security configuration for JASPI module.");
+    return null;
+  }
+  if (securityConfigurations.getAuthnModules() == null || securityConfigurations.getAuthnModules().length == 0 || securityConfigurations.getLoginModuleStacks() == null || securityConfigurations.getLoginModuleStacks().length == 0) {
+    throw new IllegalArgumentException("Missing mandatory part of JASPI configuration in the security domain.");
+  }
+  final List<ModelNode> result=new ArrayList<ModelNode>();
+  final ModelNode securityComponentNode=new ModelNode();
+  securityComponentNode.get(OP).set(ADD);
+  securityComponentNode.get(OP_ADDR).add(SUBSYSTEM,SUBSYSTEM_SECURITY);
+  securityComponentNode.get(OP_ADDR).add(SECURITY_DOMAIN,domainName);
+  securityComponentNode.get(OP_ADDR).add(Constants.AUTHENTICATION,Constants.JASPI);
+  for (  final AuthnModule config : securityConfigurations.getAuthnModules()) {
+    LOGGER.info("Adding auth-module: " + config);
+    final ModelNode securityModuleNode=securityComponentNode.get(Constants.AUTH_MODULES).add();
+    securityModuleNode.get(ModelDescriptionConstants.CODE).set(config.getName());
+    if (config.getFlag() != null) {
+      securityModuleNode.get(Constants.FLAG).set(config.getFlag());
+    }
+    if (config.getModule() != null) {
+      securityModuleNode.get(Constants.MODULE).set(config.getModule());
+    }
+    if (config.getLoginModuleStackRef() != null) {
+      securityModuleNode.get(Constants.LOGIN_MODULE_STACK_REF).set(config.getLoginModuleStackRef());
+    }
+    Map<String,String> configOptions=config.getOptions();
+    if (configOptions == null) {
+      LOGGER.info("No module options provided.");
+      configOptions=Collections.emptyMap();
+    }
+    final ModelNode moduleOptionsNode=securityModuleNode.get(MODULE_OPTIONS);
+    for (    final Map.Entry<String,String> entry : configOptions.entrySet()) {
+      final String optionName=entry.getKey();
+      final String optionValue=entry.getValue();
+      moduleOptionsNode.add(optionName,optionValue);
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Adding module option [" + optionName + "="+ optionValue+ "]");
+      }
+    }
+  }
+  result.add(securityComponentNode);
+  for (  final LoginModuleStack lmStack : securityConfigurations.getLoginModuleStacks()) {
+    final ModelNode stackNode=new ModelNode();
+    stackNode.get(OP).set(ADD);
+    stackNode.get(OP_ADDR).add(SUBSYSTEM,SUBSYSTEM_SECURITY);
+    stackNode.get(OP_ADDR).add(SECURITY_DOMAIN,domainName);
+    stackNode.get(OP_ADDR).add(Constants.AUTHENTICATION,Constants.JASPI);
+    stackNode.get(OP_ADDR).add(Constants.LOGIN_MODULE_STACK,lmStack.getName());
+    for (    final SecurityModule config : lmStack.getLoginModules()) {
+      final ModelNode securityModuleNode=stackNode.get(Constants.LOGIN_MODULES).add();
+      final String code=config.getName();
+      final String flag=StringUtils.defaultIfEmpty(config.getFlag(),Constants.REQUIRED);
+      securityModuleNode.get(ModelDescriptionConstants.CODE).set(code);
+      securityModuleNode.get(Constants.FLAG).set(flag);
+      if (LOGGER.isInfoEnabled()) {
+        LOGGER.info("Adding JASPI login module stack [code=" + code + ", flag="+ flag+ "]");
+      }
+      Map<String,String> configOptions=config.getOptions();
+      if (configOptions == null) {
+        LOGGER.info("No module options provided.");
+        configOptions=Collections.emptyMap();
+      }
+      final ModelNode moduleOptionsNode=securityModuleNode.get(MODULE_OPTIONS);
+      for (      final Map.Entry<String,String> entry : configOptions.entrySet()) {
+        final String optionName=entry.getKey();
+        final String optionValue=entry.getValue();
+        moduleOptionsNode.add(optionName,optionValue);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Adding module option [" + optionName + "="+ optionValue+ "]");
+        }
+      }
+    }
+    stackNode.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+    result.add(stackNode);
+  }
+  return result;
+}

@@ -1,0 +1,43 @@
+{
+  this.managementClient=managementClient;
+  securityDomains=getSecurityDomains();
+  if (securityDomains == null || securityDomains.length == 0) {
+    LOGGER.warn("Empty security domain configuration.");
+    return;
+  }
+  final List<ModelNode> updates=new ArrayList<ModelNode>();
+  for (  final SecurityDomain securityDomain : securityDomains) {
+    final String securityDomainName=securityDomain.getName();
+    if (LOGGER.isInfoEnabled()) {
+      LOGGER.info("Adding security domain " + securityDomainName);
+    }
+    ModelNode op=new ModelNode();
+    op.get(OP).set(ADD);
+    op.get(OP_ADDR).add(SUBSYSTEM,SUBSYSTEM_SECURITY);
+    op.get(OP_ADDR).add(SECURITY_DOMAIN,securityDomainName);
+    updates.add(op);
+    final ModelNode authnNode=createSecurityModelNode(Constants.AUTHENTICATION,Constants.LOGIN_MODULES,FLAG,Constants.REQUIRED,securityDomain.getLoginModules(),securityDomain.getName());
+    if (authnNode != null) {
+      updates.add(authnNode);
+    }
+ else {
+      final List<ModelNode> jaspiAuthnNodes=createJaspiAuthnNodes(securityDomain.getJaspiAuthn(),securityDomain.getName());
+      if (jaspiAuthnNodes != null) {
+        updates.addAll(jaspiAuthnNodes);
+      }
+    }
+    final ModelNode authzNode=createSecurityModelNode(Constants.AUTHORIZATION,Constants.POLICY_MODULES,FLAG,Constants.REQUIRED,securityDomain.getAuthorizationModules(),securityDomain.getName());
+    if (authzNode != null) {
+      updates.add(authzNode);
+    }
+    final ModelNode mappingNode=createSecurityModelNode(Constants.MAPPING,Constants.MAPPING_MODULES,TYPE,ROLE,securityDomain.getMappingModules(),securityDomain.getName());
+    if (mappingNode != null) {
+      updates.add(mappingNode);
+    }
+    final ModelNode jsseNode=createJSSENode(securityDomain.getJsse(),securityDomain.getName());
+    if (jsseNode != null) {
+      updates.add(jsseNode);
+    }
+  }
+  Utils.applyUpdates(updates,managementClient.getControllerClient());
+}

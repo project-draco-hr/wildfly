@@ -1,0 +1,36 @@
+{
+  if (securityModules == null || securityModules.length == 0) {
+    if (LOGGER.isInfoEnabled()) {
+      LOGGER.info("No security configuration for " + securityComponent + " module.");
+    }
+    return null;
+  }
+  final ModelNode securityComponentNode=new ModelNode();
+  securityComponentNode.get(OP).set(ADD);
+  securityComponentNode.get(OP_ADDR).add(SUBSYSTEM,SUBSYSTEM_SECURITY);
+  securityComponentNode.get(OP_ADDR).add(SECURITY_DOMAIN,domainName);
+  securityComponentNode.get(OP_ADDR).add(securityComponent,Constants.CLASSIC);
+  for (  final SecurityModule config : securityModules) {
+    final ModelNode securityModuleNode=securityComponentNode.get(subnodeName).add();
+    final String code=config.getName();
+    final String flag=StringUtils.defaultIfEmpty(config.getFlag(),flagDefaultValue);
+    securityModuleNode.get(ModelDescriptionConstants.CODE).set(code);
+    securityModuleNode.get(flagAttributeName).set(flag);
+    Map<String,String> configOptions=config.getOptions();
+    if (configOptions == null) {
+      LOGGER.info("No module options provided.");
+      configOptions=Collections.emptyMap();
+    }
+    if (LOGGER.isInfoEnabled()) {
+      LOGGER.info("Adding " + securityComponent + " module [code="+ code+ ", "+ flagAttributeName+ "="+ flag+ ", options = "+ configOptions+ "]");
+    }
+    final ModelNode moduleOptionsNode=securityModuleNode.get(MODULE_OPTIONS);
+    for (    final Map.Entry<String,String> entry : configOptions.entrySet()) {
+      final String optionName=entry.getKey();
+      final String optionValue=entry.getValue();
+      moduleOptionsNode.add(optionName,optionValue);
+    }
+  }
+  securityComponentNode.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  return securityComponentNode;
+}
