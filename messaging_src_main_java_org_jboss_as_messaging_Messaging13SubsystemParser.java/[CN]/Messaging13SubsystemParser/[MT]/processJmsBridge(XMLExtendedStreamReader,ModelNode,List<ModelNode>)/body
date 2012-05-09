@@ -1,0 +1,58 @@
+{
+  String bridgeName=null;
+  String moduleName=null;
+  final int count=reader.getAttributeCount();
+  for (int n=0; n < count; n++) {
+    String attrName=reader.getAttributeLocalName(n);
+    Attribute attribute=Attribute.forName(attrName);
+switch (attribute) {
+case NAME:
+      bridgeName=reader.getAttributeValue(n);
+    break;
+case MODULE:
+  moduleName=reader.getAttributeValue(n);
+break;
+default :
+throw unexpectedAttribute(reader,n);
+}
+}
+if (bridgeName == null || bridgeName.length() == 0) {
+bridgeName=DEFAULT;
+}
+final ModelNode address=subsystemAddress.clone();
+address.add(JMS_BRIDGE,bridgeName);
+address.protect();
+final ModelNode operation=new ModelNode();
+operation.get(OP).set(ADD);
+operation.get(OP_ADDR).set(address);
+list.add(operation);
+if (moduleName != null && moduleName.length() > 0) {
+JMSBridgeDefinition.MODULE.parseAndSetParameter(moduleName,operation,reader);
+}
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case SOURCE:
+case TARGET:
+processJmsBridgeResource(reader,operation,element.getLocalName());
+break;
+case QUALITY_OF_SERVICE:
+case FAILURE_RETRY_INTERVAL:
+case MAX_RETRIES:
+case MAX_BATCH_SIZE:
+case MAX_BATCH_TIME:
+case SUBSCRIPTION_NAME:
+case CLIENT_ID:
+case ADD_MESSAGE_ID_IN_HEADER:
+handleElementText(reader,element,operation);
+break;
+case SELECTOR:
+requireSingleAttribute(reader,CommonAttributes.STRING);
+final String selector=readStringAttributeElement(reader,CommonAttributes.STRING);
+SELECTOR.parseAndSetParameter(selector,operation,reader);
+break;
+default :
+throw ParseUtils.unexpectedElement(reader);
+}
+}
+}

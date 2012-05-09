@@ -1,0 +1,76 @@
+{
+  final String bridgeName=PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
+  final String operationName=operation.require(OP).asString();
+  final ServiceName bridgeServiceName=MessagingServices.getJMSBridgeServiceName(bridgeName);
+  ServiceController<?> bridgeService=context.getServiceRegistry(false).getService(bridgeServiceName);
+  JMSBridge bridge=JMSBridge.class.cast(bridgeService.getValue());
+  if (READ_ATTRIBUTE_OPERATION.equals(operationName)) {
+    readAttributeValidator.validate(operation);
+    final String name=operation.require(NAME).asString();
+    if (STARTED.equals(name)) {
+      context.getResult().set(bridge.isStarted());
+    }
+ else     if (PAUSED.equals(name)) {
+      context.getResult().set(bridge.isPaused());
+    }
+ else {
+      throw MESSAGES.unsupportedAttribute(name);
+    }
+  }
+ else   if (START.equals(operationName)) {
+    try {
+      JMSBridgeService service=(JMSBridgeService)bridgeService.getService();
+      service.startBridge();
+    }
+ catch (    Exception e) {
+      context.getFailureDescription().set(e.getLocalizedMessage());
+    }
+  }
+ else   if (STOP.equals(operationName)) {
+    try {
+      bridge.stop();
+    }
+ catch (    Exception e) {
+      context.getFailureDescription().set(e.getLocalizedMessage());
+    }
+  }
+ else   if (PAUSE.equals(operationName)) {
+    try {
+      bridge.pause();
+    }
+ catch (    Exception e) {
+      context.getFailureDescription().set(e.getLocalizedMessage());
+    }
+  }
+ else   if (RESUME.equals(operationName)) {
+    try {
+      bridge.resume();
+    }
+ catch (    Exception e) {
+      context.getFailureDescription().set(e.getLocalizedMessage());
+    }
+  }
+ else {
+    throw MESSAGES.unsupportedOperation(operationName);
+  }
+  if (context.completeStep() != OperationContext.ResultAction.KEEP) {
+    try {
+      if (START.equals(operationName)) {
+        bridge.stop();
+      }
+ else       if (STOP.equals(operationName)) {
+        JMSBridgeService service=(JMSBridgeService)bridgeService.getService();
+        service.startBridge();
+      }
+ else       if (PAUSE.equals(operationName)) {
+        bridge.resume();
+      }
+ else       if (RESUME.equals(operationName)) {
+        bridge.pause();
+      }
+    }
+ catch (    Exception e) {
+      ROOT_LOGGER.revertOperationFailed(e,getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)));
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  context.addStep(new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+      String moduleName=resolveAttribute(JMSBridgeDefinition.MODULE,context,model);
+      final JMSBridge bridge=createJMSBridge(context,model);
+      final String bridgeName=address.getLastElement().getValue();
+      final JMSBridgeService bridgeService=new JMSBridgeService(moduleName,bridgeName,bridge);
+      final ServiceName bridgeServiceName=MessagingServices.getJMSBridgeServiceName(bridgeName);
+      final ServiceBuilder<JMSBridge> jmsBridgeServiceBuilder=context.getServiceTarget().addService(bridgeServiceName,bridgeService).addListener(verificationHandler).addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER).setInitialMode(Mode.ACTIVE);
+      if (dependsOnHornetQServer(context,model)) {
+        jmsBridgeServiceBuilder.addDependency((JMSServices.getJmsManagerBaseServiceName(MessagingServices.getHornetQServiceName("default"))));
+      }
+      newControllers.add(jmsBridgeServiceBuilder.install());
+      context.completeStep();
+    }
+  }
+,OperationContext.Stage.RUNTIME);
+}
