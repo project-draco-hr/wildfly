@@ -1,44 +1,43 @@
 {
-  List<String> argsList=new LinkedList<String>();
-  String[] argsArray=null;
-  StringReader stringReader=null;
   boolean management=true;
-  int realArgsLength;
   if (args.length >= 1) {
-    for (    String temp : args) {
-      if (temp.startsWith("--")) {
-        try {
-          stringReader=new StringReader(temp.substring(2));
-          argsCliProps.load(stringReader);
-        }
- catch (        IOException e) {
-          e.printStackTrace();
-        }
- finally {
-          safeClose(stringReader);
-        }
+    Iterator<String> it=Arrays.asList(args).iterator();
+    String temp;
+    while (it.hasNext()) {
+      temp=it.next();
+      if (DOMAIN_CONFIG_DIR_USERS_OPTION.equals(temp)) {
+        System.setProperty(DOMAIN_CONFIG_DIR,it.next());
       }
- else       if (temp.equals(APPLICATION_USERS_SWITCH)) {
+ else       if (SERVER_CONFIG_DIR_USERS_OPTION.equals(temp)) {
+        System.setProperty(SERVER_CONFIG_DIR,it.next());
+      }
+ else       if (APPLICATION_USERS_OPTION.equals(temp)) {
         management=false;
       }
- else       if (temp.indexOf(DOMAIN_CONFIG_DIR_USERS_SWITCH) >= 0) {
-        System.setProperty(DOMAIN_CONFIG_DIR,temp.substring(3));
-      }
- else       if (temp.indexOf(SERVER_CONFIG_DIR) >= 0) {
-        System.setProperty(SERVER_CONFIG_DIR,temp.substring(3));
-      }
  else {
-        argsList.add(temp);
+        CommandLineOption commandLineOption=findCommandLineOption(temp);
+        if (commandLineOption != null) {
+          final String value;
+          if (SILENT_OPTION.equals(commandLineOption)) {
+            value=Boolean.TRUE.toString();
+          }
+ else {
+            value=it.next();
+          }
+          argsCliProps.setProperty(commandLineOption.key(),value);
+        }
       }
     }
   }
-  argsArray=argsList.toArray(new String[0]);
-  realArgsLength=argsArray.length;
-  if (realArgsLength == 3) {
-    new AddPropertiesUser(management,argsArray[0],argsArray[1].toCharArray(),argsArray[2]).run();
-  }
- else   if (realArgsLength == 2) {
-    new AddPropertiesUser(management,argsArray[0],argsArray[1].toCharArray()).run();
+  if (argsCliProps.containsKey(PASSWORD_OPTION.key()) && argsCliProps.containsKey(USER_OPTION.key())) {
+    char[] password=argsCliProps.getProperty(PASSWORD_OPTION.key()).toCharArray();
+    String user=argsCliProps.getProperty(USER_OPTION.key());
+    if (argsCliProps.contains(REALM_OPTION.key())) {
+      new AddPropertiesUser(management,user,password,argsCliProps.getProperty(REALM_OPTION.key())).run();
+    }
+ else {
+      new AddPropertiesUser(management,user,password).run();
+    }
   }
  else {
     new AddPropertiesUser().run();
