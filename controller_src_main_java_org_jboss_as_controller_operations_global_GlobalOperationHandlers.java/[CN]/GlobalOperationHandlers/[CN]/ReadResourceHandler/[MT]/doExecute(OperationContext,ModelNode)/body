@@ -7,6 +7,7 @@
   final boolean recursive=recursiveDepth > 0 ? true : operation.get(RECURSIVE).asBoolean(false);
   final boolean queryRuntime=operation.get(INCLUDE_RUNTIME).asBoolean(false);
   final boolean proxies=operation.get(PROXIES).asBoolean(false);
+  final boolean aliases=operation.get(INCLUDE_ALIASES).asBoolean(false);
   final boolean defaults=operation.get(INCLUDE_DEFAULTS).asBoolean(true);
   final boolean attributesOnly=operation.get(ATTRIBUTES_ONLY).asBoolean(false);
   final Map<String,ModelNode> directAttributes=new HashMap<String,ModelNode>();
@@ -18,7 +19,7 @@
   context.addStep(assemblyHandler,queryRuntime ? OperationContext.Stage.VERIFY : OperationContext.Stage.IMMEDIATE,queryRuntime);
   final ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
   final Resource resource=nullSafeReadResource(context,registry);
-  final Map<String,Set<String>> childrenByType=registry != null ? getChildAddresses(registry,resource,null) : Collections.<String,Set<String>>emptyMap();
+  final Map<String,Set<String>> childrenByType=registry != null ? getChildAddresses(context,address,registry,resource,null) : Collections.<String,Set<String>>emptyMap();
   final ModelNode model=resource.getModel();
   if (model.isDefined()) {
     for (    String key : model.keys()) {
@@ -48,7 +49,6 @@
       }
  else {
         for (        String child : children) {
-          boolean storeDirect=!recursive;
           if (recursive) {
             PathElement childPE=PathElement.pathElement(childType,child);
             PathAddress relativeAddr=PathAddress.pathAddress(childPE);
@@ -58,7 +58,11 @@
             }
             boolean proxy=childReg.isRemote();
             boolean runtimeResource=childReg.isRuntimeOnly();
-            if (!runtimeResource || (queryRuntime && !proxy) || (proxies && proxy)) {
+            boolean getChild=!runtimeResource || (queryRuntime && !proxy) || (proxies && proxy);
+            if (!aliases && childReg.isAlias()) {
+              getChild=false;
+            }
+            if (getChild) {
               final int newDepth=recursiveDepth > 0 ? recursiveDepth - 1 : 0;
               ModelNode rrOp=new ModelNode();
               rrOp.get(OP).set(opName);
@@ -67,16 +71,14 @@
               rrOp.get(RECURSIVE_DEPTH).set(newDepth);
               rrOp.get(PROXIES).set(proxies);
               rrOp.get(INCLUDE_RUNTIME).set(queryRuntime);
+              rrOp.get(INCLUDE_ALIASES).set(aliases);
               ModelNode rrRsp=new ModelNode();
               childResources.put(childPE,rrRsp);
               OperationStepHandler rrHandler=childReg.getOperationHandler(PathAddress.EMPTY_ADDRESS,opName);
               context.addStep(rrRsp,rrOp,rrHandler,OperationContext.Stage.IMMEDIATE);
             }
- else {
-              storeDirect=true;
-            }
           }
-          if (storeDirect) {
+ else {
             ModelNode childMap=directChildren.get(childType);
             if (childMap == null) {
               childMap=new ModelNode();
