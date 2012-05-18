@@ -1,15 +1,25 @@
 {
   try {
-    List<AtomicReference<T>> results=this.dispatcher.callMethodOnCluster(this.name,"getValueRef",new Object[0],new Class<?>[0],false);
-    Iterator<AtomicReference<T>> refs=results.iterator();
-    while (refs.hasNext()) {
-      if (refs.next() == null) {
-        refs.remove();
+    List<AtomicReference<T>> results=Collections.emptyList();
+    while (results.isEmpty()) {
+      if (!SingletonService.this.started) {
+        throw new IllegalStateException(SingletonMessages.MESSAGES.notStarted(this.name));
       }
-    }
-    int count=results.size();
-    if (count != 1) {
-      throw SingletonMessages.MESSAGES.unexpectedResponseCount(count);
+      results=this.dispatcher.callMethodOnCluster(this.name,"getValueRef",new Object[0],new Class<?>[0],false,this);
+      Iterator<AtomicReference<T>> refs=results.iterator();
+      while (refs.hasNext()) {
+        if (refs.next() == null) {
+          refs.remove();
+        }
+      }
+      int count=results.size();
+      if (count > 1) {
+        throw SingletonMessages.MESSAGES.unexpectedResponseCount(this.name,count);
+      }
+      if (count == 0) {
+        SingletonLogger.ROOT_LOGGER.noResponseFromMaster(this.name);
+        Thread.yield();
+      }
     }
     return results.get(0);
   }
