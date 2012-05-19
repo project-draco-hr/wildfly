@@ -2,6 +2,10 @@
   final RemoteDomainConnection connection;
   final ManagementChannelHandler handler;
   try {
+    ThreadFactory threadFactory=new JBossThreadFactory(new ThreadGroup("domain-connection-threads"),Boolean.FALSE,null,"%G - %t",null,null,AccessController.getContext());
+    this.executor=Executors.newCachedThreadPool(threadFactory);
+    ThreadFactory scheduledThreadFactory=new JBossThreadFactory(new ThreadGroup("domain-connection-pinger-threads"),Boolean.TRUE,null,"%G - %t",null,null,AccessController.getContext());
+    this.scheduledExecutorService=Executors.newSingleThreadScheduledExecutor(scheduledThreadFactory);
     final ModelNode hostInfo=createLocalHostHostInfo(localHostInfo,productConfig);
     final OptionMap options=OptionMap.EMPTY;
     final ProtocolChannelClient.Configuration configuration=new ProtocolChannelClient.Configuration();
@@ -9,7 +13,7 @@
     configuration.setEndpoint(endpointInjector.getValue());
     configuration.setOptionMap(options);
     final SecurityRealm realm=securityRealmInjector.getOptionalValue();
-    connection=new RemoteDomainConnection(localHostInfo.getLocalHostName(),hostInfo,configuration,realm,localHostInfo.getRemoteDomainControllerUsername(),executor,new RemoteDomainConnection.HostRegistrationCallback(){
+    connection=new RemoteDomainConnection(localHostInfo.getLocalHostName(),hostInfo,configuration,realm,localHostInfo.getRemoteDomainControllerUsername(),executor,scheduledExecutorService,new RemoteDomainConnection.HostRegistrationCallback(){
       @Override public ModelNode resolveSubsystemVersions(      ModelNode extensions){
         return resolveSubsystems(extensions.asList());
       }
