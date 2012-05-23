@@ -30,24 +30,34 @@
  catch (  IOException e) {
     fail("Failed to start CLI process: " + e.getLocalizedMessage());
   }
+  final InputStream cliStream=cliProc.getInputStream();
+  final StringBuilder cliOutBuf=new StringBuilder();
+  boolean wait=true;
+  int runningTime=0;
   int exitCode=0;
-  try {
-    exitCode=cliProc.waitFor();
-  }
- catch (  InterruptedException e) {
-    fail("Interrupted waiting for the CLI process.");
-  }
-  try {
-    int bytesTotal=cliProc.getInputStream().available();
-    if (bytesTotal > 0) {
-      final byte[] bytes=new byte[bytesTotal];
-      cliProc.getInputStream().read(bytes);
-      cliOutput=new String(bytes);
+  do {
+    try {
+      Thread.sleep(STATUS_CHECK_INTERVAL);
+    }
+ catch (    InterruptedException e) {
+    }
+    runningTime+=STATUS_CHECK_INTERVAL;
+    readStream(cliOutBuf,cliStream);
+    try {
+      exitCode=cliProc.exitValue();
+      wait=false;
+      readStream(cliOutBuf,cliStream);
+    }
+ catch (    IllegalThreadStateException e) {
+    }
+    if (runningTime >= CLI_PROC_TIMEOUT) {
+      readStream(cliOutBuf,cliStream);
+      cliProc.destroy();
+      wait=false;
     }
   }
- catch (  IOException e) {
-    fail("Failed to read command's output: " + e.getLocalizedMessage());
-  }
+ while (wait);
+  cliOutput=cliOutBuf.toString();
   if (logFailure && exitCode != 0) {
     System.out.println("Failed to execute '" + cmd + "'");
     System.out.println("Command's output: '" + cliOutput + "'");
