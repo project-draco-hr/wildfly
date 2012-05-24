@@ -1,4 +1,5 @@
 {
+  boolean interrupted=false;
   try {
     final OperationContext operationContext=new ParallelBootOperationContext(transactionControl,processState,primaryContext,runtimeOps,controllingThread);
     for (    ParsedBootOp op : bootOperations) {
@@ -7,12 +8,13 @@
     }
     operationContext.completeStep();
   }
- catch (  Exception e) {
-    MGMT_OP_LOGGER.failedSubsystemBootOperations(e,subsystemName);
+ catch (  Throwable t) {
+    interrupted=(t instanceof InterruptedException);
+    MGMT_OP_LOGGER.failedSubsystemBootOperations(t,subsystemName);
     if (!transactionControl.signalled) {
       ModelNode failure=new ModelNode();
       failure.get(ModelDescriptionConstants.SUCCESS).set(false);
-      failure.get(ModelDescriptionConstants.FAILURE_DESCRIPTION).set(e.toString());
+      failure.get(ModelDescriptionConstants.FAILURE_DESCRIPTION).set(t.toString());
       transactionControl.operationFailed(failure);
     }
   }
@@ -28,8 +30,14 @@
         ModelNode failure=new ModelNode();
         failure.get(ModelDescriptionConstants.SUCCESS).set(false);
         failure.get(ModelDescriptionConstants.FAILURE_DESCRIPTION).set(MESSAGES.subsystemBootOperationFailedExecuting(subsystemName));
+        transactionControl.operationFailed(failure);
       }
     }
-    transactionControl.operationCompleted(transactionControl.response);
+ else {
+      transactionControl.operationCompleted(transactionControl.response);
+    }
+    if (interrupted) {
+      Thread.currentThread().interrupt();
+    }
   }
 }
