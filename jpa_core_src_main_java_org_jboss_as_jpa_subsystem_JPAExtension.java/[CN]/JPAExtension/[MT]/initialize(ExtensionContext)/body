@@ -1,12 +1,7 @@
 {
   SubsystemRegistration registration=context.registerSubsystem(SUBSYSTEM_NAME,MANAGEMENT_API_MAJOR_VERSION,MANAGEMENT_API_MINOR_VERSION,MANAGEMENT_API_MICRO_VERSION);
-  final ManagementResourceRegistration nodeRegistration=registration.registerSubsystemModel(DESCRIPTION);
-  PersistenceUnitRegistryImpl persistenceUnitRegistry=new PersistenceUnitRegistryImpl();
-  JPASubSystemAdd subsystemAdd=new JPASubSystemAdd(persistenceUnitRegistry);
-  nodeRegistration.registerOperationHandler(JPASubSystemAdd.OPERATION_NAME,subsystemAdd,subsystemAdd,false);
-  nodeRegistration.registerOperationHandler(JPASubSystemRemove.OPERATION_NAME,JPASubSystemRemove.INSTANCE,JPASubSystemRemove.INSTANCE,false);
-  nodeRegistration.registerOperationHandler(DESCRIBE,JPADescribeHandler.INSTANCE,JPADescribeHandler.INSTANCE,false,OperationEntry.EntryType.PRIVATE);
-  nodeRegistration.registerReadWriteAttribute(CommonAttributes.DEFAULT_DATASOURCE,null,JPADefaultDatasourceWriteHandler.INSTANCE,Storage.CONFIGURATION);
+  final ManagementResourceRegistration nodeRegistration=registration.registerSubsystemModel(JPADefinition.INSTANCE);
+  nodeRegistration.registerOperationHandler(DESCRIBE,GenericSubsystemDescribeHandler.INSTANCE,GenericSubsystemDescribeHandler.INSTANCE,false,OperationEntry.EntryType.PRIVATE);
   registration.registerXMLElementWriter(parser);
   try {
     PersistenceProviderLoader.loadDefaultProvider();
@@ -18,20 +13,8 @@
     PersistenceProviderAdaptor provider=PersistenceProviderAdaptorLoader.loadPersistenceAdapterModule(Configuration.ADAPTER_MODULE_DEFAULT);
     final ManagementAdaptor managementAdaptor=provider.getManagementAdaptor();
     if (managementAdaptor != null && context.isRuntimeOnlyRegistrationValid()) {
-      DescriptionProvider JPA_SUBSYSTEM=new DescriptionProvider(){
-        @Override public ModelNode getModelDescription(        Locale locale){
-          ModelNode subsystem=new ModelNode();
-          subsystem.get(org.jboss.as.controller.descriptions.ModelDescriptionConstants.DESCRIPTION).set("Runtime information about JPA use in the deployment.");
-          subsystem.get(ATTRIBUTES).setEmptyObject();
-          subsystem.get("operations");
-          subsystem.get(CHILDREN,managementAdaptor.getIdentificationLabel(),org.jboss.as.controller.descriptions.ModelDescriptionConstants.DESCRIPTION).set("Runtime information about " + managementAdaptor.getIdentificationLabel() + " use in the deployment.");
-          subsystem.get(CHILDREN,managementAdaptor.getIdentificationLabel(),MIN_OCCURS).set(0);
-          return subsystem;
-        }
-      }
-;
-      final ManagementResourceRegistration jpaSubsystemDeployments=registration.registerDeploymentModel(JPA_SUBSYSTEM);
-      managementAdaptor.register(jpaSubsystemDeployments,persistenceUnitRegistry);
+      final ManagementResourceRegistration jpaSubsystemDeployments=registration.registerDeploymentModel(JPADefinition.INSTANCE);
+      managementAdaptor.register(jpaSubsystemDeployments,PersistenceUnitRegistryImpl.INSTANCE);
     }
   }
  catch (  ModuleLoadException e) {
