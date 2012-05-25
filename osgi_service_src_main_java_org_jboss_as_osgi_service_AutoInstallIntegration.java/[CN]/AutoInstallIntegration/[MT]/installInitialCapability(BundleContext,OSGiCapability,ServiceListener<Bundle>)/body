@@ -4,7 +4,7 @@
   ServiceName result=null;
   if (isValidModuleIdentifier(identifier)) {
     ModuleIdentifier moduleId=ModuleIdentifier.fromString(identifier);
-    File bundleFile=ModuleIdentityArtifactProvider.getRepositoryEntry(bundlesDir,moduleId);
+    File bundleFile=ModuleIdentityRepository.getRepositoryEntry(bundlesDir,moduleId);
     if (bundleFile != null) {
       LOGGER.tracef("Installing initial bundle capability: %s",identifier);
       URL bundleURL=bundleFile.toURI().toURL();
@@ -13,13 +13,15 @@
   }
  else   if (isValidMavenIdentifier(identifier)) {
     LOGGER.tracef("Installing initial maven capability: %s",identifier);
-    Repository repository=injectedRepository.getValue();
+    ServiceReference sref=context.getServiceReference(XRepository.class.getName());
+    XRepository repository=(XRepository)context.getService(sref);
     MavenCoordinates mavenId=MavenCoordinates.parse(identifier);
-    Requirement req=XRequirementBuilder.createArtifactRequirement(mavenId);
-    Collection<Capability> caps=repository.findProviders(Collections.singleton(req)).get(req);
+    Requirement req=XRequirementBuilder.create(mavenId).getRequirement();
+    Collection<Capability> caps=repository.findProviders(req);
     if (caps.isEmpty() == false) {
-      XIdentityCapability icap=(XIdentityCapability)caps.iterator().next();
-      URL bundleURL=(URL)icap.getAttribute(XResourceConstants.CONTENT_URL);
+      XResource resource=(XResource)caps.iterator().next().getResource();
+      XCapability ccap=(XCapability)resource.getCapabilities(ContentNamespace.CONTENT_NAMESPACE).get(0);
+      URL bundleURL=new URL((String)ccap.getAttribute(ContentNamespace.CAPABILITY_URL_ATTRIBUTE));
       result=installBundleFromURL(bundleURL,identifier,level,listener);
     }
   }
