@@ -7,26 +7,22 @@
     boolean inValue;
     String delegateStateId;
     ParsingStateCallbackHandler delegate;
+    CommandLineFormat format;
     @Override public void enteredState(    ParsingContext ctx) throws CommandFormatException {
       final String id=ctx.getState().getId();
       if (delegate != null) {
         delegate.enteredState(ctx);
         return;
       }
-      if (!inValue) {
+      if (!inValue && ctx.getState().updateValueIndex()) {
         bufferStartIndex=ctx.getLocation();
+        inValue=ctx.getState().lockValueIndex();
       }
       if (id.equals(PropertyListState.ID)) {
         handler.propertyListStart(ctx.getLocation());
       }
- else       if (ArgumentValueState.ID.equals(id)) {
-        inValue=true;
-      }
  else       if ("ADDR_OP_SEP".equals(id)) {
         handler.addressOperationSeparator(ctx.getLocation());
-      }
- else       if (NodeState.ID.equals(id)) {
-        inValue=true;
       }
  else       if ("NAME_VALUE_SEPARATOR".equals(id)) {
         nameValueSeparator=ctx.getLocation();
@@ -36,16 +32,15 @@
         }
       }
  else       if (id.equals(CommandState.ID)) {
+        format=CommandFormat.INSTANCE;
         handler.setFormat(CommandFormat.INSTANCE);
       }
  else       if (id.equals(OperationRequestState.ID)) {
+        format=OperationFormat.INSTANCE;
         handler.setFormat(OperationFormat.INSTANCE);
       }
  else       if (HeaderListState.ID.equals(id)) {
         handler.headerListStart(ctx.getLocation());
-      }
- else       if (HeaderValueState.ID.equals(id)) {
-        inValue=true;
       }
     }
     @Override public void leavingState(    ParsingContext ctx) throws CommandFormatException {
@@ -78,7 +73,7 @@
             handler.propertyNameValueSeparator(nameValueSeparator);
           }
         }
-        if (!ctx.isEndOfContent()) {
+        if (!ctx.isEndOfContent() || format != null && format.isPropertySeparator(ctx.getCharacter())) {
           handler.propertySeparator(ctx.getLocation());
         }
         buffer.setLength(0);
@@ -93,7 +88,6 @@
             handler.propertySeparator(ctx.getLocation());
           }
         }
-        inValue=false;
       }
  else       if (CommandNameState.ID.equals(id)) {
         final String opName=buffer.toString().trim();
@@ -147,7 +141,6 @@
           }
         }
         buffer.setLength(0);
-        inValue=false;
       }
  else       if (HeaderListState.ID.equals(id)) {
         if (!ctx.isEndOfContent()) {
@@ -168,7 +161,6 @@
  else       if (HeaderValueState.ID.equals(id)) {
         handler.header(name,buffer.toString(),bufferStartIndex);
         buffer.setLength(0);
-        inValue=false;
         nameValueSeparator=-1;
       }
  else       if (HeaderState.ID.equals(id)) {
@@ -186,6 +178,9 @@
  else       if (OutputTargetState.ID.equals(id)) {
         handler.outputTarget(bufferStartIndex,buffer.toString().trim());
         buffer.setLength(0);
+      }
+      if (inValue && ctx.getState().lockValueIndex()) {
+        inValue=false;
       }
     }
     @Override public void character(    ParsingContext ctx) throws CommandFormatException {
