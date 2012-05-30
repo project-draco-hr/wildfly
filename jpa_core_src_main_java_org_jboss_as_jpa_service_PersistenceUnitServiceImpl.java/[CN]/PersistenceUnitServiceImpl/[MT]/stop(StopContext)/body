@@ -1,14 +1,26 @@
 {
-  JPA_LOGGER.stoppingService("Persistence Unit",pu.getScopedPersistenceUnitName());
-  if (entityManagerFactory != null) {
-    WritableServiceBasedNamingStore.pushOwner(context.getController().getServiceContainer().subTarget());
-    try {
-      entityManagerFactory.close();
-    }
-  finally {
-      entityManagerFactory=null;
-      pu.setTempClassLoaderFactory(null);
-      WritableServiceBasedNamingStore.popOwner();
+  final ExecutorService executor=executorInjector.getValue();
+  final Runnable task=new Runnable(){
+    @Override public void run(){
+      JPA_LOGGER.stoppingService("Persistence Unit",pu.getScopedPersistenceUnitName());
+      if (entityManagerFactory != null) {
+        WritableServiceBasedNamingStore.pushOwner(context.getController().getServiceContainer().subTarget());
+        try {
+          entityManagerFactory.close();
+        }
+ catch (        Throwable t) {
+          JPA_LOGGER.failedToStopPUService(t,pu.getScopedPersistenceUnitName());
+        }
+ finally {
+          entityManagerFactory=null;
+          pu.setTempClassLoaderFactory(null);
+          WritableServiceBasedNamingStore.popOwner();
+        }
+      }
+      context.complete();
     }
   }
+;
+  context.asynchronous();
+  executor.execute(task);
 }
