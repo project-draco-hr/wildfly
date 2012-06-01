@@ -1,0 +1,27 @@
+{
+  context.acquireControllerLock();
+  final ModelNode domainModel=Resource.Tools.readModel(context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS,true));
+  final String hostControllerName=domainController.getLocalHostInfo().getLocalHostName();
+  final ModelNode hostModel=domainModel.require(HOST).require(hostControllerName);
+  final ModelNode updates=ManagedServerOperationsFactory.createBootUpdates(serverName,domainModel,hostModel,domainController);
+  final ProxyController controller=serverInventory.serverCommunicationRegistered(serverProcessName,channelHandler);
+  try {
+    final FlushableDataOutput output=comm.writeMessage(ManagementResponseHeader.create(comm.getRequestHeader()));
+    try {
+      output.write(DomainServerProtocol.PARAM_OK);
+      updates.writeExternal(output);
+      output.close();
+    }
+  finally {
+      StreamUtils.safeClose(output);
+    }
+  }
+ catch (  IOException e) {
+    context.getFailureDescription().set(e.getMessage());
+    context.completeStep();
+    return;
+  }
+  if (context.completeStep() == OperationContext.ResultAction.KEEP) {
+    domainController.registerRunningServer(controller);
+  }
+}
