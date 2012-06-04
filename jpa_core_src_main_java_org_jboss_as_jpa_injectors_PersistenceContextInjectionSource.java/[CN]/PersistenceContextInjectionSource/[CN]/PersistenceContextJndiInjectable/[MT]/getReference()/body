@@ -8,20 +8,38 @@
     if (JPA_LOGGER.isDebugEnabled())     JPA_LOGGER.debugf("created new TransactionScopedEntityManager for unit name=%s",unitName);
   }
  else {
-    ReferenceCountedEntityManager entityManager1=SFSBCallStack.findPersistenceContext(unitName);
+    boolean useDeepInheritance=true;
+    JPADeploymentSettings jpaDeploymentSettings=DeploymentUtils.getTopDeploymentUnit(deploymentUnit).getAttachment(JpaAttachments.DEPLOYMENT_SETTINGS_KEY);
+    if (jpaDeploymentSettings != null) {
+      useDeepInheritance=ExtendedPersistenceInheritance.DEEP.equals(jpaDeploymentSettings.getExtendedPersistenceInheritanceType());
+    }
+    boolean createdNewExtendedPersistence=false;
+    ExtendedEntityManager entityManager1;
+    if (useDeepInheritance) {
+      entityManager1=ExtendedPersistenceDeepInheritance.INSTANCE.findExtendedPersistenceContext(unitName);
+    }
+ else {
+      entityManager1=ExtendedPersistenceShallowInheritance.INSTANCE.findExtendedPersistenceContext(unitName);
+    }
     if (entityManager1 == null) {
-      EntityManager tmpEm=emf.createEntityManager(properties);
-      entityManager=new ExtendedEntityManager(unitName,tmpEm);
-      entityManager1=new ReferenceCountedEntityManager((ExtendedEntityManager)entityManager);
-      if (JPA_LOGGER.isDebugEnabled())       JPA_LOGGER.debugf("created new ExtendedEntityManager for unit name=%s",unitName);
+      entityManager1=new ExtendedEntityManager(unitName,emf.createEntityManager(properties));
+      createdNewExtendedPersistence=true;
+      if (JPA_LOGGER.isDebugEnabled())       JPA_LOGGER.debugf("created new ExtendedEntityManager for unit name=%s, useDeepInheritance = %b",unitName,useDeepInheritance);
     }
  else {
       entityManager1.increaseReferenceCount();
-      entityManager=entityManager1.getEntityManager();
-      if (JPA_LOGGER.isDebugEnabled())       JPA_LOGGER.debugf("inherited existing ExtendedEntityManager from SFSB invocation stack, unit name=%s, " + "%d beans sharing ExtendedEntityManager",unitName,entityManager1.getReferenceCount());
+      if (JPA_LOGGER.isDebugEnabled())       JPA_LOGGER.debugf("inherited existing ExtendedEntityManager from SFSB invocation stack, unit name=%s, " + "%d beans sharing ExtendedEntityManager, useDeepInheritance = %b",unitName,entityManager1.getReferenceCount(),useDeepInheritance);
     }
+    entityManager=entityManager1;
     CreatedEntityManagers.registerPersistenceContext(entityManager1);
-    SFSBCallStack.extendedPersistenceContextCreated(unitName,entityManager1);
+    if (createdNewExtendedPersistence) {
+      if (useDeepInheritance) {
+        ExtendedPersistenceDeepInheritance.INSTANCE.registerExtendedPersistenceContext(unitName,entityManager1);
+      }
+ else {
+        ExtendedPersistenceShallowInheritance.INSTANCE.registerExtendedPersistenceContext(unitName,entityManager1);
+      }
+    }
   }
   if (!standardEntityManager) {
     Class extensionClass;
