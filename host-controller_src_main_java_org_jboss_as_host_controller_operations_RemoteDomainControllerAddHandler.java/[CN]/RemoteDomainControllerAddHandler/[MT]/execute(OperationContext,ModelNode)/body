@@ -11,9 +11,24 @@
     dc.get(REMOTE,SECURITY_REALM).set(securityRealm);
     hostControllerInfo.setRemoteDomainControllerSecurityRealm(securityRealm.resolve().asString());
   }
+ else {
+    remoteDC.get(SECURITY_REALM).clear();
+  }
   if (dc.has(LOCAL)) {
     dc.remove(LOCAL);
   }
-  initializeDomain(context,remoteDC);
-  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+  if (context.isBooting()) {
+    initializeDomain(context,remoteDC);
+  }
+ else {
+    context.reloadRequired();
+  }
+  context.completeStep(new OperationContext.RollbackHandler(){
+    @Override public void handleRollback(    OperationContext context,    ModelNode operation){
+      if (!context.isBooting()) {
+        context.revertReloadRequired();
+      }
+    }
+  }
+);
 }
