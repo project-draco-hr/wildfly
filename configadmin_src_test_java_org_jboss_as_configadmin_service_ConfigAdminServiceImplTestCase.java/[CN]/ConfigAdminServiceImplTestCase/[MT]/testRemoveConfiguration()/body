@@ -1,0 +1,25 @@
+{
+  Hashtable<String,String> initialConfig=new Hashtable<String,String>();
+  initialConfig.put("x","y");
+  ConfigAdminState mockState=Mockito.mock(ConfigAdminState.class);
+  Mockito.when(mockState.getConfiguration("abc")).thenReturn(initialConfig);
+  ModelNode expectedAddr=new ModelNode();
+  expectedAddr.add(new ModelNode().set(ModelDescriptionConstants.SUBSYSTEM,ConfigAdminExtension.SUBSYSTEM_NAME));
+  expectedAddr.add(new ModelNode().set(ModelConstants.CONFIGURATION,"abc"));
+  ModelNode expectedOp=Util.getEmptyOperation(ModelDescriptionConstants.REMOVE,expectedAddr);
+  ModelNode success=new ModelNode();
+  success.set(ModelDescriptionConstants.OUTCOME,ModelDescriptionConstants.SUCCESS);
+  ModelControllerClient mockControllerClient=Mockito.mock(ModelControllerClient.class);
+  Mockito.when(mockControllerClient.execute(expectedOp)).thenReturn(success);
+  ConfigAdminServiceImpl cas=createConfigAdminServiceImpl();
+  setControllerClient(cas,mockControllerClient);
+  injectSubsystemState(cas,mockState);
+  setSynchronousExecutor(cas);
+  TestConfigAdminListener testListener=new TestConfigAdminListener();
+  cas.addListener(testListener);
+  assertEquals("Precondition",0,testListener.pidList.size());
+  assertEquals(initialConfig,cas.removeConfiguration("abc"));
+  Mockito.verify(mockState).removeConfiguration("abc");
+  assertEquals(Arrays.asList("abc"),testListener.pidList);
+  assertEquals(Arrays.asList((Object)null),testListener.propList);
+}
