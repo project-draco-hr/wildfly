@@ -1,0 +1,54 @@
+{
+  final TransformersSubRegistration transformers=registration.registerModelTransformers(ModelVersion.create(1,0,0),new ResourceTransformer(){
+    @Override public void transformResource(    ResourceTransformationContext context,    PathAddress address,    Resource resource) throws OperationFailedException {
+      boolean showModel=resource.hasChild(PathElement.pathElement(CommonAttributes.SHOW_MODEL,CommonAttributes.RESOLVED));
+      final Resource transformed=Resource.Factory.create();
+      transformed.getModel().get(CommonAttributes.SHOW_MODEL).set(showModel);
+      context.addTransformedResource(PathAddress.EMPTY_ADDRESS,transformed);
+      PathElement pathElement=PathElement.pathElement(CommonAttributes.REMOTING_CONNECTOR,CommonAttributes.JMX);
+      context.processChild(pathElement,resource.getChild(pathElement));
+    }
+  }
+);
+  TransformersSubRegistration expressions=transformers.registerSubResource(ShowModelResourceExpression.INSTANCE.getPathElement());
+  expressions.discardOperations(ADD,REMOVE,WRITE_ATTRIBUTE_OPERATION,READ_ATTRIBUTE_OPERATION);
+  TransformersSubRegistration resolved=transformers.registerSubResource(ShowModelResourceResolved.INSTANCE.getPathElement());
+  resolved.registerOperationTransformer(ADD,new AbstractOperationTransformer(){
+    @Override protected ModelNode transform(    TransformationContext context,    PathAddress address,    ModelNode operation){
+      ModelNode node=new ModelNode();
+      node.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
+      node.get(OP_ADDR).set(address.subAddress(0,address.size() - 1).toModelNode());
+      node.get(NAME).set(CommonAttributes.SHOW_MODEL);
+      node.get(VALUE).set(true);
+      return node;
+    }
+  }
+);
+  resolved.registerOperationTransformer(REMOVE,new AbstractOperationTransformer(){
+    @Override protected ModelNode transform(    TransformationContext context,    PathAddress address,    ModelNode operation){
+      ModelNode node=new ModelNode();
+      node.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
+      node.get(OP_ADDR).set(address.subAddress(0,address.size() - 1).toModelNode());
+      node.get(NAME).set(CommonAttributes.SHOW_MODEL);
+      node.get(VALUE).set(false);
+      return node;
+    }
+  }
+);
+  resolved.registerOperationTransformer(READ_ATTRIBUTE_OPERATION,new OperationTransformer(){
+    @Override public TransformedOperation transformOperation(    final TransformationContext context,    final PathAddress address,    final ModelNode operation){
+      return new TransformedOperation(null,new OperationResultTransformer(){
+        @Override public ModelNode transformResult(        ModelNode result){
+          if (operation.get(NAME).asString().equals(CommonAttributes.DOMAIN_NAME)) {
+            result.get(RESULT).set(CommonAttributes.DEFAULT_RESOLVED_DOMAIN);
+          }
+          result.get(OUTCOME).set(SUCCESS);
+          result.get(RESULT);
+          return result;
+        }
+      }
+);
+    }
+  }
+);
+}
