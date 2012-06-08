@@ -1,13 +1,13 @@
 {
   try {
+    TextMessage message=(TextMessage)m;
+    String text=message.getText();
     TextMessage replyMessage;
     if (message instanceof TextMessage) {
-      String text=((TextMessage)message).getText();
-      if (text.equals("await")) {
+      if (text.equals("await") && !message.getJMSRedelivered()) {
         HelperSingletonImpl.barrier.await(WAIT_S,SECONDS);
         HelperSingletonImpl.barrier.reset();
-        HelperSingletonImpl.barrier.await(WAIT_S,SECONDS);
-        HelperSingletonImpl.barrier.reset();
+        Thread.sleep(SECONDS.toMillis(WAIT_S));
       }
       replyMessage=session.createTextMessage("Reply: " + text);
     }
@@ -15,19 +15,11 @@
       replyMessage=session.createTextMessage("Unknown message");
     }
     Destination destination=message.getJMSReplyTo();
-    sender.send(destination,replyMessage,NON_PERSISTENT,1,SECONDS.toMillis(WAIT_S));
+    message.setJMSDeliveryMode(NON_PERSISTENT);
+    sender.send(destination,replyMessage);
     log.info("onMessage method [OK], msg: " + message.toString());
   }
- catch (  JMSException e) {
-    throw new RuntimeException(e);
-  }
-catch (  InterruptedException e) {
-    throw new RuntimeException(e);
-  }
-catch (  BrokenBarrierException e) {
-    throw new RuntimeException(e);
-  }
-catch (  TimeoutException e) {
+ catch (  Exception e) {
     throw new RuntimeException(e);
   }
 }
