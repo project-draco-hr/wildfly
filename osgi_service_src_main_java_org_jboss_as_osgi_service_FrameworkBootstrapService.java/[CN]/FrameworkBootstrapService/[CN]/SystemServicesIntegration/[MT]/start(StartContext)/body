@@ -21,7 +21,7 @@
     ServiceTarget serviceTarget=context.getChildTarget();
     ServiceName serviceName=IntegrationServices.SYSTEM_SERVICES_PROVIDER.append("BINDINGS");
     ServiceBuilder<Void> builder=serviceTarget.addService(serviceName,new AbstractService<Void>(){
-      public void start(      StartContext context) throws StartException {
+      @Override public void start(      StartContext context) throws StartException {
         for (        ServiceName serviceName : socketBindingNames) {
           SocketBinding binding=(SocketBinding)serviceContainer.getRequiredService(serviceName).getValue();
           Dictionary<String,String> props=new Hashtable<String,String>();
@@ -36,8 +36,17 @@
     builder.addDependencies(serviceNameArray);
     builder.install();
   }
+  controllerThreadExecutor=Executors.newSingleThreadExecutor(new ThreadFactory(){
+    @Override public Thread newThread(    Runnable run){
+      Thread thread=new Thread(run);
+      thread.setName("OSGi ModelControllerClient Thread");
+      thread.setDaemon(true);
+      return thread;
+    }
+  }
+);
   ModelController modelController=injectedModelController.getValue();
-  ModelControllerClient client=modelController.createClient(Executors.newSingleThreadExecutor());
+  ModelControllerClient client=modelController.createClient(controllerThreadExecutor);
   syscontext.registerService(ModelControllerClient.class.getName(),client,null);
   final ServerEnvironment serverenv=injectedServerEnvironment.getValue();
   final File storageDir=new File(serverenv.getServerDataDir().getPath() + File.separator + "repository");
