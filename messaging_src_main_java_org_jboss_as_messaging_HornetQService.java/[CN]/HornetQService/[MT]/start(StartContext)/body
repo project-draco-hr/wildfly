@@ -9,7 +9,6 @@
     }
   }
   configuration.setFileDeploymentEnabled(false);
-  configuration.setLogDelegateFactoryClassName(LOGGING_FACTORY);
   PathManager pathManager=this.pathManager.getValue();
   configuration.setBindingsDirectory(pathConfig.resolveBindingsPath(pathManager));
   configuration.setLargeMessagesDirectory(pathConfig.resolveLargeMessagePath(pathManager));
@@ -71,15 +70,26 @@
         }
       }
     }
+    final Map<String,JChannel> channels=new HashMap<String,JChannel>();
     if (broadcastGroups != null) {
       final List<BroadcastGroupConfiguration> newConfigs=new ArrayList<BroadcastGroupConfiguration>();
       for (      final BroadcastGroupConfiguration config : broadcastGroups) {
         final String name=config.getName();
-        final SocketBinding binding=groupBindings.get("broadcast" + name);
-        if (binding == null) {
-          throw MESSAGES.failedToFindBroadcastSocketBinding(name);
+        final String key="broadcast" + name;
+        if (jgroupFactories.containsKey(key)) {
+          ChannelFactory channelFactory=jgroupFactories.get(key);
+          String channelName=jgroupsChannels.get(key);
+          JChannel channel=(JChannel)channelFactory.createChannel(channelName);
+          channels.put(channelName,channel);
+          newConfigs.add(BroadcastGroupAdd.createBroadcastGroupConfiguration(name,config,channel,channelName));
         }
-        newConfigs.add(BroadcastGroupAdd.createBroadcastGroupConfiguration(name,config,binding));
+ else {
+          final SocketBinding binding=groupBindings.get(key);
+          if (binding == null) {
+            throw MESSAGES.failedToFindBroadcastSocketBinding(name);
+          }
+          newConfigs.add(BroadcastGroupAdd.createBroadcastGroupConfiguration(name,config,binding));
+        }
       }
       configuration.getBroadcastGroupConfigurations().clear();
       configuration.getBroadcastGroupConfigurations().addAll(newConfigs);
@@ -88,11 +98,25 @@
       configuration.setDiscoveryGroupConfigurations(new HashMap<String,DiscoveryGroupConfiguration>());
       for (      final Map.Entry<String,DiscoveryGroupConfiguration> entry : discoveryGroups.entrySet()) {
         final String name=entry.getKey();
-        final SocketBinding binding=groupBindings.get("discovery" + name);
-        if (binding == null) {
-          throw MESSAGES.failedToFindDiscoverySocketBinding(name);
+        final String key="discovery" + name;
+        DiscoveryGroupConfiguration config=null;
+        if (jgroupFactories.containsKey(key)) {
+          ChannelFactory channelFactory=jgroupFactories.get(key);
+          String channelName=jgroupsChannels.get(key);
+          JChannel channel=channels.get(channelName);
+          if (channel == null) {
+            channel=(JChannel)channelFactory.createChannel(key);
+            channels.put(channelName,channel);
+          }
+          config=DiscoveryGroupAdd.createDiscoveryGroupConfiguration(name,entry.getValue(),channel,channelName);
         }
-        final DiscoveryGroupConfiguration config=DiscoveryGroupAdd.createDiscoveryGroupConfiguration(name,entry.getValue(),binding);
+ else {
+          final SocketBinding binding=groupBindings.get(key);
+          if (binding == null) {
+            throw MESSAGES.failedToFindDiscoverySocketBinding(name);
+          }
+          config=DiscoveryGroupAdd.createDiscoveryGroupConfiguration(name,entry.getValue(),binding);
+        }
         configuration.getDiscoveryGroupConfigurations().put(name,config);
       }
     }
