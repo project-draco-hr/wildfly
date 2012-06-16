@@ -1,15 +1,18 @@
 {
-  char[] keystorePassword=unmaskPassword(context,ssl.require(KEYSTORE_PASSWORD));
+  char[] keystorePassword=KeystoreAttributes.KEYSTORE_PASSWORD.resolveModelAttribute(context,ssl).asString().toCharArray();
   char[] keyPassword=null;
-  if (ssl.hasDefined(KEY_PASSWORD)) {
-    keyPassword=unmaskPassword(context,ssl.require(KEY_PASSWORD));
+  ModelNode pwordNode=KeystoreAttributes.KEY_PASSWORD.resolveModelAttribute(context,ssl);
+  if (pwordNode.isDefined()) {
+    keyPassword=pwordNode.asString().toCharArray();
   }
-  String path=ssl.require(KEYSTORE_PATH).asString();
-  String alias=ssl.hasDefined(ALIAS) ? ssl.require(ALIAS).asString() : null;
+  String path=KeystoreAttributes.KEYSTORE_PATH.resolveModelAttribute(context,ssl).asString();
+  ModelNode aliasNode=KeystoreAttributes.ALIAS.resolveModelAttribute(context,ssl);
+  String alias=aliasNode.isDefined() ? aliasNode.asString() : null;
   FileKeystoreService fileKeystoreService=new FileKeystoreService(path,keystorePassword,alias,keyPassword);
   ServiceBuilder<?> serviceBuilder=serviceTarget.addService(serviceName,fileKeystoreService);
-  if (ssl.hasDefined(KEYSTORE_RELATIVE_TO)) {
-    serviceBuilder.addDependency(pathName(ssl.require(KEYSTORE_RELATIVE_TO).asString()),String.class,fileKeystoreService.getRelativeToInjector());
+  ModelNode relativeTo=KeystoreAttributes.KEYSTORE_RELATIVE_TO.resolveModelAttribute(context,ssl);
+  if (relativeTo.isDefined()) {
+    serviceBuilder.addDependency(pathName(relativeTo.asString()),String.class,fileKeystoreService.getRelativeToInjector());
   }
   final ServiceController<?> serviceController=serviceBuilder.setInitialMode(ON_DEMAND).install();
   if (newControllers != null) {
