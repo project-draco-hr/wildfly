@@ -3,16 +3,21 @@
   if (trace) {
     HOST_CONTROLLER_LOGGER.tracef("Sending %s to %s",operation,name);
   }
+  final TransactionalProtocolClient client=proxyController.getProtocolClient();
   final OperationMessageHandler messageHandler=new DelegatingMessageHandler(context);
   final OperationAttachments operationAttachments=new DelegatingOperationAttachments(context);
-  final ProxyOperation proxyOperation=new ProxyOperation(name,operation,messageHandler,operationAttachments);
-  final SubsystemInfoOperationListener subsystemListener=new SubsystemInfoOperationListener(listener,transformers);
+  final OperationTransformer.TransformedOperation transformationResult=proxyController.transformOperation(context,operation);
+  final ModelNode transformedOperation=transformationResult.getTransformedOperation();
+  final OperationResultTransformer resultTransformer=transformationResult.getResultTransformer();
+  final ProxyOperation proxyOperation=new ProxyOperation(name,transformedOperation,messageHandler,operationAttachments);
+  final SubsystemInfoOperationListener subsystemListener=new SubsystemInfoOperationListener(listener,proxyController.getTransformers());
   try {
-    return client.execute(subsystemListener,proxyOperation);
+    final AsyncFuture<ModelNode> result=client.execute(subsystemListener,proxyOperation);
+    return new ExecutedHostRequest(result,resultTransformer);
   }
  catch (  IOException e) {
     final TransactionalProtocolClient.PreparedOperation<ProxyOperation> result=BlockingQueueOperationListener.FailedOperation.create(proxyOperation,e);
     subsystemListener.operationPrepared(result);
-    return result.getFinalResult();
+    return new ExecutedHostRequest(result.getFinalResult(),resultTransformer);
   }
 }

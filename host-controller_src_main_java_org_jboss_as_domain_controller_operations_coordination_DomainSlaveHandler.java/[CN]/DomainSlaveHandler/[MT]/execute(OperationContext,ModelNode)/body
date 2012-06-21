@@ -6,13 +6,13 @@
   }
   final Set<String> outstanding=new HashSet<String>(hostProxies.keySet());
   final List<TransactionalProtocolClient.PreparedOperation<HostControllerUpdateTask.ProxyOperation>> results=new ArrayList<TransactionalProtocolClient.PreparedOperation<HostControllerUpdateTask.ProxyOperation>>();
-  final Map<String,AsyncFuture<ModelNode>> finalResults=new HashMap<String,AsyncFuture<ModelNode>>();
+  final Map<String,HostControllerUpdateTask.ExecutedHostRequest> finalResults=new HashMap<String,HostControllerUpdateTask.ExecutedHostRequest>();
   final HostControllerUpdateTask.ProxyOperationListener listener=new HostControllerUpdateTask.ProxyOperationListener();
   for (  Map.Entry<String,ProxyController> entry : hostProxies.entrySet()) {
     final String host=entry.getKey();
     final TransformingProxyController proxyController=(TransformingProxyController)entry.getValue();
     final HostControllerUpdateTask task=new HostControllerUpdateTask(host,operation.clone(),context,proxyController);
-    final AsyncFuture<ModelNode> finalResult=task.execute(listener);
+    final HostControllerUpdateTask.ExecutedHostRequest finalResult=task.execute(listener);
     finalResults.put(host,finalResult);
   }
   boolean interrupted=false;
@@ -35,14 +35,16 @@
  catch (    InterruptedException ie) {
       interrupted=true;
       domainOperationContext.setFailureReported(true);
-      for (      final AsyncFuture<ModelNode> finalResult : finalResults.values()) {
-        finalResult.asyncCancel(false);
+      for (      final HostControllerUpdateTask.ExecutedHostRequest finalResult : finalResults.values()) {
+        finalResult.asyncCancel();
       }
-      for (      final Map.Entry<String,AsyncFuture<ModelNode>> entry : finalResults.entrySet()) {
+      for (      final Map.Entry<String,HostControllerUpdateTask.ExecutedHostRequest> entry : finalResults.entrySet()) {
         final String hostName=entry.getKey();
         try {
-          final ModelNode result=entry.getValue().get();
-          domainOperationContext.addHostControllerResult(hostName,result);
+          final HostControllerUpdateTask.ExecutedHostRequest request=entry.getValue();
+          final ModelNode result=request.getFinalResult().get();
+          final ModelNode transformedResult=request.transformResult(result);
+          domainOperationContext.addHostControllerResult(hostName,transformedResult);
         }
  catch (        Exception e) {
           final ModelNode result=new ModelNode();

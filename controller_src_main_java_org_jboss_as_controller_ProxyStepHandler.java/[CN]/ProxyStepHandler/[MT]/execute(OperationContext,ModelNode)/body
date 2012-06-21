@@ -18,13 +18,32 @@
 ;
   if (proxyController instanceof TransformingProxyController) {
     final TransformingProxyController transformingProxyController=(TransformingProxyController)proxyController;
-    final TransformationContext transformationContext=Transformers.Factory.getTransformationContext(context);
-    final ModelNode transformedOperation=transformingProxyController.getTransformers().transformOperation(transformationContext,operation);
+    final OperationTransformer.TransformedOperation result=transformingProxyController.transformOperation(context,operation);
+    final ModelNode transformedOperation=result.getTransformedOperation();
+    final OperationResultTransformer resultTransformer=result.getResultTransformer();
     if (transformedOperation != null) {
-      proxyController.execute(transformedOperation,messageHandler,proxyControl,new DelegatingOperationAttachments(context));
+      final ProxyController.ProxyOperationControl transformingProxyControl=new ProxyController.ProxyOperationControl(){
+        @Override public void operationFailed(        ModelNode response){
+          final ModelNode result=resultTransformer.transformResult(response);
+          proxyControl.operationFailed(result);
+        }
+        @Override public void operationCompleted(        ModelNode response){
+          final ModelNode result=resultTransformer.transformResult(response);
+          proxyControl.operationCompleted(result);
+        }
+        @Override public void operationPrepared(        ModelController.OperationTransaction transaction,        ModelNode response){
+          proxyControl.operationPrepared(transaction,response);
+        }
+      }
+;
+      proxyController.execute(transformedOperation,messageHandler,transformingProxyControl,new DelegatingOperationAttachments(context));
     }
  else {
-      context.completeStep();
+      final ModelNode transformedResult=resultTransformer.transformResult(new ModelNode());
+      if (transformedResult != null) {
+        context.getResult().set(transformedResult);
+      }
+      context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
       return;
     }
   }
