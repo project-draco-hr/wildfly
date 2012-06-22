@@ -13,14 +13,7 @@
   serverRegistration.registerSubModel(new BroadcastGroupDefinition(registerRuntimeOnly));
   serverRegistration.registerSubModel(new DiscoveryGroupDefinition(registerRuntimeOnly));
   serverRegistration.registerSubModel(new DivertDefinition(registerRuntimeOnly));
-  final ManagementResourceRegistration queue=serverRegistration.registerSubModel(PathElement.pathElement(QUEUE),MessagingSubsystemProviders.QUEUE_RESOURCE);
-  queue.registerOperationHandler(ADD,QueueAdd.INSTANCE,QueueAdd.INSTANCE,false);
-  queue.registerOperationHandler(REMOVE,QueueRemove.INSTANCE,QueueRemove.INSTANCE,false);
-  QueueConfigurationWriteHandler.INSTANCE.registerAttributes(queue,registerRuntimeOnly);
-  if (registerRuntimeOnly) {
-    QueueReadAttributeHandler.INSTANCE.registerAttributes(queue);
-    QueueControlHandler.INSTANCE.registerOperations(queue);
-  }
+  serverRegistration.registerSubModel(new QueueDefinition(registerRuntimeOnly));
   serverRegistration.registerSubModel(GenericTransportDefinition.createAcceptorDefinition(registerRuntimeOnly));
   serverRegistration.registerSubModel(RemoteTransportDefinition.createAcceptorDefinition(registerRuntimeOnly));
   serverRegistration.registerSubModel(InVMTransportDefinition.createAcceptorDefinition(registerRuntimeOnly));
@@ -31,53 +24,21 @@
   serverRegistration.registerSubModel(new ClusterConnectionDefinition(registerRuntimeOnly));
   serverRegistration.registerSubModel(new GroupingHandlerDefinition(registerRuntimeOnly));
   serverRegistration.registerSubModel(new ConnectorServiceDefinition(registerRuntimeOnly));
-  for (  final String path : CommonAttributes.PATHS) {
+  for (  final String path : MessagingPathHandlers.PATHS) {
     ManagementResourceRegistration bindings=serverRegistration.registerSubModel(PathElement.pathElement(PATH,path),new MessagingSubsystemProviders.PathProvider(path));
     MessagingPathHandlers.register(bindings);
   }
-  final ManagementResourceRegistration cfs=serverRegistration.registerSubModel(CFS_PATH,MessagingSubsystemProviders.CF);
-  cfs.registerOperationHandler(ADD,ConnectionFactoryAdd.INSTANCE,MessagingSubsystemProviders.CF_ADD,false);
-  cfs.registerOperationHandler(REMOVE,ConnectionFactoryRemove.INSTANCE,MessagingSubsystemProviders.CF_REMOVE,false);
-  ConnectionFactoryWriteAttributeHandler.INSTANCE.registerAttributes(cfs);
-  if (registerRuntimeOnly) {
-    ConnectionFactoryReadAttributeHandler.INSTANCE.registerAttributes(cfs);
-  }
-  ConnectionFactoryAddJndiHandler.INSTANCE.registerOperation(cfs);
-  final ManagementResourceRegistration resourceAdapters=serverRegistration.registerSubModel(RA_PATH,MessagingSubsystemProviders.RA);
-  resourceAdapters.registerOperationHandler(ADD,PooledConnectionFactoryAdd.INSTANCE,MessagingSubsystemProviders.RA_ADD,false);
-  resourceAdapters.registerOperationHandler(REMOVE,PooledConnectionFactoryRemove.INSTANCE,MessagingSubsystemProviders.RA_REMOVE);
-  PooledConnectionFactoryWriteAttributeHandler.INSTANCE.registerAttributes(resourceAdapters,registerRuntimeOnly);
-  final ManagementResourceRegistration queues=serverRegistration.registerSubModel(JMS_QUEUE_PATH,MessagingSubsystemProviders.JMS_QUEUE_RESOURCE);
-  queues.registerOperationHandler(ADD,JMSQueueAdd.INSTANCE,JMSQueueAdd.INSTANCE,false);
-  queues.registerOperationHandler(REMOVE,JMSQueueRemove.INSTANCE,JMSQueueRemove.INSTANCE,false);
-  JMSQueueConfigurationWriteHandler.INSTANCE.registerAttributes(queues,registerRuntimeOnly);
-  JMSQueueAddJndiHandler.INSTANCE.registerOperation(queues);
-  if (registerRuntimeOnly) {
-    JMSQueueReadAttributeHandler.INSTANCE.registerAttributes(queues);
-    JMSQueueControlHandler.INSTANCE.registerOperations(queues);
-  }
-  final ManagementResourceRegistration topics=serverRegistration.registerSubModel(TOPIC_PATH,MessagingSubsystemProviders.JMS_TOPIC_RESOURCE);
-  topics.registerOperationHandler(ADD,JMSTopicAdd.INSTANCE,JMSTopicAdd.INSTANCE,false);
-  topics.registerOperationHandler(REMOVE,JMSTopicRemove.INSTANCE,JMSTopicRemove.INSTANCE,false);
-  JMSTopicConfigurationWriteHandler.INSTANCE.registerAttributes(topics);
-  JMSTopicAddJndiHandler.INSTANCE.registerOperation(topics);
-  if (registerRuntimeOnly) {
-    JMSTopicReadAttributeHandler.INSTANCE.registerAttributes(topics);
-    JMSTopicControlHandler.INSTANCE.registerOperations(topics);
-  }
+  serverRegistration.registerSubModel(new ConnectionFactoryDefinition(registerRuntimeOnly));
+  serverRegistration.registerSubModel(new PooledConnectionFactoryDefinition(registerRuntimeOnly));
+  serverRegistration.registerSubModel(new JMSQueueDefinition(registerRuntimeOnly));
+  serverRegistration.registerSubModel(new JMSTopicDefinition(registerRuntimeOnly));
   serverRegistration.registerSubModel(new SecuritySettingDefinition(registerRuntimeOnly));
-  if (context.isRuntimeOnlyRegistrationValid()) {
-    ResourceDefinition deploymentsDef=new SimpleResourceDefinition(PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,SUBSYSTEM_NAME),getResourceDescriptionResolver("deployed"));
+  if (registerRuntimeOnly) {
+    ResourceDefinition deploymentsDef=new SimpleResourceDefinition(SUBSYSTEM_PATH,getResourceDescriptionResolver("deployed"));
     final ManagementResourceRegistration deploymentsRegistration=subsystem.registerDeploymentModel(deploymentsDef);
     final ManagementResourceRegistration serverModel=deploymentsRegistration.registerSubModel(new HornetQServerResourceDefinition(true));
-    final ManagementResourceRegistration deploymentQueue=serverModel.registerSubModel(JMS_QUEUE_PATH,MessagingSubsystemProviders.JMS_QUEUE_RESOURCE);
-    JMSQueueReadAttributeHandler.INSTANCE.registerAttributes(deploymentQueue);
-    JMSQueueControlHandler.INSTANCE.registerOperations(deploymentQueue);
-    JMSQueueConfigurationRuntimeHandler.INSTANCE.registerAttributes(deploymentQueue);
-    final ManagementResourceRegistration deploymentTopics=serverModel.registerSubModel(TOPIC_PATH,MessagingSubsystemProviders.JMS_TOPIC_RESOURCE);
-    JMSTopicReadAttributeHandler.INSTANCE.registerAttributes(deploymentTopics);
-    JMSTopicControlHandler.INSTANCE.registerOperations(deploymentTopics);
-    JMSTopicConfigurationRuntimeHandler.INSTANCE.registerAttributes(deploymentTopics);
+    serverModel.registerSubModel(JMSQueueDefinition.newDeployedJMSQueueDefinition());
+    serverModel.registerSubModel(JMSTopicDefinition.newDeployedJMSTopicDefinition());
   }
   rootRegistration.registerSubModel(new JMSBridgeDefinition());
 }
