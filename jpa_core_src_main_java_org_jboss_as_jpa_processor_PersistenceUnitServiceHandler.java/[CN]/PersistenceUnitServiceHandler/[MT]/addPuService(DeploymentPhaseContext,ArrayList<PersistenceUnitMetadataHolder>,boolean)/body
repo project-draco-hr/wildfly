@@ -1,0 +1,45 @@
+{
+  if (puList.size() > 0) {
+    final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+    final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+    final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+    final Collection<ComponentDescription> components=eeModuleDescription.getComponentDescriptions();
+    if (module == null)     throw MESSAGES.failedToGetModuleAttachment(phaseContext.getDeploymentUnit());
+    final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+    final ModuleClassLoader classLoader=module.getClassLoader();
+    PersistenceProviderDeploymentHolder persistenceProviderDeploymentHolder=getPersistenceProviderDeploymentHolder(deploymentUnit);
+    for (    PersistenceUnitMetadataHolder holder : puList) {
+      setAnnotationIndexes(holder,deploymentUnit);
+      for (      PersistenceUnitMetadata pu : holder.getPersistenceUnits()) {
+        String jpaContainerManaged=pu.getProperties().getProperty(Configuration.JPA_CONTAINER_MANAGED);
+        boolean deployPU=(jpaContainerManaged == null ? true : Boolean.parseBoolean(jpaContainerManaged));
+        boolean allowClassTransformer=true;
+        if (pu.getProperties().containsKey(Configuration.JPA_CONTAINER_CLASS_TRANSFORMER)) {
+          allowClassTransformer=Boolean.parseBoolean(pu.getProperties().getProperty(Configuration.JPA_CONTAINER_CLASS_TRANSFORMER));
+        }
+        boolean startThisPu=false;
+        if (deployPU) {
+          if (startEarly) {
+            if (false == allowClassTransformer) {
+              JPA_LOGGER.tracef("persistence unit %s in deployment %s is configured to not allow class transformer to be set, no class rewriting will be allowed",pu.getPersistenceUnitName(),deploymentUnit.getName());
+            }
+ else {
+              startThisPu=true;
+            }
+          }
+ else {
+            if (false == allowClassTransformer) {
+              startThisPu=true;
+            }
+          }
+          if (startThisPu) {
+            deployPersistenceUnit(phaseContext,deploymentUnit,eeModuleDescription,components,serviceTarget,classLoader,persistenceProviderDeploymentHolder,pu,startEarly);
+          }
+        }
+ else {
+          JPA_LOGGER.tracef("persistence unit %s in deployment %s is not container managed (%s is set to false)",pu.getPersistenceUnitName(),deploymentUnit.getName(),Configuration.JPA_CONTAINER_MANAGED);
+        }
+      }
+    }
+  }
+}
