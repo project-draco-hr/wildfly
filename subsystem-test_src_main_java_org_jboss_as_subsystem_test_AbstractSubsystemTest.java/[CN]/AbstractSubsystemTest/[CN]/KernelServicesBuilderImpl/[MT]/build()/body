@@ -1,0 +1,22 @@
+{
+  validateNotAlreadyBuilt();
+  built=true;
+  KernelServices kernelServices=KernelServices.create(mainSubsystemName,additionalInit,cloneExtensionRegistry(),bootOperations,testParser,mainExtension,null);
+  AbstractSubsystemTest.this.kernelServices.add(kernelServices);
+  validateDescriptionProviders(additionalInit,kernelServices);
+  ManagementResourceRegistration subsystemReg=kernelServices.getRootRegistration().getSubModel(PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,mainSubsystemName)));
+  validateModelDescriptions(PathAddress.EMPTY_ADDRESS,subsystemReg);
+  for (  Map.Entry<ModelVersion,LegacyKernelServiceInitializerImpl> entry : legacyControllerInitializers.entrySet()) {
+    LegacyKernelServiceInitializerImpl legacyInitializer=entry.getValue();
+    List<ModelNode> transformedBootOperations=new ArrayList<ModelNode>();
+    for (    ModelNode op : bootOperations) {
+      ModelNode transformed=kernelServices.transformOperation(entry.getKey(),op);
+      if (transformed != null) {
+        transformedBootOperations.add(transformed);
+      }
+    }
+    KernelServices legacyServices=legacyInitializer.install(transformedBootOperations);
+    kernelServices.addLegacyKernelService(entry.getKey(),legacyServices);
+  }
+  return kernelServices;
+}
