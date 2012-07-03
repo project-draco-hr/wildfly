@@ -24,50 +24,39 @@
     throw new IllegalStateException("Failed to locate closing ')' for '(' at " + pos + " in '"+ input+ "'");
   }
   final int start=pos;
-  for (; pos < input.length() && !isEndWord(input.charAt(pos)); ++pos)   ;
-  final String op=input.substring(start,pos);
-  skipWhitespaces();
+  int end=pos;
+  ComparisonOperation comparison=null;
+  while (true) {
+    if (pos == input.length()) {
+      break;
+    }
+    final char ch=input.charAt(pos);
+    if (Character.isWhitespace(ch)) {
+      skipWhitespaces();
+      comparison=tryComparison();
+      break;
+    }
+    if (ch == '&' || ch == '|') {
+      break;
+    }
+    comparison=tryComparison();
+    if (comparison != null) {
+      break;
+    }
+    ++pos;
+    ++end;
+  }
+  final String op=input.substring(start,end);
   Operand operand=new Operand(){
     public String toString(){
       return '\'' + op + '\'';
     }
   }
 ;
-  if (!isEOL()) {
-    ComparisonOperation comparison=null;
-    if (input.startsWith(EQ,pos)) {
-      comparison=new ComparisonOperation(EQ);
-      pos+=2;
-    }
- else     if (input.startsWith(NOT_EQ,pos)) {
-      comparison=new ComparisonOperation(NOT_EQ);
-      pos+=2;
-    }
- else     if (input.charAt(pos) == '>') {
-      if (input.length() > pos + 1 && input.charAt(pos + 1) == '=') {
-        comparison=new ComparisonOperation(NLT);
-        pos+=2;
-      }
- else {
-        comparison=new ComparisonOperation(GT);
-        ++pos;
-      }
-    }
- else     if (input.charAt(pos) == '<') {
-      if (input.length() > pos + 1 && input.charAt(pos + 1) == '=') {
-        comparison=new ComparisonOperation(NGT);
-        pos+=2;
-      }
- else {
-        comparison=new ComparisonOperation(LT);
-        ++pos;
-      }
-    }
-    if (comparison != null) {
-      comparison.addOperand(operand);
-      operand=comparison;
-      comparison.addOperand(parseOperand());
-    }
+  if (comparison != null) {
+    comparison.addOperand(operand);
+    operand=comparison;
+    comparison.addOperand(parseOperand());
   }
   return operand;
 }
