@@ -1,15 +1,23 @@
 {
   requireNoAttributes(reader);
-  final Set<String> configuredSubsystemTypes=new HashSet<String>();
+  final Map<String,List<ModelNode>> profileOps=new LinkedHashMap<String,List<ModelNode>>();
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
     if (Element.forName(reader.getLocalName()) != Element.SUBSYSTEM) {
       throw unexpectedElement(reader);
     }
-    if (!configuredSubsystemTypes.add(reader.getNamespaceURI())) {
+    String namespace=reader.getNamespaceURI();
+    if (profileOps.containsKey(namespace)) {
       throw MESSAGES.duplicateDeclaration("subsystem",reader.getLocation());
     }
     final List<ModelNode> subsystems=new ArrayList<ModelNode>();
     reader.handleAny(subsystems);
+    profileOps.put(namespace,subsystems);
+  }
+  Set<ProfileParsingCompletionHandler> completionHandlers=extensionRegistry.getProfileParsingCompletionHandlers();
+  for (  ProfileParsingCompletionHandler completionHandler : completionHandlers) {
+    completionHandler.handleProfileParsingCompletion(profileOps,list);
+  }
+  for (  List<ModelNode> subsystems : profileOps.values()) {
     for (    final ModelNode update : subsystems) {
       final ModelNode subsystemAddress=address.clone();
       for (      final Property path : update.get(OP_ADDR).asPropertyList()) {

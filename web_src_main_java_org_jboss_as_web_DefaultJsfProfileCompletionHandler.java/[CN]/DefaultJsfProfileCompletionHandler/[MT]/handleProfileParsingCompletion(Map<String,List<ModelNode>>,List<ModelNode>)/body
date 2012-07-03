@@ -1,0 +1,38 @@
+{
+  List<ModelNode> legacyWebOps=profileBootOperations.get(Namespace.WEB_1_0.getUriString());
+  if (legacyWebOps == null) {
+    legacyWebOps=profileBootOperations.get(Namespace.WEB_1_1.getUriString());
+  }
+  if (legacyWebOps != null) {
+    boolean hasJsf=false;
+    for (    String namespace : profileBootOperations.keySet()) {
+      if (namespace.startsWith(JSF_NAMESPACE_PREFIX)) {
+        hasJsf=true;
+        break;
+      }
+    }
+    if (!hasJsf) {
+      boolean hasJSFExtension=false;
+      for (      ModelNode op : otherBootOperations) {
+        PathAddress pa=PathAddress.pathAddress(op.get(OP_ADDR));
+        if (pa.size() == 1 && EXTENSION.equals(pa.getElement(0).getKey()) && JSF_MODULE.equals(pa.getElement(0).getValue())) {
+          hasJSFExtension=true;
+          break;
+        }
+      }
+      if (!hasJSFExtension) {
+        final ModelNode jsfExtension=new ModelNode();
+        jsfExtension.get(OP).set(ADD);
+        PathAddress jsfExtensionAddress=PathAddress.pathAddress(PathElement.pathElement(EXTENSION,JSF_MODULE));
+        jsfExtension.get(OP_ADDR).set(jsfExtensionAddress.toModelNode());
+        jsfExtension.get(MODULE).set(JSF_MODULE);
+        otherBootOperations.add(jsfExtension);
+      }
+      final ModelNode jsf=new ModelNode();
+      jsf.get(OP).set(ADD);
+      PathAddress jsfAddress=PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,JSF_SUBSYSTEM));
+      jsf.get(OP_ADDR).set(jsfAddress.toModelNode());
+      legacyWebOps.add(jsf);
+    }
+  }
+}

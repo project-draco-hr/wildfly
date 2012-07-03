@@ -12,8 +12,7 @@
     if (!names.add(name)) {
       throw MESSAGES.duplicateDeclaration("profile",name,reader.getLocation());
     }
-    final List<ModelNode> subsystems=new ArrayList<ModelNode>();
-    final Set<String> configuredSubsystemTypes=new HashSet<String>();
+    final Map<String,List<ModelNode>> profileOps=new LinkedHashMap<String,List<ModelNode>>();
     while (reader.nextTag() != END_ELEMENT) {
       Namespace ns=Namespace.forUri(reader.getNamespaceURI());
 switch (ns) {
@@ -22,10 +21,13 @@ case UNKNOWN:
           if (Element.forName(reader.getLocalName()) != Element.SUBSYSTEM) {
             throw unexpectedElement(reader);
           }
-          if (!configuredSubsystemTypes.add(reader.getNamespaceURI())) {
+          String namespace=reader.getNamespaceURI();
+          if (profileOps.containsKey(namespace)) {
             throw MESSAGES.duplicateDeclaration("subsystem",name,reader.getLocation());
           }
+          final List<ModelNode> subsystems=new ArrayList<ModelNode>();
           reader.handleAny(subsystems);
+          profileOps.put(namespace,subsystems);
           break;
         }
 case DOMAIN_1_0:
@@ -34,7 +36,7 @@ case DOMAIN_1_2:
 case DOMAIN_1_3:
 {
         requireNamespace(reader,expectedNs);
-        if (configuredSubsystemTypes.size() > 0) {
+        if (profileOps.size() > 0) {
           throw unexpectedElement(reader);
         }
         if (Element.forName(reader.getLocalName()) != Element.INCLUDE) {
@@ -51,19 +53,25 @@ default :
     }
 }
 }
+Set<ProfileParsingCompletionHandler> completionHandlers=extensionRegistry.getProfileParsingCompletionHandlers();
+for (ProfileParsingCompletionHandler completionHandler : completionHandlers) {
+completionHandler.handleProfileParsingCompletion(profileOps,list);
+}
 final ModelNode profile=new ModelNode();
 profile.get(OP).set(ADD);
 profile.get(OP_ADDR).set(address).add(ModelDescriptionConstants.PROFILE,name);
 list.add(profile);
+for (List<ModelNode> subsystems : profileOps.values()) {
 for (final ModelNode update : subsystems) {
-final ModelNode subsystemAddress=address.clone().set(address).add(ModelDescriptionConstants.PROFILE,name);
-for (final Property path : update.get(OP_ADDR).asPropertyList()) {
-  subsystemAddress.add(path.getName(),path.getValue().asString());
+  final ModelNode subsystemAddress=address.clone().set(address).add(ModelDescriptionConstants.PROFILE,name);
+  for (  final Property path : update.get(OP_ADDR).asPropertyList()) {
+    subsystemAddress.add(path.getName(),path.getValue().asString());
+  }
+  update.get(OP_ADDR).set(subsystemAddress);
+  list.add(update);
 }
-update.get(OP_ADDR).set(subsystemAddress);
-list.add(update);
 }
-if (configuredSubsystemTypes.size() == 0) {
+if (profileOps.size() == 0) {
 throw MESSAGES.profileHasNoSubsystems(reader.getLocation());
 }
 }
