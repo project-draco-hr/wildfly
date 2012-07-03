@@ -12,22 +12,62 @@
       }
  else       if (input.charAt(endIndex) == ')') {
         if (depthCount == 0) {
-          return parseExpression(input.substring(pos + 1,endIndex));
+          final Operation expr=parseExpression(input.substring(pos + 1,endIndex));
+          skipWhitespaces();
+          return expr;
         }
  else {
           --depthCount;
         }
       }
     }
+    throw new IllegalStateException("Failed to locate closing ')' for '(' at " + pos + " in '"+ input+ "'");
   }
-  int start=pos;
-  for (; pos < input.length() && !Character.isWhitespace(input.charAt(pos)); ++pos)   ;
+  final int start=pos;
+  for (; pos < input.length() && !isEndWord(input.charAt(pos)); ++pos)   ;
   final String op=input.substring(start,pos);
   skipWhitespaces();
-  return new Operand(){
+  Operand operand=new Operand(){
     public String toString(){
       return '\'' + op + '\'';
     }
   }
 ;
+  if (!isEOL()) {
+    ComparisonOperation comparison=null;
+    if (input.startsWith(EQ,pos)) {
+      comparison=new ComparisonOperation(EQ);
+      pos+=2;
+    }
+ else     if (input.startsWith(NOT_EQ,pos)) {
+      comparison=new ComparisonOperation(NOT_EQ);
+      pos+=2;
+    }
+ else     if (input.charAt(pos) == '>') {
+      if (input.length() > pos + 1 && input.charAt(pos + 1) == '=') {
+        comparison=new ComparisonOperation(NLT);
+        pos+=2;
+      }
+ else {
+        comparison=new ComparisonOperation(GT);
+        ++pos;
+      }
+    }
+ else     if (input.charAt(pos) == '<') {
+      if (input.length() > pos + 1 && input.charAt(pos + 1) == '=') {
+        comparison=new ComparisonOperation(NGT);
+        pos+=2;
+      }
+ else {
+        comparison=new ComparisonOperation(LT);
+        ++pos;
+      }
+    }
+    if (comparison != null) {
+      comparison.addOperand(operand);
+      operand=comparison;
+      comparison.addOperand(parseOperand());
+    }
+  }
+  return operand;
 }
