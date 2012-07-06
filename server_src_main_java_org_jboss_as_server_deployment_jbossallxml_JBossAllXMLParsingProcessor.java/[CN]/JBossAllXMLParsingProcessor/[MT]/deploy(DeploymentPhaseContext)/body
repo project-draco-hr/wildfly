@@ -1,0 +1,34 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final ResourceRoot root=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  VirtualFile descriptor=null;
+  for (  final String loc : DEPLOYMENT_STRUCTURE_DESCRIPTOR_LOCATIONS) {
+    final VirtualFile file=root.getRoot().getChild(loc);
+    if (file.exists()) {
+      descriptor=file;
+      break;
+    }
+  }
+  if (descriptor == null) {
+    return;
+  }
+  final XMLMapper mapper=XMLMapper.Factory.create();
+  final Map<String,AttachmentKey<?>> namespaceAttachments=new HashMap<String,AttachmentKey<?>>();
+  for (  final JBossAllXMLParserDescription<?> parser : deploymentUnit.getAttachmentList(JBossAllXMLParserDescription.ATTACHMENT_KEY)) {
+    namespaceAttachments.put(parser.getRootElement().getNamespaceURI(),parser.getAttachmentKey());
+    mapper.registerRootElement(parser.getRootElement(),new JBossAllXMLElementReader(parser));
+  }
+  mapper.registerRootElement(new QName(Namespace.JBOSS_1_0.getUriString(),JBOSS),Parser.INSTANCE);
+  mapper.registerRootElement(new QName(Namespace.NONE.getUriString(),JBOSS),Parser.INSTANCE);
+  final JBossAllXmlParseContext context=new JBossAllXmlParseContext(deploymentUnit);
+  parse(descriptor,mapper,context);
+  final Map<AttachmentKey<?>,String> usedNamespaces=new HashMap<AttachmentKey<?>,String>();
+  for (  Map.Entry<String,Object> entry : context.getParseResults().entrySet()) {
+    final AttachmentKey attachmentKey=namespaceAttachments.get(entry.getKey());
+    if (usedNamespaces.containsKey(attachmentKey)) {
+      ServerMessages.MESSAGES.equivilentNamespacesInJBossXml(entry.getKey(),usedNamespaces.get(attachmentKey));
+    }
+    usedNamespaces.put(attachmentKey,entry.getKey());
+    deploymentUnit.putAttachment(attachmentKey,entry.getValue());
+  }
+}
