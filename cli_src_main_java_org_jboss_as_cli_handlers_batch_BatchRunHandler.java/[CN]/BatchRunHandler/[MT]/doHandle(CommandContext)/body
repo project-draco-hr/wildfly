@@ -1,27 +1,15 @@
 {
-  final BatchManager batchManager=ctx.getBatchManager();
-  if (!batchManager.isBatchActive()) {
-    throw new CommandFormatException("No active batch.");
-  }
-  final Batch batch=batchManager.getActiveBatch();
-  List<BatchedCommand> currentBatch=batch.getCommands();
-  if (currentBatch.isEmpty()) {
-    batchManager.discardActiveBatch();
-    throw new CommandFormatException("The batch is empty.");
-  }
-  final ModelNode composite=batch.toRequest();
-  ModelNode result;
+  boolean failed=false;
   try {
-    result=ctx.getModelControllerClient().execute(composite);
+    super.doHandle(ctx);
   }
- catch (  Exception e) {
-    throw new CommandFormatException("Failed to execute batch: " + e.getLocalizedMessage());
+ catch (  CommandLineException e) {
+    failed=true;
+    throw e;
   }
-  if (Util.isSuccess(result)) {
-    batchManager.discardActiveBatch();
-    ctx.printLine("The batch executed successfully.");
-  }
- else {
-    throw new CommandFormatException("Failed to execute batch: " + Util.getFailureDescription(result));
+ finally {
+    if (!failed) {
+      ctx.getBatchManager().discardActiveBatch();
+    }
   }
 }
