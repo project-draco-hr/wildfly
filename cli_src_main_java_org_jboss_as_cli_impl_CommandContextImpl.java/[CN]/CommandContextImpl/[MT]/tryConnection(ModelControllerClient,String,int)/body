@@ -4,21 +4,26 @@
     builder.setOperationName(Util.READ_ATTRIBUTE);
     builder.addProperty(Util.NAME,Util.NAME);
     client.execute(builder.buildRequest());
-    return ConnectStatus.SUCCESS;
+    return false;
   }
  catch (  Exception e) {
     try {
       Throwable current=e;
       while (current != null) {
         if (current instanceof SaslException) {
-          return ConnectStatus.AUTHENTICATION_FAILURE;
+          throw new CommandLineException("Unable to authenticate against controller at " + host + ":"+ port,current);
         }
         if (current instanceof SSLException) {
-          return ConnectStatus.SSL_FAILURE;
+          if (!handleSSLFailure()) {
+            throw new CommandLineException("Unable to negotiate SSL connection with controller at " + host + ":"+ port);
+          }
+ else {
+            return true;
+          }
         }
         current=current.getCause();
       }
-      return ConnectStatus.CONNECTION_FAILURE;
+      throw new CommandLineException("The controller is not available at " + host + ":"+ port,e);
     }
   finally {
       StreamUtils.safeClose(client);
