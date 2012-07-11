@@ -1,2 +1,30 @@
 {
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (isWarDeployment(deploymentUnit)) {
+    int puCount;
+    List<PersistenceUnitMetadataHolder> listPUHolders=new ArrayList<PersistenceUnitMetadataHolder>(1);
+    final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+    VirtualFile persistence_xml=deploymentRoot.getRoot().getChild(WEB_PERSISTENCE_XML);
+    parse(persistence_xml,listPUHolders,deploymentUnit);
+    PersistenceUnitMetadataHolder holder=normalize(listPUHolders);
+    deploymentRoot.putAttachment(PersistenceUnitMetadataHolder.PERSISTENCE_UNITS,holder);
+    addApplicationDependenciesOnProvider(deploymentUnit,holder);
+    markDU(holder,deploymentUnit);
+    puCount=holder.getPersistenceUnits().size();
+    List<ResourceRoot> resourceRoots=deploymentUnit.getAttachmentList(Attachments.RESOURCE_ROOTS);
+    for (    ResourceRoot resourceRoot : resourceRoots) {
+      if (resourceRoot.getRoot().getName().toLowerCase(Locale.ENGLISH).endsWith(JAR_FILE_EXTENSION)) {
+        listPUHolders=new ArrayList<PersistenceUnitMetadataHolder>(1);
+        persistence_xml=resourceRoot.getRoot().getChild(META_INF_PERSISTENCE_XML);
+        parse(persistence_xml,listPUHolders,deploymentUnit);
+        holder=normalize(listPUHolders);
+        resourceRoot.putAttachment(PersistenceUnitMetadataHolder.PERSISTENCE_UNITS,holder);
+        addApplicationDependenciesOnProvider(deploymentUnit,holder);
+        markDU(holder,deploymentUnit);
+        puCount+=holder.getPersistenceUnits().size();
+      }
+    }
+    JPA_LOGGER.tracef("parsed persistence unit definitions for war %s",deploymentRoot.getRootName());
+    incrementPersistenceUnitCount(deploymentUnit,puCount);
+  }
 }

@@ -97,40 +97,48 @@ metaDataSecurityDomain=metaDataSecurityDomain.trim();
 String securityDomain=metaDataSecurityDomain == null ? SecurityConstants.DEFAULT_APPLICATION_POLICY : SecurityUtil.unprefixSecurityDomain(metaDataSecurityDomain);
 final List<ServletContextAttribute> attributes=deploymentUnit.getAttachment(ServletContextAttribute.ATTACHMENT_KEY);
 try {
-final ServiceName deploymentServiceName=WebSubsystemServices.deploymentServiceName(hostName,pathName);
-final ServiceName realmServiceName=deploymentServiceName.append("realm");
+final ServiceName webappServiceName=WebSubsystemServices.deploymentServiceName(hostName,pathName);
+final ServiceName realmServiceName=webappServiceName.append("realm");
 final JBossWebRealmService realmService=new JBossWebRealmService(deploymentUnit);
-ServiceBuilder<?> builder=serviceTarget.addService(realmServiceName,realmService);
-builder.addDependency(DependencyType.REQUIRED,SecurityDomainService.SERVICE_NAME.append(securityDomain),SecurityDomainContext.class,realmService.getSecurityDomainContextInjector()).setInitialMode(Mode.ACTIVE).install();
-final WebDeploymentService webDeploymentService=new WebDeploymentService(webContext,injectionContainer,setupActions,attributes);
-builder=serviceTarget.addService(deploymentServiceName,webDeploymentService).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(hostName),VirtualHost.class,new WebContextInjector(webContext)).addDependencies(injectionContainer.getServiceNames()).addDependency(realmServiceName,Realm.class,webDeploymentService.getRealm()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES)).addDependency(JndiNamingDependencyProcessor.serviceName(deploymentUnit));
+ServiceBuilder<Realm> realmBuilder=serviceTarget.addService(realmServiceName,realmService);
+realmBuilder.addDependency(DependencyType.REQUIRED,SecurityDomainService.SERVICE_NAME.append(securityDomain),SecurityDomainContext.class,realmService.getSecurityDomainContextInjector()).setInitialMode(Mode.ACTIVE).install();
+final WebDeploymentService webappService=new WebDeploymentService(webContext,injectionContainer,setupActions,attributes);
+ServiceBuilder<StandardContext> webappBuilder=serviceTarget.addService(webappServiceName,webappService).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(hostName),VirtualHost.class,new WebContextInjector(webContext)).addDependencies(injectionContainer.getServiceNames()).addDependency(realmServiceName,Realm.class,webappService.getRealm()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES)).addDependency(JndiNamingDependencyProcessor.serviceName(deploymentUnit));
 for (final SetupAction action : setupActions) {
-builder.addDependencies(action.dependencies());
+webappBuilder.addDependencies(action.dependencies());
 }
 if (metaData.getDistributable() != null) {
 DistributedCacheManagerFactoryService factoryService=new DistributedCacheManagerFactoryService();
 DistributedCacheManagerFactory factory=factoryService.getValue();
 if (factory != null) {
-ServiceName factoryServiceName=deploymentServiceName.append("session");
-builder.addDependency(DependencyType.OPTIONAL,factoryServiceName,DistributedCacheManagerFactory.class,config.getDistributedCacheManagerFactoryInjector());
+ServiceName factoryServiceName=webappServiceName.append("session");
+webappBuilder.addDependency(DependencyType.OPTIONAL,factoryServiceName,DistributedCacheManagerFactory.class,config.getDistributedCacheManagerFactoryInjector());
 ServiceBuilder<DistributedCacheManagerFactory> factoryBuilder=serviceTarget.addService(factoryServiceName,factoryService);
-boolean enabled=factory.addDeploymentDependencies(deploymentServiceName,deploymentUnit.getServiceRegistry(),serviceTarget,factoryBuilder,metaData);
-factoryBuilder.setInitialMode(enabled ? ServiceController.Mode.ON_DEMAND : ServiceController.Mode.NEVER).install();
+boolean enabled=factory.addDeploymentDependencies(webappServiceName,deploymentUnit.getServiceRegistry(),serviceTarget,factoryBuilder,metaData);
+factoryBuilder.setInitialMode(enabled ? Mode.ON_DEMAND : Mode.NEVER).install();
 }
 }
-builder.install();
-AbstractSecurityDeployer<?> deployer=new WarSecurityDeployer();
-JaccService<?> service=deployer.deploy(deploymentUnit);
-if (service != null) {
-((WarJaccService)service).setContext(webContext);
+if (deploymentUnit.hasAttachment(Attachments.OSGI_MANIFEST)) {
+webappBuilder.setInitialMode(Mode.NEVER);
+ContextActivator activator=new ContextActivator(webappBuilder.install());
+deploymentUnit.putAttachment(ContextActivator.ATTACHMENT_KEY,activator);
+}
+ else {
+webappBuilder.setInitialMode(Mode.ACTIVE);
+webappBuilder.install();
+}
+AbstractSecurityDeployer<WarMetaData> deployer=new WarSecurityDeployer();
+JaccService<WarMetaData> jaccService=deployer.deploy(deploymentUnit);
+if (jaccService != null) {
+((WarJaccService)jaccService).setContext(webContext);
 final ServiceName jaccServiceName=deploymentUnit.getServiceName().append(JaccService.SERVICE_NAME);
-builder=serviceTarget.addService(jaccServiceName,service);
+ServiceBuilder<?> jaccBuilder=serviceTarget.addService(jaccServiceName,jaccService);
 if (deploymentUnit.getParent() != null) {
 final DeploymentUnit parentDU=deploymentUnit.getParent();
-builder.addDependency(parentDU.getServiceName().append(JaccService.SERVICE_NAME),PolicyConfiguration.class,service.getParentPolicyInjector());
+jaccBuilder.addDependency(parentDU.getServiceName().append(JaccService.SERVICE_NAME),PolicyConfiguration.class,jaccService.getParentPolicyInjector());
 }
-builder.addDependency(deploymentServiceName);
-builder.setInitialMode(Mode.ACTIVE).install();
+jaccBuilder.addDependency(webappServiceName);
+jaccBuilder.setInitialMode(Mode.PASSIVE).install();
 }
 }
  catch (ServiceRegistryException e) {
