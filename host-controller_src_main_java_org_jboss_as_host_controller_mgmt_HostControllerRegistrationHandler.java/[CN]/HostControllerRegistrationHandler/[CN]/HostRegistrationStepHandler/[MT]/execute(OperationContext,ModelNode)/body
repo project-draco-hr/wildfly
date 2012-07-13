@@ -7,23 +7,29 @@
     context.completeStep();
     return;
   }
-  final Resource root=context.readResource(PathAddress.EMPTY_ADDRESS);
+  final Resource root=context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS.append(PathElement.pathElement(EXTENSION)),true);
   final ModelNode hostInfo=registrationContext.hostInfo;
   boolean as711=hostInfo.get(MANAGEMENT_MAJOR_VERSION).asInt() == 1 && hostInfo.get(MANAGEMENT_MINOR_VERSION).asInt() == 1;
-  final Transformers transformers;
   if (as711) {
     final OperationFailedException failure=HostControllerMessages.MESSAGES.unsupportedManagementVersionForHost(hostInfo.get(MANAGEMENT_MAJOR_VERSION).asInt(),hostInfo.get(MANAGEMENT_MINOR_VERSION).asInt(),1,2);
     registrationContext.failed(failure);
     throw failure;
   }
- else {
-    final ModelNode extensions=new ModelNode();
-    final Collection<Resource.ResourceEntry> resources=root.getChildren(EXTENSION);
-    for (    final Resource.ResourceEntry entry : resources) {
-      extensions.add(entry.getName());
-    }
-    transformers=registrationContext.createTransfomers(transformerRegistry,extensions);
+  final int major=hostInfo.get(MANAGEMENT_MAJOR_VERSION).asInt();
+  final int minor=hostInfo.get(MANAGEMENT_MINOR_VERSION).asInt();
+  final int micro=hostInfo.hasDefined(MANAGEMENT_MICRO_VERSION) ? hostInfo.get(MANAGEMENT_MICRO_VERSION).asInt() : 0;
+  final TransformationTarget target=TransformationTargetImpl.create(transformerRegistry,ModelVersion.create(major,minor,micro),Collections.<PathAddress,ModelVersion>emptyMap(),TransformationTarget.TransformationTargetType.HOST);
+  final Transformers transformers=Transformers.Factory.create(target);
+  final ModelNode extensions=new ModelNode();
+  final Resource transformed=transformers.transformResource(Transformers.Factory.getTransformationContext(target,context),root);
+  final Collection<Resource.ResourceEntry> resources=transformed.getChildren(EXTENSION);
+  for (  final Resource.ResourceEntry entry : resources) {
+    extensions.add(entry.getName());
   }
+  if (!extensions.isDefined()) {
+    throw new OperationFailedException(extensions);
+  }
+  registrationContext.processSubsystems(transformers,extensions);
   final ReadMasterDomainModelHandler handler=new ReadMasterDomainModelHandler(transformers);
   context.addStep(READ_DOMAIN_MODEL,handler,OperationContext.Stage.MODEL);
   context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
