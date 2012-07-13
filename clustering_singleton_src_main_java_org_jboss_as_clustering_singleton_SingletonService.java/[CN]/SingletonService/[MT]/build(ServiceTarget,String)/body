@@ -1,5 +1,12 @@
 {
-  target.addService(this.serviceName,this.service).setInitialMode(ServiceController.Mode.NEVER).install();
-  target.addService(this.singletonServiceName.append("singleton"),new ValueService<Singleton>(new ImmediateValue<Singleton>(this))).addDependency(this.singletonServiceName).setInitialMode(ServiceController.Mode.PASSIVE).install();
-  return AsynchronousService.addService(target,this.singletonServiceName,this).addDependency(ServiceProviderRegistryService.getServiceName(container),ServiceProviderRegistry.class,this.registryRef).addDependency(ServiceName.JBOSS.append(DEFAULT_CONTAINER,container),GroupRpcDispatcher.class,this.dispatcherRef);
+  final BatchServiceTarget batchTarget=target.batchTarget();
+  batchTarget.addService(this.serviceName,this.service).setInitialMode(ServiceController.Mode.NEVER).install();
+  batchTarget.addService(this.singletonServiceName.append("singleton"),new ValueService<Singleton>(new ImmediateValue<Singleton>(this))).addDependency(this.singletonServiceName).setInitialMode(ServiceController.Mode.PASSIVE).install();
+  final ServiceListener<T> listener=new AbstractServiceListener<T>(){
+    @Override public void serviceRemoveRequested(    ServiceController<? extends T> controller){
+      batchTarget.removeServices();
+    }
+  }
+;
+  return AsynchronousService.addService(target,this.singletonServiceName,this).addDependency(ServiceProviderRegistryService.getServiceName(container),ServiceProviderRegistry.class,this.registryRef).addDependency(ServiceName.JBOSS.append(DEFAULT_CONTAINER,container),GroupRpcDispatcher.class,this.dispatcherRef).addListener(listener);
 }
