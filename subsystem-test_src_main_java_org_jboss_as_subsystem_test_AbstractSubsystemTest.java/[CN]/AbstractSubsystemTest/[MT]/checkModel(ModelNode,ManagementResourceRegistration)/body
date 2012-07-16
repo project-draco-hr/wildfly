@@ -1,0 +1,45 @@
+{
+  final Set<String> children=rr.getChildNames(PathAddress.EMPTY_ADDRESS);
+  final Set<String> attributeNames=rr.getAttributeNames(PathAddress.EMPTY_ADDRESS);
+  for (  ModelNode el : model.asList()) {
+    String name=el.asProperty().getName();
+    ModelNode value=el.asProperty().getValue();
+    if (attributeNames.contains(name)) {
+      AttributeAccess aa=rr.getAttributeAccess(PathAddress.EMPTY_ADDRESS,name);
+      Assert.assertNotNull("Attribute " + name + " is not known",aa);
+      AttributeDefinition ad=aa.getAttributeDefinition();
+      Assert.assertEquals("Attribute " + name + " type mismatch",value.getType(),ad.getType());
+      try {
+        ad.getValidator().validateParameter(name,value);
+      }
+ catch (      OperationFailedException e) {
+        Assert.fail("validation for attribute '" + name + "' failed, "+ e.getMessage());
+      }
+    }
+ else     if (!children.contains(name)) {
+      Assert.fail("Element '" + name + "' is not known in target definition");
+    }
+  }
+  for (  PathElement pe : rr.getChildAddresses(PathAddress.EMPTY_ADDRESS)) {
+    if (pe.isWildcard()) {
+      if (children.contains(pe.getKey()) && model.hasDefined(pe.getKey())) {
+        for (        ModelNode v : model.get(pe.getKey()).asList()) {
+          String name=v.asProperty().getName();
+          ModelNode value=v.asProperty().getValue();
+          ManagementResourceRegistration sub=rr.getSubModel(PathAddress.pathAddress(pe));
+          Assert.assertNotNull("Child with name '" + name + "' not found",sub);
+          checkModel(value,sub);
+        }
+      }
+    }
+ else {
+      if (children.contains(pe.getKeyValuePair())) {
+        String name=pe.getValue();
+        ModelNode value=model.get(pe.getKeyValuePair());
+        ManagementResourceRegistration sub=rr.getSubModel(PathAddress.pathAddress(pe));
+        Assert.assertNotNull("Child with name '" + name + "' not found",sub);
+        checkModel(value,sub);
+      }
+    }
+  }
+}
