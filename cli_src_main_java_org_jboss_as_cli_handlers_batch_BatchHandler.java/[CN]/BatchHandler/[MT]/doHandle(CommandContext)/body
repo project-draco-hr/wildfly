@@ -15,7 +15,51 @@
     return;
   }
   if (batchManager.isBatchActive()) {
-    throw new CommandFormatException("Can't start a new batch while in batch mode.");
+    throw new CommandLineException("Can't start a new batch while in batch mode.");
+  }
+  final String path=file.getValue(ctx.getParsedCommandLine());
+  if (path != null) {
+    final File f=new File(path);
+    if (!f.exists()) {
+      throw new CommandLineException("File " + f.getAbsolutePath() + " does not exist.");
+    }
+    final File currentDir=ctx.getCurrentDir();
+    final File baseDir=f.getParentFile();
+    if (baseDir != null) {
+      ctx.setCurrentDir(baseDir);
+    }
+    BufferedReader reader=null;
+    try {
+      reader=new BufferedReader(new FileReader(f));
+      String line=reader.readLine();
+      batchManager.activateNewBatch();
+      final Batch batch=batchManager.getActiveBatch();
+      while (line != null) {
+        batch.add(ctx.toBatchedCommand(line));
+        line=reader.readLine();
+      }
+    }
+ catch (    IOException e) {
+      batchManager.discardActiveBatch();
+      throw new CommandLineException("Failed to read file " + f.getAbsolutePath(),e);
+    }
+catch (    CommandFormatException e) {
+      batchManager.discardActiveBatch();
+      throw new CommandLineException("Failed to create batch from " + f.getAbsolutePath(),e);
+    }
+ finally {
+      if (baseDir != null) {
+        ctx.setCurrentDir(currentDir);
+      }
+      if (reader != null) {
+        try {
+          reader.close();
+        }
+ catch (        IOException e) {
+        }
+      }
+    }
+    return;
   }
   final String name=this.name.getValue(ctx.getParsedCommandLine());
   boolean activated;
@@ -34,12 +78,12 @@
     }
   }
  else   if (name != null) {
-    throw new CommandFormatException("'" + name + "' not found among the held back batches.");
+    throw new CommandLineException("'" + name + "' not found among the held back batches.");
   }
  else {
     activated=batchManager.activateNewBatch();
   }
   if (!activated) {
-    throw new CommandFormatException("Failed to activate batch.");
+    throw new CommandLineException("Failed to activate batch.");
   }
 }
