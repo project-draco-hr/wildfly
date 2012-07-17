@@ -1,0 +1,29 @@
+{
+  super.start(context);
+  ServiceController<?> serviceController=context.getController();
+  LOGGER.tracef("Starting: %s in mode %s",serviceController.getName(),serviceController.getMode());
+  final BundleContext syscontext=injectedSystemContext.getValue();
+  final List<Deployment> deployments=new ArrayList<Deployment>();
+  final ServiceTarget serviceTarget=context.getChildTarget();
+  try {
+    ServerEnvironment serverEnvironment=injectedServerEnvironment.getValue();
+    bundlesDir=serverEnvironment.getBundlesDir();
+    if (bundlesDir.isDirectory() == false)     throw MESSAGES.illegalStateCannotFindBundleDir(bundlesDir);
+    final List<OSGiCapability> configcaps=new ArrayList<OSGiCapability>();
+    configcaps.add(new OSGiCapability("org.osgi.enterprise",null));
+    configcaps.addAll(injectedSubsystemState.getValue().getCapabilities());
+    Iterator<OSGiCapability> iterator=configcaps.iterator();
+    while (iterator.hasNext()) {
+      OSGiCapability configcap=iterator.next();
+      if (installInitialModuleCapability(configcap))       iterator.remove();
+    }
+    for (    OSGiCapability configcap : configcaps) {
+      Deployment dep=getInitialDeployment(syscontext,configcap);
+      deployments.add(dep);
+    }
+  }
+ catch (  Exception ex) {
+    throw MESSAGES.startFailedToProcessInitialCapabilites(ex);
+  }
+  installBootstrapBundles(serviceTarget,deployments);
+}
