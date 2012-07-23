@@ -1,0 +1,16 @@
+{
+  final ServiceTarget serviceTarget=serviceActivatorContext.getServiceTarget();
+  final ServiceName endpointName=managementSubsystemEndpoint ? RemotingServices.SUBSYSTEM_ENDPOINT : ManagementRemotingServices.MANAGEMENT_ENDPOINT;
+  final EndpointService.EndpointType endpointType=managementSubsystemEndpoint ? EndpointService.EndpointType.SUBSYSTEM : EndpointService.EndpointType.MANAGEMENT;
+  try {
+    final OptionMap options=EndpointConfigFactory.create(ExpressionResolver.DEFAULT,endpointConfig,DEFAULTS);
+    ManagementRemotingServices.installRemotingEndpoint(serviceTarget,endpointName,SecurityActions.getSystemProperty(ServerEnvironment.NODE_NAME),endpointType,options,null,null);
+    final int port=managementSocket.getPort();
+    final String host=managementSocket.getAddress().getHostAddress();
+    HostControllerConnectionService service=new HostControllerConnectionService(host,port,serverName,serverProcessName,authKey);
+    serviceTarget.addService(HostControllerConnectionService.SERVICE_NAME,service).addDependency(endpointName,Endpoint.class,service.getEndpointInjector()).addDependency(ControlledProcessStateService.SERVICE_NAME,ControlledProcessStateService.class,service.getProcessStateServiceInjectedValue()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  }
+ catch (  OperationFailedException e) {
+    throw new ServiceRegistryException(e);
+  }
+}
