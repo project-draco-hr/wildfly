@@ -7,4 +7,28 @@
   session.registerSubModel(MailServerDefinition.INSTANCE_POP3);
   session.registerSubModel(MailServerDefinition.INSTANCE_SMTP);
   subsystem.registerXMLElementWriter(parser);
+  TransformersSubRegistration serverTransformers=subsystem.registerModelTransformers(ModelVersion.create(1,1,0),new AbstractSubsystemTransformer(SUBSYSTEM_NAME){
+    @Override protected ModelNode transformModel(    TransformationContext context,    ModelNode model){
+      for (      Property p : model.get(MAIL_SESSION_PATH.getKey()).asPropertyList()) {
+        for (        Property server : p.getValue().get(MailSubsystemModel.SERVER_TYPE).asPropertyList()) {
+          ModelNode serverModel=server.getValue();
+          if (serverModel.has(TLS)) {
+            serverModel.remove(TLS);
+          }
+          model.get(MailSubsystemModel.MAIL_SESSION,p.getName(),MailSubsystemModel.SERVER_TYPE,server.getName()).set(serverModel);
+        }
+      }
+      return model;
+    }
+  }
+).registerSubResource(MAIL_SESSION_PATH).registerSubResource(SMTP_SERVER_PATH);
+  serverTransformers.registerOperationTransformer(ADD,new AbstractOperationTransformer(){
+    @Override protected ModelNode transform(    TransformationContext context,    PathAddress address,    ModelNode operation){
+      if (operation.has(TLS)) {
+        operation.remove(TLS);
+      }
+      return operation;
+    }
+  }
+);
 }
