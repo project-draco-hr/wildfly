@@ -1,24 +1,17 @@
 {
-  ServiceController<?> controller=context.getController();
+  ServiceController<?> controller=startContext.getController();
   LOGGER.tracef("Starting: %s in mode %s",controller.getName(),controller.getMode());
-  serviceContainer=context.getController().getServiceContainer();
+  serviceContainer=startContext.getController().getServiceContainer();
   final BundleContext syscontext=injectedBundleContext.getValue();
   BundleManager bundleManager=injectedBundleManager.getValue();
   resource.getInjectedBundleManager().inject(bundleManager);
-  jndiServiceListener=new JNDIServiceListener(syscontext);
-  try {
-    String filter="(" + Constants.OBJECTCLASS + "="+ ObjectFactory.class.getName()+ ")";
-    syscontext.addServiceListener(jndiServiceListener,filter);
-  }
- catch (  InvalidSyntaxException e) {
-  }
   String bindingNames=syscontext.getProperty(MAPPED_OSGI_SOCKET_BINDINGS);
   if (bindingNames != null) {
     final Set<ServiceName> socketBindingNames=new HashSet<ServiceName>();
     for (    String suffix : bindingNames.split(",")) {
       socketBindingNames.add(JBOSS_BINDING_NAME.append(suffix));
     }
-    ServiceTarget serviceTarget=context.getChildTarget();
+    ServiceTarget serviceTarget=startContext.getChildTarget();
     ServiceName serviceName=IntegrationServices.SYSTEM_SERVICES_PLUGIN.append("BINDINGS");
     ServiceBuilder<Void> builder=serviceTarget.addService(serviceName,new AbstractService<Void>(){
       @Override public void start(      StartContext context) throws StartException {
@@ -70,4 +63,8 @@
   builder.addRepository(new ModuleIdentityRepository(serverenv));
   builder.addRepositoryStorage(factory);
   builder.addDefaultRepositories();
+  syscontext.registerService(ServiceContainer.class.getName(),serviceContainer,null);
+  for (  SubsystemExtension extension : extensions) {
+    extension.startSystemServices(startContext,syscontext);
+  }
 }
