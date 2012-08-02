@@ -70,13 +70,22 @@
     final boolean purge=CommonAttributes.PURGE.resolveModelAttribute(context,store).asBoolean();
     final boolean singleton=CommonAttributes.SINGLETON.resolveModelAttribute(context,store).asBoolean();
     final boolean async=store.hasDefined(ModelKeys.WRITE_BEHIND) && store.get(ModelKeys.WRITE_BEHIND,ModelKeys.WRITE_BEHIND_NAME).isDefined();
-    builder.loaders().shared(shared).preload(preload).passivation(passivation);
-    LoaderConfigurationBuilder storeBuilder=builder.loaders().addCacheLoader().fetchPersistentState(fetchState).purgeOnStartup(purge).purgeSynchronously(true);
+    LoadersConfigurationBuilder loadersBuilder=builder.loaders().shared(shared).preload(preload).passivation(passivation);
+    StoreConfigurationBuilder<?,?> storeBuilder=this.buildCacheStore(context,loadersBuilder,containerName,store,storeKey,dependencies).fetchPersistentState(fetchState).purgeOnStartup(purge).purgeSynchronously(true);
     storeBuilder.singletonStore().enabled(singleton);
     if (async) {
       ModelNode writeBehind=store.get(ModelKeys.WRITE_BEHIND,ModelKeys.WRITE_BEHIND_NAME);
       storeBuilder.async().enable().flushLockTimeout(CommonAttributes.FLUSH_LOCK_TIMEOUT.resolveModelAttribute(context,writeBehind).asLong()).modificationQueueSize(CommonAttributes.MODIFICATION_QUEUE_SIZE.resolveModelAttribute(context,writeBehind).asInt()).shutdownTimeout(CommonAttributes.SHUTDOWN_TIMEOUT.resolveModelAttribute(context,writeBehind).asLong()).threadPoolSize(CommonAttributes.THREAD_POOL_SIZE.resolveModelAttribute(context,writeBehind).asInt());
     }
-    this.buildCacheStore(context,storeBuilder,containerName,store,storeKey,dependencies);
+    final Properties properties=new TypedProperties();
+    if (store.hasDefined(ModelKeys.PROPERTY)) {
+      for (      Property property : store.get(ModelKeys.PROPERTY).asPropertyList()) {
+        String propertyName=property.getName();
+        Property complexValue=property.getValue().asProperty();
+        String propertyValue=complexValue.getValue().asString();
+        properties.setProperty(propertyName,propertyValue);
+      }
+    }
+    storeBuilder.withProperties(properties);
   }
 }

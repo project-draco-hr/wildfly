@@ -1,0 +1,69 @@
+{
+  ModelNode resolvedValue=null;
+  if (storeKey.equals(ModelKeys.FILE_STORE)) {
+    final FileCacheStoreConfigurationBuilder builder=loadersBuilder.addStore(FileCacheStoreConfigurationBuilder.class);
+    final String path=((resolvedValue=CommonAttributes.PATH.resolveModelAttribute(context,store)).isDefined()) ? resolvedValue.asString() : InfinispanExtension.SUBSYSTEM_NAME + File.separatorChar + containerName;
+    final String relativeTo=((resolvedValue=CommonAttributes.RELATIVE_TO.resolveModelAttribute(context,store)).isDefined()) ? resolvedValue.asString() : ServerEnvironment.SERVER_DATA_DIR;
+    Injector<PathManager> injector=new SimpleInjector<PathManager>(){
+      volatile PathManager.Callback.Handle callbackHandle;
+      @Override public void inject(      PathManager value){
+        callbackHandle=value.registerCallback(relativeTo,PathManager.ReloadServerCallback.create(),PathManager.Event.UPDATED,PathManager.Event.REMOVED);
+        builder.location(value.resolveRelativePathEntry(path,relativeTo));
+      }
+      @Override public void uninject(){
+        super.uninject();
+        if (callbackHandle != null) {
+          callbackHandle.remove();
+        }
+      }
+    }
+;
+    dependencies.add(new Dependency<PathManager>(PathManagerService.SERVICE_NAME,PathManager.class,injector));
+    return builder.fsyncMode(FsyncMode.PER_WRITE);
+  }
+ else   if (storeKey.equals(ModelKeys.STRING_KEYED_JDBC_STORE) || storeKey.equals(ModelKeys.BINARY_KEYED_JDBC_STORE) || storeKey.equals(ModelKeys.MIXED_KEYED_JDBC_STORE)) {
+    final AbstractJdbcCacheStoreConfigurationBuilder<?,?> builder=this.buildJdbcStore(loadersBuilder,context,store);
+    final String datasource=CommonAttributes.DATA_SOURCE.resolveModelAttribute(context,store).asString();
+    dependencies.add(new Dependency<Object>(ServiceName.JBOSS.append("data-source",datasource)));
+    builder.dataSource().jndiUrl(datasource);
+    return builder;
+  }
+ else   if (storeKey.equals(ModelKeys.REMOTE_STORE)) {
+    final RemoteCacheStoreConfigurationBuilder builder=loadersBuilder.addStore(RemoteCacheStoreConfigurationBuilder.class);
+    for (    ModelNode server : store.require(ModelKeys.REMOTE_SERVERS).asList()) {
+      String outboundSocketBinding=server.get(ModelKeys.OUTBOUND_SOCKET_BINDING).asString();
+      Injector<OutboundSocketBinding> injector=new SimpleInjector<OutboundSocketBinding>(){
+        @Override public void inject(        OutboundSocketBinding value){
+          try {
+            builder.addServer().host(value.getDestinationAddress().getHostAddress()).port(value.getDestinationPort());
+          }
+ catch (          UnknownHostException e) {
+            throw InfinispanMessages.MESSAGES.failedToInjectSocketBinding(e,value);
+          }
+        }
+      }
+;
+      dependencies.add(new Dependency<OutboundSocketBinding>(OutboundSocketBinding.OUTBOUND_SOCKET_BINDING_BASE_SERVICE_NAME.append(outboundSocketBinding),OutboundSocketBinding.class,injector));
+    }
+    if (store.hasDefined(ModelKeys.CACHE)) {
+      builder.remoteCacheName(store.get(ModelKeys.CACHE).asString());
+    }
+    if (store.hasDefined(ModelKeys.SOCKET_TIMEOUT)) {
+      builder.socketTimeout(store.require(ModelKeys.SOCKET_TIMEOUT).asLong());
+    }
+    if (store.hasDefined(ModelKeys.TCP_NO_DELAY)) {
+      builder.tcpNoDelay(store.require(ModelKeys.TCP_NO_DELAY).asBoolean());
+    }
+    return builder;
+  }
+ else {
+    String className=store.require(ModelKeys.CLASS).asString();
+    try {
+      Class<? extends CacheStore> storeClass=CacheStore.class.getClassLoader().loadClass(className).asSubclass(CacheStore.class);
+      return loadersBuilder.loaders().addStore().cacheStore(storeClass.newInstance());
+    }
+ catch (    Exception e) {
+      throw InfinispanMessages.MESSAGES.invalidCacheStore(e,className);
+    }
+  }
+}
