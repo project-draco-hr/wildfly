@@ -10,17 +10,26 @@
     Module.registerURLStreamHandlerFactoryModule(coreFrameworkModule);
     Module.registerContentHandlerFactoryModule(coreFrameworkModule);
     ServiceTarget serviceTarget=context.getChildTarget();
-    Activation activation=subsystemState.getActivationPolicy();
-    FrameworkActivationService.create(serviceTarget,activation,verificationHandler);
-    BundleInstallIntegration.addService(serviceTarget);
-    FrameworkModuleIntegration.addService(serviceTarget,props);
     JAXPServiceProvider.addService(serviceTarget);
-    ModuleLoaderIntegration.addService(serviceTarget);
     ResolverService.addService(serviceTarget);
-    SystemServicesIntegration.addService(serviceTarget,resource,extensions);
     FrameworkBuilder builder=new FrameworkBuilder(props);
     builder.setServiceContainer(serviceContainer);
     builder.setServiceTarget(serviceTarget);
+    builder.installIntegrationService(serviceContainer,serviceTarget,new BundleInstallIntegration());
+    builder.installIntegrationService(serviceContainer,serviceTarget,new FrameworkModuleIntegration(props));
+    builder.installIntegrationService(serviceContainer,serviceTarget,new ModuleLoaderIntegration());
+    builder.installIntegrationService(serviceContainer,serviceTarget,new SystemServicesIntegration(resource,extensions));
+    Activation activation=subsystemState.getActivationPolicy();
+    if (activation == Activation.EAGER) {
+      builder.installIntegrationService(serviceContainer,serviceTarget,new BootstrapBundlesIntegration());
+      builder.installIntegrationService(serviceContainer,serviceTarget,new PersistentBundlesIntegration());
+      builder.setInitialMode(Mode.ACTIVE);
+    }
+ else {
+      builder.addExcludedService(IntegrationService.BOOTSTRAP_BUNDLES_INSTALL);
+      builder.addExcludedService(IntegrationService.PERSISTENT_BUNDLES_INSTALL);
+      builder.setInitialMode(Mode.LAZY);
+    }
     builder.createFrameworkServices(true);
   }
  catch (  Throwable th) {
