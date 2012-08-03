@@ -1,0 +1,68 @@
+{
+  final ModelVersion version_1_1_0=ModelVersion.create(1,1,0);
+  final TransformersSubRegistration transformers=subsystem.registerModelTransformers(version_1_1_0,new AbstractSubsystemTransformer(SUBSYSTEM_NAME){
+    @Override public ModelNode transformModel(    final TransformationContext context,    final ModelNode model){
+      ModelNode oldModel=model.clone();
+      if (oldModel.hasDefined(HORNETQ_SERVER)) {
+        for (        Property server : oldModel.get(HORNETQ_SERVER).asPropertyList()) {
+          if (server.getValue().hasDefined(POOLED_CONNECTION_FACTORY)) {
+            for (            Property pooledConnectionFactory : server.getValue().get(POOLED_CONNECTION_FACTORY).asPropertyList()) {
+              oldModel.get(HORNETQ_SERVER,server.getName(),POOLED_CONNECTION_FACTORY,pooledConnectionFactory.getName()).remove(ConnectionFactoryAttributes.Pooled.USE_AUTO_RECOVERY.getName());
+              oldModel.get(HORNETQ_SERVER,server.getName(),POOLED_CONNECTION_FACTORY,pooledConnectionFactory.getName()).remove(ConnectionFactoryAttributes.Common.COMPRESS_LARGE_MESSAGES.getName());
+            }
+          }
+          if (server.getValue().hasDefined(CONNECTION_FACTORY)) {
+            for (            Property connectionFactory : server.getValue().get(CONNECTION_FACTORY).asPropertyList()) {
+              if (!connectionFactory.getValue().hasDefined(HA.getName())) {
+                oldModel.get(HORNETQ_SERVER,server.getName(),CONNECTION_FACTORY,connectionFactory.getName()).get(HA.getName()).set(HA.getDefaultValue());
+              }
+              if (connectionFactory.getValue().hasDefined(FACTORY_TYPE.getName()) && (connectionFactory.getValue().get(FACTORY_TYPE.getName()).equals(FACTORY_TYPE.getDefaultValue()))) {
+                oldModel.get(HORNETQ_SERVER,server.getName(),CONNECTION_FACTORY,connectionFactory.getName()).get(FACTORY_TYPE.getName()).set(new ModelNode());
+              }
+            }
+          }
+        }
+      }
+      return oldModel;
+    }
+  }
+);
+  TransformersSubRegistration server=transformers.registerSubResource(PathElement.pathElement(CommonAttributes.HORNETQ_SERVER));
+  server.registerOperationTransformer(ADD,new OperationTransformer(){
+    @Override public TransformedOperation transformOperation(    TransformationContext context,    PathAddress address,    ModelNode operation) throws OperationFailedException {
+      if (!operation.hasDefined(ID_CACHE_SIZE.getName())) {
+        operation.get(ID_CACHE_SIZE.getName()).set(ID_CACHE_SIZE.getDefaultValue());
+      }
+      return new TransformedOperation(operation,ORIGINAL_RESULT);
+    }
+  }
+);
+  RejectExpressionValuesTransformer rejectExpressionTransformer=new RejectExpressionValuesTransformer(PATH);
+  for (  final String path : MessagingPathHandlers.PATHS) {
+    TransformersSubRegistration pathRegistration=server.registerSubResource(PathElement.pathElement(PATH,path),rejectExpressionTransformer,rejectExpressionTransformer);
+    pathRegistration.registerOperationTransformer(ADD,rejectExpressionTransformer);
+    pathRegistration.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,rejectExpressionTransformer.getWriteAttributeTransformer());
+  }
+  TransformersSubRegistration pooledConnectionFactory=server.registerSubResource(PooledConnectionFactoryDefinition.PATH);
+  pooledConnectionFactory.registerOperationTransformer(ADD,new OperationTransformer(){
+    @Override public TransformedOperation transformOperation(    final TransformationContext context,    final PathAddress address,    final ModelNode operation) throws OperationFailedException {
+      final ModelNode transformedOperation=operation.clone();
+      transformedOperation.remove(ConnectionFactoryAttributes.Pooled.USE_AUTO_RECOVERY.getName());
+      transformedOperation.remove(ConnectionFactoryAttributes.Common.COMPRESS_LARGE_MESSAGES.getName());
+      return new TransformedOperation(transformedOperation,ORIGINAL_RESULT);
+    }
+  }
+);
+  pooledConnectionFactory.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,new OperationTransformer(){
+    @Override public TransformedOperation transformOperation(    final TransformationContext context,    final PathAddress address,    final ModelNode operation) throws OperationFailedException {
+      String[] unsupportedAttributes={ConnectionFactoryAttributes.Pooled.USE_AUTO_RECOVERY.getName(),ConnectionFactoryAttributes.Common.COMPRESS_LARGE_MESSAGES.getName()};
+      for (      String attrName : unsupportedAttributes) {
+        if (operation.require(NAME).asString().equals(attrName)) {
+          throw MessagingMessages.MESSAGES.unsupportedAttributeInVersion(attrName,version_1_1_0);
+        }
+      }
+      return new TransformedOperation(operation,ORIGINAL_RESULT);
+    }
+  }
+);
+}

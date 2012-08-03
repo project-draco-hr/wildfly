@@ -1,0 +1,44 @@
+{
+  String subsystemXml=readResource("subsystem_1_3.xml");
+  KernelServicesBuilder builder=createKernelServicesBuilder(createAdditionalInitialization()).setSubsystemXml(subsystemXml);
+  ModelVersion version_1_1_0=ModelVersion.create(1,1,0);
+  builder.createLegacyKernelServicesBuilder(createAdditionalInitialization(),version_1_1_0).addMavenResourceURL("org.jboss.as:jboss-as-messaging:7.1.2.Final");
+  KernelServices mainServices=builder.build();
+  KernelServices legacyServices=mainServices.getLegacyServices(version_1_1_0);
+  assertNotNull(legacyServices);
+  checkSubsystemModelTransformation(mainServices,version_1_1_0);
+  ModelNode operation=new ModelNode();
+  operation.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
+  ModelNode address=new ModelNode();
+  address.add(SUBSYSTEM,MessagingExtension.SUBSYSTEM_NAME);
+  address.add("hornetq-server","default");
+  address.add("path","journal-directory");
+  operation.get(OP_ADDR).set(address);
+  operation.get(NAME).set("path");
+  operation.get(VALUE).set("${my.journal.dir:journal}");
+  ModelNode mainResult=mainServices.executeOperation(operation);
+  assertEquals(mainResult.toJSONString(true),SUCCESS,mainResult.get(OUTCOME).asString());
+  try {
+    TransformedOperation transformedOperation=mainServices.transformOperation(version_1_1_0,operation);
+    fail("should reject the expression,instead got " + transformedOperation.getTransformedOperation().toJSONString(true));
+  }
+ catch (  OperationFailedException e) {
+  }
+  operation=new ModelNode();
+  operation.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
+  address=new ModelNode();
+  address.add(SUBSYSTEM,MessagingExtension.SUBSYSTEM_NAME);
+  address.add("hornetq-server","default");
+  address.add("pooled-connection-factory","hornetq-ra-local");
+  operation.get(OP_ADDR).set(address);
+  operation.get(NAME).set("use-auto-recovery");
+  operation.get(VALUE).set("false");
+  mainResult=mainServices.executeOperation(operation);
+  assertEquals(mainResult.toJSONString(true),SUCCESS,mainResult.get(OUTCOME).asString());
+  try {
+    TransformedOperation transformedOperation=mainServices.transformOperation(version_1_1_0,operation);
+    fail("should reject the write-attribute operation,instead got " + transformedOperation.getTransformedOperation().toJSONString(true));
+  }
+ catch (  OperationFailedException e) {
+  }
+}
