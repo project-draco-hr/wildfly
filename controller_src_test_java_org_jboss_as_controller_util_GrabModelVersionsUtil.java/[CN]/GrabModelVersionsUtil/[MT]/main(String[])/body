@@ -1,0 +1,46 @@
+{
+  ModelControllerClient client=ModelControllerClient.Factory.create("localhost",9999);
+  try {
+    ModelNode op=new ModelNode();
+    op.get(OP).set(READ_RESOURCE_OPERATION);
+    op.get(OP_ADDR).setEmptyList();
+    ModelNode result=getAndCheckResult(client.execute(op));
+    ModelVersion coreModelVersion=createModelVersion(result);
+    System.out.println("<table border=\"1\">");
+    System.out.println("<tr><th>Subsystem</th><th>Management Version</th><th>Schemas</th></tr>");
+    System.out.print("<tr valign=\"top\" align=\"left\"><td><b>Standalone core</b></td><td>");
+    System.out.print(coreModelVersion);
+    System.out.println("</td><td>&nbsp;</td></tr>");
+    op.get(OP_ADDR).add(EXTENSION,"*").add(SUBSYSTEM,"*");
+    result=getAndCheckResult(client.execute(op));
+    TreeMap<String,ModelNode> map=new TreeMap<String,ModelNode>();
+    List<ModelNode> subsystemResults=result.asList();
+    for (    ModelNode subsystemResult : subsystemResults) {
+      String subsystemName=PathAddress.pathAddress(subsystemResult.get(OP_ADDR)).getLastElement().getValue();
+      map.put(subsystemName,getAndCheckResult(subsystemResult));
+    }
+    for (    Map.Entry<String,ModelNode> entry : map.entrySet()) {
+      System.out.print("<tr valign=\"top\" align=\"left\"><td><b>");
+      System.out.print(entry.getKey());
+      System.out.print("</b></td><td>");
+      System.out.print(createModelVersion(entry.getValue()));
+      System.out.print("<td>");
+      boolean first=true;
+      for (      ModelNode ns : entry.getValue().get(XML_NAMESPACES).asList()) {
+        if (first) {
+          first=false;
+        }
+ else {
+          System.out.println("<br/>");
+        }
+        System.out.print(ns.asString());
+      }
+      System.out.print("</td>");
+      System.out.println("</td></tr>");
+    }
+    System.out.println("</table>");
+  }
+  finally {
+    IoUtils.safeClose(client);
+  }
+}
