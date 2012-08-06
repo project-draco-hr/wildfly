@@ -2,13 +2,40 @@
   final ModelNode address=operation.require(VALUE);
   final PathAddress pathAddr=PathAddress.pathAddress(address);
   final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
-  try {
-    resource.navigate(pathAddr);
-    context.getResult().get(VALID).set(true);
+  Resource model=resource;
+  final Iterator<PathElement> iterator=pathAddr.iterator();
+  int index=0;
+  out:   while (iterator.hasNext()) {
+    final PathElement next=iterator.next();
+    index++;
+    if (model.hasChild(next)) {
+      model=model.getChild(next);
+    }
+ else {
+      final PathAddress subAddress=pathAddr.subAddress(0,index);
+      final ImmutableManagementResourceRegistration registration=context.getResourceRegistration().getSubModel(subAddress);
+      if (registration != null) {
+        boolean remote=registration.isRemote();
+        if (remote && !iterator.hasNext()) {
+          break out;
+        }
+        final PathAddress newAddress=pathAddr.subAddress(index);
+        final ModelNode newOperation=operation.clone();
+        newOperation.get(OP_ADDR).set(subAddress.toModelNode());
+        newOperation.get(VALUE).set(newAddress.toModelNode());
+        final OperationStepHandler proxyHandler=registration.getOperationHandler(PathAddress.EMPTY_ADDRESS,OPERATION_NAME);
+        if (proxyHandler != null) {
+          context.addStep(newOperation,proxyHandler,OperationContext.Stage.IMMEDIATE);
+          context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+          return;
+        }
+      }
+      context.getResult().get(VALID).set(false);
+      context.getResult().get(PROBLEM).set(ControllerMessages.MESSAGES.childResourceNotFound(next));
+      context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+      return;
+    }
   }
- catch (  NoSuchElementException e) {
-    context.getResult().get(VALID).set(false);
-    context.getResult().get(PROBLEM).set(e.getMessage());
-  }
+  context.getResult().get(VALID).set(true);
   context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
 }
