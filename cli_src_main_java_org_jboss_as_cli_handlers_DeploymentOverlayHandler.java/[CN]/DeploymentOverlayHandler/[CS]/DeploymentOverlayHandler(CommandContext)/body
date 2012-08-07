@@ -1,0 +1,82 @@
+{
+  super("deployment-overlay",true);
+  action=new ArgumentWithValue(this,new SimpleTabCompleter(new String[]{"add","remove"}),0,"--action");
+  name=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
+    @Override public Collection<String> getAllCandidates(    CommandContext ctx){
+      final ModelControllerClient client=ctx.getModelControllerClient();
+      if (client == null) {
+        return Collections.emptyList();
+      }
+      final ModelNode op=new ModelNode();
+      op.get(Util.OPERATION).set(Util.READ_CHILDREN_NAMES);
+      op.get(Util.ADDRESS).setEmptyList();
+      op.get(Util.CHILD_TYPE).set(Util.DEPLOYMENT_OVERLAY);
+      final ModelNode response;
+      try {
+        response=client.execute(op);
+      }
+ catch (      IOException e) {
+        return Collections.emptyList();
+      }
+      final ModelNode result=response.get(Util.RESULT);
+      if (!result.isDefined()) {
+        return Collections.emptyList();
+      }
+      final List<String> names=new ArrayList<String>();
+      for (      ModelNode node : result.asList()) {
+        names.add(node.asString());
+      }
+      return names;
+    }
+  }
+),1,"--name");
+  name.addRequiredPreceding(action);
+  final FilenameTabCompleter pathCompleter=Util.isWindows() ? new WindowsFilenameTabCompleter(ctx) : new DefaultFilenameTabCompleter(ctx);
+  content=new ArgumentWithValue(this,new CommandLineCompleter(){
+    @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
+      int i=buffer.lastIndexOf(',');
+      i=buffer.indexOf('=',i + 1);
+      if (i < 0) {
+        return -1;
+      }
+      final String path=buffer.substring(i + 1);
+      int pathResult=pathCompleter.complete(ctx,path,0,candidates);
+      if (pathResult < 0) {
+        return -1;
+      }
+      return i + 1 + pathResult;
+    }
+  }
+,"--content");
+  content.addRequiredPreceding(name);
+  deployment=new ArgumentWithValue(this,new CommandLineCompleter(){
+    @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
+      final ModelControllerClient client=ctx.getModelControllerClient();
+      if (client == null) {
+        return -1;
+      }
+      final List<String> existing=Util.getDeployments(client);
+      if (existing.isEmpty()) {
+        return buffer.length();
+      }
+      candidates.addAll(existing);
+      if (buffer.isEmpty()) {
+        return 0;
+      }
+      final String[] specified=buffer.split(",+");
+      candidates.removeAll(Arrays.asList(specified));
+      if (buffer.charAt(buffer.length() - 1) == ',') {
+        return buffer.length();
+      }
+      final String chunk=specified[specified.length - 1];
+      for (int i=0; i < candidates.size(); ++i) {
+        if (!candidates.get(i).startsWith(chunk)) {
+          candidates.remove(i);
+        }
+      }
+      return buffer.length() - chunk.length();
+    }
+  }
+,"--deployment");
+  deployment.addRequiredPreceding(name);
+}
