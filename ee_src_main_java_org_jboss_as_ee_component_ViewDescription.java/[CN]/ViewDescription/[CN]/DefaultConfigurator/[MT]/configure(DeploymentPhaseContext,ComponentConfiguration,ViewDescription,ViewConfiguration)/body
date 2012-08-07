@@ -2,8 +2,18 @@
   final DeploymentReflectionIndex reflectionIndex=context.getDeploymentUnit().getAttachment(REFLECTION_INDEX);
   final List<Method> methods=configuration.getProxyFactory().getCachedMethods();
   for (  final Method method : methods) {
-    final Method componentMethod=ClassReflectionIndexUtil.findMethod(reflectionIndex,componentConfiguration.getComponentClass(),MethodIdentifier.getIdentifierForMethod(method));
+    MethodIdentifier methodIdentifier=MethodIdentifier.getIdentifierForMethod(method);
+    Method componentMethod=ClassReflectionIndexUtil.findMethod(reflectionIndex,componentConfiguration.getComponentClass(),methodIdentifier);
     if (componentMethod != null) {
+      if ((BRIDGE & componentMethod.getModifiers()) != 0) {
+        Collection<Method> otherMethods=ClassReflectionIndexUtil.findMethods(reflectionIndex,reflectionIndex.getClassIndex(componentConfiguration.getComponentClass()),methodIdentifier.getName(),methodIdentifier.getParameterTypes());
+        for (        final Method other : otherMethods) {
+          if ((BRIDGE & other.getModifiers()) == 0) {
+            componentMethod=other;
+            break;
+          }
+        }
+      }
       configuration.addViewInterceptor(method,new ImmediateInterceptorFactory(new ComponentDispatcherInterceptor(componentMethod)),InterceptorOrder.View.COMPONENT_DISPATCHER);
       configuration.addClientInterceptor(method,CLIENT_DISPATCHER_INTERCEPTOR_FACTORY,InterceptorOrder.Client.CLIENT_DISPATCHER);
     }
