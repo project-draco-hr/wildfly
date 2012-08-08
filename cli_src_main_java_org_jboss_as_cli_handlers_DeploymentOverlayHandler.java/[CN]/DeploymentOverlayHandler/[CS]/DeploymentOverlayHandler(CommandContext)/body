@@ -34,17 +34,55 @@
   final FilenameTabCompleter pathCompleter=Util.isWindows() ? new WindowsFilenameTabCompleter(ctx) : new DefaultFilenameTabCompleter(ctx);
   content=new ArgumentWithValue(this,new CommandLineCompleter(){
     @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
-      int i=buffer.lastIndexOf(',');
-      i=buffer.indexOf('=',i + 1);
-      if (i < 0) {
+      final String actionStr=action.getValue(ctx.getParsedCommandLine());
+      if ("add".equals(actionStr)) {
+        int i=buffer.lastIndexOf(',');
+        i=buffer.indexOf('=',i + 1);
+        if (i < 0) {
+          return -1;
+        }
+        final String path=buffer.substring(i + 1);
+        int pathResult=pathCompleter.complete(ctx,path,0,candidates);
+        if (pathResult < 0) {
+          return -1;
+        }
+        return i + 1 + pathResult;
+      }
+ else       if ("remove".equals(actionStr)) {
+        final String nameStr=name.getValue(ctx.getParsedCommandLine());
+        if (nameStr == null) {
+          return -1;
+        }
+        final List<String> existing;
+        try {
+          existing=loadContentFor(ctx.getModelControllerClient(),nameStr);
+        }
+ catch (        CommandLineException e) {
+          return -1;
+        }
+        if (existing.isEmpty()) {
+          return buffer.length();
+        }
+        candidates.addAll(existing);
+        if (buffer.isEmpty()) {
+          return 0;
+        }
+        final String[] specified=buffer.split(",+");
+        candidates.removeAll(Arrays.asList(specified));
+        if (buffer.charAt(buffer.length() - 1) == ',') {
+          return buffer.length();
+        }
+        final String chunk=specified[specified.length - 1];
+        for (int i=0; i < candidates.size(); ++i) {
+          if (!candidates.get(i).startsWith(chunk)) {
+            candidates.remove(i);
+          }
+        }
+        return buffer.length() - chunk.length();
+      }
+ else {
         return -1;
       }
-      final String path=buffer.substring(i + 1);
-      int pathResult=pathCompleter.complete(ctx,path,0,candidates);
-      if (pathResult < 0) {
-        return -1;
-      }
-      return i + 1 + pathResult;
     }
   }
 ,"--content");
@@ -55,7 +93,31 @@
       if (client == null) {
         return -1;
       }
-      final List<String> existing=Util.getDeployments(client);
+      final String actionStr=action.getValue(ctx.getParsedCommandLine());
+      final List<String> existing;
+      if ("add".equals(actionStr)) {
+        existing=Util.getDeployments(client);
+      }
+ else       if ("remove".equals(actionStr)) {
+        try {
+          final String nameStr=name.getValue(ctx.getParsedCommandLine());
+          if (nameStr == null) {
+            return -1;
+          }
+          existing=loadLinks(client);
+          for (int i=0; i < existing.size(); ++i) {
+            if (existing.get(i).startsWith(nameStr + '-')) {
+              existing.set(i,existing.get(i).substring(nameStr.length() + 1));
+            }
+          }
+        }
+ catch (        CommandLineException e) {
+          return -1;
+        }
+      }
+ else {
+        return -1;
+      }
       if (existing.isEmpty()) {
         return buffer.length();
       }

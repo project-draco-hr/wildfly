@@ -1,3 +1,62 @@
 {
-  throw new CommandLineException("remove is not yet implemented");
+  final ModelControllerClient client=ctx.getModelControllerClient();
+  final ParsedCommandLine args=ctx.getParsedCommandLine();
+  final String name=this.name.getValue(args,true);
+  final String contentStr=content.getValue(args);
+  final String deploymentStr=deployment.getValue(args);
+  final ModelNode composite=new ModelNode();
+  composite.get(Util.OPERATION).set(Util.COMPOSITE);
+  composite.get(Util.ADDRESS).setEmptyList();
+  final ModelNode steps=composite.get(Util.STEPS);
+  if (deploymentStr != null || contentStr == null) {
+    final List<String> overlays;
+    if (deploymentStr == null) {
+      overlays=loadLinks(client);
+    }
+ else {
+      overlays=new ArrayList<String>();
+      final String[] deployments=deploymentStr.split(",+");
+      for (      String deploymentName : deployments) {
+        overlays.add(name + '-' + deploymentName);
+      }
+    }
+    for (    String overlay : overlays) {
+      final ModelNode op=new ModelNode();
+      op.get(Util.ADDRESS).add(Util.DEPLOYMENT_OVERLAY_LINK,overlay);
+      op.get(Util.OPERATION).set(Util.REMOVE);
+      steps.add(op);
+    }
+  }
+  if (contentStr != null || deploymentStr == null) {
+    final List<String> contentList;
+    if (contentStr == null) {
+      contentList=loadContentFor(client,name);
+    }
+ else {
+      contentList=java.util.Arrays.asList(contentStr.split(",+"));
+    }
+    for (    String content : contentList) {
+      final ModelNode op=new ModelNode();
+      ModelNode addr=op.get(Util.ADDRESS);
+      addr.add(Util.DEPLOYMENT_OVERLAY,name);
+      addr.add(Util.CONTENT,content);
+      op.get(Util.OPERATION).set(Util.REMOVE);
+      steps.add(op);
+    }
+  }
+  if (contentStr == null && deploymentStr == null) {
+    final ModelNode op=new ModelNode();
+    op.get(Util.ADDRESS).add(Util.DEPLOYMENT_OVERLAY,name);
+    op.get(Util.OPERATION).set(Util.REMOVE);
+    steps.add(op);
+  }
+  try {
+    final ModelNode result=client.execute(composite);
+    if (!Util.isSuccess(result)) {
+      throw new CommandFormatException(Util.getFailureDescription(result));
+    }
+  }
+ catch (  IOException e) {
+    throw new CommandFormatException("Failed to remove overlay",e);
+  }
 }
