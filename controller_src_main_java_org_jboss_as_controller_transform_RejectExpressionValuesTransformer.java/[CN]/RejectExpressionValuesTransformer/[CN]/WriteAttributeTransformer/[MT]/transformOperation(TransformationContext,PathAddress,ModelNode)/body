@@ -1,11 +1,23 @@
 {
   final String attribute=operation.require(ModelDescriptionConstants.NAME).asString();
+  boolean containsExpression=false;
   if (attributeNames.contains(attribute)) {
     if (operation.hasDefined(ModelDescriptionConstants.VALUE)) {
-      if (checkForExpression(operation.get(ModelDescriptionConstants.VALUE))) {
-        throw ControllerMessages.MESSAGES.expressionNotAllowed(attribute);
+      containsExpression=checkForExpression(operation.get(ModelDescriptionConstants.VALUE));
+    }
+  }
+  final boolean rejectResult=containsExpression;
+  if (rejectResult) {
+    final OperationRejectionPolicy rejectPolicy=new OperationRejectionPolicy(){
+      @Override public boolean rejectOperation(      ModelNode preparedResult){
+        return true;
+      }
+      @Override public String getFailureDescription(){
+        return ControllerMessages.MESSAGES.expressionNotAllowed(attribute).getMessage();
       }
     }
+;
+    return new TransformedOperation(operation,rejectPolicy,OperationResultTransformer.ORIGINAL_RESULT);
   }
   return new TransformedOperation(operation,OperationResultTransformer.ORIGINAL_RESULT);
 }

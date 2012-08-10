@@ -35,8 +35,22 @@
         if (HOST_CONTROLLER_LOGGER.isTraceEnabled()) {
           HOST_CONTROLLER_LOGGER.tracef("Preliminary result for remote host %s is %s",hostName,preparedResult);
         }
-        domainOperationContext.addHostControllerResult(hostName,preparedResult);
-        results.add(prepared);
+        final HostControllerUpdateTask.ExecutedHostRequest request=finalResults.get(hostName);
+        boolean reject=prepared.isFailed() ? false : request.rejectOperation(preparedResult);
+        if (reject) {
+          if (HOST_CONTROLLER_LOGGER.isDebugEnabled()) {
+            HOST_CONTROLLER_LOGGER.debugf("Rejecting result for remote host %s is %s",hostName,preparedResult);
+          }
+          final ModelNode failedResult=new ModelNode();
+          failedResult.get(OUTCOME).set(FAILED);
+          failedResult.get(FAILURE_DESCRIPTION).set(request.getFailureDescription());
+          domainOperationContext.addHostControllerResult(hostName,failedResult);
+          results.add(prepared);
+        }
+ else {
+          domainOperationContext.addHostControllerResult(hostName,preparedResult);
+          results.add(prepared);
+        }
       }
     }
  catch (    InterruptedException ie) {
