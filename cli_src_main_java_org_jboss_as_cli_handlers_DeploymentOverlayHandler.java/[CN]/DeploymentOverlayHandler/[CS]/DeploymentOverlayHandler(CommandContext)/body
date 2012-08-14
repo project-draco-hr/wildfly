@@ -1,6 +1,7 @@
 {
   super("deployment-overlay",true);
-  action=new ArgumentWithValue(this,new SimpleTabCompleter(new String[]{"add","remove"}),0,"--action");
+  l=new ArgumentWithoutValue(this,"-l");
+  action=new ArgumentWithValue(this,new SimpleTabCompleter(new String[]{"add","link","list-content","list-deployments","remove","upload"}),0,"--action");
   name=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
     @Override public Collection<String> getAllCandidates(    CommandContext ctx){
       final ModelControllerClient client=ctx.getModelControllerClient();
@@ -29,13 +30,13 @@
       return names;
     }
   }
-),1,"--name");
+),"--name");
   name.addRequiredPreceding(action);
   final FilenameTabCompleter pathCompleter=Util.isWindows() ? new WindowsFilenameTabCompleter(ctx) : new DefaultFilenameTabCompleter(ctx);
   content=new ArgumentWithValue(this,new CommandLineCompleter(){
     @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
       final String actionStr=action.getValue(ctx.getParsedCommandLine());
-      if ("add".equals(actionStr)) {
+      if ("add".equals(actionStr) || "upload".equals(actionStr)) {
         int i=buffer.lastIndexOf(',');
         i=buffer.indexOf('=',i + 1);
         if (i < 0) {
@@ -87,6 +88,7 @@
   }
 ,"--content");
   content.addRequiredPreceding(name);
+  content.addCantAppearAfter(l);
   deployment=new ArgumentWithValue(this,new CommandLineCompleter(){
     @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
       final ModelControllerClient client=ctx.getModelControllerClient();
@@ -95,7 +97,7 @@
       }
       final String actionStr=action.getValue(ctx.getParsedCommandLine());
       final List<String> existing;
-      if ("add".equals(actionStr)) {
+      if ("add".equals(actionStr) || "link".equals(actionStr)) {
         existing=Util.getDeployments(client);
       }
  else       if ("remove".equals(actionStr)) {
@@ -104,11 +106,9 @@
           if (nameStr == null) {
             return -1;
           }
-          existing=loadLinks(client);
+          existing=loadLinks(client,nameStr);
           for (int i=0; i < existing.size(); ++i) {
-            if (existing.get(i).startsWith(nameStr + '-')) {
-              existing.set(i,existing.get(i).substring(nameStr.length() + 1));
-            }
+            existing.set(i,existing.get(i).substring(nameStr.length() + 1));
           }
         }
  catch (        CommandLineException e) {
@@ -141,4 +141,5 @@
   }
 ,"--deployment");
   deployment.addRequiredPreceding(name);
+  deployment.addCantAppearAfter(l);
 }

@@ -1,6 +1,9 @@
 {
   final ParsedCommandLine args=ctx.getParsedCommandLine();
   final String name=this.name.getValue(args,true);
+  if (!Util.isValidPath(ctx.getModelControllerClient(),Util.DEPLOYMENT_OVERLAY,name)) {
+    throw new CommandLineException("Deployment overlay " + name + " does not exist.");
+  }
   final String contentStr=content.getValue(args,true);
   final String[] contentPairs=contentStr.split(",+");
   if (contentPairs.length == 0) {
@@ -28,13 +31,9 @@
     }
     contentPaths[i]=f;
   }
-  final String deploymentsStr=deployment.getValue(args,true);
-  final String[] deployments;
-  if (deploymentsStr == null) {
-    deployments=null;
-  }
- else {
-    deployments=deploymentsStr.split(",+");
+  final String deploymentsStr=deployment.getValue(args);
+  if (deploymentsStr != null) {
+    throw new CommandFormatException(deployment.getFullName() + " can't be used in combination with upload.");
   }
   final ModelControllerClient client=ctx.getModelControllerClient();
   final List<ModelNode> uploadResponses;
@@ -68,7 +67,13 @@
       }
     }
     if (!response.hasDefined(Util.RESULT)) {
-      throw new CommandFormatException("Upload response is missing result.");
+      final String descr=Util.getFailureDescription(response);
+      if (descr == null) {
+        throw new CommandLineException("Upload response is missing result.");
+      }
+ else {
+        throw new CommandLineException(descr);
+      }
     }
     uploadResponses=response.get(Util.RESULT).asList();
   }
@@ -77,40 +82,24 @@
     composite.get(Util.OPERATION).set(Util.COMPOSITE);
     composite.get(Util.ADDRESS).setEmptyList();
     final ModelNode steps=composite.get(Util.STEPS);
-    ModelNode op=new ModelNode();
-    ModelNode address=op.get(Util.ADDRESS);
-    address.add(Util.DEPLOYMENT_OVERLAY,name);
-    op.get(Util.OPERATION).set(Util.ADD);
-    steps.add(op);
     for (int i=0; i < contentNames.length; ++i) {
       final String contentName=contentNames[i];
       ModelNode result=uploadResponses.get(i);
       result=result.get("step-" + (i + 1));
       if (!result.isDefined()) {
-        throw new CommandFormatException("Upload step response is missing expected step-" + (i + 1) + " attribute: "+ result);
+        throw new CommandLineException("Upload step response is missing expected step-" + (i + 1) + " attribute: "+ result);
       }
       result=result.get(Util.RESULT);
       if (!result.isDefined()) {
-        throw new CommandFormatException("Upload step response is missing result: " + result);
+        throw new CommandLineException("Upload step response is missing result: " + result);
       }
-      op=new ModelNode();
-      address=op.get(Util.ADDRESS);
+      final ModelNode op=new ModelNode();
+      final ModelNode address=op.get(Util.ADDRESS);
       address.add(Util.DEPLOYMENT_OVERLAY,name);
       address.add(Util.CONTENT,contentName);
       op.get(Util.OPERATION).set(Util.ADD);
       op.get(Util.CONTENT).set(result);
       steps.add(op);
-    }
-    if (deployments != null && deployments.length > 0) {
-      for (      String deployment : deployments) {
-        op=new ModelNode();
-        address=op.get(Util.ADDRESS);
-        address.add(Util.DEPLOYMENT_OVERLAY_LINK,name + "-" + deployment);
-        op.get(Util.OPERATION).set(Util.ADD);
-        op.get(Util.DEPLOYMENT).set(deployment);
-        op.get(Util.DEPLOYMENT_OVERLAY).set(name);
-        steps.add(op);
-      }
     }
     try {
       final ModelNode result=client.execute(composite);
