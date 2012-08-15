@@ -1,0 +1,31 @@
+{
+  final ParsedCommandLine args=ctx.getParsedCommandLine();
+  final String name=this.name.getValue(args,true);
+  final String deploymentsStr=deployment.getValue(args,true);
+  final String[] deployments=deploymentsStr.split(",+");
+  if (deployments.length == 0) {
+    throw new CommandFormatException("Missing value for " + deployment.getFullName() + ": '"+ deploymentsStr+ "'");
+  }
+  final ModelNode composite=new ModelNode();
+  composite.get(Util.OPERATION).set(Util.COMPOSITE);
+  composite.get(Util.ADDRESS).setEmptyList();
+  final ModelNode steps=composite.get(Util.STEPS);
+  for (  String deployment : deployments) {
+    final ModelNode op=new ModelNode();
+    final ModelNode address=op.get(Util.ADDRESS);
+    address.add(Util.DEPLOYMENT_OVERLAY_LINK,name + "-" + deployment);
+    op.get(Util.OPERATION).set(Util.ADD);
+    op.get(Util.DEPLOYMENT).set(deployment);
+    op.get(Util.DEPLOYMENT_OVERLAY).set(name);
+    steps.add(op);
+  }
+  try {
+    final ModelNode result=ctx.getModelControllerClient().execute(composite);
+    if (!Util.isSuccess(result)) {
+      throw new CommandFormatException(Util.getFailureDescription(result));
+    }
+  }
+ catch (  IOException e) {
+    throw new CommandFormatException("Failed to link overlay",e);
+  }
+}
