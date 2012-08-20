@@ -1,0 +1,29 @@
+{
+  System.setProperty("org.jboss.as.jpa.testBadExpr","hello");
+  try {
+    ModelVersion oldVersion=ModelVersion.create(1,1,0);
+    KernelServicesBuilder builder=createKernelServicesBuilder(null).setSubsystemXml(getSubsystemXml());
+    builder.createLegacyKernelServicesBuilder(null,oldVersion).setExtensionClassName(JPAExtension.class.getName()).addMavenResourceURL("org.jboss.as:jboss-as-jpa:7.1.2.Final").addMavenResourceURL("org.jboss.as:jboss-as-controller:7.1.2.Final").addParentFirstClassPattern("org.jboss.as.controller.*");
+    KernelServices mainServices=builder.build();
+    KernelServices legacyServices=mainServices.getLegacyServices(oldVersion);
+    Assert.assertNotNull(legacyServices);
+    checkSubsystemModelTransformation(mainServices,oldVersion);
+    final ModelNode operation=new ModelNode();
+    operation.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
+    operation.get(OP_ADDR).add(SUBSYSTEM,JPAExtension.SUBSYSTEM_NAME);
+    operation.get(NAME).set(JPADefinition.DEFAULT_DATASOURCE.getName());
+    operation.get(VALUE).set("${org.jboss.as.jpa.testBadExpr}");
+    final ModelNode mainResult=mainServices.executeOperation(operation);
+    System.out.println(mainResult);
+    Assert.assertTrue(SUCCESS.equals(mainResult.get(OUTCOME).asString()));
+    final OperationTransformer.TransformedOperation op=mainServices.transformOperation(oldVersion,operation);
+    final ModelNode result=mainServices.executeOperation(oldVersion,op);
+    Assert.assertEquals(FAILED,result.get(OUTCOME).asString());
+  }
+ catch (  Throwable t) {
+    Assert.fail(t.getMessage());
+  }
+ finally {
+    System.clearProperty("org.jboss.as.jpa.testBadExpr");
+  }
+}
