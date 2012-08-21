@@ -1,0 +1,64 @@
+{
+  if (log.isTraceEnabled()) {
+    log.trace("[" + forwardContext + "], PathInfo: "+ request.getPathInfo()+ ", QueryString: "+ request.getQueryString()+ ", ContextPath: "+ request.getContextPath()+ ", HeaderNames: "+ request.getHeaderNames()+ ", isCommitted: "+ response.isCommitted());
+  }
+  String includeParam=request.getParameter("include");
+  if (includeParam == null)   throw new IllegalStateException("No include parameter seen");
+  boolean include=Boolean.valueOf(includeParam);
+  String commitParam=request.getParameter("commit");
+  if (commitParam == null)   throw new IllegalStateException("No commit parameter seen");
+  boolean commit=Boolean.valueOf(commitParam);
+  UserTransaction transaction;
+  try {
+    transaction=(UserTransaction)new InitialContext().lookup("java:comp/UserTransaction");
+    transaction.begin();
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(e);
+  }
+  ServletContext sc=getServletContext().getContext(forwardContext);
+  if (sc != null) {
+    log.info("Found ServletContext for: " + forwardContext);
+    RequestDispatcher rd=sc.getRequestDispatcher(forwardPath);
+    if (rd != null) {
+      log.info("Found RequestDispatcher for: " + forwardPath);
+      if (include) {
+        rd.include(request,response);
+      }
+ else {
+        rd.forward(request,response);
+      }
+      Integer status=(Integer)request.getAttribute(TxStatusServlet.ATTRIBUTE);
+      if (status == null) {
+        throw new ServletException("No transaction status");
+      }
+      if (include) {
+        response.setHeader(INNER_STATUS_HEADER,status.toString());
+      }
+ else       if (status.intValue() != Status.STATUS_ACTIVE) {
+        throw new ServletException("Status is " + status);
+      }
+    }
+ else {
+      throw new ServletException("No RequestDispatcher for: " + forwardContext + forwardPath);
+    }
+  }
+ else {
+    throw new ServletException("No ServletContext for: " + forwardContext);
+  }
+  try {
+    int ourStatus=transaction.getStatus();
+    if (include) {
+      response.setHeader(OUTER_STATUS_HEADER,String.valueOf(ourStatus));
+    }
+ else     if (ourStatus != Status.STATUS_ACTIVE) {
+      throw new ServletException("Status is " + ourStatus);
+    }
+    if (commit) {
+      transaction.commit();
+    }
+  }
+ catch (  Exception e) {
+    throw new ServletException(e);
+  }
+}
