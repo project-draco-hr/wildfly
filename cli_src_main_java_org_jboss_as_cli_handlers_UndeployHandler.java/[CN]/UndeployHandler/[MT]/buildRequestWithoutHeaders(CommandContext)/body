@@ -81,18 +81,30 @@ catch (      CommandLineException e) {
     }
   }
   if (name == null) {
-    throw new OperationFormatException("Required argument name are missing.");
+    throw new OperationFormatException("Deployment name is missing.");
   }
   final ModelControllerClient client=ctx.getModelControllerClient();
   DefaultOperationRequestBuilder builder;
-  if (ctx.isDomainMode()) {
-    final List<String> serverGroups;
-    if (allRelevantServerGroups) {
-      if (keepContent) {
-        serverGroups=Util.getAllEnabledServerGroups(name,client);
-      }
+  final List<String> deploymentNames;
+  if (name.indexOf('*') < 0) {
+    deploymentNames=Collections.singletonList(name);
+  }
  else {
-        serverGroups=Util.getAllReferencingServerGroups(name,client);
+    deploymentNames=Util.getDeployments(client,name);
+    if (deploymentNames.isEmpty()) {
+      throw new CommandFormatException("No deployment matched wildcard expression " + name);
+    }
+  }
+  if (ctx.isDomainMode()) {
+    List<String> serverGroups=Collections.emptyList();
+    if (allRelevantServerGroups) {
+      for (      String deploymentName : deploymentNames) {
+        if (keepContent) {
+          serverGroups=Util.getAllEnabledServerGroups(deploymentName,client);
+        }
+ else {
+          serverGroups=Util.getAllReferencingServerGroups(deploymentName,client);
+        }
       }
     }
  else {
@@ -105,31 +117,37 @@ catch (      CommandLineException e) {
     }
     if (serverGroups.isEmpty()) {
       if (keepContent) {
-        throw new OperationFormatException("None server group is specified or available.");
+        throw new OperationFormatException("None of the server groups is specified or references specified deployment.");
       }
     }
  else {
-      for (      String group : serverGroups) {
-        ModelNode groupStep=Util.configureDeploymentOperation(DEPLOYMENT_UNDEPLOY_OPERATION,name,group);
-        steps.add(groupStep);
-      }
-      for (      String group : serverGroups) {
-        ModelNode groupStep=Util.configureDeploymentOperation(DEPLOYMENT_REMOVE_OPERATION,name,group);
-        steps.add(groupStep);
+      for (      String deploymentName : deploymentNames) {
+        for (        String group : serverGroups) {
+          ModelNode groupStep=Util.configureDeploymentOperation(Util.UNDEPLOY,deploymentName,group);
+          steps.add(groupStep);
+          groupStep=Util.configureDeploymentOperation(Util.REMOVE,deploymentName,group);
+          steps.add(groupStep);
+        }
       }
     }
   }
- else   if (Util.isDeployedAndEnabledInStandalone(name,client)) {
-    builder=new DefaultOperationRequestBuilder();
-    builder.setOperationName("undeploy");
-    builder.addNode("deployment",name);
-    steps.add(builder.buildRequest());
+ else {
+    for (    String deploymentName : deploymentNames) {
+      if (Util.isDeployedAndEnabledInStandalone(deploymentName,client)) {
+        builder=new DefaultOperationRequestBuilder();
+        builder.setOperationName(Util.UNDEPLOY);
+        builder.addNode(Util.DEPLOYMENT,deploymentName);
+        steps.add(builder.buildRequest());
+      }
+    }
   }
   if (!keepContent) {
-    builder=new DefaultOperationRequestBuilder();
-    builder.setOperationName("remove");
-    builder.addNode("deployment",name);
-    steps.add(builder.buildRequest());
+    for (    String deploymentName : deploymentNames) {
+      builder=new DefaultOperationRequestBuilder();
+      builder.setOperationName(Util.REMOVE);
+      builder.addNode(Util.DEPLOYMENT,deploymentName);
+      steps.add(builder.buildRequest());
+    }
   }
   return composite;
 }
