@@ -34,7 +34,7 @@ catch (  ClassCastException e) {
   final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(name);
   final Hashtable<String,String> environment=getObjectFactoryEnvironment(context,model);
   final BinderService binderService=new BinderService(name,objectFactoryClassInstance);
-  binderService.getManagedObjectInjector().inject(new ManagedReferenceFactory(){
+  binderService.getManagedObjectInjector().inject(new ContextListAndJndiViewManagedReferenceFactory(){
     @Override public ManagedReference getReference(){
       try {
         final Object value=objectFactoryClassInstance.getObjectInstance(name,null,null,environment);
@@ -42,6 +42,27 @@ catch (  ClassCastException e) {
       }
  catch (      Exception e) {
         throw new RuntimeException(e);
+      }
+    }
+    @Override public String getInstanceClassName(){
+      final ClassLoader cl=SecurityActions.getContextClassLoader();
+      try {
+        SecurityActions.setContextClassLoader(objectFactoryClassInstance.getClass().getClassLoader());
+        final Object value=getReference().getInstance();
+        return value != null ? value.getClass().getName() : ContextListManagedReferenceFactory.DEFAULT_INSTANCE_CLASS_NAME;
+      }
+  finally {
+        SecurityActions.setContextClassLoader(cl);
+      }
+    }
+    @Override public String getJndiViewInstanceValue(){
+      final ClassLoader cl=SecurityActions.getContextClassLoader();
+      try {
+        SecurityActions.setContextClassLoader(objectFactoryClassInstance.getClass().getClassLoader());
+        return String.valueOf(getReference().getInstance());
+      }
+  finally {
+        SecurityActions.setContextClassLoader(cl);
       }
     }
   }

@@ -1,0 +1,53 @@
+{
+  if (isEmpty(name)) {
+    return new NamingContext(prefix,namingStore,environment);
+  }
+  final Name absoluteName=getAbsoluteName(name);
+  Object result;
+  try {
+    result=namingStore.lookup(absoluteName,dereference);
+  }
+ catch (  CannotProceedException cpe) {
+    final Context continuationContext=NamingManager.getContinuationContext(cpe);
+    if (continuationContext instanceof NamingContext) {
+      result=((NamingContext)continuationContext).lookup(cpe.getRemainingName(),dereference);
+    }
+ else {
+      result=continuationContext.lookup(cpe.getRemainingName());
+    }
+  }
+  if (result instanceof ResolveResult) {
+    final ResolveResult resolveResult=(ResolveResult)result;
+    final Object resolvedObject=resolveResult.getResolvedObj();
+    Object context;
+    if (resolvedObject instanceof Context) {
+      context=resolvedObject;
+    }
+ else     if (resolvedObject instanceof LinkRef) {
+      context=resolveLink(resolvedObject,dereference);
+    }
+ else {
+      context=getObjectInstance(resolvedObject,absoluteName,environment);
+    }
+    if (!(context instanceof Context)) {
+      throw notAContextException(absoluteName.getPrefix(absoluteName.size() - resolveResult.getRemainingName().size()));
+    }
+    final Context namingContext=(Context)context;
+    if (namingContext instanceof NamingContext) {
+      return ((NamingContext)namingContext).lookup(resolveResult.getRemainingName(),dereference);
+    }
+ else {
+      return namingContext.lookup(resolveResult.getRemainingName());
+    }
+  }
+ else   if (result instanceof LinkRef) {
+    result=resolveLink(result,dereference);
+  }
+ else   if (result instanceof Reference) {
+    result=getObjectInstance(result,absoluteName,environment);
+    if (result instanceof LinkRef) {
+      result=resolveLink(result,dereference);
+    }
+  }
+  return result;
+}
