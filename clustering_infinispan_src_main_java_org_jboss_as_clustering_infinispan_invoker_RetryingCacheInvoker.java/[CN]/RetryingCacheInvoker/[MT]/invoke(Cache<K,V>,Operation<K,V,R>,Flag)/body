@@ -1,0 +1,34 @@
+{
+  Flag[] attemptFlags=null;
+  if ((allFlags != null) && (allFlags.length > 0)) {
+    Set<Flag> flags=EnumSet.noneOf(Flag.class);
+    flags.addAll(Arrays.asList(allFlags));
+    flags.remove(Flag.FAIL_SILENTLY);
+    attemptFlags=flags.toArray(new Flag[flags.size()]);
+  }
+  Exception exception=null;
+  for (int i=0; i <= this.backOffIntervals.length; ++i) {
+    try {
+      return this.invoker.invoke(cache,operation,(i < this.backOffIntervals.length) ? attemptFlags : allFlags);
+    }
+ catch (    TimeoutException e) {
+      exception=e;
+    }
+catch (    SuspectException e) {
+      exception=e;
+    }
+    if (i < this.backOffIntervals.length) {
+      int delay=this.backOffIntervals[i];
+      try {
+        if (ROOT_LOGGER.isTraceEnabled()) {
+          ROOT_LOGGER.tracef(exception,"Cache operation failed.  Retrying in %d ms",Integer.valueOf(delay));
+        }
+        Thread.sleep(delay);
+      }
+ catch (      InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
+  throw MESSAGES.abortingCacheOperation(exception,Integer.valueOf(this.backOffIntervals.length + 1));
+}
