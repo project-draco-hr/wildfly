@@ -25,22 +25,24 @@
   webContext.setPath(pathName);
   webContext.setIgnoreAnnotations(true);
   webContext.setCrossContext(!metaData.isDisableCrossContext());
+  List<ExpressionFactoryWrapper> wrappers=deploymentUnit.getAttachmentList(ExpressionFactoryWrapper.ATTACHMENT_KEY);
+  if (!wrappers.isEmpty()) {
+    if (metaData.getListeners() == null) {
+      metaData.setListeners(new ArrayList<ListenerMetaData>());
+    }
+    final ListenerMetaData listenerMetaData=new ListenerMetaData();
+    listenerMetaData.setListenerClass(JspInitializationListener.class.getName());
+    metaData.getListeners().add(listenerMetaData);
+    deploymentUnit.addToAttachmentList(ServletContextAttribute.ATTACHMENT_KEY,new ServletContextAttribute(JspInitializationListener.CONTEXT_KEY,wrappers));
+  }
   contextFactory.postProcessContext(deploymentUnit,webContext);
-  final WebInjectionContainer injectionContainer=new WebInjectionContainer(module.getClassLoader());
-  final Map<String,ComponentInstantiator> components=deploymentUnit.getAttachment(WebAttachments.WEB_COMPONENT_INSTANTIATORS);
-  if (components != null) {
-    final Set<ServiceName> failed=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.FAILED_COMPONENTS);
-    for (    Map.Entry<String,ComponentInstantiator> entry : components.entrySet()) {
-      boolean skip=false;
-      for (      final ServiceName serviceName : entry.getValue().getServiceNames()) {
-        if (failed.contains(serviceName)) {
-          skip=true;
-          break;
-        }
-      }
-      if (!skip) {
-        injectionContainer.addInstantiator(entry.getKey(),entry.getValue());
-      }
+  final Set<ServiceName> dependentComponents=new HashSet<ServiceName>();
+  final List<ServiceName> components=deploymentUnit.getAttachmentList(WebComponentDescription.WEB_COMPONENTS);
+  final Set<ServiceName> failed=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.FAILED_COMPONENTS);
+  for (  final ServiceName component : components) {
+    boolean skip=false;
+    if (!failed.contains(component)) {
+      dependentComponents.add(component);
     }
   }
   final Loader loader=new WebCtxLoader(classLoader);
@@ -105,8 +107,12 @@ deploymentUnit.addToAttachmentList(Attachments.DEPLOYMENT_COMPLETE_SERVICES,real
 final JBossWebRealmService realmService=new JBossWebRealmService(deploymentUnit);
 ServiceBuilder<Realm> realmBuilder=serviceTarget.addService(realmServiceName,realmService);
 realmBuilder.addDependency(DependencyType.REQUIRED,SecurityDomainService.SERVICE_NAME.append(securityDomain),SecurityDomainContext.class,realmService.getSecurityDomainContextInjector()).setInitialMode(Mode.ACTIVE).install();
-final WebDeploymentService webappService=new WebDeploymentService(webContext,injectionContainer,setupActions,attributes);
-ServiceBuilder<StandardContext> webappBuilder=serviceTarget.addService(webappServiceName,webappService).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(hostName),VirtualHost.class,new WebContextInjector(webContext)).addDependencies(injectionContainer.getServiceNames()).addDependency(realmServiceName,Realm.class,webappService.getRealm()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES)).addDependency(JndiNamingDependencyProcessor.serviceName(deploymentUnit.getServiceName()));
+ComponentRegistry componentRegistry=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.COMPONENT_REGISTRY);
+if (componentRegistry == null) {
+componentRegistry=new ComponentRegistry(null);
+}
+final WebDeploymentService webappService=new WebDeploymentService(webContext,new WebInjectionContainer(module.getClassLoader(),componentRegistry),setupActions,attributes);
+ServiceBuilder<StandardContext> webappBuilder=serviceTarget.addService(webappServiceName,webappService).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(hostName),VirtualHost.class,new WebContextInjector(webContext)).addDependencies(dependentComponents).addDependency(realmServiceName,Realm.class,webappService.getRealm()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES)).addDependency(JndiNamingDependencyProcessor.serviceName(deploymentUnit.getServiceName()));
 Services.addServerExecutorDependency(webappBuilder,webappService.getServerExecutorInjector(),false);
 for (final SetupAction action : setupActions) {
 webappBuilder.addDependencies(action.dependencies());
