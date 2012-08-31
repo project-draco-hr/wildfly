@@ -1,0 +1,24 @@
+{
+  final Resource resource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
+  final ModelNode model=resource.getModel();
+  final ModelNode originalModel=model.clone();
+  updateModel(operation,model);
+  if (context.getProcessType().isServer()) {
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      final OperationContext context,      final ModelNode operation) throws OperationFailedException {
+        performRuntime(context,operation,logContextConfiguration,name,model);
+        if (context.completeStep() == ResultAction.ROLLBACK) {
+          logContextConfiguration.forget();
+          try {
+            performRollback(context,operation,model,logContextConfiguration,name,originalModel);
+            logContextConfiguration.commit();
+          }
+ catch (          OperationFailedException e) {
+            throw createRollbackFailure(e);
+          }
+        }
+      }
+    }
+,Stage.RUNTIME);
+  }
+}

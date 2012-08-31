@@ -1,0 +1,36 @@
+{
+  final String name=getAddressName(operation);
+  final ConfigurationPersistence configurationPersistence=ConfigurationPersistence.getOrCreateConfigurationPersistence();
+  final LogContextConfiguration logContextConfiguration=configurationPersistence.getLogContextConfiguration();
+  execute(context,operation,name,logContextConfiguration);
+  if (context.getProcessType().isServer()) {
+    context.addStep(new OperationStepHandler(){
+      public void execute(      final OperationContext context,      final ModelNode operation) throws OperationFailedException {
+        context.attachIfAbsent(ATTACHMENT_KEY,Boolean.TRUE);
+        context.addStep(new OperationStepHandler(){
+          @Override public void execute(          final OperationContext context,          final ModelNode operation) throws OperationFailedException {
+            final Boolean addCommit=context.getAttachment(ATTACHMENT_KEY);
+            logContextConfiguration.commit();
+            if (addCommit != null && addCommit) {
+              final LogContextConfiguration logContextConfiguration=configurationPersistence.getLogContextConfiguration();
+              logContextConfiguration.commit();
+              configurationPersistence.writeConfiguration(context);
+              context.detach(ATTACHMENT_KEY);
+              if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
+                logContextConfiguration.forget();
+                configurationPersistence.writeConfiguration(context);
+              }
+            }
+ else {
+              context.completeStep(RollbackHandler.NOOP_ROLLBACK_HANDLER);
+            }
+          }
+        }
+,Stage.RUNTIME);
+        context.completeStep(RollbackHandler.NOOP_ROLLBACK_HANDLER);
+      }
+    }
+,Stage.RUNTIME);
+  }
+  context.completeStep(RollbackHandler.NOOP_ROLLBACK_HANDLER);
+}
