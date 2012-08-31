@@ -1,7 +1,7 @@
 {
   pu.setClassLoader(classLoader);
   try {
-    final HashMap properties=new HashMap();
+    final HashMap<String,ValidatorFactory> properties=new HashMap<String,ValidatorFactory>();
     if (!ValidationMode.NONE.equals(pu.getValidationMode())) {
       ValidatorFactory validatorFactory=SerializableValidatorFactory.validatorFactory();
       properties.put("javax.persistence.validation.factory",validatorFactory);
@@ -22,16 +22,17 @@
       provider=lookupProvider(pu);
     }
     final PersistenceUnitServiceImpl service=new PersistenceUnitServiceImpl(classLoader,pu,adaptor,provider,PersistenceUnitRegistryImpl.INSTANCE);
-    phaseContext.getDeploymentUnit().addToAttachmentList(REMOVAL_KEY,new PersistenceAdaptorRemoval(pu,adaptor));
+    deploymentUnit.addToAttachmentList(REMOVAL_KEY,new PersistenceAdaptorRemoval(pu,adaptor));
     adaptor.addProviderProperties(properties,pu);
     final ServiceName puServiceName=PersistenceUnitServiceImpl.getPUServiceName(pu);
+    deploymentUnit.putAttachment(JpaAttachments.PERSISTENCE_UNIT_SERVICE_KEY,puServiceName);
     deploymentUnit.addToAttachmentList(Attachments.DEPLOYMENT_COMPLETE_SERVICES,puServiceName);
     addPUServiceDependencyToComponents(components,puServiceName);
     if (startEarly) {
       phaseContext.addToAttachmentList(Attachments.NEXT_PHASE_DEPS,puServiceName);
     }
     deploymentUnit.addToAttachmentList(Attachments.WEB_DEPENDENCIES,puServiceName);
-    ServiceBuilder<PersistenceUnitServiceImpl> builder=serviceTarget.addService(puServiceName,service);
+    ServiceBuilder<PersistenceUnitService> builder=serviceTarget.addService(puServiceName,service);
     boolean useDefaultDataSource=true;
     final String jtaDataSource=adjustJndi(pu.getJtaDataSourceName());
     final String nonJtaDataSource=adjustJndi(pu.getNonJtaDataSourceName());
