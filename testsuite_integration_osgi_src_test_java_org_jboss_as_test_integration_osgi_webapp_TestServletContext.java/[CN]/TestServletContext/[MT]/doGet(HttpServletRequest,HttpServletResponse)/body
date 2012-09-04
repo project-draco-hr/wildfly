@@ -1,28 +1,29 @@
 {
-  PrintWriter writer=resp.getWriter();
+  System.out.println("GET " + req);
   String testValue="set on " + System.currentTimeMillis();
-  getServletContext().setAttribute(getClass().getName(),testValue);
-  BundleContext ctxt=(BundleContext)getServletContext().getAttribute("osgi-bundlecontext");
+  PrintWriter writer=resp.getWriter();
+  ServletContext servletContext=getServletContext();
+  servletContext.setAttribute(getClass().getName(),testValue);
+  BundleContext bundleContext=(BundleContext)servletContext.getAttribute("osgi-bundlecontext");
+  if (bundleContext == null)   throw new RuntimeException("Error: BundleContext attribute not set on: " + servletContext);
   try {
-    Filter filter=ctxt.createFilter("(&(objectClass=" + ServletContext.class.getName() + ")"+ "(osgi.web.symbolicname="+ ctxt.getBundle().getSymbolicName()+ "))");
-    ServiceTracker st=new ServiceTracker(ctxt,filter,null);
-    st.open();
-    ServletContext sc=(ServletContext)st.waitForService(2000);
-    ServiceReference sr=st.getServiceReference();
-    if (sc == null) {
-      writer.write("ServletContext service not found given filter: " + filter);
-      return;
-    }
-    Object attrVal=sc.getAttribute(getClass().getName());
-    if (!testValue.equals(attrVal)) {
-      writer.write("Error: Servlet Context service not the same as the actual Servlet Context: " + attrVal);
-      return;
-    }
-    writer.write("ServletContext: " + sr.getProperty("osgi.web.symbolicname") + "|"+ sr.getProperty("osgi.web.contextpath"));
-    st.close();
+    String symbolicName=bundleContext.getBundle().getSymbolicName();
+    Filter filter=bundleContext.createFilter("(&(objectClass=" + ServletContext.class.getName() + ")"+ "(osgi.web.symbolicname="+ symbolicName+ "))");
+    ServiceTracker tracker=new ServiceTracker(bundleContext,filter,null);
+    tracker.open();
+    ServletContext servletContextService=(ServletContext)tracker.waitForService(2000);
+    if (servletContextService == null)     throw new RuntimeException("ServletContext service not found given filter: " + filter);
+    Object attrVal=servletContextService.getAttribute(getClass().getName());
+    if (!testValue.equals(attrVal))     throw new RuntimeException("Error: Servlet Context service not the same as the actual Servlet Context: " + attrVal);
+    ServiceReference sref=tracker.getServiceReference();
+    writer.write("ServletContext: " + sref.getProperty("osgi.web.symbolicname") + "|"+ sref.getProperty("osgi.web.contextpath"));
+    tracker.close();
   }
- catch (  Exception e) {
-    e.printStackTrace(writer);
+ catch (  InvalidSyntaxException e) {
+    e.printStackTrace();
+  }
+catch (  InterruptedException e) {
+    e.printStackTrace();
   }
  finally {
     writer.close();
