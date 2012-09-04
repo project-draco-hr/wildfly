@@ -1,0 +1,17 @@
+{
+  final SecurityModule.Builder kerberosModuleBuilder=new SecurityModule.Builder();
+  if (SystemUtils.JAVA_VENDOR.startsWith("IBM")) {
+    kerberosModuleBuilder.name("com.ibm.security.auth.module.Krb5LoginModule").putOption("useKeytab",Krb5ConfServerSetupTask.HTTP_KEYTAB_FILE.toURI().toString()).putOption("credsType","both").putOption("forwardable",TRUE).putOption("proxiable",TRUE).putOption("noAddress",TRUE);
+  }
+ else {
+    kerberosModuleBuilder.name("Kerberos").putOption("storeKey",TRUE).putOption("refreshKrb5Config",TRUE).putOption("useKeyTab",TRUE).putOption("keyTab",Krb5ConfServerSetupTask.getKeyTabFullPath()).putOption("doNotPrompt",TRUE);
+  }
+  kerberosModuleBuilder.putOption("principal","HTTP/" + NetworkUtils.formatPossibleIpv6Address(Utils.getCannonicalHost(managementClient)) + "@JBOSS.ORG").putOption("debug",TRUE);
+  final SecurityDomain hostDomain=new SecurityDomain.Builder().name("host").loginModules(kerberosModuleBuilder.build()).build();
+  final SecurityModule spnegoLoginModule=new SecurityModule.Builder().name("SPNEGO").putOption("password-stacking","useFirstPass").putOption("serverSecurityDomain","host").build();
+  final SecurityDomain sd1=new SecurityDomain.Builder().name(SECURITY_DOMAIN_NAME_PREFIX + DEP1).loginModules(spnegoLoginModule,new SecurityModule.Builder().name(AdvancedLdapLoginModule.class.getName()).options(getCommonOptions()).putOption("baseCtxDN","ou=Users,dc=jboss,dc=org").putOption("baseFilter","(krb5PrincipalName={0})").putOption("rolesCtxDN","ou=Roles,dc=jboss,dc=org").putOption("roleFilter","(member={1})").putOption("roleAttributeID","cn").build()).build();
+  final SecurityDomain sd2=new SecurityDomain.Builder().name(SECURITY_DOMAIN_NAME_PREFIX + DEP2).loginModules(spnegoLoginModule,new SecurityModule.Builder().name("AdvancedLdap").options(getCommonOptions()).putOption("baseCtxDN","ou=Users,dc=jboss,dc=org").putOption("baseFilter","(krb5PrincipalName={0})").putOption("rolesCtxDN","ou=Roles,o=example2,dc=jboss,dc=org").putOption("roleFilter","(postalAddress={0})").putOption("roleAttributeID","description").putOption("roleAttributeIsDN",TRUE).putOption("roleNameAttributeID","cn").build()).build();
+  final SecurityDomain sd3=new SecurityDomain.Builder().name(SECURITY_DOMAIN_NAME_PREFIX + DEP3).loginModules(spnegoLoginModule,new SecurityModule.Builder().name(AdvancedLdapLoginModule.class.getName()).options(getCommonOptions()).putOption("baseCtxDN","ou=Users,dc=jboss,dc=org").putOption("baseFilter","(mail={0})").putOption("rolesCtxDN","ou=Roles,o=example3,dc=jboss,dc=org").putOption("roleFilter","(member={1})").putOption("roleAttributeID","cn").build()).build();
+  final SecurityDomain sd4=new SecurityDomain.Builder().name(SECURITY_DOMAIN_NAME_PREFIX + DEP4).loginModules(spnegoLoginModule,new SecurityModule.Builder().name(AdvancedLdapLoginModule.class.getName()).options(getCommonOptions()).putOption("baseCtxDN","ou=Users,dc=jboss,dc=org").putOption("baseFilter","(mail={0})").putOption("rolesCtxDN","ou=Roles,o=example4,dc=jboss,dc=org").putOption("roleFilter","(member={1})").putOption("roleAttributeID","cn").putOption("recurseRoles",TRUE).build()).build();
+  return new SecurityDomain[]{hostDomain,sd1,sd2,sd3,sd4};
+}

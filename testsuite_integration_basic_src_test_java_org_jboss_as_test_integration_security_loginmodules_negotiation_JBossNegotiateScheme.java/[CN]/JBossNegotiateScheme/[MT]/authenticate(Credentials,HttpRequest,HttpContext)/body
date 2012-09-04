@@ -24,36 +24,15 @@
  else {
       authServer=host.getHostName();
     }
-    if (log.isDebugEnabled()) {
-      log.debug("init " + authServer);
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("init " + authServer);
     }
-    negotiationOid=new Oid(SPNEGO_OID);
-    boolean tryKerberos=false;
-    try {
-      GSSManager manager=getManager();
-      GSSName serverName=manager.createName("HTTP@" + authServer,GSSName.NT_HOSTBASED_SERVICE);
-      gssContext=manager.createContext(serverName.canonicalize(negotiationOid),negotiationOid,null,DEFAULT_LIFETIME);
-      gssContext.requestMutualAuth(true);
-      gssContext.requestCredDeleg(true);
-    }
- catch (    GSSException ex) {
-      if (ex.getMajor() == GSSException.BAD_MECH) {
-        log.debug("GSSException BAD_MECH, retry with Kerberos MECH");
-        tryKerberos=true;
-      }
- else {
-        throw ex;
-      }
-    }
-    if (tryKerberos) {
-      log.debug("Using Kerberos MECH " + KERBEROS_OID);
-      negotiationOid=new Oid(KERBEROS_OID);
-      GSSManager manager=getManager();
-      GSSName serverName=manager.createName("HTTP@" + authServer,GSSName.NT_HOSTBASED_SERVICE);
-      gssContext=manager.createContext(serverName.canonicalize(negotiationOid),negotiationOid,null,DEFAULT_LIFETIME);
-      gssContext.requestMutualAuth(true);
-      gssContext.requestCredDeleg(true);
-    }
+    final Oid negotiationOid=new Oid(SPNEGO_OID);
+    final GSSManager manager=GSSManager.getInstance();
+    final GSSName serverName=manager.createName("HTTP@" + authServer,GSSName.NT_HOSTBASED_SERVICE);
+    final GSSContext gssContext=manager.createContext(serverName.canonicalize(negotiationOid),negotiationOid,null,DEFAULT_LIFETIME);
+    gssContext.requestMutualAuth(true);
+    gssContext.requestCredDeleg(true);
     if (token == null) {
       token=new byte[0];
     }
@@ -62,15 +41,21 @@
       state=State.FAILED;
       throw new AuthenticationException("GSS security context initialization failed");
     }
-    if (spengoGenerator != null && negotiationOid.toString().equals(KERBEROS_OID)) {
-      token=spengoGenerator.generateSpnegoDERObject(token);
-    }
     state=State.TOKEN_GENERATED;
-    String tokenstr=new String(Base64.encodeBase64(token,false));
-    if (log.isDebugEnabled()) {
-      log.debug("Sending response '" + tokenstr + "' back to the auth server");
+    String tokenstr=new String(base64codec.encode(token));
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("Sending response '" + tokenstr + "' back to the auth server");
     }
-    return new BasicHeader("Authorization","Negotiate " + tokenstr);
+    CharArrayBuffer buffer=new CharArrayBuffer(32);
+    if (isProxy()) {
+      buffer.append(AUTH.PROXY_AUTH_RESP);
+    }
+ else {
+      buffer.append(AUTH.WWW_AUTH_RESP);
+    }
+    buffer.append(": Negotiate ");
+    buffer.append(tokenstr);
+    return new BufferedHeader(buffer);
   }
  catch (  GSSException gsse) {
     state=State.FAILED;
@@ -78,9 +63,5 @@
     if (gsse.getMajor() == GSSException.NO_CRED)     throw new InvalidCredentialsException(gsse.getMessage(),gsse);
     if (gsse.getMajor() == GSSException.DEFECTIVE_TOKEN || gsse.getMajor() == GSSException.DUPLICATE_TOKEN || gsse.getMajor() == GSSException.OLD_TOKEN)     throw new AuthenticationException(gsse.getMessage(),gsse);
     throw new AuthenticationException(gsse.getMessage());
-  }
-catch (  IOException ex) {
-    state=State.FAILED;
-    throw new AuthenticationException(ex.getMessage());
   }
 }

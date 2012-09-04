@@ -1,0 +1,29 @@
+{
+  directoryService=DSAnnotationProcessor.getDirectoryService();
+  final String hostname=Utils.getCannonicalHost(managementClient);
+  final Map<String,String> map=new HashMap<String,String>();
+  map.put("hostname",NetworkUtils.formatPossibleIpv6Address(hostname));
+  final String secondaryTestAddress=Utils.getSecondaryTestAddress(managementClient,true);
+  map.put("ldaphost",secondaryTestAddress);
+  final String ldifContent=StrSubstitutor.replace(IOUtils.toString(AdvancedLdapLoginModuleTestCase.class.getResourceAsStream(AdvancedLdapLoginModuleTestCase.class.getSimpleName() + ".ldif"),"UTF-8"),map);
+  LOGGER.info(ldifContent);
+  final SchemaManager schemaManager=directoryService.getSchemaManager();
+  try {
+    for (    LdifEntry ldifEntry : new LdifReader(IOUtils.toInputStream(ldifContent))) {
+      directoryService.getAdminSession().add(new DefaultEntry(schemaManager,ldifEntry.getEntry()));
+    }
+  }
+ catch (  Exception e) {
+    e.printStackTrace();
+    throw e;
+  }
+  kdcServer=KDCServerAnnotationProcessor.getKdcServer(directoryService,1024,hostname);
+  final ManagedCreateLdapServer createLdapServer=new ManagedCreateLdapServer((CreateLdapServer)AnnotationUtils.getInstance(CreateLdapServer.class));
+  createLdapServer.setSaslHost(secondaryTestAddress);
+  createLdapServer.setSaslPrincipal("ldap/" + secondaryTestAddress + "@JBOSS.ORG");
+  fixTransportAddress(createLdapServer,secondaryTestAddress);
+  ldapServer=ServerAnnotationProcessor.instantiateLdapServer(createLdapServer,directoryService);
+  ldapServer.getSaslHost();
+  ldapServer.setSearchBaseDn("dc=jboss,dc=org");
+  ldapServer.start();
+}

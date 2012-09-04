@@ -1,0 +1,56 @@
+{
+  LOGGER.info("getName() called with GSSCredential:\n" + gssCredential);
+  final Socket socket=new Socket();
+  GSSContext gssContext=null;
+  try {
+    socket.connect(new InetSocketAddress(host,port),GSSTestConstants.SOCKET_TIMEOUT);
+    DataOutputStream dos=new DataOutputStream(socket.getOutputStream());
+    DataInputStream dis=new DataInputStream(socket.getInputStream());
+    LOGGER.debug("Sending NAME command.");
+    dos.writeInt(GSSTestConstants.CMD_NAME);
+    dos.flush();
+    GSSManager manager=GSSManager.getInstance();
+    gssContext=manager.createContext(manager.createName(spn,null),Constants.KERBEROS_V5,gssCredential,GSSContext.DEFAULT_LIFETIME);
+    gssContext.requestMutualAuth(true);
+    gssContext.requestConf(true);
+    gssContext.requestInteg(true);
+    byte[] token=new byte[0];
+    while (!gssContext.isEstablished()) {
+      token=gssContext.initSecContext(token,0,token.length);
+      if (token != null) {
+        dos.writeInt(token.length);
+        dos.write(token);
+        dos.flush();
+      }
+      if (!gssContext.isEstablished()) {
+        token=new byte[dis.readInt()];
+        dis.readFully(token);
+      }
+    }
+    token=new byte[dis.readInt()];
+    dis.readFully(token);
+    MessageProp msgProp=new MessageProp(false);
+    final byte[] nameBytes=gssContext.unwrap(token,0,token.length,msgProp);
+    return new String(nameBytes,GSSTestConstants.CHAR_ENC);
+  }
+ catch (  IOException e) {
+    LOGGER.error("IOException occured.",e);
+    throw e;
+  }
+ finally {
+    try {
+      socket.close();
+    }
+ catch (    IOException e) {
+      LOGGER.error("IOException occured",e);
+    }
+    if (gssContext != null) {
+      try {
+        gssContext.dispose();
+      }
+ catch (      GSSException e) {
+        LOGGER.error("GSSException occured",e);
+      }
+    }
+  }
+}

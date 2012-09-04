@@ -1,0 +1,78 @@
+{
+  final GSSManager gssManager=GSSManager.getInstance();
+  try {
+    final ServerSocket serverSocket=new ServerSocket(GSSTestConstants.PORT);
+    LOGGER.info("Server started on port " + GSSTestConstants.PORT);
+    int command=GSSTestConstants.CMD_NOOP;
+    serverStarted=true;
+    do {
+      Socket socket=null;
+      GSSContext gssContext=null;
+      try {
+        LOGGER.debug("Waiting for client connection");
+        socket=serverSocket.accept();
+        LOGGER.debug("Client connected");
+        gssContext=gssManager.createContext((GSSCredential)null);
+        final DataInputStream dataInputStream=new DataInputStream(socket.getInputStream());
+        final DataOutputStream dataOutputStream=new DataOutputStream(socket.getOutputStream());
+        command=dataInputStream.readInt();
+        LOGGER.debug("Command code: " + command);
+        if (command == GSSTestConstants.CMD_NAME) {
+          while (!gssContext.isEstablished()) {
+            final byte[] inToken=new byte[dataInputStream.readInt()];
+            dataInputStream.readFully(inToken);
+            final byte[] outToken=gssContext.acceptSecContext(inToken,0,inToken.length);
+            if (outToken != null) {
+              dataOutputStream.writeInt(outToken.length);
+              dataOutputStream.write(outToken);
+              dataOutputStream.flush();
+            }
+          }
+          final String clientName=gssContext.getSrcName().toString();
+          LOGGER.info("Context Established with Client " + clientName);
+          final MessageProp msgProp=new MessageProp(true);
+          final byte[] clientNameBytes=clientName.getBytes(GSSTestConstants.CHAR_ENC);
+          final byte[] outToken=gssContext.wrap(clientNameBytes,0,clientNameBytes.length,msgProp);
+          dataOutputStream.writeInt(outToken.length);
+          dataOutputStream.write(outToken);
+          dataOutputStream.flush();
+          LOGGER.info("Client name was returned as the token value.");
+        }
+      }
+ catch (      EOFException e) {
+        LOGGER.info("Client didn't send a correct message.");
+      }
+catch (      IOException e) {
+        LOGGER.error("IOException occured",e);
+      }
+catch (      GSSException e) {
+        LOGGER.error("GSSException occured",e);
+      }
+ finally {
+        if (gssContext != null) {
+          try {
+            gssContext.dispose();
+          }
+ catch (          GSSException e) {
+            LOGGER.error("Problem occured during disposing GSS context",e);
+          }
+        }
+        if (socket != null) {
+          try {
+            socket.close();
+          }
+ catch (          IOException e) {
+            LOGGER.error("Problem occured during closing a Socket",e);
+          }
+        }
+      }
+    }
+ while (command != GSSTestConstants.CMD_STOP);
+    LOGGER.info("Stop command received.");
+  }
+ catch (  IOException e) {
+    LOGGER.error("IOException occured",e);
+    return e.getMessage();
+  }
+  return null;
+}
