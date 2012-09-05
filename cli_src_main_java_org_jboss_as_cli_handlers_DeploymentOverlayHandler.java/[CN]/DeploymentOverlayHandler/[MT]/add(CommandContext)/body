@@ -28,6 +28,10 @@
     }
     contentPaths[i]=f;
   }
+  final String sg=serverGroup.getValue(args);
+  if (ctx.isDomainMode() && sg == null) {
+    throw new CommandFormatException(serverGroup.getFullName() + " is missing");
+  }
   final String deploymentsStr=deployment.getValue(args);
   final String[] deployments;
   if (deploymentsStr == null) {
@@ -102,14 +106,15 @@
       steps.add(op);
     }
     if (deployments != null && deployments.length > 0) {
-      for (      String deployment : deployments) {
+      if (sg != null) {
         op=new ModelNode();
         address=op.get(Util.ADDRESS);
+        address.add(Util.SERVER_GROUP,sg);
         address.add(Util.DEPLOYMENT_OVERLAY,name);
-        address.add(Util.DEPLOYMENT,deployment);
         op.get(Util.OPERATION).set(Util.ADD);
         steps.add(op);
       }
+      addLinkDeploymentSteps(name,sg,deployments,steps);
     }
     try {
       final ModelNode result=client.execute(composite);

@@ -2,6 +2,10 @@
   final ParsedCommandLine args=ctx.getParsedCommandLine();
   final String name=this.name.getValue(args,true);
   final String deploymentsStr=deployment.getValue(args,true);
+  final String sg=serverGroup.getValue(args);
+  if (ctx.isDomainMode() && sg == null) {
+    throw new CommandFormatException(serverGroup.getFullName() + " is missing value.");
+  }
   final String[] deployments=deploymentsStr.split(",+");
   if (deployments.length == 0) {
     throw new CommandFormatException("Missing value for " + deployment.getFullName() + ": '"+ deploymentsStr+ "'");
@@ -10,14 +14,15 @@
   composite.get(Util.OPERATION).set(Util.COMPOSITE);
   composite.get(Util.ADDRESS).setEmptyList();
   final ModelNode steps=composite.get(Util.STEPS);
-  for (  String deployment : deployments) {
+  if (sg != null && !Util.isValidPath(ctx.getModelControllerClient(),Util.SERVER_GROUP,sg,Util.DEPLOYMENT_OVERLAY,name)) {
     final ModelNode op=new ModelNode();
     final ModelNode address=op.get(Util.ADDRESS);
+    address.add(Util.SERVER_GROUP,sg);
     address.add(Util.DEPLOYMENT_OVERLAY,name);
-    address.add(Util.DEPLOYMENT,deployment);
     op.get(Util.OPERATION).set(Util.ADD);
     steps.add(op);
   }
+  addLinkDeploymentSteps(name,sg,deployments,steps);
   try {
     final ModelNode result=ctx.getModelControllerClient().execute(composite);
     if (!Util.isSuccess(result)) {
