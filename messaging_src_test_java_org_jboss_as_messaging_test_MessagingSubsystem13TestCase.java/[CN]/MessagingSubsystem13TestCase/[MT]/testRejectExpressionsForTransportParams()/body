@@ -1,0 +1,27 @@
+{
+  String subsystemXml=readResource("subsystem_1_3.xml");
+  KernelServicesBuilder builder=createKernelServicesBuilder(createAdditionalInitialization()).setSubsystemXml(subsystemXml);
+  ModelVersion version_1_1_0=ModelVersion.create(1,1,0);
+  builder.createLegacyKernelServicesBuilder(createAdditionalInitialization(),version_1_1_0).addMavenResourceURL("org.jboss.as:jboss-as-messaging:7.1.2.Final");
+  KernelServices mainServices=builder.build();
+  KernelServices legacyServices=mainServices.getLegacyServices(version_1_1_0);
+  assertNotNull(legacyServices);
+  checkSubsystemModelTransformation(mainServices,version_1_1_0);
+  ModelNode operation=new ModelNode();
+  operation.get(OP).set(ADD);
+  ModelNode address=new ModelNode();
+  address.add(SUBSYSTEM,MessagingExtension.SUBSYSTEM_NAME);
+  address.add(HORNETQ_SERVER,"default");
+  address.add(REMOTE_CONNECTOR,"netty");
+  address.add(PARAM,"password");
+  operation.get(OP_ADDR).set(address);
+  operation.get(VALUE).set("${mypassword:default}");
+  ModelNode mainResult=mainServices.executeOperation(operation);
+  assertEquals(mainResult.toJSONString(true),SUCCESS,mainResult.get(OUTCOME).asString());
+  try {
+    TransformedOperation transformedOperation=mainServices.transformOperation(version_1_1_0,operation);
+    fail("should reject the expression,instead got " + transformedOperation.getTransformedOperation().toJSONString(true));
+  }
+ catch (  OperationFailedException e) {
+  }
+}
