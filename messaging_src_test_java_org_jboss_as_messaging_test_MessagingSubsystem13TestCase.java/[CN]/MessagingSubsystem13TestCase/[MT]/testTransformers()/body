@@ -18,6 +18,15 @@
   operation.get(VALUE).set("${my.journal.dir:journal}");
   ModelNode mainResult=mainServices.executeOperation(operation);
   assertEquals(mainResult.toJSONString(true),SUCCESS,mainResult.get(OUTCOME).asString());
+  ModelNode successResult=new ModelNode();
+  successResult.get(OUTCOME).set(SUCCESS);
+  successResult.protect();
+  ModelNode failedResult=new ModelNode();
+  failedResult.get(OUTCOME).set(FAILED);
+  failedResult.protect();
+  ModelNode ignoreResult=new ModelNode();
+  ignoreResult.get(OUTCOME).set(IGNORED);
+  ignoreResult.protect();
   try {
     TransformedOperation transformedOperation=mainServices.transformOperation(version_1_1_0,operation);
     fail("should reject the expression,instead got " + transformedOperation.getTransformedOperation().toJSONString(true));
@@ -35,10 +44,12 @@
   operation.get(VALUE).set("false");
   mainResult=mainServices.executeOperation(operation);
   assertEquals(mainResult.toJSONString(true),SUCCESS,mainResult.get(OUTCOME).asString());
-  try {
-    TransformedOperation transformedOperation=mainServices.transformOperation(version_1_1_0,operation);
-    fail("should reject the write-attribute operation,instead got " + transformedOperation.getTransformedOperation().toJSONString(true));
-  }
- catch (  OperationFailedException e) {
-  }
+  TransformedOperation transformedOperation=mainServices.transformOperation(version_1_1_0,operation);
+  ModelNode transformedResult=transformedOperation.getResultTransformer().transformResult(successResult);
+  assertEquals("success transformed to failed",FAILED,transformedResult.get(OUTCOME).asString());
+  transformedResult=transformedOperation.getResultTransformer().transformResult(successResult);
+  assertEquals("failed transformed to failed",FAILED,transformedResult.get(OUTCOME).asString());
+  assertTrue("failed transformed with failure description",transformedResult.hasDefined(FAILURE_DESCRIPTION));
+  transformedResult=transformedOperation.getResultTransformer().transformResult(ignoreResult);
+  assertEquals("ignored result untransformed",IGNORED,transformedResult.get(OUTCOME).asString());
 }
