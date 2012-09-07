@@ -11,10 +11,17 @@
   }
  else {
     hash=addFromContentAdditionParameter(context,content);
-    if (remoteRepository != null) {
-      remoteRepository.getDeploymentFiles(hash);
-    }
   }
+  final ModelNode slave=operation.clone();
+  slave.get(CONTENT).clear();
+  slave.get(CONTENT).get(HASH).set(hash);
+  operation.get(CONTENT).clear();
   operation.get(CONTENT).set(hash);
-  super.populateModel(context,operation,resource);
+  context.attach(OperationAttachments.SLAVE_SERVER_OPERATION,slave);
+  for (  AttributeDefinition attr : ContentDefinition.attributes()) {
+    attr.validateAndSet(operation,resource.getModel());
+  }
+  if (!contentRepository.syncContent(hash)) {
+    throw ServerMessages.MESSAGES.noSuchDeploymentContent(Arrays.toString(hash));
+  }
 }
