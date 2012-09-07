@@ -3,14 +3,14 @@
   l=new ArgumentWithoutValue(this,"-l"){
     @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
       final String actionStr=action.getValue(ctx.getParsedCommandLine());
-      if (actionStr == null || "list-content".equals(actionStr) || "list-deployments".equals(actionStr)) {
+      if (actionStr == null || LIST_CONTENT.equals(actionStr) || LIST_LINKS.equals(actionStr)) {
         return super.canAppearNext(ctx);
       }
       return false;
     }
   }
 ;
-  action=new ArgumentWithValue(this,new SimpleTabCompleter(new String[]{"add","link","list-content","list-deployments","remove","upload"}),0,"--action");
+  action=new ArgumentWithValue(this,new SimpleTabCompleter(new String[]{ADD,LINK,LIST_CONTENT,LIST_LINKS,REDEPLOY_AFFECTED,REMOVE,UPLOAD}),0,"--action");
   name=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
     @Override public Collection<String> getAllCandidates(    CommandContext ctx){
       final ModelControllerClient client=ctx.getModelControllerClient();
@@ -45,7 +45,7 @@
   content=new ArgumentWithValue(this,new CommandLineCompleter(){
     @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
       final String actionStr=action.getValue(ctx.getParsedCommandLine());
-      if ("add".equals(actionStr) || "upload".equals(actionStr)) {
+      if (ADD.equals(actionStr) || UPLOAD.equals(actionStr)) {
         int i=buffer.lastIndexOf(',');
         i=buffer.indexOf('=',i + 1);
         if (i < 0) {
@@ -58,7 +58,7 @@
         }
         return i + 1 + pathResult;
       }
- else       if ("remove".equals(actionStr)) {
+ else       if (REMOVE.equals(actionStr)) {
         final String nameStr=name.getValue(ctx.getParsedCommandLine());
         if (nameStr == null) {
           return -1;
@@ -101,7 +101,7 @@
       if (actionStr == null) {
         return false;
       }
-      if ("add".equals(actionStr) || "upload".equals(actionStr) || "remove".equals(actionStr)) {
+      if (ADD.equals(actionStr) || UPLOAD.equals(actionStr) || REMOVE.equals(actionStr)) {
         return super.canAppearNext(ctx);
       }
       return false;
@@ -110,12 +110,12 @@
 ;
   content.addRequiredPreceding(name);
   content.addCantAppearAfter(l);
-  serverGroup=new ArgumentWithValue(this,new DefaultCompleter(new CandidatesProvider(){
-    @Override public Collection<String> getAllCandidates(    CommandContext ctx){
+  serverGroups=new ArgumentWithValue(this,new CommaSeparatedCompleter(){
+    @Override protected Collection<String> getAllCandidates(    CommandContext ctx){
       return Util.getServerGroups(ctx.getModelControllerClient());
     }
   }
-),"--server-group"){
+,"--server-groups"){
     @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
       if (!ctx.isDomainMode()) {
         return false;
@@ -124,44 +124,41 @@
       if (actionStr == null) {
         return false;
       }
-      if ("add".equals(actionStr) || "link".equals(actionStr) || "remove".equals(actionStr)|| "list-deployments".equals(actionStr)) {
+      if (ADD.equals(actionStr) || LINK.equals(actionStr) || REMOVE.equals(actionStr)|| LIST_LINKS.equals(actionStr)) {
         return super.canAppearNext(ctx);
       }
       return false;
     }
   }
 ;
-  serverGroup.addRequiredPreceding(name);
-  deployment=new ArgumentWithValue(this,new CommandLineCompleter(){
+  serverGroups.addRequiredPreceding(name);
+  allRelevantServerGroups=new ArgumentWithoutValue(this,"--all-relevant-server-groups"){
+    @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
+      if (!ctx.isDomainMode()) {
+        return false;
+      }
+      final String actionStr=action.getValue(ctx.getParsedCommandLine());
+      if (actionStr == null) {
+        return false;
+      }
+      if (REMOVE.equals(actionStr)) {
+        return super.canAppearNext(ctx);
+      }
+      return false;
+    }
+  }
+;
+  allRelevantServerGroups.addRequiredPreceding(name);
+  allRelevantServerGroups.addCantAppearAfter(serverGroups);
+  serverGroups.addCantAppearAfter(allRelevantServerGroups);
+  deployments=new ArgumentWithValue(this,new CommandLineCompleter(){
     @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
       final ModelControllerClient client=ctx.getModelControllerClient();
       if (client == null) {
         return -1;
       }
-      final String actionStr=action.getValue(ctx.getParsedCommandLine());
       final List<String> existing;
-      if ("add".equals(actionStr) || "link".equals(actionStr)) {
-        existing=Util.getDeployments(client);
-      }
- else       if ("remove".equals(actionStr)) {
-        try {
-          final String nameStr=name.getValue(ctx.getParsedCommandLine());
-          if (nameStr == null) {
-            return -1;
-          }
-          final String sg=serverGroup.getValue(ctx.getParsedCommandLine());
-          if (ctx.isDomainMode() && sg == null) {
-            return -1;
-          }
-          existing=loadLinkedDeployments(client,nameStr,sg);
-        }
- catch (        CommandLineException e) {
-          return -1;
-        }
-      }
- else {
-        return -1;
-      }
+      existing=Util.getDeployments(client);
       if (existing.isEmpty()) {
         return buffer.length();
       }
@@ -183,10 +180,10 @@
       return buffer.length() - chunk.length();
     }
   }
-,"--deployment"){
+,"--deployments"){
     @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
       if (ctx.isDomainMode()) {
-        if (serverGroup.isPresent(ctx.getParsedCommandLine())) {
+        if (serverGroups.isPresent(ctx.getParsedCommandLine())) {
           return super.canAppearNext(ctx);
         }
         return false;
@@ -195,13 +192,13 @@
       if (actionStr == null) {
         return false;
       }
-      if ("add".equals(actionStr) || "link".equals(actionStr) || "remove".equals(actionStr)) {
+      if (ADD.equals(actionStr) || LINK.equals(actionStr) || REMOVE.equals(actionStr)) {
         return super.canAppearNext(ctx);
       }
       return false;
     }
   }
 ;
-  deployment.addRequiredPreceding(name);
-  deployment.addCantAppearAfter(l);
+  deployments.addRequiredPreceding(name);
+  deployments.addCantAppearAfter(l);
 }

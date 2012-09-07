@@ -6,8 +6,23 @@
     throw new CommandFormatException(this.name + " is missing value.");
   }
   final String contentStr=content.getValue(args);
-  final String deploymentStr=deployment.getValue(args);
-  final String sg=serverGroup.getValue(args);
+  final String deploymentStr=deployments.getValue(args);
+  final String sgStr=serverGroups.getValue(args);
+  final List<String> sg;
+  if (sgStr == null) {
+    if (allRelevantServerGroups.isPresent(args)) {
+      sg=Util.getServerGroups(client);
+    }
+ else {
+      sg=null;
+    }
+  }
+ else {
+    sg=Arrays.asList(sgStr.split(",+"));
+    if (sg.isEmpty()) {
+      throw new CommandFormatException(serverGroups.getFullName() + " is missing value.");
+    }
+  }
   final ModelNode composite=new ModelNode();
   composite.get(Util.OPERATION).set(Util.COMPOSITE);
   composite.get(Util.ADDRESS).setEmptyList();
@@ -15,7 +30,7 @@
   if (deploymentStr != null || contentStr == null) {
     if (ctx.isDomainMode()) {
       if (deploymentStr == null) {
-        final List<String> sgNames=sg == null ? Util.getServerGroups(client) : Collections.singletonList(sg);
+        final List<String> sgNames=sg == null ? Util.getServerGroups(client) : sg;
         for (        String sgName : sgNames) {
           final List<String> deployments=loadLinkedDeployments(client,name,sgName);
           if (!deployments.isEmpty()) {
@@ -31,10 +46,12 @@
       }
  else {
         if (ctx.isDomainMode() && sg == null) {
-          throw new CommandFormatException(serverGroup.getFullName() + " is missing.");
+          throw new CommandFormatException(serverGroups.getFullName() + " or " + allRelevantServerGroups.getFullName()+ " is required.");
         }
         final List<String> deployments=Arrays.asList(deploymentStr.split(",+"));
-        addRemoveDeploymentSteps(name,sg,deployments,steps);
+        for (        String group : sg) {
+          addRemoveDeploymentSteps(name,group,deployments,steps);
+        }
       }
     }
  else {
@@ -43,12 +60,9 @@
         overlays=loadLinkedDeployments(client,name,null);
       }
  else {
-        if (ctx.isDomainMode() && sg == null) {
-          throw new CommandFormatException(serverGroup.getFullName() + " is missing.");
-        }
         overlays=Arrays.asList(deploymentStr.split(",+"));
       }
-      addRemoveDeploymentSteps(name,sg,overlays,steps);
+      addRemoveDeploymentSteps(name,null,overlays,steps);
     }
   }
   if (contentStr != null || deploymentStr == null && sg == null) {

@@ -28,11 +28,21 @@
     }
     contentPaths[i]=f;
   }
-  final String sg=serverGroup.getValue(args);
-  if (ctx.isDomainMode() && sg == null) {
-    throw new CommandFormatException(serverGroup.getFullName() + " is missing");
+  final String sgStr=serverGroups.getValue(args);
+  final String[] sg;
+  if (ctx.isDomainMode()) {
+    if (sgStr == null) {
+      throw new CommandFormatException(serverGroups.getFullName() + " is missing.");
+    }
+    sg=sgStr.split(",+");
+    if (sg.length == 0) {
+      throw new CommandFormatException(serverGroups.getFullName() + " is missing value.");
+    }
   }
-  final String deploymentsStr=deployment.getValue(args);
+ else {
+    sg=null;
+  }
+  final String deploymentsStr=deployments.getValue(args);
   final String[] deployments;
   if (deploymentsStr == null) {
     deployments=null;
@@ -65,14 +75,19 @@
     }
     if (deployments != null && deployments.length > 0) {
       if (sg != null) {
-        op=new ModelNode();
-        address=op.get(Util.ADDRESS);
-        address.add(Util.SERVER_GROUP,sg);
-        address.add(Util.DEPLOYMENT_OVERLAY,name);
-        op.get(Util.OPERATION).set(Util.ADD);
-        steps.add(op);
+        for (        String group : sg) {
+          op=new ModelNode();
+          address=op.get(Util.ADDRESS);
+          address.add(Util.SERVER_GROUP,group);
+          address.add(Util.DEPLOYMENT_OVERLAY,name);
+          op.get(Util.OPERATION).set(Util.ADD);
+          steps.add(op);
+          addLinkDeploymentSteps(name,group,deployments,steps);
+        }
       }
-      addLinkDeploymentSteps(name,sg,deployments,steps);
+ else {
+        addLinkDeploymentSteps(name,null,deployments,steps);
+      }
     }
     try {
       final ModelNode result=client.execute(opBuilder.build());
