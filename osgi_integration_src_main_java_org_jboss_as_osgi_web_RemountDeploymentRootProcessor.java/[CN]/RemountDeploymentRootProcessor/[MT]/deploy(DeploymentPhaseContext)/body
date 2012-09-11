@@ -1,0 +1,37 @@
+{
+  DeploymentUnit depUnit=phaseContext.getDeploymentUnit();
+  Manifest manifest=depUnit.getAttachment(Attachments.OSGI_MANIFEST);
+  if (manifest == null || MountExplodedMarker.isMountExploded(depUnit))   return;
+  boolean remountExploded=false;
+  String deploymentName=depUnit.getName().toLowerCase(Locale.ENGLISH);
+  if (deploymentName.endsWith(".jar")) {
+    Attributes mainAttributes=manifest.getMainAttributes();
+    if (mainAttributes.getValue(WebExtension.WEB_CONTEXT_PATH) != null) {
+      remountExploded=true;
+    }
+  }
+  if (!remountExploded)   return;
+  ResourceRoot resourceRoot=depUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  Closeable handle=resourceRoot.getMountHandle();
+  VFSUtils.safeClose(handle);
+  depUnit.removeAttachment(Attachments.MANIFEST);
+  depUnit.removeAttachment(Attachments.OSGI_MANIFEST);
+  VirtualFile deploymentContents=depUnit.getAttachment(Attachments.DEPLOYMENT_CONTENTS);
+  DeploymentMountProvider deploymentMountProvider=depUnit.getAttachment(Attachments.SERVER_DEPLOYMENT_REPOSITORY);
+  VirtualFile deploymentRoot=VFS.getChild("content/" + deploymentName);
+  MountHandle mountHandle;
+  try {
+    handle=deploymentMountProvider.mountDeploymentContent(deploymentContents,deploymentRoot,MountType.EXPANDED);
+    mountHandle=new MountHandle(handle);
+  }
+ catch (  IOException e) {
+    VFSUtils.safeClose(handle);
+    throw ServerMessages.MESSAGES.deploymentMountFailed(e);
+  }
+  resourceRoot=new ResourceRoot(deploymentRoot,mountHandle);
+  ModuleRootMarker.mark(resourceRoot);
+  depUnit.putAttachment(Attachments.DEPLOYMENT_ROOT,resourceRoot);
+  manifest=ManifestAttachmentProcessor.getManifest(resourceRoot);
+  depUnit.putAttachment(Attachments.OSGI_MANIFEST,manifest);
+  depUnit.putAttachment(Attachments.MANIFEST,manifest);
+}
