@@ -1,31 +1,42 @@
 {
-  validator.validate(operation);
+  if (!operation.hasDefined(DeploymentResourceDescription.PERSISTENT.getName())) {
+    operation.get(DeploymentResourceDescription.PERSISTENT.getName()).set(true);
+  }
+  final Resource resource=context.createResource(PathAddress.EMPTY_ADDRESS);
+  ModelNode newModel=new ModelNode();
+  for (  AttributeDefinition def : DeploymentResourceDescription.SERVER_ADD_ATTRIBUTES) {
+    if (!def.getName().equals(CONTENT.getName())) {
+      def.validateAndSet(operation,newModel);
+    }
+ else {
+      def.validateOperation(operation);
+    }
+  }
+  final ModelNode content=operation.require(CONTENT.getName());
+  ModelNode contentItemNode=content.require(0);
   final ModelNode opAddr=operation.get(OP_ADDR);
   PathAddress address=PathAddress.pathAddress(opAddr);
   final String name=address.getLastElement().getValue();
-  final String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : name;
-  final ModelNode content=operation.require(CONTENT).clone();
+  final String runtimeName=operation.hasDefined(RUNTIME_NAME.getName()) ? operation.get(RUNTIME_NAME.getName()).asString() : name;
+  newModel.get(RUNTIME_NAME.getName()).set(runtimeName);
   final DeploymentHandlerUtil.ContentItem contentItem;
-  final ModelNode contentItemNode=content.require(0);
-  if (contentItemNode.hasDefined(HASH)) {
-    managedContentValidator.validate(contentItemNode);
-    byte[] hash=contentItemNode.require(HASH).asBytes();
+  if (contentItemNode.hasDefined(CONTENT_HASH.getName())) {
+    byte[] hash=contentItemNode.require(CONTENT_HASH.getName()).asBytes();
     contentItem=addFromHash(hash,name,context);
   }
  else   if (hasValidContentAdditionParameterDefined(contentItemNode)) {
     contentItem=addFromContentAdditionParameter(context,contentItemNode);
+    contentItemNode=new ModelNode();
+    contentItemNode.get(CONTENT_HASH.getName()).set(contentItem.getHash());
+    content.setEmptyList();
+    content.add(contentItemNode);
   }
  else {
     contentItem=addUnmanaged(contentItemNode);
   }
-  final Resource resource=context.createResource(PathAddress.EMPTY_ADDRESS);
-  ModelNode subModel=resource.getModel();
-  subModel.get(NAME).set(name);
-  subModel.get(RUNTIME_NAME).set(runtimeName);
-  subModel.get(CONTENT).set(content);
-  subModel.get(ENABLED).set(operation.has(ENABLED) && operation.get(ENABLED).asBoolean());
-  subModel.get(PERSISTENT).set(!operation.hasDefined(PERSISTENT) || operation.get(PERSISTENT).asBoolean());
-  if (subModel.get(ENABLED).asBoolean() && context.isNormalServer()) {
+  newModel.get(CONTENT.getName()).set(content);
+  resource.getModel().set(newModel);
+  if (ENABLED.resolveModelAttribute(context,newModel).asBoolean() && context.isNormalServer()) {
     DeploymentHandlerUtil.deploy(context,runtimeName,name,vaultReader,contentItem);
   }
   context.completeStep();
