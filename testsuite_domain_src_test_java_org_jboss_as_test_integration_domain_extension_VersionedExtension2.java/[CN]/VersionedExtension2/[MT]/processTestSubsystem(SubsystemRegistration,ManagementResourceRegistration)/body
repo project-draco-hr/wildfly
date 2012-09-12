@@ -11,9 +11,28 @@
 ,DESCRIPTION_PROVIDER);
   registration.registerSubModel(createResourceDefinition(NEW_ELEMENT));
   registration.registerSubModel(createResourceDefinition(RENAMED));
+  registration.registerOperationHandler("test",new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      context.getResult().set(true);
+      context.completeStep();
+    }
+  }
+,DESCRIPTION_PROVIDER,false,OperationEntry.EntryType.PUBLIC,EnumSet.of(OperationEntry.Flag.READ_ONLY));
   final TransformersSubRegistration transformers=subsystem.registerModelTransformers(ModelVersion.create(1,0,0),RESOURCE_TRANSFORMER);
   transformers.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,rejectExpressions.getWriteAttributeTransformer());
   transformers.registerOperationTransformer("update",new UpdateTransformer());
+  transformers.registerOperationTransformer("test",new OperationTransformer(){
+    @Override public TransformedOperation transformOperation(    TransformationContext context,    PathAddress address,    ModelNode operation) throws OperationFailedException {
+      return new TransformedOperation(operation,new OperationResultTransformer(){
+        @Override public ModelNode transformResult(        ModelNode result){
+          result.get(RESULT).set(false);
+          return result;
+        }
+      }
+);
+    }
+  }
+);
   final TransformersSubRegistration newElement=transformers.registerSubResource(NEW_ELEMENT);
   newElement.discardOperations(TransformersSubRegistration.COMMON_OPERATIONS);
   transformers.registerSubResource(RENAMED,AliasOperationTransformer.replaceLastElement(PathElement.pathElement("element","renamed")));
