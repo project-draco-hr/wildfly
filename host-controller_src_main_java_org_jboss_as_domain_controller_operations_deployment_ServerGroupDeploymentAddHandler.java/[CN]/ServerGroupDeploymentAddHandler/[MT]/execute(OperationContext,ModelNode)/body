@@ -5,16 +5,18 @@
   final Resource deploymentResource=context.readResourceFromRoot(PathAddress.pathAddress(PathElement.pathElement(DEPLOYMENT,name)));
   ModelNode deployment=deploymentResource.getModel();
   for (  ModelNode content : deployment.require(CONTENT).asList()) {
-    if ((content.hasDefined(HASH))) {
-      byte[] hash=content.require(HASH).asBytes();
-      fileRepository.getDeploymentFiles(hash);
+    if ((content.hasDefined(CONTENT_HASH.getName()))) {
+      CONTENT_HASH.validateOperation(content);
+      fileRepository.getDeploymentFiles(CONTENT_HASH.resolveModelAttribute(context,content).asBytes());
     }
   }
-  final String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : deployment.get(RUNTIME_NAME).asString();
   final Resource resource=context.createResource(PathAddress.EMPTY_ADDRESS);
   final ModelNode subModel=resource.getModel();
-  subModel.get(NAME).set(name);
-  subModel.get(RUNTIME_NAME).set(runtimeName);
-  subModel.get(ENABLED).set(operation.has(ENABLED) && operation.get(ENABLED).asBoolean());
+  for (  AttributeDefinition def : SERVER_ADD_GROUP_ATTRIBUTES) {
+    def.validateAndSet(operation,subModel);
+  }
+  if (!RUNTIME_NAME.resolveModelAttribute(context,subModel).isDefined()) {
+    RUNTIME_NAME.validateAndSet(deployment,subModel);
+  }
   context.completeStep();
 }

@@ -1,14 +1,24 @@
 {
-  validator.validate(operation);
-  PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
-  String name=address.getLastElement().getValue();
-  String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : name;
+  final Resource resource=context.createResource(PathAddress.EMPTY_ADDRESS);
+  ModelNode newModel=resource.getModel();
+  for (  AttributeDefinition def : DOMAIN_ADD_ATTRIBUTES) {
+    if (!def.getName().equals(CONTENT.getName())) {
+      def.validateAndSet(operation,newModel);
+    }
+ else {
+      def.validateOperation(operation);
+    }
+  }
+  final ModelNode content=operation.require(CONTENT.getName());
+  ModelNode contentItemNode=content.require(0);
+  final ModelNode opAddr=operation.get(OP_ADDR);
+  PathAddress address=PathAddress.pathAddress(opAddr);
+  final String name=address.getLastElement().getValue();
+  final String runtimeName=operation.hasDefined(RUNTIME_NAME.getName()) ? operation.get(RUNTIME_NAME.getName()).asString() : name;
+  newModel.get(RUNTIME_NAME.getName()).set(runtimeName);
   byte[] hash=null;
-  final ModelNode content=operation.require(CONTENT).clone();
-  final ModelNode contentItemNode=content.require(0);
-  if (contentItemNode.hasDefined(HASH)) {
-    managedContentValidator.validate(contentItemNode);
-    hash=contentItemNode.require(HASH).asBytes();
+  if (contentItemNode.hasDefined(CONTENT_HASH.getName())) {
+    hash=contentItemNode.require(CONTENT_HASH.getName()).asBytes();
     if (contentRepository != null && !contentRepository.hasContent(hash)) {
       if (context.isBooting()) {
         if (context.getRunningMode() == RunningMode.ADMIN_ONLY) {
@@ -23,11 +33,11 @@
       }
     }
   }
- else   if (hasValidContentAdditionParameterDefined(contentItemNode)) {
+ else   if (DeploymentHandlerUtils.hasValidContentAdditionParameterDefined(contentItemNode)) {
     if (contentRepository == null) {
       throw createFailureException(MESSAGES.slaveCannotAcceptUploads());
     }
-    InputStream in=getInputStream(context,contentItemNode);
+    InputStream in=DeploymentHandlerUtils.getInputStream(context,contentItemNode);
     try {
       try {
         hash=contentRepository.addContent(in);
@@ -39,16 +49,13 @@
   finally {
       StreamUtils.safeClose(in);
     }
-    contentItemNode.clear();
-    contentItemNode.get(HASH).set(hash);
+    contentItemNode=new ModelNode();
+    contentItemNode.get(CONTENT_HASH.getName()).set(hash);
+    content.clear();
+    content.add(contentItemNode);
   }
  else {
-    unmanagedContentValidator.validate(contentItemNode);
   }
-  final Resource resource=context.createResource(PathAddress.EMPTY_ADDRESS);
-  final ModelNode subModel=resource.getModel();
-  subModel.get(NAME).set(name);
-  subModel.get(RUNTIME_NAME).set(runtimeName);
-  subModel.get(CONTENT).set(content);
+  newModel.get(CONTENT.getName()).set(content);
   context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
 }
