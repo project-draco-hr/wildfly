@@ -18,20 +18,16 @@
     }
   }
   final ModuleIdentifier moduleId=(resolvedValue=CommonAttributes.CACHE_CONTAINER_MODULE.resolveModelAttribute(context,containerModel)).isDefined() ? ModuleIdentifier.fromString(resolvedValue.asString()) : null;
-  final boolean hasTransport=containerModel.hasDefined(ModelKeys.TRANSPORT) && containerModel.get(ModelKeys.TRANSPORT).hasDefined(ModelKeys.TRANSPORT_NAME);
+  final Transport transportConfig=containerModel.hasDefined(ModelKeys.TRANSPORT) && containerModel.get(ModelKeys.TRANSPORT).hasDefined(ModelKeys.TRANSPORT_NAME) ? new Transport() : null;
   String stack=null;
-  String cluster=null;
-  long lockTimeout=0;
   String transportExecutor=null;
-  Transport transportConfig=null;
-  Collection<ServiceController<?>> controllers=new ArrayList<ServiceController<?>>(6);
-  if (hasTransport) {
+  Collection<ServiceController<?>> controllers=new LinkedList<ServiceController<?>>();
+  if (transportConfig != null) {
     ModelNode transport=containerModel.get(ModelKeys.TRANSPORT,ModelKeys.TRANSPORT_NAME);
     stack=(resolvedValue=CommonAttributes.STACK.resolveModelAttribute(context,transport)).isDefined() ? resolvedValue.asString() : null;
-    cluster=(resolvedValue=CommonAttributes.CLUSTER.resolveModelAttribute(context,transport)).isDefined() ? resolvedValue.asString() : name;
-    lockTimeout=CommonAttributes.LOCK_TIMEOUT.resolveModelAttribute(context,transport).asLong();
+    final String cluster=(resolvedValue=CommonAttributes.CLUSTER.resolveModelAttribute(context,transport)).isDefined() ? resolvedValue.asString() : name;
+    long lockTimeout=CommonAttributes.LOCK_TIMEOUT.resolveModelAttribute(context,transport).asLong();
     transportExecutor=(resolvedValue=CommonAttributes.EXECUTOR.resolveModelAttribute(context,transport)).isDefined() ? resolvedValue.asString() : null;
-    transportConfig=new Transport();
     transportConfig.setLockTimeout(lockTimeout);
     controllers.add(this.installChannelService(target,name,cluster,stack,verificationHandler));
     for (    ChannelDependentServiceProvider provider : ServiceLoader.load(ChannelDependentServiceProvider.class,ChannelDependentServiceProvider.class.getClassLoader())) {
@@ -39,7 +35,7 @@
     }
   }
   controllers.add(this.installContainerConfigurationService(target,name,defaultCache,moduleId,stack,transportConfig,transportExecutor,listenerExecutor,evictionExecutor,replicationQueueExecutor,verificationHandler));
-  controllers.add(this.installContainerService(target,name,aliases,initialMode,verificationHandler));
+  controllers.add(this.installContainerService(target,name,aliases,transportConfig,initialMode,verificationHandler));
   controllers.add(this.installJndiService(target,name,InfinispanJndiName.createCacheContainerJndiName(jndiName,name),verificationHandler));
   controllers.add(this.installKeyAffinityServiceFactoryService(target,name,verificationHandler));
   log.debugf("%s cache container installed",name);
