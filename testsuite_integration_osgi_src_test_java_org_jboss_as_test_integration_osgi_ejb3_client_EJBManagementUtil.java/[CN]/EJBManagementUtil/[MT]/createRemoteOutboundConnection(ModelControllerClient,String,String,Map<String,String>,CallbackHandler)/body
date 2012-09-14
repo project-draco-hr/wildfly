@@ -1,0 +1,40 @@
+{
+  try {
+    final ModelNode addRemoteOutboundConnection=new ModelNode();
+    addRemoteOutboundConnection.get(OP).set(ADD);
+    final PathAddress address=PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,RemotingExtension.SUBSYSTEM_NAME),PathElement.pathElement("remote-outbound-connection",connectionName));
+    addRemoteOutboundConnection.get(OP_ADDR).set(address.toModelNode());
+    final ModelNode addPasswordRealm=new ModelNode();
+    addPasswordRealm.get(OP).set(ADD);
+    ModelNode realmAddress=new ModelNode();
+    realmAddress.add(CORE_SERVICE,MANAGEMENT);
+    realmAddress.add(SECURITY_REALM,"PasswordRealm");
+    addPasswordRealm.get(OP_ADDR).set(realmAddress);
+    final ModelNode addServerIdentity=new ModelNode();
+    addServerIdentity.get(OP).set(ADD);
+    ModelNode secretAddress=realmAddress.clone().add(SERVER_IDENTITY,SECRET);
+    addServerIdentity.get(OP_ADDR).set(secretAddress);
+    addServerIdentity.get(VALUE).set("cGFzc3dvcmQx");
+    addRemoteOutboundConnection.get("outbound-socket-binding-ref").set(outboundSocketRef);
+    addRemoteOutboundConnection.get(SECURITY_REALM).set("PasswordRealm");
+    addRemoteOutboundConnection.get("username").set("user1");
+    final ModelNode op=Util.getEmptyOperation(COMPOSITE,new ModelNode());
+    final ModelNode steps=op.get(STEPS);
+    steps.add(addPasswordRealm);
+    steps.add(addServerIdentity);
+    steps.add(addRemoteOutboundConnection);
+    if (!connectionCreationOptions.isEmpty()) {
+      for (      Map.Entry<String,String> property : connectionCreationOptions.entrySet()) {
+        ModelNode propertyOp=new ModelNode();
+        propertyOp.get(OP).set(ADD);
+        propertyOp.get(OP_ADDR).set(address.toModelNode()).add("property",property.getKey());
+        propertyOp.get("value").set(property.getValue());
+        steps.add(propertyOp);
+      }
+    }
+    execute(modelControllerClient,op);
+  }
+ catch (  IOException ioe) {
+    throw new RuntimeException(ioe);
+  }
+}
