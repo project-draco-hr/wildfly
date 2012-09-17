@@ -1,9 +1,12 @@
 {
-  String name=operation.require(NAME).asString();
-  String runtimeName=operation.hasDefined(RUNTIME_NAME) ? operation.get(RUNTIME_NAME).asString() : name;
+  for (  AttributeDefinition def : DeploymentAttributes.FULL_REPLACE_DEPLOYMENT_ATTRIBUTES.values()) {
+    def.validateOperation(operation);
+  }
+  String name=DeploymentAttributes.FULL_REPLACE_DEPLOYMENT_ATTRIBUTES.get(NAME).resolveModelAttribute(context,operation).asString();
+  String runtimeName=operation.hasDefined(RUNTIME_NAME) ? DeploymentAttributes.FULL_REPLACE_DEPLOYMENT_ATTRIBUTES.get(RUNTIME_NAME).resolveModelAttribute(context,operation).asString() : name;
   byte[] hash;
-  final ModelNode content=operation.require(CONTENT).clone();
-  final ModelNode contentItemNode=content.require(0);
+  ModelNode content=operation.require(CONTENT);
+  ModelNode contentItemNode=content.require(0);
   if (contentItemNode.hasDefined(HASH)) {
     hash=contentItemNode.require(HASH).asBytes();
     if (contentRepository != null) {
@@ -15,11 +18,11 @@
       fileRepository.getDeploymentFiles(hash);
     }
   }
- else   if (hasValidContentAdditionParameterDefined(contentItemNode)) {
+ else   if (DeploymentHandlerUtils.hasValidContentAdditionParameterDefined(contentItemNode)) {
     if (contentRepository == null) {
       throw createFailureException(MESSAGES.slaveCannotAcceptUploads());
     }
-    InputStream in=getInputStream(context,contentItemNode);
+    InputStream in=DeploymentHandlerUtils.getInputStream(context,contentItemNode);
     try {
       try {
         hash=contentRepository.addContent(in);
@@ -31,8 +34,10 @@
   finally {
       StreamUtils.safeClose(in);
     }
-    contentItemNode.clear();
+    contentItemNode=new ModelNode();
     contentItemNode.get(HASH).set(hash);
+    content=new ModelNode();
+    content.add(contentItemNode);
   }
  else {
   }
