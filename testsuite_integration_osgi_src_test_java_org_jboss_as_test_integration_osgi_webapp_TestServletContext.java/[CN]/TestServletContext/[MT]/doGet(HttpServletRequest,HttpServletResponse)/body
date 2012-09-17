@@ -1,0 +1,30 @@
+{
+  PrintWriter writer=resp.getWriter();
+  String testValue="set on " + System.currentTimeMillis();
+  getServletContext().setAttribute(getClass().getName(),testValue);
+  BundleContext ctxt=(BundleContext)getServletContext().getAttribute("osgi-bundlecontext");
+  try {
+    Filter filter=ctxt.createFilter("(&(objectClass=" + ServletContext.class.getName() + ")"+ "(osgi.web.symbolicname="+ ctxt.getBundle().getSymbolicName()+ "))");
+    ServiceTracker st=new ServiceTracker(ctxt,filter,null);
+    st.open();
+    ServletContext sc=(ServletContext)st.waitForService(2000);
+    ServiceReference sr=st.getServiceReference();
+    if (sc == null) {
+      writer.write("ServletContext service not found given filter: " + filter);
+      return;
+    }
+    Object attrVal=sc.getAttribute(getClass().getName());
+    if (!testValue.equals(attrVal)) {
+      writer.write("Error: Servlet Context service not the same as the actual Servlet Context: " + attrVal);
+      return;
+    }
+    writer.write("ServletContext: " + sr.getProperty("osgi.web.symbolicname") + "|"+ sr.getProperty("osgi.web.contextpath"));
+    st.close();
+  }
+ catch (  Exception e) {
+    e.printStackTrace(writer);
+  }
+ finally {
+    writer.close();
+  }
+}
