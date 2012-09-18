@@ -36,79 +36,28 @@
     throw new CommandFormatException(deployments.getFullName() + " can't be used in combination with upload.");
   }
   final ModelControllerClient client=ctx.getModelControllerClient();
-  final List<ModelNode> uploadResponses;
-{
-    final ModelNode composite=new ModelNode();
-    final OperationBuilder opBuilder=new OperationBuilder(composite);
-    composite.get(Util.OPERATION).set(Util.COMPOSITE);
-    composite.get(Util.ADDRESS).setEmptyList();
-    final ModelNode steps=composite.get(Util.STEPS);
-    for (int i=0; i < contentPaths.length; ++i) {
-      final ModelNode op=new ModelNode();
-      op.get(Util.ADDRESS).setEmptyList();
-      op.get(Util.OPERATION).set(Util.UPLOAD_DEPLOYMENT_STREAM);
-      op.get(Util.INPUT_STREAM_INDEX).set(i);
-      opBuilder.addFileAsAttachment(contentPaths[i]);
-      steps.add(op);
-    }
-    final Operation compositeOp=opBuilder.build();
-    final ModelNode response;
-    try {
-      response=client.execute(compositeOp);
-    }
- catch (    IOException e) {
-      throw new CommandFormatException("Failed to upload content",e);
-    }
- finally {
-      try {
-        compositeOp.close();
-      }
- catch (      IOException e) {
-      }
-    }
-    if (!response.hasDefined(Util.RESULT)) {
-      final String descr=Util.getFailureDescription(response);
-      if (descr == null) {
-        throw new CommandLineException("Upload response is missing result.");
-      }
- else {
-        throw new CommandLineException(descr);
-      }
-    }
-    uploadResponses=response.get(Util.RESULT).asList();
+  final ModelNode composite=new ModelNode();
+  final OperationBuilder opBuilder=new OperationBuilder(composite,true);
+  composite.get(Util.OPERATION).set(Util.COMPOSITE);
+  composite.get(Util.ADDRESS).setEmptyList();
+  final ModelNode steps=composite.get(Util.STEPS);
+  for (int i=0; i < contentNames.length; ++i) {
+    final ModelNode op=new ModelNode();
+    ModelNode address=op.get(Util.ADDRESS);
+    address.add(Util.DEPLOYMENT_OVERLAY,name);
+    address.add(Util.CONTENT,contentNames[i]);
+    op.get(Util.OPERATION).set(Util.ADD);
+    op.get(Util.CONTENT).get(Util.INPUT_STREAM_INDEX).set(i);
+    opBuilder.addFileAsAttachment(contentPaths[i]);
+    steps.add(op);
   }
-{
-    final ModelNode composite=new ModelNode();
-    composite.get(Util.OPERATION).set(Util.COMPOSITE);
-    composite.get(Util.ADDRESS).setEmptyList();
-    final ModelNode steps=composite.get(Util.STEPS);
-    for (int i=0; i < contentNames.length; ++i) {
-      final String contentName=contentNames[i];
-      ModelNode result=uploadResponses.get(i);
-      result=result.get("step-" + (i + 1));
-      if (!result.isDefined()) {
-        throw new CommandLineException("Upload step response is missing expected step-" + (i + 1) + " attribute: "+ result);
-      }
-      result=result.get(Util.RESULT);
-      if (!result.isDefined()) {
-        throw new CommandLineException("Upload step response is missing result: " + result);
-      }
-      final ModelNode op=new ModelNode();
-      final ModelNode address=op.get(Util.ADDRESS);
-      address.add(Util.DEPLOYMENT_OVERLAY,name);
-      address.add(Util.CONTENT,contentName);
-      op.get(Util.OPERATION).set(Util.ADD);
-      op.get(Util.CONTENT).set(result);
-      steps.add(op);
+  try {
+    final ModelNode result=client.execute(opBuilder.build());
+    if (!Util.isSuccess(result)) {
+      throw new CommandFormatException(Util.getFailureDescription(result));
     }
-    try {
-      final ModelNode result=client.execute(composite);
-      if (!Util.isSuccess(result)) {
-        throw new CommandFormatException(Util.getFailureDescription(result));
-      }
-    }
- catch (    IOException e) {
-      throw new CommandFormatException("Failed to add overlay",e);
-    }
+  }
+ catch (  IOException e) {
+    throw new CommandFormatException("Failed to add overlay",e);
   }
 }

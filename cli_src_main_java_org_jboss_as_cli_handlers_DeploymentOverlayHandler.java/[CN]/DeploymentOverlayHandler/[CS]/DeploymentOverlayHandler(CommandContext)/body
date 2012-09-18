@@ -153,7 +153,40 @@
   serverGroups.addCantAppearAfter(allRelevantServerGroups);
   deployments=new ArgumentWithValue(this,new CommaSeparatedCompleter(){
     @Override protected Collection<String> getAllCandidates(    CommandContext ctx){
-      return Util.getDeployments(ctx.getModelControllerClient());
+      final String actionValue=action.getValue(ctx.getParsedCommandLine());
+      final ModelControllerClient client=ctx.getModelControllerClient();
+      if (REMOVE.equals(actionValue)) {
+        final String overlay=name.getValue(ctx.getParsedCommandLine());
+        if (overlay == null) {
+          return Collections.emptyList();
+        }
+        try {
+          if (ctx.isDomainMode()) {
+            final String groupsStr=serverGroups.getValue(ctx.getParsedCommandLine());
+            if (groupsStr != null) {
+              final String[] groups=groupsStr.split(",+");
+              if (groups.length == 1) {
+                return loadLinkedDeployments(client,overlay,groups[0]);
+              }
+ else               if (groups.length > 1) {
+                final Set<String> commonLinks=new HashSet<String>();
+                commonLinks.addAll(loadLinkedDeployments(client,overlay,groups[0]));
+                for (int i=1; i < groups.length; ++i) {
+                  commonLinks.retainAll(loadLinkedDeployments(client,overlay,groups[i]));
+                }
+                return commonLinks;
+              }
+            }
+          }
+ else {
+            return loadLinkedDeployments(client,overlay,null);
+          }
+        }
+ catch (        CommandLineException e) {
+        }
+        return Collections.emptyList();
+      }
+      return Util.getDeployments(client);
     }
   }
 ,"--deployments"){
