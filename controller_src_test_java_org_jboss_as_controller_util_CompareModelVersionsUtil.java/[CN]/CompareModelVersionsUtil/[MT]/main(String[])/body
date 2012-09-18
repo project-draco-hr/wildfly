@@ -1,11 +1,29 @@
 {
   String version=System.getProperty("jboss.as.compare.version",null);
   String diff=System.getProperty("jboss.as.compare.different.versions",null);
+  String type=System.getProperty("jboss.as.comare.type",null);
   if (version == null) {
     System.out.print("Enter legacy AS version: ");
     version=readInput(null);
   }
   System.out.println("Using target model: " + version);
+  if (type == null) {
+    System.out.print("Enter type [S](standalone)/H(host)/D(domain):");
+    type=readInput("S");
+  }
+  final ResourceType resourceType;
+  if (ResourceType.STANDALONE.toString().startsWith(type.toUpperCase())) {
+    resourceType=ResourceType.STANDALONE;
+  }
+ else   if (ResourceType.HOST.toString().startsWith(type.toUpperCase())) {
+    resourceType=ResourceType.HOST;
+  }
+ else   if (ResourceType.DOMAIN.toString().startsWith(type.toUpperCase())) {
+    resourceType=ResourceType.DOMAIN;
+  }
+ else {
+    throw new IllegalArgumentException("Could not determine type for: '" + type + "'");
+  }
   if (diff == null) {
     System.out.print("Report on differences in the model when the management versions are different? y/[n]: ");
     diff=readInput("n").toLowerCase();
@@ -26,13 +44,22 @@
   ModelNode legacyModelVersions=Tools.loadModelNodeFromFile(new File("target/test-classes/legacy-models/standalone-model-versions-" + version + ".dmr"));
   System.out.println("Loaded legacy model versions");
   System.out.println("Loading legacy resource descriptions for " + version + "....");
-  ModelNode legacyResourceDefinitions=Tools.loadModelNodeFromFile(new File("target/test-classes/legacy-models/standalone-resource-definition-" + version + ".dmr"));
+  ModelNode legacyResourceDefinitions=Tools.loadModelNodeFromFile(new File("target/test-classes/legacy-models/" + resourceType.toString().toLowerCase() + "-resource-definition-"+ version+ ".dmr"));
   System.out.println("Loaded legacy resource descriptions");
   System.out.println("Loading model versions for currently running server...");
   ModelNode currentModelVersions=Tools.getCurrentModelVersions();
   System.out.println("Loaded current model versions");
   System.out.println("Loading resource descriptions for currently running server...");
-  ModelNode currentResourceDefinitions=Tools.getCurrentRunningResourceDefinition();
+  final ModelNode currentResourceDefinitions;
+  if (resourceType == ResourceType.STANDALONE) {
+    currentResourceDefinitions=Tools.getCurrentRunningResourceDefinition(PathAddress.EMPTY_ADDRESS);
+  }
+ else   if (resourceType == ResourceType.DOMAIN) {
+    currentResourceDefinitions=Tools.getCurrentRunningDomainResourceDefinition();
+  }
+ else {
+    currentResourceDefinitions=Tools.getCurrentRunningResourceDefinition(PathAddress.pathAddress(PathElement.pathElement(HOST,"master")));
+  }
   System.out.println("Loaded current resource descriptions");
   CompareModelVersionsUtil compareModelVersionsUtil=new CompareModelVersionsUtil(compareDifferentVersions,version,legacyModelVersions,legacyResourceDefinitions,currentModelVersions,currentResourceDefinitions);
   System.out.println("Starting comparison of the current....\n");
