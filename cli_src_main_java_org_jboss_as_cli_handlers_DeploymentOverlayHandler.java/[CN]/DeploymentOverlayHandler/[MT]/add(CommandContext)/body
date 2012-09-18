@@ -29,71 +29,67 @@
     }
     contentPaths[i]=f;
   }
-  final String deploymentsStr=deployments.getValue(args);
-  final String[] deployments;
-  if (deploymentsStr == null) {
-    if (serverGroups.isPresent(args) || allServerGroups.isPresent(args)) {
-      throw new CommandFormatException("server groups are specified but " + this.deployments.getFullName() + " is not.");
-    }
-    deployments=null;
-  }
- else {
-    deployments=deploymentsStr.split(",+");
-  }
-  final List<String> sg;
-  if (deployments != null && ctx.isDomainMode()) {
-    sg=getServerGroupsToLink(ctx);
-  }
- else {
-    sg=null;
-  }
+  final String[] deployments=getLinks(this.deployments,args);
+  final String[] wildcards=getLinks(this.wildcards,args);
   final ModelControllerClient client=ctx.getModelControllerClient();
-{
-    final ModelNode composite=new ModelNode();
-    final OperationBuilder opBuilder=new OperationBuilder(composite,true);
-    composite.get(Util.OPERATION).set(Util.COMPOSITE);
-    composite.get(Util.ADDRESS).setEmptyList();
-    final ModelNode steps=composite.get(Util.STEPS);
-    ModelNode op=new ModelNode();
-    ModelNode address=op.get(Util.ADDRESS);
+  final ModelNode composite=new ModelNode();
+  final OperationBuilder opBuilder=new OperationBuilder(composite,true);
+  composite.get(Util.OPERATION).set(Util.COMPOSITE);
+  composite.get(Util.ADDRESS).setEmptyList();
+  final ModelNode steps=composite.get(Util.STEPS);
+  ModelNode op=new ModelNode();
+  ModelNode address=op.get(Util.ADDRESS);
+  address.add(Util.DEPLOYMENT_OVERLAY,name);
+  op.get(Util.OPERATION).set(Util.ADD);
+  steps.add(op);
+  for (int i=0; i < contentNames.length; ++i) {
+    final String contentName=contentNames[i];
+    op=new ModelNode();
+    address=op.get(Util.ADDRESS);
     address.add(Util.DEPLOYMENT_OVERLAY,name);
+    address.add(Util.CONTENT,contentName);
     op.get(Util.OPERATION).set(Util.ADD);
+    op.get(Util.CONTENT).get(Util.INPUT_STREAM_INDEX).set(i);
+    opBuilder.addFileAsAttachment(contentPaths[i]);
     steps.add(op);
-    for (int i=0; i < contentNames.length; ++i) {
-      final String contentName=contentNames[i];
-      op=new ModelNode();
-      address=op.get(Util.ADDRESS);
-      address.add(Util.DEPLOYMENT_OVERLAY,name);
-      address.add(Util.CONTENT,contentName);
-      op.get(Util.OPERATION).set(Util.ADD);
-      op.get(Util.CONTENT).get(Util.INPUT_STREAM_INDEX).set(i);
-      opBuilder.addFileAsAttachment(contentPaths[i]);
-      steps.add(op);
-    }
-    if (deployments != null && deployments.length > 0) {
-      if (sg != null) {
-        for (        String group : sg) {
-          op=new ModelNode();
-          address=op.get(Util.ADDRESS);
-          address.add(Util.SERVER_GROUP,group);
-          address.add(Util.DEPLOYMENT_OVERLAY,name);
-          op.get(Util.OPERATION).set(Util.ADD);
-          steps.add(op);
-          addLinkDeploymentSteps(name,group,deployments,steps);
+  }
+  if (deployments != null || wildcards != null) {
+    if (ctx.isDomainMode()) {
+      final List<String> sg=getServerGroupsToLink(ctx);
+      for (      String group : sg) {
+        op=new ModelNode();
+        address=op.get(Util.ADDRESS);
+        address.add(Util.SERVER_GROUP,group);
+        address.add(Util.DEPLOYMENT_OVERLAY,name);
+        op.get(Util.OPERATION).set(Util.ADD);
+        steps.add(op);
+        if (deployments != null) {
+          addLinkSteps(name,group,deployments,false,steps);
+        }
+        if (wildcards != null) {
+          addLinkSteps(name,group,wildcards,true,steps);
         }
       }
+    }
  else {
-        addLinkDeploymentSteps(name,null,deployments,steps);
+      if (deployments != null) {
+        addLinkSteps(name,null,deployments,false,steps);
+      }
+      if (wildcards != null) {
+        addLinkSteps(name,null,wildcards,true,steps);
       }
     }
-    try {
-      final ModelNode result=client.execute(opBuilder.build());
-      if (!Util.isSuccess(result)) {
-        throw new CommandFormatException(Util.getFailureDescription(result));
-      }
+  }
+ else   if (ctx.isDomainMode() && (serverGroups.isPresent(args) || allServerGroups.isPresent(args))) {
+    throw new CommandFormatException("server groups are specified but neither " + this.deployments.getFullName() + " nor "+ this.wildcards.getFullName()+ " is.");
+  }
+  try {
+    final ModelNode result=client.execute(opBuilder.build());
+    if (!Util.isSuccess(result)) {
+      throw new CommandFormatException(Util.getFailureDescription(result));
     }
- catch (    IOException e) {
-      throw new CommandFormatException("Failed to add overlay",e);
-    }
+  }
+ catch (  IOException e) {
+    throw new CommandFormatException("Failed to add overlay",e);
   }
 }
