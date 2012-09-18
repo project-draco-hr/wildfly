@@ -1,0 +1,37 @@
+{
+  if (domainController.isHostRegistered(hostName)) {
+    domainController.pingRemoteHost(hostName);
+    boolean inter=false;
+    try {
+      Thread.sleep(500);
+    }
+ catch (    InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+ finally {
+      if (domainController.isHostRegistered(hostName)) {
+        failed(SlaveRegistrationException.ErrorCode.HOST_ALREADY_EXISTS,DomainControllerMessages.MESSAGES.slaveAlreadyRegistered(hostName));
+      }
+    }
+  }
+  if (!failed) {
+    try {
+      final OperationStepHandler handler=new HostRegistrationStepHandler(transformerRegistry,this);
+      operationExecutor.execute(READ_DOMAIN_MODEL,OperationMessageHandler.logging,this,OperationAttachments.EMPTY,handler);
+    }
+ catch (    Exception e) {
+      failed(e);
+      return;
+    }
+    sendCompletedMessage();
+    responseChannel.getChannel().addCloseHandler(new CloseHandler<Channel>(){
+      @Override public void handleClose(      Channel closed,      IOException exception){
+        if (domainController.isHostRegistered(hostName)) {
+          DOMAIN_LOGGER.lostConnectionToRemoteHost(hostName);
+        }
+        domainController.unregisterRemoteHost(hostName,getRemoteConnectionId());
+      }
+    }
+);
+  }
+}
