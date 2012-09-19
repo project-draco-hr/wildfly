@@ -1,0 +1,61 @@
+{
+  final String patchId=patch.getPatchId();
+  final List<String> appliesTo=patch.getAppliesTo();
+  if (!appliesTo.contains(patchInfo.getVersion())) {
+    throw PatchMessages.MESSAGES.doesNotApply(appliesTo,patchInfo.getVersion());
+  }
+  final File workDir=new File(structure.getHistoryDir(patchId),"work");
+  if (workDir.exists()) {
+    recursiveDelete(workDir);
+  }
+  workDir.mkdirs();
+  final PatchContentLoader loader=new PatchContentLoader.FilePatchContentLoader(workDir);
+  final PatchingContext context=new PatchingContext(patchInfo,structure,loader);
+  try {
+    final File cachedContent=context.newFile(workDir,"content");
+    FileOutputStream os=null;
+    try {
+      os=new FileOutputStream(cachedContent);
+      PatchUtils.copyStream(content,os);
+      os.close();
+    }
+ catch (    IOException e) {
+      throw new PatchingException(e);
+    }
+ finally {
+      PatchUtils.safeClose(os);
+    }
+    try {
+      unpack(cachedContent,workDir);
+    }
+ catch (    IOException e) {
+      throw new PatchingException(e);
+    }
+    final File modules=new File(workDir,PatchContents.MODULES);
+    if (modules.exists()) {
+      final File patchDir=structure.getPatchDirectory(patchId);
+      if (!modules.renameTo(patchDir)) {
+        throw new PatchingException("...");
+      }
+    }
+    final File files=new File(workDir,PatchContents.FILES);
+    if (files.exists()) {
+      final Collection<ContentItem> contents=PatchContents.getContents(files);
+      final PatchingTask task=new FilesPatchingTask(contents);
+      try {
+        task.execute(patch,context);
+      }
+ catch (      IOException e) {
+        context.rollbackOnly();
+        throw new PatchingException(e);
+      }
+    }
+    return context.finish(patch);
+  }
+  finally {
+    if (!recursiveDelete(workDir)) {
+      PatchLogger.ROOT_LOGGER.debugf("failed to remove work directory (%s)",workDir);
+    }
+    context.cleanup();
+  }
+}
