@@ -11,8 +11,12 @@
     throw new RuntimeException(result.get(FAILURE_DESCRIPTION).asString());
   }
   ModelNode model=result.get(RESULT);
-  KnownIssuesValidationConfiguration.trimDescription(model);
-  ModelTestModelDescriptionValidator validator=new ModelTestModelDescriptionValidator(PathAddress.EMPTY_ADDRESS.toModelNode(),model,validationConfiguration);
+  if (type == TestModelType.HOST) {
+    model=model.require("children").require("host").require("model-description").require("master");
+  }
+  System.out.println(model);
+  ValidationConfiguration config=KnownIssuesValidationConfiguration.createAndFixupModel(type,model);
+  ModelTestModelDescriptionValidator validator=new ModelTestModelDescriptionValidator(PathAddress.EMPTY_ADDRESS.toModelNode(),model,config);
   List<ValidationFailure> validationMessages=validator.validateResources();
   if (validationMessages.size() > 0) {
     final StringBuilder builder=new StringBuilder("VALIDATION ERRORS IN MODEL:");
@@ -20,8 +24,6 @@
       builder.append(failure);
       builder.append("\n");
     }
-    if (validationConfiguration != null) {
-      Assert.fail("Failed due to validation errors in the model. Please fix :-) " + builder.toString());
-    }
+    Assert.fail("Failed due to validation errors in the model. Please fix :-) " + builder.toString());
   }
 }
