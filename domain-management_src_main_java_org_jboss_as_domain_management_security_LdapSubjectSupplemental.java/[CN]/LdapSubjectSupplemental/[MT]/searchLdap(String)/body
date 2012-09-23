@@ -1,0 +1,44 @@
+{
+  Set<String> userNames=new HashSet<String>();
+  InitialDirContext searchContext=null;
+  NamingEnumeration<SearchResult> searchEnumeration=null;
+  try {
+    searchContext=createSearchContext();
+    SearchControls searchControls=createSearchControl();
+    String[] filter=createSearchFilter(searchContext,searchControls,username);
+    Object[] filterArguments=new Object[]{filter[1]};
+    searchEnumeration=searchContext.search(baseDn,filter[0],filterArguments,searchControls);
+    while (searchEnumeration.hasMore()) {
+      SearchResult result=searchEnumeration.next();
+      if (rolesDn.equalsIgnoreCase("dn")) {
+        userNames.add(result.getNameInNamespace());
+      }
+ else {
+        Attributes attributes=result.getAttributes();
+        if (attributes != null) {
+          Attribute dn=attributes.get(rolesDn);
+          if (dn != null) {
+            NamingEnumeration<?> role=dn.getAll();
+            while (role.hasMore()) {
+              userNames.add(role.next().toString());
+            }
+          }
+ else {
+            ROOT_LOGGER.failedRetrieveLdapAttribute(rolesDn);
+          }
+        }
+ else {
+          ROOT_LOGGER.failedRetrieveLdapAttribute(rolesDn);
+        }
+      }
+    }
+  }
+ catch (  Exception e) {
+    ROOT_LOGGER.failedRetrieveLdapRoles(e);
+  }
+ finally {
+    safeClose(searchEnumeration);
+    safeClose(searchContext);
+  }
+  return userNames;
+}
