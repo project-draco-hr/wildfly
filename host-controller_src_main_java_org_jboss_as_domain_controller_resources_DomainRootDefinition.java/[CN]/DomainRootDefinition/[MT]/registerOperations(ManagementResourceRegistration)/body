@@ -1,0 +1,37 @@
+{
+  super.registerOperations(resourceRegistration);
+  final EnumSet<OperationEntry.Flag> readOnly=EnumSet.of(OperationEntry.Flag.READ_ONLY);
+  final EnumSet<OperationEntry.Flag> masterOnly=EnumSet.of(OperationEntry.Flag.MASTER_HOST_CONTROLLER_ONLY);
+  XmlMarshallingHandler xmh=new XmlMarshallingHandler(configurationPersister);
+  resourceRegistration.registerOperationHandler(XmlMarshallingHandler.OPERATION_NAME,xmh,xmh,false,OperationEntry.EntryType.PUBLIC,readOnly);
+  resourceRegistration.registerOperationHandler(NamespaceAddHandler.OPERATION_NAME,NamespaceAddHandler.INSTANCE,NamespaceAddHandler.INSTANCE,false);
+  resourceRegistration.registerOperationHandler(NamespaceRemoveHandler.OPERATION_NAME,NamespaceRemoveHandler.INSTANCE,NamespaceRemoveHandler.INSTANCE,false);
+  resourceRegistration.registerOperationHandler(SchemaLocationAddHandler.OPERATION_NAME,SchemaLocationAddHandler.INSTANCE,SchemaLocationAddHandler.INSTANCE,false);
+  resourceRegistration.registerOperationHandler(SchemaLocationRemoveHandler.OPERATION_NAME,SchemaLocationRemoveHandler.INSTANCE,SchemaLocationRemoveHandler.INSTANCE,false);
+  if (isMaster) {
+    DeploymentUploadURLHandler.registerMaster(resourceRegistration,contentRepo);
+    DeploymentUploadStreamAttachmentHandler.registerMaster(resourceRegistration,contentRepo);
+    DeploymentUploadBytesHandler.registerMaster(resourceRegistration,contentRepo);
+    SnapshotDeleteHandler snapshotDelete=new SnapshotDeleteHandler(configurationPersister);
+    resourceRegistration.registerOperationHandler(SnapshotDeleteHandler.OPERATION_NAME,snapshotDelete,snapshotDelete,false,EntryType.PUBLIC,masterOnly);
+    SnapshotListHandler snapshotList=new SnapshotListHandler(configurationPersister);
+    resourceRegistration.registerOperationHandler(SnapshotListHandler.OPERATION_NAME,snapshotList,snapshotList,false,EntryType.PUBLIC,masterOnly);
+    SnapshotTakeHandler snapshotTake=new SnapshotTakeHandler(configurationPersister);
+    resourceRegistration.registerOperationHandler(SnapshotTakeHandler.OPERATION_NAME,snapshotTake,snapshotTake,false,EntryType.PUBLIC,masterOnly);
+    final SubsystemDescriptionDump dumper=new SubsystemDescriptionDump(extensionRegistry);
+    resourceRegistration.registerOperationHandler(SubsystemDescriptionDump.DEFINITION,dumper,false);
+  }
+ else {
+    DeploymentUploadURLHandler.registerSlave(resourceRegistration);
+    DeploymentUploadStreamAttachmentHandler.registerSlave(resourceRegistration);
+    DeploymentUploadBytesHandler.registerSlave(resourceRegistration);
+    final ApplyExtensionsHandler aexh=new ApplyExtensionsHandler(extensionRegistry,hostControllerInfo,ignoredDomainResourceRegistry);
+    resourceRegistration.registerOperationHandler(ApplyExtensionsHandler.OPERATION_NAME,aexh,aexh,false,EntryType.PRIVATE);
+    ApplyRemoteMasterDomainModelHandler armdmh=new ApplyRemoteMasterDomainModelHandler(fileRepository,contentRepo,hostControllerInfo,ignoredDomainResourceRegistry);
+    resourceRegistration.registerOperationHandler(ApplyRemoteMasterDomainModelHandler.OPERATION_NAME,armdmh,armdmh,false,OperationEntry.EntryType.PRIVATE);
+  }
+  resourceRegistration.registerOperationHandler(DeploymentAttributes.FULL_REPLACE_DEPLOYMENT_DEFINITION,isMaster ? new DeploymentFullReplaceHandler(contentRepo) : new DeploymentFullReplaceHandler(fileRepository));
+  resourceRegistration.registerOperationHandler(ValidateAddressOperationHandler.OPERATION_NAME,ValidateAddressOperationHandler.INSTANCE,ValidateAddressOperationHandler.INSTANCE,false,EnumSet.of(OperationEntry.Flag.READ_ONLY));
+  resourceRegistration.registerOperationHandler(ResolveExpressionOnDomainHandler.OPERATION_NAME,ResolveExpressionOnDomainHandler.INSTANCE,ResolveExpressionOnDomainHandler.INSTANCE,EnumSet.of(OperationEntry.Flag.READ_ONLY,OperationEntry.Flag.DOMAIN_PUSH_TO_SERVERS));
+  DomainServerLifecycleHandlers.registerDomainHandlers(resourceRegistration);
+}

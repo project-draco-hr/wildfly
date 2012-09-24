@@ -1,47 +1,6 @@
 {
   final EnumSet<OperationEntry.Flag> readOnly=EnumSet.of(OperationEntry.Flag.READ_ONLY);
   final EnumSet<OperationEntry.Flag> masterOnly=EnumSet.of(OperationEntry.Flag.MASTER_HOST_CONTROLLER_ONLY);
-  XmlMarshallingHandler xmh=new XmlMarshallingHandler(configurationPersister);
-  root.registerOperationHandler(XmlMarshallingHandler.OPERATION_NAME,xmh,xmh,false,OperationEntry.EntryType.PUBLIC,readOnly);
-  root.registerOperationHandler(NamespaceAddHandler.OPERATION_NAME,NamespaceAddHandler.INSTANCE,NamespaceAddHandler.INSTANCE,false);
-  root.registerOperationHandler(NamespaceRemoveHandler.OPERATION_NAME,NamespaceRemoveHandler.INSTANCE,NamespaceRemoveHandler.INSTANCE,false);
-  root.registerOperationHandler(SchemaLocationAddHandler.OPERATION_NAME,SchemaLocationAddHandler.INSTANCE,SchemaLocationAddHandler.INSTANCE,false);
-  root.registerOperationHandler(SchemaLocationRemoveHandler.OPERATION_NAME,SchemaLocationRemoveHandler.INSTANCE,SchemaLocationRemoveHandler.INSTANCE,false);
-  root.registerReadOnlyAttribute(RELEASE_VERSION,null,Storage.CONFIGURATION);
-  root.registerReadOnlyAttribute(RELEASE_CODENAME,null,Storage.CONFIGURATION);
-  root.registerReadOnlyAttribute(MANAGEMENT_MAJOR_VERSION,null,Storage.CONFIGURATION);
-  root.registerReadOnlyAttribute(MANAGEMENT_MINOR_VERSION,null,Storage.CONFIGURATION);
-  root.registerReadOnlyAttribute(MANAGEMENT_MICRO_VERSION,null,Storage.CONFIGURATION);
-  root.registerReadOnlyAttribute(PRODUCT_NAME,null,Storage.CONFIGURATION);
-  root.registerReadOnlyAttribute(PRODUCT_VERSION,null,Storage.CONFIGURATION);
-  root.registerReadOnlyAttribute(NAMESPACES,null,Storage.CONFIGURATION);
-  root.registerReadOnlyAttribute(SCHEMA_LOCATIONS,null,Storage.CONFIGURATION);
-  if (isMaster) {
-    DeploymentUploadURLHandler.registerMaster(root,contentRepo);
-    DeploymentUploadStreamAttachmentHandler.registerMaster(root,contentRepo);
-    DeploymentUploadBytesHandler.registerMaster(root,contentRepo);
-  }
- else {
-    DeploymentUploadURLHandler.registerSlave(root);
-    DeploymentUploadStreamAttachmentHandler.registerSlave(root);
-    DeploymentUploadBytesHandler.registerSlave(root);
-  }
-  root.registerOperationHandler(DeploymentAttributes.FULL_REPLACE_DEPLOYMENT_DEFINITION,isMaster ? new DeploymentFullReplaceHandler(contentRepo) : new DeploymentFullReplaceHandler(fileRepository));
-  if (isMaster) {
-    SnapshotDeleteHandler snapshotDelete=new SnapshotDeleteHandler(configurationPersister);
-    root.registerOperationHandler(SnapshotDeleteHandler.OPERATION_NAME,snapshotDelete,snapshotDelete,false,EntryType.PUBLIC,masterOnly);
-    SnapshotListHandler snapshotList=new SnapshotListHandler(configurationPersister);
-    root.registerOperationHandler(SnapshotListHandler.OPERATION_NAME,snapshotList,snapshotList,false,EntryType.PUBLIC,masterOnly);
-    SnapshotTakeHandler snapshotTake=new SnapshotTakeHandler(configurationPersister);
-    root.registerOperationHandler(SnapshotTakeHandler.OPERATION_NAME,snapshotTake,snapshotTake,false,EntryType.PUBLIC,masterOnly);
-  }
-  root.registerReadOnlyAttribute(PROCESS_TYPE,isMaster ? ProcessTypeHandler.MASTER : ProcessTypeHandler.SLAVE,Storage.RUNTIME);
-  root.registerReadOnlyAttribute(ServerDescriptionConstants.LAUNCH_TYPE,new LaunchTypeHandler(ServerEnvironment.LaunchType.DOMAIN),Storage.RUNTIME);
-  root.registerReadOnlyAttribute(LOCAL_HOST_NAME,new LocalHostNameOperationHandler(hostControllerInfo),Storage.RUNTIME);
-  root.registerReadWriteAttribute(DomainAttributes.NAME,null,new WriteAttributeHandlers.StringLengthValidatingHandler(1,true,true));
-  root.registerOperationHandler(ValidateAddressOperationHandler.OPERATION_NAME,ValidateAddressOperationHandler.INSTANCE,ValidateAddressOperationHandler.INSTANCE,false,EnumSet.of(OperationEntry.Flag.READ_ONLY));
-  root.registerOperationHandler(ResolveExpressionOnDomainHandler.OPERATION_NAME,ResolveExpressionOnDomainHandler.INSTANCE,ResolveExpressionOnDomainHandler.INSTANCE,EnumSet.of(OperationEntry.Flag.READ_ONLY,OperationEntry.Flag.DOMAIN_PUSH_TO_SERVERS));
-  DomainServerLifecycleHandlers.registerDomainHandlers(root);
   root.registerSubModel(SystemPropertyResourceDefinition.createForDomainOrHost(Location.DOMAIN));
   final ManagementResourceRegistration interfaces=root.registerSubModel(new InterfaceDefinition(InterfaceAddHandler.NAMED_INSTANCE,InterfaceRemoveHandler.INSTANCE,false));
   final ManagementResourceRegistration profile=root.registerSubModel(PathElement.pathElement(PROFILE),DomainDescriptionProviders.PROFILE);
@@ -83,15 +42,5 @@
   mgmtContent.registerSubModel(planDef);
   root.registerSubModel(new ExtensionResourceDefinition(extensionRegistry,true,!isMaster));
   extensionRegistry.setSubsystemParentResourceRegistrations(profile,null);
-  if (!isMaster) {
-    final ApplyExtensionsHandler aexh=new ApplyExtensionsHandler(extensionRegistry,hostControllerInfo,ignoredDomainResourceRegistry);
-    root.registerOperationHandler(ApplyExtensionsHandler.OPERATION_NAME,aexh,aexh,false,EntryType.PRIVATE);
-    ApplyRemoteMasterDomainModelHandler armdmh=new ApplyRemoteMasterDomainModelHandler(fileRepository,contentRepo,hostControllerInfo,ignoredDomainResourceRegistry);
-    root.registerOperationHandler(ApplyRemoteMasterDomainModelHandler.OPERATION_NAME,armdmh,armdmh,false,OperationEntry.EntryType.PRIVATE);
-  }
- else {
-    final SubsystemDescriptionDump dumper=new SubsystemDescriptionDump(extensionRegistry);
-    root.registerOperationHandler(SubsystemDescriptionDump.DEFINITION,dumper,false);
-  }
   DomainTransformers.initializeDomainRegistry(extensionRegistry.getTransformerRegistry());
 }
