@@ -1,7 +1,7 @@
 {
-  boolean restartRequired=false;
-  boolean applyToRuntime=context.isNormalServer();
-  ModelNode resolvedValue=null;
+  final boolean restartRequired;
+  final boolean applyToRuntime=context.isNormalServer();
+  final ModelNode resolvedValue;
   if (applyToRuntime) {
     validateResolvedValue(attributeName,newValue);
     resolvedValue=newValue.resolve();
@@ -10,16 +10,25 @@
       context.reloadRequired();
     }
   }
-  if (context.completeStep() != OperationContext.ResultAction.KEEP && applyToRuntime) {
-    ModelNode valueToRestore=currentValue.resolve();
-    try {
-      revertUpdateToRuntime(context,operation,attributeName,valueToRestore,resolvedValue);
-    }
- catch (    Exception e) {
-      ServerLogger.ROOT_LOGGER.caughtExceptionRevertingOperation(e,getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)));
-    }
-    if (restartRequired) {
-      context.revertReloadRequired();
+ else {
+    restartRequired=false;
+    resolvedValue=null;
+  }
+  context.completeStep(new OperationContext.RollbackHandler(){
+    @Override public void handleRollback(    OperationContext context,    ModelNode operation){
+      if (applyToRuntime) {
+        ModelNode valueToRestore=currentValue.resolve();
+        try {
+          revertUpdateToRuntime(context,operation,attributeName,valueToRestore,resolvedValue);
+        }
+ catch (        Exception e) {
+          ServerLogger.ROOT_LOGGER.caughtExceptionRevertingOperation(e,getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)));
+        }
+        if (restartRequired) {
+          context.revertReloadRequired();
+        }
+      }
     }
   }
+);
 }
