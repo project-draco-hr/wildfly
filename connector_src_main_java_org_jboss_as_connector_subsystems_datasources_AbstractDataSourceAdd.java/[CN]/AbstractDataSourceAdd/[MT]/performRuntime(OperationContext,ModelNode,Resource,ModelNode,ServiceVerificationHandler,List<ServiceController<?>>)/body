@@ -5,27 +5,21 @@
   final ServiceTarget serviceTarget=context.getServiceTarget();
   boolean enabled=false;
   ModelNode node=DATASOURCE_DRIVER.resolveModelAttribute(context,model);
+  final String driverName=node.asString();
+  final ServiceName driverServiceName=ServiceName.JBOSS.append("jdbc-driver",driverName.replaceAll("\\.","_"));
+  ValueInjectionService driverDemanderService=new ValueInjectionService<Driver>();
+  final ServiceName driverDemanderServiceName=ServiceName.JBOSS.append("driver-demander").append(jndiName);
+  final ServiceBuilder<?> driverDemanderBuilder=serviceTarget.addService(driverDemanderServiceName,driverDemanderService).addDependency(driverServiceName,Driver.class,driverDemanderService.getInjector());
+  driverDemanderBuilder.addListener(verificationHandler);
+  driverDemanderBuilder.setInitialMode(ServiceController.Mode.ACTIVE);
+  controllers.add(driverDemanderBuilder.install());
   AbstractDataSourceService dataSourceService=createDataSourceService(dsName);
   final ManagementResourceRegistration registration=context.getResourceRegistrationForUpdate();
   final ServiceName dataSourceServiceName=AbstractDataSourceService.SERVICE_NAME_BASE.append(jndiName);
   final ServiceBuilder<?> dataSourceServiceBuilder=serviceTarget.addService(dataSourceServiceName,dataSourceService).addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,dataSourceService.getTransactionIntegrationInjector()).addDependency(ConnectorServices.MANAGEMENT_REPOSITORY_SERVICE,ManagementRepository.class,dataSourceService.getManagementRepositoryInjector()).addDependency(SubjectFactoryService.SERVICE_NAME,SubjectFactory.class,dataSourceService.getSubjectFactoryInjector()).addDependency(ConnectorServices.JDBC_DRIVER_REGISTRY_SERVICE,DriverRegistry.class,dataSourceService.getDriverRegistryInjector()).addDependency(ConnectorServices.CCM_SERVICE,CachedConnectionManager.class,dataSourceService.getCcmInjector()).addDependency(ConnectorServices.IDLE_REMOVER_SERVICE).addDependency(ConnectorServices.CONNECTION_VALIDATOR_SERVICE).addDependency(NamingService.SERVICE_NAME);
   dataSourceServiceBuilder.addListener(new DataSourceStatisticsListener(registration,resource,dsName));
   startConfigAndAddDependency(dataSourceServiceBuilder,dataSourceService,dsName,serviceTarget,operation,verificationHandler);
-  final String driverName=node.asString();
-  final ServiceName driverServiceName=ServiceName.JBOSS.append("jdbc-driver",driverName.replaceAll("\\.","_"));
-  if (!context.isBooting()) {
-    final ServiceRegistry registry=context.getServiceRegistry(true);
-    final ServiceController<?> dataSourceController=registry.getService(driverServiceName);
-    if (driverServiceName != null && dataSourceController != null) {
-      dataSourceServiceBuilder.addDependency(driverServiceName,Driver.class,dataSourceService.getDriverInjector());
-    }
- else {
-      throw new OperationFailedException(MESSAGES.driverNotPresent(driverName));
-    }
-  }
- else {
-    dataSourceServiceBuilder.addDependency(driverServiceName,Driver.class,dataSourceService.getDriverInjector());
-  }
+  dataSourceServiceBuilder.addDependency(driverServiceName,Driver.class,dataSourceService.getDriverInjector());
   dataSourceServiceBuilder.setInitialMode(ServiceController.Mode.NEVER);
   controllers.add(dataSourceServiceBuilder.install());
 }
