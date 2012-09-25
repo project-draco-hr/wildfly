@@ -1,0 +1,64 @@
+{
+  final ModelNode linkResources=loadLinkResources(client,overlay,sgName);
+  if (linkResources == null) {
+    return;
+  }
+  if (linkResources.keys().isEmpty()) {
+    return;
+  }
+  if (removeLinks) {
+    final Iterator<String> linkNames;
+    if (specifiedLinks != null) {
+      linkNames=specifiedLinks.iterator();
+    }
+ else {
+      linkNames=linkResources.keys().iterator();
+    }
+    while (linkNames.hasNext()) {
+      final String linkName=linkNames.next();
+      final ModelNode op=new ModelNode();
+      final ModelNode addr=op.get(Util.ADDRESS);
+      if (sgName != null) {
+        addr.add(Util.SERVER_GROUP,sgName);
+      }
+      addr.add(Util.DEPLOYMENT_OVERLAY,overlay);
+      addr.add(Util.DEPLOYMENT,linkName);
+      op.get(Util.OPERATION).set(Util.REMOVE);
+      steps.add(op);
+    }
+    if (specifiedLinks == null && sgName != null) {
+      final ModelNode op=new ModelNode();
+      final ModelNode addr=op.get(Util.ADDRESS);
+      addr.add(Util.SERVER_GROUP,sgName);
+      addr.add(Util.DEPLOYMENT_OVERLAY,overlay);
+      op.get(Util.OPERATION).set(Util.REMOVE);
+      steps.add(op);
+    }
+  }
+  final Iterator<String> linkNames;
+  if (redeploy == REDEPLOY_ALL) {
+    linkNames=linkResources.keys().iterator();
+  }
+ else   if (redeploy == REDEPLOY_ONLY_AFFECTED && specifiedLinks != null) {
+    linkNames=specifiedLinks.iterator();
+  }
+ else {
+    return;
+  }
+  final List<String> sgDeployments=Util.getDeployments(client,sgName);
+  while (linkNames.hasNext() && !sgDeployments.isEmpty()) {
+    final String linkName=linkNames.next();
+    final ModelNode link=linkResources.get(linkName);
+    if (!link.isDefined()) {
+      final StringBuilder buf=new StringBuilder();
+      buf.append(linkName);
+      buf.append(" not found among the registered links ");
+      if (sgName != null) {
+        buf.append("for server group ").append(sgName).append(' ');
+      }
+      buf.append(linkResources.keys());
+      throw new CommandFormatException(buf.toString());
+    }
+    addRedeploySteps(steps,sgName,linkName,link,sgDeployments);
+  }
+}
