@@ -1,10 +1,24 @@
 {
   final String name=getAddressName(operation);
-  final ConfigurationPersistence configurationPersistence=ConfigurationPersistence.getOrCreateConfigurationPersistence();
+  final PathAddress address=getAddress(operation);
+  final ConfigurationPersistence configurationPersistence;
+  final boolean isLoggingProfile=LoggingProfileOperations.isLoggingProfileAddress(address);
+  if (isLoggingProfile) {
+    final LogContext logContext=LoggingProfileContextSelector.getInstance().getOrCreate(LoggingProfileOperations.getLoggingProfileName(address));
+    configurationPersistence=ConfigurationPersistence.getOrCreateConfigurationPersistence(logContext);
+  }
+ else {
+    configurationPersistence=ConfigurationPersistence.getOrCreateConfigurationPersistence();
+  }
   final LogContextConfiguration logContextConfiguration=configurationPersistence.getLogContextConfiguration();
   handbackHolder.setHandback(configurationPersistence);
   final boolean restartRequired=applyUpdate(context,attributeName,name,resolvedValue,logContextConfiguration);
-  logContextConfiguration.commit();
-  configurationPersistence.writeConfiguration(context);
+  try {
+    logContextConfiguration.commit();
+  }
+  finally {
+    logContextConfiguration.forget();
+  }
+  if (!isLoggingProfile)   configurationPersistence.writeConfiguration(context);
   return restartRequired;
 }

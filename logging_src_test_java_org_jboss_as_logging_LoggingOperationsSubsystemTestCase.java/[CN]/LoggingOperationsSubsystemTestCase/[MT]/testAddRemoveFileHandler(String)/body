@@ -1,0 +1,24 @@
+{
+  final KernelServices kernelServices=createKernelServicesBuilder(LoggingTestEnvironment.get()).setSubsystemXml(readResource("/operations.xml")).build();
+  final String fileHandlerName="test-file-handler";
+  File logFile=createLogFile();
+  addFileHandler(kernelServices,loggingProfile,fileHandlerName,org.jboss.logmanager.Level.INFO,logFile,true);
+  final ModelNode rootLoggerAddress=parseAddress(ROOT_LOGGER_PATH,loggingProfile);
+  ModelNode op=Operations.createReadAttributeOperation(rootLoggerAddress,CommonAttributes.HANDLERS);
+  ModelNode handlerResult=executeOperation(kernelServices,op);
+  List<String> handlerList=Operations.readResultAsList(handlerResult);
+  assertTrue(String.format("Handler '%s' was not found. Result: %s",fileHandlerName,handlerResult),handlerList.contains(fileHandlerName));
+  doLog(loggingProfile,LEVELS,"Test123");
+  op=Operations.createOperation(RootLoggerResourceDefinition.ROOT_LOGGER_REMOVE_HANDLER_OPERATION_NAME,rootLoggerAddress);
+  op.get(CommonAttributes.NAME.getName()).set(fileHandlerName);
+  executeOperation(kernelServices,op);
+  op=Operations.createReadAttributeOperation(rootLoggerAddress,CommonAttributes.HANDLERS);
+  handlerResult=executeOperation(kernelServices,op);
+  handlerList=Operations.readResultAsList(handlerResult);
+  assertFalse(String.format("Handler '%s' was not removed. Result: %s",fileHandlerName,handlerResult),handlerList.contains(fileHandlerName));
+  removeFileHandler(kernelServices,loggingProfile,fileHandlerName,false);
+  assertTrue(FileUtils.readFileToString(logFile).contains("Test123"));
+  long checksum=FileUtils.checksumCRC32(logFile);
+  doLog(loggingProfile,LEVELS,"Test123");
+  assertEquals(checksum,FileUtils.checksumCRC32(logFile));
+}

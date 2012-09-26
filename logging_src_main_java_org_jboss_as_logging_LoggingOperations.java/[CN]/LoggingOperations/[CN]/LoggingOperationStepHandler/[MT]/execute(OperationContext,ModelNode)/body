@@ -1,44 +1,73 @@
 {
+  final PathAddress address=getAddress(operation);
   final String name=getAddressName(operation);
-  final ConfigurationPersistence configurationPersistence=ConfigurationPersistence.getOrCreateConfigurationPersistence();
+  final ConfigurationPersistence configurationPersistence;
+  final boolean isLoggingProfile=LoggingProfileOperations.isLoggingProfileAddress(address);
+  if (isLoggingProfile) {
+    final LogContext logContext=LoggingProfileContextSelector.getInstance().getOrCreate(LoggingProfileOperations.getLoggingProfileName(address));
+    configurationPersistence=ConfigurationPersistence.getOrCreateConfigurationPersistence(logContext);
+  }
+ else {
+    configurationPersistence=ConfigurationPersistence.getOrCreateConfigurationPersistence();
+  }
   final LogContextConfiguration logContextConfiguration=configurationPersistence.getLogContextConfiguration();
   execute(context,operation,name,logContextConfiguration);
   if (context.getProcessType().isServer()) {
-    context.addStep(new OperationStepHandler(){
-      public void execute(      final OperationContext context,      final ModelNode operation) throws OperationFailedException {
-        context.attachIfAbsent(ATTACHMENT_KEY,Boolean.TRUE);
-        context.addStep(new OperationStepHandler(){
-          @Override public void execute(          final OperationContext context,          final ModelNode operation) throws OperationFailedException {
-            final Boolean addCommit=context.getAttachment(ATTACHMENT_KEY);
+    if (isLoggingProfile) {
+      context.addStep(new OperationStepHandler(){
+        public void execute(        final OperationContext context,        final ModelNode operation) throws OperationFailedException {
+          try {
             logContextConfiguration.commit();
-            if (addCommit != null && addCommit) {
-              final LogContextConfiguration logContextConfiguration=configurationPersistence.getLogContextConfiguration();
-              logContextConfiguration.commit();
-              configurationPersistence.writeConfiguration(context);
-              context.detach(ATTACHMENT_KEY);
-              context.completeStep(new RollbackHandler(){
-                @Override public void handleRollback(                OperationContext context,                ModelNode operation){
-                  logContextConfiguration.forget();
-                  try {
-                    configurationPersistence.writeConfiguration(context);
-                  }
- catch (                  OperationFailedException e) {
-                    throw LoggingMessages.MESSAGES.rollbackFailure(e);
+          }
+  finally {
+            logContextConfiguration.forget();
+          }
+          context.completeStep(RollbackHandler.NOOP_ROLLBACK_HANDLER);
+        }
+      }
+,Stage.RUNTIME);
+    }
+ else {
+      context.addStep(new OperationStepHandler(){
+        public void execute(        final OperationContext context,        final ModelNode operation) throws OperationFailedException {
+          context.attachIfAbsent(ATTACHMENT_KEY,Boolean.TRUE);
+          context.addStep(new OperationStepHandler(){
+            @Override public void execute(            final OperationContext context,            final ModelNode operation) throws OperationFailedException {
+              final Boolean addCommit=context.getAttachment(ATTACHMENT_KEY);
+              try {
+                logContextConfiguration.commit();
+              }
+  finally {
+                logContextConfiguration.forget();
+              }
+              if (addCommit != null && addCommit) {
+                configurationPersistence.writeConfiguration(context);
+                context.detach(ATTACHMENT_KEY);
+                context.completeStep(new RollbackHandler(){
+                  @Override public void handleRollback(                  OperationContext context,                  ModelNode operation){
+                    final LogContextConfiguration logContextConfiguration=configurationPersistence.getLogContextConfiguration();
+                    logContextConfiguration.forget();
+                    try {
+                      configurationPersistence.writeConfiguration(context);
+                    }
+ catch (                    OperationFailedException e) {
+                      throw LoggingMessages.MESSAGES.rollbackFailure(e);
+                    }
                   }
                 }
-              }
 );
-            }
+              }
  else {
-              context.completeStep(RollbackHandler.NOOP_ROLLBACK_HANDLER);
+                context.completeStep(RollbackHandler.NOOP_ROLLBACK_HANDLER);
+              }
             }
           }
+,Stage.RUNTIME);
+          context.completeStep(RollbackHandler.NOOP_ROLLBACK_HANDLER);
         }
-,Stage.RUNTIME);
-        context.completeStep(RollbackHandler.NOOP_ROLLBACK_HANDLER);
       }
-    }
 ,Stage.RUNTIME);
+    }
   }
-  context.stepCompleted();
+  context.completeStep(RollbackHandler.NOOP_ROLLBACK_HANDLER);
 }

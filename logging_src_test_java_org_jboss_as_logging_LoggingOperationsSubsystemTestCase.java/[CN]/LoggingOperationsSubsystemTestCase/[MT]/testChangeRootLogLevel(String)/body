@@ -1,0 +1,42 @@
+{
+  final KernelServices kernelServices=createKernelServicesBuilder(LoggingTestEnvironment.get()).setSubsystemXml(readResource("/operations.xml")).build();
+  final String fileHandlerName="test-file-handler";
+  final File logFile=createLogFile();
+  addFileHandler(kernelServices,loggingProfile,fileHandlerName,org.jboss.logmanager.Level.TRACE,logFile,true);
+  final Level[] levels={org.jboss.logmanager.Level.FATAL,org.jboss.logmanager.Level.ERROR,org.jboss.logmanager.Level.WARN,org.jboss.logmanager.Level.INFO,org.jboss.logmanager.Level.DEBUG,org.jboss.logmanager.Level.TRACE};
+  final Map<Level,Integer> levelOrd=new HashMap<Level,Integer>();
+  levelOrd.put(org.jboss.logmanager.Level.FATAL,0);
+  levelOrd.put(org.jboss.logmanager.Level.ERROR,1);
+  levelOrd.put(org.jboss.logmanager.Level.WARN,2);
+  levelOrd.put(org.jboss.logmanager.Level.INFO,3);
+  levelOrd.put(org.jboss.logmanager.Level.DEBUG,4);
+  levelOrd.put(org.jboss.logmanager.Level.TRACE,5);
+  final ModelNode address=parseAddress(ROOT_LOGGER_PATH,loggingProfile);
+  for (  Level level : levels) {
+    final ModelNode op=Operations.createWriteAttributeOperation(address,CommonAttributes.LEVEL,level.getName());
+    executeOperation(kernelServices,op);
+    doLog(loggingProfile,levels,"RootLoggerTestCaseTST %s",level);
+  }
+  removeFileHandler(kernelServices,loggingProfile,fileHandlerName,true);
+  final boolean[][] logFound=new boolean[levelOrd.size()][levelOrd.size()];
+  final List<String> logLines=FileUtils.readLines(logFile);
+  for (  String line : logLines) {
+    if (!line.contains("RootLoggerTestCaseTST"))     continue;
+    final String[] words=line.split("\\s+");
+    try {
+      final Level lineLogLevel=Level.parse(words[1]);
+      final Level rootLogLevel=Level.parse(words[5]);
+      final int producedLevel=levelOrd.get(lineLogLevel);
+      final int loggedLevel=levelOrd.get(rootLogLevel);
+      assertTrue(String.format("Produced level(%s) greater than logged level (%s)",lineLogLevel,rootLogLevel),producedLevel <= loggedLevel);
+      logFound[producedLevel][loggedLevel]=true;
+    }
+ catch (    Exception e) {
+      throw new Exception("Unexpected log:" + line);
+    }
+  }
+  for (  Level level : levels) {
+    final int rl=levelOrd.get(level);
+    for (int ll=0; ll <= rl; ll++)     assertTrue(logFound[ll][rl]);
+  }
+}

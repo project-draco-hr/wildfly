@@ -1,0 +1,53 @@
+{
+  if (Boolean.valueOf(SecurityActions.getSystemProperty(PER_DEPLOYMENT_LOGGING,Boolean.toString(true)))) {
+    if (deploymentUnit.hasAttachment(LOG_CONTEXT_KEY))     return;
+    final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+    final ResourceRoot root=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+    if (SubDeploymentMarker.isSubDeployment(root)) {
+      final LogContext logContext=findParentLogContext(deploymentUnit);
+      if (logContext != null) {
+        LoggingExtension.CONTEXT_SELECTOR.registerLogContext(module.getClassLoader(),logContext);
+        return;
+      }
+    }
+    LoggingLogger.ROOT_LOGGER.trace("Scanning for logging configuration files.");
+    final VirtualFile configFile=findConfigFile(root);
+    if (configFile != null) {
+      InputStream configStream=null;
+      try {
+        LoggingLogger.ROOT_LOGGER.debugf("Found logging configuration file: %s",configFile);
+        final LogContext logContext=LogContext.create();
+        LoggingExtension.CONTEXT_SELECTOR.registerLogContext(module.getClassLoader(),logContext);
+        deploymentUnit.putAttachment(LOG_CONTEXT_KEY,logContext);
+        final String fileName=configFile.getName();
+        configStream=configFile.openStream();
+        if (LOG4J_PROPERTIES.equals(fileName) || LOG4J_XML.equals(fileName) || JBOSS_LOG4J_XML.equals(fileName)) {
+          final ClassLoader current=SecurityActions.getThreadContextClassLoader();
+          try {
+            SecurityActions.setThreadContextClassLoader(module.getClassLoader());
+            if (LOG4J_XML.equals(fileName) || JBOSS_LOG4J_XML.equals(fileName)) {
+              new DOMConfigurator().doConfigure(configStream,org.apache.log4j.JBossLogManagerFacade.getLoggerRepository(logContext));
+            }
+ else {
+              final Properties properties=new Properties();
+              properties.load(new InputStreamReader(configStream,"utf-8"));
+              new org.apache.log4j.PropertyConfigurator().doConfigure(properties,org.apache.log4j.JBossLogManagerFacade.getLoggerRepository(logContext));
+            }
+          }
+  finally {
+            SecurityActions.setThreadContextClassLoader(current);
+          }
+        }
+ else {
+          ConfigurationPersistence.getOrCreateConfigurationPersistence(logContext).configure(configStream);
+        }
+      }
+ catch (      Exception e) {
+        throw LoggingMessages.MESSAGES.failedToConfigureLogging(e,configFile.getName());
+      }
+ finally {
+        safeClose(configStream);
+      }
+    }
+  }
+}

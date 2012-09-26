@@ -1,0 +1,32 @@
+{
+  final KernelServices kernelServices=createKernelServicesBuilder(LoggingTestEnvironment.get()).setSubsystemXml(readResource("/operations.xml")).build();
+  final String handlerName="test-file-handler";
+  final File logFile=createLogFile();
+  final File profileLogFile=createLogFile("profile.log");
+  final ModelNode handlerAddress=parseAddress(String.format("%s=%s",CommonAttributes.FILE_HANDLER,handlerName),null);
+  final ModelNode profileHandlerAddress=parseAddress(String.format("%s=%s",CommonAttributes.FILE_HANDLER,handlerName),PROFILE);
+  addFileHandler(kernelServices,null,handlerName,org.jboss.logmanager.Level.INFO,logFile,true);
+  addFileHandler(kernelServices,PROFILE,handlerName,org.jboss.logmanager.Level.INFO,profileLogFile,true);
+  ModelNode op=Operations.createReadAttributeOperation(handlerAddress,CommonAttributes.FORMATTER);
+  final String defaultHandlerFormat=Operations.readResultAsString(executeOperation(kernelServices,op));
+  op=Operations.createReadAttributeOperation(profileHandlerAddress,CommonAttributes.FORMATTER);
+  final String defaultProfileHandlerFormat=Operations.readResultAsString(executeOperation(kernelServices,op));
+  op=Operations.createWriteAttributeOperation(handlerAddress,CommonAttributes.FORMATTER,"%m%n");
+  executeOperation(kernelServices,op);
+  op=Operations.createWriteAttributeOperation(profileHandlerAddress,CommonAttributes.FORMATTER,"%m%n");
+  executeOperation(kernelServices,op);
+  final String msg="This is a test message";
+  doLog(null,LEVELS,msg);
+  doLog(PROFILE,LEVELS,msg);
+  op=Operations.createWriteAttributeOperation(handlerAddress,CommonAttributes.FORMATTER,defaultHandlerFormat);
+  executeOperation(kernelServices,op);
+  op=Operations.createWriteAttributeOperation(profileHandlerAddress,CommonAttributes.FORMATTER,defaultProfileHandlerFormat);
+  executeOperation(kernelServices,op);
+  removeFileHandler(kernelServices,null,handlerName,true);
+  removeFileHandler(kernelServices,PROFILE,handlerName,true);
+  final String result=FileUtils.readFileToString(logFile);
+  final String profileResult=FileUtils.readFileToString(profileLogFile);
+  assertTrue(result.contains(msg));
+  assertTrue(profileResult.contains(msg));
+  assertTrue(String.format("Contents don't match: %nResult:%n%s%nProfileResult%n%s",result,profileResult),result.equals(profileResult));
+}
