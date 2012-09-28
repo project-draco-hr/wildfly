@@ -13,8 +13,16 @@
   context.removeResource(PathAddress.EMPTY_ADDRESS);
   context.addStep(new OperationStepHandler(){
     public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
-      RaOperationUtil.deactivateIfActive(context,raName);
+      final boolean wasActive=RaOperationUtil.deactivateIfActive(context,raName);
       ServiceName raServiceName=ServiceName.of(ConnectorServices.RA_SERVICE,raName);
+      ServiceController<?> serviceController=context.getServiceRegistry(false).getService(raServiceName);
+      final ModifiableResourceAdapter resourceAdapter;
+      if (serviceController != null) {
+        resourceAdapter=(ModifiableResourceAdapter)serviceController.getValue();
+      }
+ else {
+        resourceAdapter=null;
+      }
       final List<ServiceName> serviceNameList=context.getServiceRegistry(false).getServiceNames();
       for (      ServiceName name : serviceNameList) {
         if (raServiceName.isParentOf(name)) {
@@ -24,6 +32,14 @@
       context.removeService(raServiceName);
       context.completeStep(new OperationContext.RollbackHandler(){
         @Override public void handleRollback(        OperationContext context,        ModelNode operation){
+          if (resourceAdapter != null) {
+            RaOperationUtil.installRaServices(context,new ServiceVerificationHandler(),raName,resourceAdapter);
+            try {
+              if (wasActive)               RaOperationUtil.activate(context,raName,archive);
+            }
+ catch (            OperationFailedException e) {
+            }
+          }
         }
       }
 );
