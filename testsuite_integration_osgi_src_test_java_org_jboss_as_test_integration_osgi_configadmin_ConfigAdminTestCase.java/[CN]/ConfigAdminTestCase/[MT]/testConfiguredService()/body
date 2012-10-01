@@ -1,0 +1,26 @@
+{
+  Dictionary<String,String> config=new Hashtable<String,String>();
+  config.put("foo","bar");
+  ConfigAdmin configAdmin=getConfigAdmin();
+  configAdmin.putConfiguration(ConfiguredMSCService.SERVICE_PID,config);
+  ServiceController<ConfiguredMSCService> controller=null;
+  try {
+    final CountDownLatch latch=new CountDownLatch(1);
+    ServiceListener<ConfiguredMSCService> tracker=new AbstractServiceListener<ConfiguredMSCService>(){
+      @Override public void transition(      ServiceController<? extends ConfiguredMSCService> controller,      Transition transition){
+        if (transition == Transition.STARTING_to_UP) {
+          latch.countDown();
+        }
+      }
+    }
+;
+    controller=ConfiguredMSCService.addService(serviceTarget,tracker);
+    Assert.assertTrue(latch.await(3,TimeUnit.SECONDS));
+    ConfiguredMSCService service=controller.getValue();
+    Assert.assertEquals("bar",service.getConfig().get("foo"));
+  }
+  finally {
+    configAdmin.removeConfiguration(ConfiguredMSCService.SERVICE_PID);
+    controller.setMode(ServiceController.Mode.REMOVE);
+  }
+}

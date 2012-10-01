@@ -1,0 +1,29 @@
+{
+  InputStream input=deployer.getDeployment(CONFIG_ADMIN_BUNDLE_A);
+  Bundle bundle=syscontext.installBundle(CONFIG_ADMIN_PID_A,input);
+  try {
+    bundle.start();
+    Assert.assertEquals("Bundle ACTIVE",Bundle.ACTIVE,bundle.getState());
+    BundleContext context=bundle.getBundleContext();
+    ConfigAdmin configAdmin=getConfigAdmin(context);
+    ConfigurationAdmin configurationAdmin=getConfigurationAdmin(context);
+    Configuration config=configurationAdmin.getConfiguration(CONFIG_ADMIN_PID_A);
+    Dictionary<String,Object> props=new Hashtable<String,Object>();
+    props.put("foo","bar");
+    config.update(props);
+    try {
+      ServiceReference sref=context.getServiceReference(ConfiguredService.class.getName());
+      ConfiguredService service=(ConfiguredService)context.getService(sref);
+      Assert.assertTrue(service.awaitUpdate(3,TimeUnit.SECONDS));
+      Assert.assertEquals("bar",service.getProperties().get("foo"));
+      Dictionary<String,String> modelProps=configAdmin.getConfiguration(CONFIG_ADMIN_PID_A);
+      Assert.assertEquals("bar",modelProps.get("foo"));
+    }
+  finally {
+      config.delete();
+    }
+  }
+  finally {
+    bundle.uninstall();
+  }
+}

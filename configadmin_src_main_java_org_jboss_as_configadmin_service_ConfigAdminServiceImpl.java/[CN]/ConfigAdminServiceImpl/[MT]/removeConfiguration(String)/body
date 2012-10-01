@@ -1,22 +1,20 @@
 {
-  Dictionary<String,String> oldConfig=getConfiguration(pid);
-  if (oldConfig != null) {
-    ModelNode address=getSubsystemAddress();
-    address.add(new ModelNode().set(ModelConstants.CONFIGURATION,pid));
-    ModelNode op=Util.getEmptyOperation(ModelDescriptionConstants.REMOVE,address);
-    try {
-      ModelNode node=controllerClient.execute(op);
-      ModelNode outcome=node.get(ModelDescriptionConstants.OUTCOME);
-      if (ModelDescriptionConstants.SUCCESS.equals(outcome.asString())) {
-        removeConfigurationInternal(pid);
+  LOGGER.debugf("Remove configuration: %s",pid);
+synchronized (configurations) {
+    final Dictionary<String,String> previous=configurations.get(pid);
+    if (previous != null) {
+      ModelNode address=getSubsystemAddress();
+      address.add(new ModelNode().set(ModelConstants.CONFIGURATION,pid));
+      ModelNode op=Util.getEmptyOperation(ModelDescriptionConstants.REMOVE,address);
+      configurations.remove(pid);
+      Callable<Object> errorHandler=new Callable<Object>(){
+        @Override public Object call() throws Exception {
+          return configurations.put(pid,previous,true);
+        }
       }
- else {
-        ROOT_LOGGER.cannotRemoveConfiguration(pid,node);
-      }
+;
+      new ConfigAdminOperationTask(pid,op,errorHandler).submit();
     }
- catch (    IOException ex) {
-      ROOT_LOGGER.cannotRemoveConfiguration(ex,pid);
-    }
+    return previous;
   }
-  return oldConfig;
 }

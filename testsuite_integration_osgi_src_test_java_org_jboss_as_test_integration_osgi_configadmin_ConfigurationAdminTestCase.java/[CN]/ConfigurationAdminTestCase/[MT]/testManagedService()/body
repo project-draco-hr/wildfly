@@ -1,29 +1,19 @@
 {
-  bundle.start();
   BundleContext context=bundle.getBundleContext();
-  ServiceReference sref=context.getServiceReference(ConfigurationAdmin.class.getName());
-  ConfigurationAdmin configAdmin=(ConfigurationAdmin)context.getService(sref);
-  final CountDownLatch latch=new CountDownLatch(1);
-  ConfigurationListener listener=new ConfigurationListener(){
-    @Override public void configurationEvent(    ConfigurationEvent event){
-      if (ConfiguredService.SERVICE_PID.equals(event.getPid()))       latch.countDown();
-    }
-  }
-;
-  context.registerService(ConfigurationListener.class.getName(),listener,null);
-  Configuration config=configAdmin.getConfiguration(ConfiguredService.SERVICE_PID);
-  assertNotNull("Config not null",config);
+  ConfigurationAdmin configAdmin=getConfigurationAdmin(context);
+  Configuration config=configAdmin.getConfiguration(PID_A);
+  Assert.assertNotNull("Config not null",config);
+  Assert.assertNull("Config is empty, but was: " + config.getProperties(),config.getProperties());
   try {
     Dictionary<String,String> configProps=new Hashtable<String,String>();
     configProps.put("foo","bar");
     config.update(configProps);
+    ConfiguredService service=new ConfiguredService();
     Dictionary<String,String> serviceProps=new Hashtable<String,String>();
-    serviceProps.put(Constants.SERVICE_PID,ConfiguredService.SERVICE_PID);
-    context.registerService(new String[]{ConfiguredService.class.getName(),ManagedService.class.getName()},new ConfiguredService(),serviceProps);
-    if (latch.await(5,TimeUnit.SECONDS) == false)     throw new TimeoutException();
-    sref=context.getServiceReference(ConfiguredService.class.getName());
-    ConfiguredService service=(ConfiguredService)context.getService(sref);
-    assertEquals("bar",service.getValue("foo"));
+    serviceProps.put(Constants.SERVICE_PID,PID_A);
+    context.registerService(new String[]{ConfiguredService.class.getName(),ManagedService.class.getName()},service,serviceProps);
+    Assert.assertTrue(service.awaitUpdate(3,TimeUnit.SECONDS));
+    Assert.assertEquals("bar",service.getProperties().get("foo"));
   }
   finally {
     config.delete();
