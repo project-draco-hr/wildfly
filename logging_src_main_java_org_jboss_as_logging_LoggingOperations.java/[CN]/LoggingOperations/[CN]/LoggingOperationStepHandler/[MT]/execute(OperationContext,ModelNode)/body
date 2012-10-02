@@ -16,10 +16,18 @@
               logContextConfiguration.commit();
               configurationPersistence.writeConfiguration(context);
               context.detach(ATTACHMENT_KEY);
-              if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
-                logContextConfiguration.forget();
-                configurationPersistence.writeConfiguration(context);
+              context.completeStep(new RollbackHandler(){
+                @Override public void handleRollback(                OperationContext context,                ModelNode operation){
+                  logContextConfiguration.forget();
+                  try {
+                    configurationPersistence.writeConfiguration(context);
+                  }
+ catch (                  OperationFailedException e) {
+                    throw LoggingMessages.MESSAGES.rollbackFailure(e);
+                  }
+                }
               }
+);
             }
  else {
               context.completeStep(RollbackHandler.NOOP_ROLLBACK_HANDLER);
@@ -32,5 +40,5 @@
     }
 ,Stage.RUNTIME);
   }
-  context.completeStep(RollbackHandler.NOOP_ROLLBACK_HANDLER);
+  context.stepCompleted();
 }

@@ -7,18 +7,22 @@
     context.addStep(new OperationStepHandler(){
       @Override public void execute(      final OperationContext context,      final ModelNode operation) throws OperationFailedException {
         performRuntime(context,operation,logContextConfiguration,name,model);
-        if (context.completeStep() == ResultAction.ROLLBACK) {
-          logContextConfiguration.forget();
-          try {
-            performRollback(context,operation,model,logContextConfiguration,name,originalModel);
-            logContextConfiguration.commit();
-          }
- catch (          OperationFailedException e) {
-            throw LoggerOperations.createRollbackFailure(e);
+        context.completeStep(new RollbackHandler(){
+          @Override public void handleRollback(          OperationContext context,          ModelNode operation){
+            logContextConfiguration.forget();
+            try {
+              performRollback(context,operation,model,logContextConfiguration,name,originalModel);
+              logContextConfiguration.commit();
+            }
+ catch (            OperationFailedException e) {
+              throw LoggingMessages.MESSAGES.rollbackFailure(e);
+            }
           }
         }
+);
       }
     }
 ,Stage.RUNTIME);
   }
+  context.stepCompleted();
 }
