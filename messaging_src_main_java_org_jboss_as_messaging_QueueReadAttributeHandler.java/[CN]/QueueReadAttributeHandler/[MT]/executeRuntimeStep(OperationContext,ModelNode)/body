@@ -1,8 +1,13 @@
 {
   validator.validate(operation);
   final String attributeName=operation.require(ModelDescriptionConstants.NAME).asString();
-  String queueName=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
-  final ServiceName hqServiceName=MessagingServices.getHornetQServiceName(PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)));
+  PathAddress address=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR));
+  String queueName=address.getLastElement().getValue();
+  if (forwardToRuntimeQueue(context,operation,RUNTIME_INSTANCE)) {
+    context.stepCompleted();
+    return;
+  }
+  final ServiceName hqServiceName=MessagingServices.getHornetQServiceName(address);
   ServiceController<?> hqService=context.getServiceRegistry(false).getService(hqServiceName);
   HornetQServer hqServer=HornetQServer.class.cast(hqService.getValue());
   QueueControl control=QueueControl.class.cast(hqServer.getManagementService().getResource(ResourceNames.CORE_QUEUE + queueName));
@@ -37,6 +42,21 @@ catch (    Exception e) {
   }
  else   if (TEMPORARY.getName().equals(attributeName)) {
     context.getResult().set(control.isTemporary());
+  }
+ else   if (readStorageAttributes && getStorageAttributeNames().contains(attributeName)) {
+    if (ADDRESS.getName().equals(attributeName)) {
+      context.getResult().set(control.getAddress());
+    }
+ else     if (DURABLE.getName().equals(attributeName)) {
+      context.getResult().set(control.isDurable());
+    }
+ else     if (FILTER.getName().equals(attributeName)) {
+      ModelNode result=context.getResult();
+      String filter=control.getFilter();
+      if (filter != null) {
+        result.set(filter);
+      }
+    }
   }
  else {
     throw MESSAGES.unsupportedAttribute(attributeName);
