@@ -1,0 +1,27 @@
+{
+  String operationName=NAME.resolveModelAttribute(context,operation).asString();
+  final ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
+  OperationEntry operationEntry=registry.getOperationEntry(PathAddress.EMPTY_ADDRESS,operationName);
+  if (operationEntry == null || (context.getProcessType() == ProcessType.DOMAIN_SERVER && !operationEntry.getFlags().contains(OperationEntry.Flag.RUNTIME_ONLY))) {
+    throw new OperationFailedException(new ModelNode().set(MESSAGES.operationNotRegistered(operationName,PathAddress.pathAddress(operation.require(OP_ADDR)))));
+  }
+ else {
+    final ModelNode result=operationEntry.getDescriptionProvider().getModelDescription(GlobalOperationHandlers.getLocale(context,operation));
+    Set<OperationEntry.Flag> flags=operationEntry.getFlags();
+    boolean readOnly=flags.contains(OperationEntry.Flag.READ_ONLY);
+    result.get(READ_ONLY).set(readOnly);
+    if (!readOnly) {
+      if (flags.contains(OperationEntry.Flag.RESTART_ALL_SERVICES)) {
+        result.get(RESTART_REQUIRED).set("all-services");
+      }
+ else       if (flags.contains(OperationEntry.Flag.RESTART_RESOURCE_SERVICES)) {
+        result.get(RESTART_REQUIRED).set("resource-services");
+      }
+ else       if (flags.contains(OperationEntry.Flag.RESTART_JVM)) {
+        result.get(RESTART_REQUIRED).set("jvm");
+      }
+    }
+    context.getResult().set(result);
+  }
+  context.stepCompleted();
+}
