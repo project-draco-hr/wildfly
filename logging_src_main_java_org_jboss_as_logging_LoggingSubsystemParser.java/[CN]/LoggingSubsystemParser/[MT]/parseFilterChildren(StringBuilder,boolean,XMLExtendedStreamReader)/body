@@ -1,0 +1,116 @@
+{
+  if (reader.getAttributeCount() > 0) {
+    throw unexpectedAttribute(reader,0);
+  }
+  final char delimiter=',';
+  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+    final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case ACCEPT:
+{
+        filter.append(Filters.ACCEPT);
+        requireNoContent(reader);
+        break;
+      }
+case ALL:
+{
+      filter.append(Filters.ALL).append('(');
+      parseFilterChildren(filter,true,reader);
+      final int index=filter.length() - 1;
+      if (filter.charAt(index) == delimiter) {
+        filter.setCharAt(index,')');
+      }
+ else {
+        filter.append(')');
+      }
+      break;
+    }
+case ANY:
+{
+    filter.append(Filters.ANY).append('(');
+    parseFilterChildren(filter,true,reader);
+    final int index=filter.length() - 1;
+    if (filter.charAt(index) == delimiter) {
+      filter.setCharAt(index,')');
+    }
+ else {
+      filter.append(')');
+    }
+    break;
+  }
+case CHANGE_LEVEL:
+{
+  filter.append(Filters.LEVEL_CHANGE).append('(').append(readStringAttributeElement(reader,CommonAttributes.NEW_LEVEL.getName())).append(')');
+  break;
+}
+case DENY:
+{
+filter.append(Filters.DENY);
+requireNoContent(reader);
+break;
+}
+case LEVEL:
+{
+filter.append(Filters.LEVELS).append('(').append(readStringAttributeElement(reader,NAME.getName())).append(')');
+break;
+}
+case LEVEL_RANGE:
+{
+filter.append(Filters.LEVEL_RANGE);
+final boolean minInclusive=Boolean.parseBoolean(reader.getAttributeValue(null,MIN_INCLUSIVE.getName()));
+final boolean maxInclusive=Boolean.parseBoolean(reader.getAttributeValue(null,MAX_INCLUSIVE.getName()));
+if (minInclusive) {
+filter.append('[');
+}
+ else {
+filter.append('(');
+}
+filter.append(reader.getAttributeValue(null,MIN_LEVEL.getName())).append(delimiter);
+filter.append(reader.getAttributeValue(null,MAX_LEVEL.getName()));
+if (maxInclusive) {
+filter.append(']');
+}
+ else {
+filter.append(')');
+}
+requireNoContent(reader);
+break;
+}
+case MATCH:
+{
+filter.append(Filters.MATCH).append("(\"").append(readStringAttributeElement(reader,PATTERN.getName())).append("\")");
+break;
+}
+case NOT:
+{
+filter.append(Filters.NOT).append('(');
+parseFilterChildren(filter,true,reader);
+final int index=filter.length() - 1;
+if (filter.charAt(index) == delimiter) {
+filter.setCharAt(index,')');
+}
+ else {
+filter.append(')');
+}
+break;
+}
+case REPLACE:
+{
+final boolean replaceAll=Boolean.valueOf(reader.getAttributeValue(null,REPLACE_ALL.getName()));
+if (replaceAll) {
+filter.append(Filters.SUBSTITUTE_ALL);
+}
+ else {
+filter.append(Filters.SUBSTITUTE);
+}
+filter.append("(\"").append(reader.getAttributeValue(null,PATTERN.getName())).append('"').append(delimiter).append('"').append(reader.getAttributeValue(null,REPLACEMENT.getName())).append("\")");
+break;
+}
+default :
+throw unexpectedElement(reader);
+}
+if (useDelimiter) {
+filter.append(delimiter);
+}
+}
+}

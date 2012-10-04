@@ -3,7 +3,19 @@
   final SubsystemRegistration subsystem=context.registerSubsystem(SUBSYSTEM_NAME,MANAGEMENT_API_MAJOR_VERSION,MANAGEMENT_API_MINOR_VERSION,MANAGEMENT_API_MICRO_VERSION);
   final ManagementResourceRegistration registration=subsystem.registerSubsystemModel(LoggingRootResource.INSTANCE);
   registration.registerOperationHandler(GenericSubsystemDescribeHandler.DEFINITION,DESCRIBE_HANDLER);
-  registerSubModels(registration);
-  registerSubModels(registration.registerSubModel(new SimpleResourceDefinition(LOGGING_PROFILE_PATH,getResourceDescriptionResolver(),LoggingProfileOperations.ADD_PROFILE,LoggingProfileOperations.REMOVE_PROFILE)));
+  registerSubModels(registration,true);
+  registerSubModels(registration.registerSubModel(new SimpleResourceDefinition(LOGGING_PROFILE_PATH,getResourceDescriptionResolver(),LoggingProfileOperations.ADD_PROFILE,LoggingProfileOperations.REMOVE_PROFILE)),false);
+  final TransformersSubRegistration reg=subsystem.registerModelTransformers(ModelVersion.create(1,1,0),new AbstractSubsystemTransformer(SUBSYSTEM_NAME){
+    @Override protected ModelNode transformModel(    final TransformationContext context,    final ModelNode model){
+      if (model.hasDefined(CommonAttributes.FILTER_SPEC.getName())) {
+        final String filterExpression=model.get(CommonAttributes.FILTER.getName()).asString();
+        model.get(CommonAttributes.FILTER.getName()).set(Filters.filterSpecToFilter(filterExpression));
+      }
+      return model;
+    }
+  }
+);
+  reg.registerSubResource(LOGGING_PROFILE_PATH,true);
+  registerTransformersSubModels(reg);
   subsystem.registerXMLElementWriter(LoggingSubsystemParser.INSTANCE);
 }

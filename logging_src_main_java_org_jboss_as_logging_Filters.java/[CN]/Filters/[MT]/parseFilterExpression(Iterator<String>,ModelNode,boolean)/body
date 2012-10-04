@@ -1,0 +1,96 @@
+{
+  if (!iterator.hasNext()) {
+    if (outermost) {
+      model.setEmptyObject();
+      return;
+    }
+    throw LoggingMessages.MESSAGES.unexpectedEnd();
+  }
+  final String token=iterator.next();
+  if (ACCEPT.equals(token)) {
+    set(CommonAttributes.ACCEPT,model,true);
+  }
+ else   if (DENY.equals(token)) {
+    set(CommonAttributes.DENY,model,true);
+  }
+ else   if (NOT.equals(token)) {
+    expect("(",iterator);
+    parseFilterExpression(iterator,model.get(CommonAttributes.NOT.getName()),false);
+    expect(")",iterator);
+  }
+ else   if (ALL.equals(token)) {
+    expect("(",iterator);
+    do {
+      final ModelNode m=model.get(CommonAttributes.ALL.getName());
+      parseFilterExpression(iterator,m,false);
+    }
+ while (expect(",",")",iterator));
+  }
+ else   if (ANY.equals(token)) {
+    expect("(",iterator);
+    do {
+      final ModelNode m=model.get(CommonAttributes.ANY.getName());
+      parseFilterExpression(iterator,m,false);
+    }
+ while (expect(",",")",iterator));
+  }
+ else   if (LEVEL_CHANGE.equals(token)) {
+    expect("(",iterator);
+    final String levelName=expectName(iterator);
+    set(CommonAttributes.CHANGE_LEVEL,model,levelName);
+    expect(")",iterator);
+  }
+ else   if (LEVELS.equals(token)) {
+    expect("(",iterator);
+    final Set<String> levels=new HashSet<String>();
+    do {
+      levels.add(expectName(iterator));
+    }
+ while (expect(",",")",iterator));
+    if (levels.iterator().hasNext())     set(CommonAttributes.LEVEL,model,levels.iterator().next());
+  }
+ else   if (LEVEL_RANGE.equals(token)) {
+    final ModelNode levelRange=model.get(CommonAttributes.LEVEL_RANGE_LEGACY.getName());
+    final boolean minInclusive=expect("[","(",iterator);
+    if (minInclusive)     set(CommonAttributes.MIN_INCLUSIVE,levelRange,minInclusive);
+    final String minLevel=expectName(iterator);
+    set(CommonAttributes.MIN_LEVEL,levelRange,minLevel);
+    expect(",",iterator);
+    final String maxLevel=expectName(iterator);
+    set(CommonAttributes.MAX_LEVEL,levelRange,maxLevel);
+    final boolean maxInclusive=expect("]",")",iterator);
+    if (maxInclusive)     set(CommonAttributes.MAX_INCLUSIVE,levelRange,maxInclusive);
+  }
+ else   if (MATCH.equals(token)) {
+    expect("(",iterator);
+    final String pattern=expectString(iterator);
+    set(CommonAttributes.MATCH,model,pattern);
+    expect(")",iterator);
+  }
+ else   if (SUBSTITUTE.equals(token)) {
+    final ModelNode substitute=model.get(CommonAttributes.REPLACE.getName());
+    substitute.get(CommonAttributes.REPLACE_ALL.getName()).set(false);
+    expect("(",iterator);
+    final String pattern=expectString(iterator);
+    set(CommonAttributes.PATTERN,substitute,pattern);
+    expect(",",iterator);
+    final String replacement=expectString(iterator);
+    set(CommonAttributes.REPLACEMENT,substitute,replacement);
+    expect(")",iterator);
+  }
+ else   if (SUBSTITUTE_ALL.equals(token)) {
+    final ModelNode substitute=model.get(CommonAttributes.REPLACE.getName());
+    substitute.get(CommonAttributes.REPLACE_ALL.getName()).set(true);
+    expect("(",iterator);
+    final String pattern=expectString(iterator);
+    set(CommonAttributes.PATTERN,substitute,pattern);
+    expect(",",iterator);
+    final String replacement=expectString(iterator);
+    set(CommonAttributes.REPLACEMENT,substitute,replacement);
+    expect(")",iterator);
+  }
+ else {
+    final String name=expectName(iterator);
+    throw LoggingMessages.MESSAGES.filterNotFound(name);
+  }
+}

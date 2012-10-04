@@ -1,0 +1,74 @@
+{
+  final KernelServices kernelServices=createKernelServicesBuilder(LoggingTestEnvironment.get()).setSubsystemXml(readResource("/operations.xml")).build();
+  final String fileHandlerName="test-file-handler";
+  final File logFile=createLogFile();
+  final ModelNode handlerAddress=parseAddress(String.format("%s=%s",CommonAttributes.FILE_HANDLER,fileHandlerName),null);
+  addFileHandler(kernelServices,null,fileHandlerName,org.jboss.logmanager.Level.TRACE,logFile,true);
+  for (  Map.Entry<String,ModelNode> entry : FilterConversionTestCase.MAP.entrySet()) {
+    ModelNode op=Operations.createWriteAttributeOperation(handlerAddress,CommonAttributes.FILTER,entry.getValue());
+    executeOperation(kernelServices,op);
+    op=Operations.createReadAttributeOperation(handlerAddress,CommonAttributes.FILTER_SPEC);
+    String filterSpecResult=Operations.readResultAsString(executeOperation(kernelServices,op));
+    assertEquals(entry.getKey(),filterSpecResult);
+    final ModelNode tempHandlerAddress=parseAddress(String.format("%s=%s",CommonAttributes.CONSOLE_HANDLER,"temp"),null);
+    op=Operations.createAddOperation(tempHandlerAddress);
+    op.get(CommonAttributes.FILTER.getName()).set(entry.getValue());
+    executeOperation(kernelServices,op);
+    op=Operations.createReadAttributeOperation(tempHandlerAddress,CommonAttributes.FILTER_SPEC);
+    filterSpecResult=Operations.readResultAsString(executeOperation(kernelServices,op));
+    assertEquals(entry.getKey(),filterSpecResult);
+    op=Operations.createRemoveOperation(tempHandlerAddress,true);
+    executeOperation(kernelServices,op);
+    final ModelNode loggerAddress=parseAddress(String.format("%s=%s",CommonAttributes.LOGGER,"test-logger"),null);
+    op=Operations.createAddOperation(loggerAddress);
+    op.get(CommonAttributes.FILTER.getName()).set(entry.getValue());
+    executeOperation(kernelServices,op);
+    op=Operations.createReadAttributeOperation(loggerAddress,CommonAttributes.FILTER_SPEC);
+    filterSpecResult=Operations.readResultAsString(executeOperation(kernelServices,op));
+    assertEquals(entry.getKey(),filterSpecResult);
+    op=Operations.createUndefineAttributeOperation(loggerAddress,CommonAttributes.FILTER_SPEC);
+    executeOperation(kernelServices,op);
+    op=Operations.createReadAttributeOperation(loggerAddress,CommonAttributes.FILTER);
+    assertEquals("Filter was not undefined",Operations.UNDEFINED,Operations.readResult(executeOperation(kernelServices,op)));
+    op=Operations.createReadAttributeOperation(loggerAddress,CommonAttributes.FILTER_SPEC);
+    assertEquals("Filter was not undefined",Operations.UNDEFINED,Operations.readResult(executeOperation(kernelServices,op)));
+    op=Operations.createWriteAttributeOperation(loggerAddress,CommonAttributes.FILTER,entry.getValue());
+    executeOperation(kernelServices,op);
+    op=Operations.createReadAttributeOperation(loggerAddress,CommonAttributes.FILTER_SPEC);
+    filterSpecResult=Operations.readResultAsString(executeOperation(kernelServices,op));
+    assertEquals(entry.getKey(),filterSpecResult);
+    op=Operations.createRemoveOperation(loggerAddress,true);
+    executeOperation(kernelServices,op);
+  }
+  for (  Map.Entry<String,ModelNode> entry : FilterConversionTestCase.MAP.entrySet()) {
+    ModelNode op=Operations.createWriteAttributeOperation(handlerAddress,CommonAttributes.FILTER_SPEC,entry.getKey());
+    executeOperation(kernelServices,op);
+    op=Operations.createReadAttributeOperation(handlerAddress,CommonAttributes.FILTER);
+    ModelNode filterResult=Operations.readResult(executeOperation(kernelServices,op));
+    ModelTestUtils.compare(entry.getValue(),filterResult);
+    final ModelNode tempHandlerAddress=parseAddress(String.format("%s=%s",CommonAttributes.CONSOLE_HANDLER,"temp"),null);
+    op=Operations.createAddOperation(tempHandlerAddress);
+    op.get(CommonAttributes.FILTER_SPEC.getName()).set(entry.getKey());
+    executeOperation(kernelServices,op);
+    op=Operations.createReadAttributeOperation(tempHandlerAddress,CommonAttributes.FILTER);
+    filterResult=Operations.readResult(executeOperation(kernelServices,op));
+    ModelTestUtils.compare(entry.getValue(),filterResult);
+    op=Operations.createRemoveOperation(tempHandlerAddress,true);
+    executeOperation(kernelServices,op);
+    final ModelNode loggerAddress=parseAddress(String.format("%s=%s",CommonAttributes.LOGGER,"test-logger"),null);
+    op=Operations.createAddOperation(loggerAddress);
+    op.get(CommonAttributes.FILTER_SPEC.getName()).set(entry.getKey());
+    executeOperation(kernelServices,op);
+    op=Operations.createReadAttributeOperation(loggerAddress,CommonAttributes.FILTER);
+    filterResult=Operations.readResult(executeOperation(kernelServices,op));
+    ModelTestUtils.compare(entry.getValue(),filterResult);
+    op=Operations.createWriteAttributeOperation(loggerAddress,CommonAttributes.FILTER_SPEC,entry.getKey());
+    executeOperation(kernelServices,op);
+    op=Operations.createReadAttributeOperation(loggerAddress,CommonAttributes.FILTER);
+    filterResult=Operations.readResult(executeOperation(kernelServices,op));
+    ModelTestUtils.compare(entry.getValue(),filterResult);
+    op=Operations.createRemoveOperation(loggerAddress,true);
+    executeOperation(kernelServices,op);
+  }
+  removeFileHandler(kernelServices,null,fileHandlerName,true);
+}
