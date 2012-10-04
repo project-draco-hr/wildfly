@@ -6,22 +6,18 @@
   session.registerSubModel(MailServerDefinition.INSTANCE_IMAP);
   session.registerSubModel(MailServerDefinition.INSTANCE_POP3);
   session.registerSubModel(MailServerDefinition.INSTANCE_SMTP);
+  session.registerSubModel(MailServerDefinition.INSTANCE_CUSTOM);
   subsystem.registerXMLElementWriter(parser);
-  TransformersSubRegistration serverTransformers=subsystem.registerModelTransformers(ModelVersion.create(1,1,0),new AbstractSubsystemTransformer(SUBSYSTEM_NAME){
-    @Override protected ModelNode transformModel(    TransformationContext context,    ModelNode model){
-      for (      Property p : model.get(MAIL_SESSION_PATH.getKey()).asPropertyList()) {
-        for (        Property server : p.getValue().get(MailSubsystemModel.SERVER_TYPE).asPropertyList()) {
-          ModelNode serverModel=server.getValue();
-          if (serverModel.has(TLS)) {
-            serverModel.remove(TLS);
-          }
-          model.get(MailSubsystemModel.MAIL_SESSION,p.getName(),MailSubsystemModel.SERVER_TYPE,server.getName()).set(serverModel);
-        }
+  TransformersSubRegistration sessionTransformers=subsystem.registerModelTransformers(ModelVersion.create(1,1,0),null).registerSubResource(MAIL_SESSION_PATH);
+  TransformersSubRegistration serverTransformers=sessionTransformers.registerSubResource(SMTP_SERVER_PATH,new ResourceTransformer(){
+    @Override public void transformResource(    ResourceTransformationContext context,    PathAddress address,    Resource resource) throws OperationFailedException {
+      ModelNode serverModel=resource.getModel();
+      if (serverModel.has(TLS)) {
+        serverModel.remove(TLS);
       }
-      return model;
     }
   }
-).registerSubResource(MAIL_SESSION_PATH).registerSubResource(SMTP_SERVER_PATH);
+);
   serverTransformers.registerOperationTransformer(ADD,new AbstractOperationTransformer(){
     @Override protected ModelNode transform(    TransformationContext context,    PathAddress address,    ModelNode operation){
       if (operation.has(TLS)) {
@@ -31,4 +27,5 @@
     }
   }
 );
+  sessionTransformers.registerSubResource(CUSTOM_SERVER_PATH,true);
 }
