@@ -1,0 +1,22 @@
+{
+  final String patchId=operation.require(PATCH_ID).asString();
+  context.acquireControllerLock();
+  final PatchInfoService service=(PatchInfoService)context.getServiceRegistry(false).getRequiredService(PatchInfoService.NAME).getValue();
+  final PatchInfo info=service.getPatchInfo();
+  if (info.getCumulativeID().equals(patchId)) {
+    throw PatchMessages.MESSAGES.patchActive(patchId);
+  }
+  if (info.getPatchIDs().contains(patchId)) {
+    throw PatchMessages.MESSAGES.patchActive(patchId);
+  }
+  final DirectoryStructure structure=service.getStructure();
+  final File history=structure.getHistoryDir(patchId);
+  if (history.exists()) {
+    recursiveDelete(history);
+  }
+  final File patchRoot=structure.getPatchDirectory(patchId);
+  if (patchRoot.exists()) {
+    recursiveDelete(patchRoot);
+  }
+  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+}
