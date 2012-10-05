@@ -40,20 +40,32 @@
     handback=handleOperation(operationName,context,operation);
     appliedToRuntime=handback != null;
   }
-  if (context.completeStep() != OperationContext.ResultAction.KEEP && appliedToRuntime) {
-    try {
-      if (START.equals(operationName)) {
-        control.stop();
-      }
- else       if (STOP.equals(operationName)) {
-        control.start();
-      }
+  OperationContext.RollbackHandler rh;
+  if (appliedToRuntime) {
+    final HornetQComponentControl rhControl=control;
+    final Object rhHandback=handback;
+    rh=new OperationContext.RollbackHandler(){
+      @Override public void handleRollback(      OperationContext context,      ModelNode operation){
+        try {
+          if (START.equals(operationName)) {
+            rhControl.stop();
+          }
+ else           if (STOP.equals(operationName)) {
+            rhControl.start();
+          }
  else {
-        handleRevertOperation(operationName,context,operation,handback);
+            handleRevertOperation(operationName,context,operation,rhHandback);
+          }
+        }
+ catch (        Exception e) {
+          ROOT_LOGGER.revertOperationFailed(e,getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)));
+        }
       }
     }
- catch (    Exception e) {
-      ROOT_LOGGER.revertOperationFailed(e,getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)));
-    }
+;
   }
+ else {
+    rh=OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER;
+  }
+  context.completeStep(rh);
 }
