@@ -1,0 +1,85 @@
+{
+  DistributionContentItem itemPath=newStructure.getContentItem(file,parent);
+  DistributionContentItem.Type type=itemPath.getType();
+  File oldFile=null;
+  DistributionContentItem oldItemPath=newStructure.getPreviousVersionPath(itemPath,oldStructure);
+  if (oldItemPath != null) {
+    oldVisited.add(oldItemPath);
+    oldFile=oldItemPath.getFile(oldRoot);
+  }
+  boolean recurse=type.getHasRelevantChildren();
+switch (type) {
+case BUNDLE_PARENT:
+    break;
+case BUNDLE_ROOT:
+  if (oldFile == null || !oldFile.exists()) {
+    recordBundleAdd(itemPath);
+    recurse=false;
+  }
+break;
+case BUNDLE_CONTENT:
+if (oldFile == null || !oldFile.exists()) {
+recordBundleUpdate(itemPath);
+recurse=false;
+}
+ else {
+byte[] newHash=getHash(itemPath,newRoot);
+byte[] oldHash=getHash(oldFile);
+if (!Arrays.equals(newHash,oldHash)) {
+  recordBundleUpdate(itemPath);
+  recurse=false;
+}
+}
+break;
+case MODULE_PARENT:
+break;
+case MODULE_ROOT:
+if (oldFile == null || !oldFile.exists()) {
+recordModuleAdd(itemPath);
+recurse=false;
+}
+break;
+case MODULE_CONTENT:
+if (oldFile == null || !oldFile.exists()) {
+recordModuleUpdateViaContentChange(itemPath);
+recurse=false;
+}
+ else {
+DistributionContentItem moduleRoot=getModuleRoot(itemPath);
+if (!moduleUpdates.containsKey(moduleRoot)) {
+byte[] newHash=getHash(itemPath,newRoot);
+byte[] oldHash=getHash(oldFile);
+if (!Arrays.equals(newHash,oldHash)) {
+recordModuleUpdateViaContentChange(moduleRoot);
+recurse=false;
+}
+}
+}
+break;
+case MISC:
+if (oldFile == null || !oldFile.exists()) {
+recordMiscFileAdd(itemPath);
+}
+ else if (shouldCompareContents(file,oldFile)) {
+byte[] newHash=getHash(itemPath,newRoot);
+byte[] oldHash=getHash(oldFile);
+if (!Arrays.equals(newHash,oldHash)) {
+recordMiscFileUpdate(itemPath,patchConfig,newHash,oldHash);
+}
+}
+break;
+case IGNORED:
+break;
+case DISTRIBUTION_ROOT:
+default :
+throw new IllegalStateException();
+}
+if (recurse && file.isDirectory()) {
+File[] children=file.listFiles();
+if (children != null) {
+for (File child : children) {
+processNewVersionFile(child,itemPath,patchConfig,oldVisited);
+}
+}
+}
+}
