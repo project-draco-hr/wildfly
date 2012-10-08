@@ -8,38 +8,47 @@
   if (context.isNormalServer()) {
     context.addStep(new OperationStepHandler(){
       public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
-        String deploymentUnitName=null;
-        boolean enabled=ENABLED.resolveModelAttribute(context,model).asBoolean();
+        final String deploymentUnitName;
+        final boolean enabled=ENABLED.resolveModelAttribute(context,model).asBoolean();
         if (enabled) {
           deploymentUnitName=RUNTIME_NAME.resolveModelAttribute(context,model).asString();
           final ServiceName deploymentUnitServiceName=Services.deploymentUnitName(deploymentUnitName);
           context.removeService(deploymentUnitServiceName);
           context.removeService(deploymentUnitServiceName.append("contents"));
         }
-        if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
-          if (enabled) {
-            recoverServices(context,model,deployment,registration,mutableRegistration,vaultReader);
-          }
-          if (enabled && context.hasFailureDescription()) {
-            ServerLogger.ROOT_LOGGER.undeploymentRolledBack(deploymentUnitName,context.getFailureDescription().asString());
-          }
- else           if (enabled) {
-            ServerLogger.ROOT_LOGGER.undeploymentRolledBackWithNoMessage(deploymentUnitName);
-          }
-        }
  else {
-          if (enabled) {
-            ServerLogger.ROOT_LOGGER.deploymentUndeployed(deploymentUnitName);
-          }
-          for (          byte[] hash : removedHashes) {
-            try {
-              contentRepository.removeContent(hash);
+          deploymentUnitName=null;
+        }
+        final ModelNode contentNode=CONTENT_ALL.resolveModelAttribute(context,model);
+        context.completeStep(new OperationContext.ResultHandler(){
+          @Override public void handleResult(          OperationContext.ResultAction resultAction,          OperationContext context,          ModelNode operation){
+            if (resultAction == OperationContext.ResultAction.ROLLBACK) {
+              if (enabled) {
+                recoverServices(context,model,deployment,deploymentUnitName,contentNode,registration,mutableRegistration,vaultReader);
+              }
+              if (enabled && context.hasFailureDescription()) {
+                ServerLogger.ROOT_LOGGER.undeploymentRolledBack(deploymentUnitName,context.getFailureDescription().asString());
+              }
+ else               if (enabled) {
+                ServerLogger.ROOT_LOGGER.undeploymentRolledBackWithNoMessage(deploymentUnitName);
+              }
             }
- catch (            Exception e) {
-              ServerLogger.DEPLOYMENT_LOGGER.failedToRemoveDeploymentContent(e,HashUtil.bytesToHexString(hash));
+ else {
+              if (enabled) {
+                ServerLogger.ROOT_LOGGER.deploymentUndeployed(deploymentUnitName);
+              }
+              for (              byte[] hash : removedHashes) {
+                try {
+                  contentRepository.removeContent(hash);
+                }
+ catch (                Exception e) {
+                  ServerLogger.DEPLOYMENT_LOGGER.failedToRemoveDeploymentContent(e,HashUtil.bytesToHexString(hash));
+                }
+              }
             }
           }
         }
+);
       }
     }
 ,OperationContext.Stage.RUNTIME);

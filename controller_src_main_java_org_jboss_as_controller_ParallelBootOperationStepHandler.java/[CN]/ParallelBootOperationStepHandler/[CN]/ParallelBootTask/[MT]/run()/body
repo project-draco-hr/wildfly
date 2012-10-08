@@ -1,6 +1,7 @@
 {
   boolean interrupted=false;
   ParallelBootOperationContext operationContext=null;
+  boolean completeStepCalled=false;
   try {
     operationContext=new ParallelBootOperationContext(transactionControl,processState,primaryContext,runtimeOps,controllingThread);
     for (    ParsedBootOp op : bootOperations) {
@@ -20,28 +21,8 @@
     }
   }
  finally {
-    if (!transactionControl.signalled) {
-      for (      ParsedBootOp op : bootOperations) {
-        if (op.response.hasDefined(ModelDescriptionConstants.SUCCESS) && !op.response.get(ModelDescriptionConstants.SUCCESS).asBoolean()) {
-          transactionControl.operationFailed(op.response);
-          break;
-        }
-      }
-      if (!transactionControl.signalled) {
-        ModelNode failure=new ModelNode();
-        failure.get(ModelDescriptionConstants.SUCCESS).set(false);
-        failure.get(ModelDescriptionConstants.FAILURE_DESCRIPTION).set(MESSAGES.subsystemBootOperationFailedExecuting(subsystemName));
-        transactionControl.operationFailed(failure);
-      }
-    }
- else {
-      transactionControl.operationCompleted(transactionControl.response);
-    }
-    if (operationContext != null) {
-      operationContext.close();
-    }
-    if (interrupted) {
-      Thread.currentThread().interrupt();
+    if (!completeStepCalled) {
+      finalizeRun(operationContext,interrupted);
     }
   }
 }

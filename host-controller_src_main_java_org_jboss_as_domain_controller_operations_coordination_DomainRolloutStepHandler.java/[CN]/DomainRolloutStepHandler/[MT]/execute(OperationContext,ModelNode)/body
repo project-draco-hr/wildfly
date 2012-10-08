@@ -34,66 +34,25 @@
     domainOperationContext.setCompleteRollback(false);
     final Map<ServerIdentity,ServerTaskExecutor.ExecutedServerRequest> submittedTasks=new HashMap<ServerIdentity,ServerTaskExecutor.ExecutedServerRequest>();
     final List<ServerTaskExecutor.ServerPreparedResponse> preparedResults=new ArrayList<ServerTaskExecutor.ServerPreparedResponse>();
+    boolean completeStepCalled=false;
     try {
       pushToServers(context,submittedTasks,preparedResults);
-      context.completeStep();
+      context.completeStep(new OperationContext.ResultHandler(){
+        @Override public void handleResult(        OperationContext.ResultAction resultAction,        OperationContext context,        ModelNode operation){
+          finalizeOp(submittedTasks,preparedResults);
+        }
+      }
+);
+      completeStepCalled=true;
     }
   finally {
-      boolean completeRollback=domainOperationContext.isCompleteRollback();
-      final String localHostName=domainOperationContext.getLocalHostInfo().getLocalHostName();
-      for (      final ServerTaskExecutor.ServerPreparedResponse preparedResult : preparedResults) {
-        boolean rollback=completeRollback || domainOperationContext.isServerGroupRollback(preparedResult.getServerGroupName());
-        if (!preparedResult.finalizeTransaction(!rollback)) {
-          final ServerIdentity identity=preparedResult.getServerIdentity();
-          try {
-            final ModelNode result=preparedResult.getPreparedOperation().getPreparedResult();
-            ProxyController proxy=hostProxies.get(identity.getHostName());
-            if (proxy == null) {
-              if (localHostName.equals(identity.getHostName())) {
-                proxy=serverProxies.get(identity.getServerName());
-                if (proxy == null) {
-                  if (trace) {
-                    HOST_CONTROLLER_LOGGER.tracef("No proxy for %s",identity);
-                  }
-                  continue;
-                }
-              }
-            }
-            final Future<ModelNode> future=executorService.submit(new ServerRequireRestartTask(identity,proxy,result));
-            submittedTasks.put(identity,new ServerTaskExecutor.ExecutedServerRequest(identity,future));
-          }
- catch (          Exception ignore) {
-          }
-        }
-      }
-      boolean interrupted=false;
-      try {
-        for (        Map.Entry<ServerIdentity,ServerTaskExecutor.ExecutedServerRequest> entry : submittedTasks.entrySet()) {
-          final ServerTaskExecutor.ExecutedServerRequest request=entry.getValue();
-          final Future<ModelNode> future=request.getFinalResult();
-          try {
-            final ModelNode finalResult=future.isCancelled() ? getCancelledResult() : future.get();
-            final ModelNode transformedResult=request.transformResult(finalResult);
-            domainOperationContext.addServerResult(entry.getKey(),transformedResult);
-          }
- catch (          InterruptedException e) {
-            interrupted=true;
-            HOST_CONTROLLER_LOGGER.interruptedAwaitingFinalResponse(entry.getKey().getServerName(),entry.getKey().getHostName());
-          }
-catch (          ExecutionException e) {
-            HOST_CONTROLLER_LOGGER.caughtExceptionAwaitingFinalResponse(e.getCause(),entry.getKey().getServerName(),entry.getKey().getHostName());
-          }
-        }
-      }
-  finally {
-        if (interrupted) {
-          Thread.currentThread().interrupt();
-        }
+      if (!completeStepCalled) {
+        finalizeOp(submittedTasks,preparedResults);
       }
     }
   }
  else {
     reportHostFailures(context,operation);
-    context.completeStep();
+    context.completeStep(OperationContext.ResultHandler.NOOP_RESULT_HANDLER);
   }
 }

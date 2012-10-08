@@ -9,23 +9,28 @@
         final ServiceName deploymentUnitServiceName=Services.deploymentUnitName(deploymentUnitName);
         context.removeService(deploymentUnitServiceName);
         context.removeService(deploymentUnitServiceName.append("contents"));
-        if (context.completeStep() == OperationContext.ResultAction.ROLLBACK) {
-          final ModelNode model=context.readModel(PathAddress.EMPTY_ADDRESS);
-          final String name=model.require(NAME).asString();
-          final String runtimeName=model.require(RUNTIME_NAME).asString();
-          final DeploymentHandlerUtil.ContentItem[] contents=getContents(model.require(CONTENT));
-          final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
-          doDeploy(context,runtimeName,name,verificationHandler,deployment,registration,mutableRegistration,vaultReader,contents);
-          if (context.hasFailureDescription()) {
-            ServerLogger.ROOT_LOGGER.undeploymentRolledBack(deploymentUnitName,context.getFailureDescription().asString());
-          }
+        context.completeStep(new OperationContext.ResultHandler(){
+          @Override public void handleResult(          OperationContext.ResultAction resultAction,          OperationContext context,          ModelNode operation){
+            if (resultAction == OperationContext.ResultAction.ROLLBACK) {
+              final ModelNode model=context.readResource(PathAddress.EMPTY_ADDRESS).getModel();
+              final String name=model.require(NAME).asString();
+              final String runtimeName=model.require(RUNTIME_NAME).asString();
+              final DeploymentHandlerUtil.ContentItem[] contents=getContents(model.require(CONTENT));
+              final ServiceVerificationHandler verificationHandler=new ServiceVerificationHandler();
+              doDeploy(context,runtimeName,name,verificationHandler,deployment,registration,mutableRegistration,vaultReader,contents);
+              if (context.hasFailureDescription()) {
+                ServerLogger.ROOT_LOGGER.undeploymentRolledBack(deploymentUnitName,context.getFailureDescription().asString());
+              }
  else {
-            ServerLogger.ROOT_LOGGER.undeploymentRolledBackWithNoMessage(deploymentUnitName);
+                ServerLogger.ROOT_LOGGER.undeploymentRolledBackWithNoMessage(deploymentUnitName);
+              }
+            }
+ else {
+              ServerLogger.ROOT_LOGGER.deploymentUndeployed(deploymentUnitName);
+            }
           }
         }
- else {
-          ServerLogger.ROOT_LOGGER.deploymentUndeployed(deploymentUnitName);
-        }
+);
       }
     }
 ,OperationContext.Stage.RUNTIME);

@@ -1,5 +1,5 @@
 {
-  boolean txCompleted=false;
+  boolean completeStepCalled=false;
   try {
     ModelNode preparedResponse=preparedResultRef.get();
     ModelNode preparedResult=preparedResponse.get(RESULT);
@@ -12,44 +12,57 @@
  else {
       context.getResult().set(preparedResult);
     }
-    OperationContext.ResultAction resultAction=context.completeStep();
-    ModelController.OperationTransaction tx=txRef.get();
-    try {
-      if (resultAction == OperationContext.ResultAction.KEEP) {
-        tx.commit();
-      }
+    context.completeStep(new OperationContext.ResultHandler(){
+      @Override public void handleResult(      OperationContext.ResultAction resultAction,      OperationContext context,      ModelNode operation){
+        boolean txCompleted=false;
+        try {
+          ModelController.OperationTransaction tx=txRef.get();
+          try {
+            if (resultAction == OperationContext.ResultAction.KEEP) {
+              tx.commit();
+            }
  else {
-        tx.rollback();
-      }
-    }
+              tx.rollback();
+            }
+          }
   finally {
-      txCompleted=true;
-    }
-    ModelNode finalResponse=finalResultRef.get();
-    if (finalResponse != null) {
-      ModelNode finalResult=finalResponse.get(RESULT);
-      if (finalResponse.hasDefined(FAILURE_DESCRIPTION)) {
-        context.getFailureDescription().set(finalResponse.get(FAILURE_DESCRIPTION));
-        if (finalResult.isDefined()) {
-          context.getResult().set(finalResult);
+            txCompleted=true;
+          }
+          ModelNode finalResponse=finalResultRef.get();
+          if (finalResponse != null) {
+            ModelNode finalResult=finalResponse.get(RESULT);
+            if (finalResponse.hasDefined(FAILURE_DESCRIPTION)) {
+              context.getFailureDescription().set(finalResponse.get(FAILURE_DESCRIPTION));
+              if (finalResult.isDefined()) {
+                context.getResult().set(finalResult);
+              }
+            }
+ else {
+              context.getResult().set(finalResult);
+            }
+            if (context.getProcessType() == ProcessType.HOST_CONTROLLER && finalResponse.has(SERVER_GROUPS)) {
+              context.getServerResults().set(finalResponse.get(SERVER_GROUPS));
+            }
+            if (finalResponse.hasDefined(RESPONSE_HEADERS)) {
+              context.getResponseHeaders().set(finalResponse.get(RESPONSE_HEADERS));
+            }
+          }
+ else {
+            ControllerLogger.SERVER_MANAGEMENT_LOGGER.noFinalProxyOutcomeReceived(operation.get(OP),operation.get(OP_ADDR),proxyController.getProxyNodeAddress().toModelNode());
+          }
+        }
+  finally {
+          if (!txCompleted && txRef.get() != null) {
+            txRef.get().rollback();
+          }
         }
       }
- else {
-        context.getResult().set(finalResult);
-      }
-      if (context.getProcessType() == ProcessType.HOST_CONTROLLER && finalResponse.has(SERVER_GROUPS)) {
-        context.getServerResults().set(finalResponse.get(SERVER_GROUPS));
-      }
-      if (finalResponse.hasDefined(RESPONSE_HEADERS)) {
-        context.getResponseHeaders().set(finalResponse.get(RESPONSE_HEADERS));
-      }
     }
- else {
-      ControllerLogger.SERVER_MANAGEMENT_LOGGER.noFinalProxyOutcomeReceived(operation.get(OP),operation.get(OP_ADDR),proxyController.getProxyNodeAddress().toModelNode());
-    }
+);
+    completeStepCalled=true;
   }
   finally {
-    if (!txCompleted && txRef.get() != null) {
+    if (!completeStepCalled && txRef.get() != null) {
       txRef.get().rollback();
     }
   }
