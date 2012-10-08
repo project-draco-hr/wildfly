@@ -1,14 +1,13 @@
 {
   boolean interrupted=false;
   ParallelBootOperationContext operationContext=null;
-  boolean completeStepCalled=false;
   try {
     operationContext=new ParallelBootOperationContext(transactionControl,processState,primaryContext,runtimeOps,controllingThread);
     for (    ParsedBootOp op : bootOperations) {
       final OperationStepHandler osh=op.handler == null ? rootRegistration.getOperationHandler(op.address,op.operationName) : op.handler;
       operationContext.addStep(op.response,op.operation,osh,executionStage);
     }
-    operationContext.completeStep();
+    operationContext.executeOperation();
   }
  catch (  Throwable t) {
     interrupted=(t instanceof InterruptedException);
@@ -21,8 +20,28 @@
     }
   }
  finally {
-    if (!completeStepCalled) {
-      finalizeRun(operationContext,interrupted);
+    if (!transactionControl.signalled) {
+      for (      ParsedBootOp op : bootOperations) {
+        if (op.response.hasDefined(ModelDescriptionConstants.SUCCESS) && !op.response.get(ModelDescriptionConstants.SUCCESS).asBoolean()) {
+          transactionControl.operationFailed(op.response);
+          break;
+        }
+      }
+      if (!transactionControl.signalled) {
+        ModelNode failure=new ModelNode();
+        failure.get(ModelDescriptionConstants.SUCCESS).set(false);
+        failure.get(ModelDescriptionConstants.FAILURE_DESCRIPTION).set(MESSAGES.subsystemBootOperationFailedExecuting(subsystemName));
+        transactionControl.operationFailed(failure);
+      }
+    }
+ else {
+      transactionControl.operationCompleted(transactionControl.response);
+    }
+    if (operationContext != null) {
+      operationContext.close();
+    }
+    if (interrupted) {
+      Thread.currentThread().interrupt();
     }
   }
 }
