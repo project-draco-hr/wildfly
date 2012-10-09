@@ -1,2 +1,78 @@
 {
+  if (rollbackOnly) {
+    throw new IllegalStateException();
+  }
+  final String patchId=patch.getPatchId();
+  final PatchInfo newInfo;
+  if (Patch.PatchType.ONE_OFF == patch.getPatchType()) {
+    final List<String> patches=new ArrayList<String>(info.getPatchIDs());
+    patches.add(0,patchId);
+    final String resultingVersion=info.getVersion();
+    newInfo=new LocalPatchInfo(resultingVersion,info.getCumulativeID(),patches,info.getEnvironment());
+  }
+ else {
+    final String resultingVersion=patch.getResultingVersion();
+    newInfo=new LocalPatchInfo(resultingVersion,patchId,Collections.<String>emptyList(),info.getEnvironment());
+  }
+  final File cumulativeBackup=new File(backup,DirectoryStructure.CUMULATIVE);
+  final File referencesBackup=new File(backup,DirectoryStructure.REFERENCES);
+  try {
+    PatchUtils.writeRef(cumulativeBackup,info.getCumulativeID());
+    PatchUtils.writeRefs(referencesBackup,info.getPatchIDs());
+  }
+ catch (  IOException e) {
+    throw new PatchingException(e);
+  }
+  final Patch newPatch=new RollbackPatch();
+  final File patchXml=new File(backup,PatchXml.PATCH_XML);
+  try {
+    final OutputStream os=new FileOutputStream(patchXml);
+    try {
+      PatchXml.marshal(os,newPatch);
+    }
+  finally {
+      PatchUtils.safeClose(os);
+    }
+  }
+ catch (  XMLStreamException e) {
+    throw new PatchingException(e);
+  }
+catch (  IOException e) {
+    throw new PatchingException(e);
+  }
+  try {
+    persist(newInfo);
+    return new PatchingResult(){
+      @Override public String getPatchId(){
+        return patch.getPatchId();
+      }
+      @Override public boolean hasFailures(){
+        return false;
+      }
+      @Override public Collection<ContentItem> getProblems(){
+        return Collections.emptyList();
+      }
+      @Override public PatchInfo getPatchInfo(){
+        return newInfo;
+      }
+      @Override public void rollback(){
+        try {
+          persist(info);
+        }
+ catch (        Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+    }
+;
+  }
+ catch (  Exception e) {
+    try {
+      persist(info);
+    }
+ catch (    Exception ex) {
+      PatchLogger.ROOT_LOGGER.debugf(ex,"failed to persist current version");
+    }
+    throw new PatchingException(e);
+  }
 }
