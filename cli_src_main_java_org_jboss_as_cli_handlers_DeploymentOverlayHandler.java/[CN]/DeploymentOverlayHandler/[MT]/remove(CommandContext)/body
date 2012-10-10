@@ -37,11 +37,45 @@
   composite.get(Util.OPERATION).set(Util.COMPOSITE);
   composite.get(Util.ADDRESS).setEmptyList();
   final ModelNode steps=composite.get(Util.STEPS);
-  byte redeploy=this.redeployAffected.isPresent(args) ? REDEPLOY_ONLY_AFFECTED : REDEPLOY_NONE;
-  if (contentStr != null || deploymentStr == null && sg == null) {
-    if (redeploy == REDEPLOY_ONLY_AFFECTED) {
-      redeploy=REDEPLOY_ALL;
+  if (deploymentStr != null || contentStr == null) {
+    if (ctx.isDomainMode()) {
+      if (deploymentStr == null) {
+        final List<String> sgNames=sg == null ? Util.getServerGroups(client) : sg;
+        for (        String sgName : sgNames) {
+          final List<String> deployments=loadLinkedDeployments(client,name,sgName);
+          if (!deployments.isEmpty()) {
+            addRemoveDeploymentSteps(name,sgName,deployments,steps);
+            final ModelNode op=new ModelNode();
+            final ModelNode addr=op.get(Util.ADDRESS);
+            addr.add(Util.SERVER_GROUP,sgName);
+            addr.add(Util.DEPLOYMENT_OVERLAY,name);
+            op.get(Util.OPERATION).set(Util.REMOVE);
+            steps.add(op);
+          }
+        }
+      }
+ else {
+        if (ctx.isDomainMode() && sg == null) {
+          throw new CommandFormatException(serverGroups.getFullName() + " or " + allRelevantServerGroups.getFullName()+ " is required.");
+        }
+        final List<String> deployments=Arrays.asList(deploymentStr.split(",+"));
+        for (        String group : sg) {
+          addRemoveDeploymentSteps(name,group,deployments,steps);
+        }
+      }
     }
+ else {
+      final List<String> overlays;
+      if (deploymentStr == null) {
+        overlays=loadLinkedDeployments(client,name,null);
+      }
+ else {
+        overlays=Arrays.asList(deploymentStr.split(",+"));
+      }
+      addRemoveDeploymentSteps(name,null,overlays,steps);
+    }
+  }
+  if (contentStr != null || deploymentStr == null && sg == null) {
     final List<String> contentList;
     if (contentStr == null) {
       contentList=loadContentFor(client,name);
@@ -57,37 +91,6 @@
       op.get(Util.OPERATION).set(Util.REMOVE);
       steps.add(op);
     }
-  }
-  if (deploymentStr != null || contentStr == null) {
-    if (ctx.isDomainMode()) {
-      if (deploymentStr == null) {
-        final List<String> groups=sg == null ? Util.getServerGroupsReferencingOverlay(name,client) : sg;
-        for (        String group : groups) {
-          addRemoveRedeployLinksSteps(client,steps,name,group,null,true,redeploy);
-        }
-      }
- else {
-        if (ctx.isDomainMode() && sg == null) {
-          throw new CommandFormatException(serverGroups.getFullName() + " or " + allRelevantServerGroups.getFullName()+ " is required.");
-        }
-        final List<String> links=Arrays.asList(deploymentStr.split(",+"));
-        for (        String group : sg) {
-          addRemoveRedeployLinksSteps(client,steps,name,group,links,true,redeploy);
-        }
-      }
-    }
- else {
-      if (deploymentStr == null) {
-        addRemoveRedeployLinksSteps(client,steps,name,null,null,true,redeploy);
-      }
- else {
-        final List<String> links=Arrays.asList(deploymentStr.split(",+"));
-        addRemoveRedeployLinksSteps(client,steps,name,null,links,true,redeploy);
-      }
-    }
-  }
- else   if (redeploy == REDEPLOY_ALL) {
-    addRemoveRedeployLinksSteps(client,steps,name,null,null,false,redeploy);
   }
   if (contentStr == null && deploymentStr == null && sg == null) {
     final ModelNode op=new ModelNode();
