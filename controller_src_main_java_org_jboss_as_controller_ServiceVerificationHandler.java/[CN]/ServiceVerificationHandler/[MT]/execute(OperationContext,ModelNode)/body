@@ -26,37 +26,63 @@
     }
   }
   if (!failed.isEmpty() || !problem.isEmpty()) {
+    Set<ServiceController<?>> missingTransitive=null;
+    Set<ServiceName> trackedServices=new HashSet<ServiceName>();
     final ModelNode failureDescription=context.getFailureDescription();
     ModelNode failedList=null;
     for (    ServiceController<?> controller : failed) {
       if (failedList == null) {
         failedList=failureDescription.get(MESSAGES.failedServices());
       }
-      failedList.get(controller.getName().getCanonicalName()).set(getServiceFailureDescription(controller.getStartException()));
+      ServiceName serviceName=controller.getName();
+      trackedServices.add(serviceName);
+      failedList.get(serviceName.getCanonicalName()).set(getServiceFailureDescription(controller.getStartException()));
     }
     ModelNode problemList=null;
     for (    ServiceController<?> controller : problem) {
-      if (problemList == null) {
-        problemList=failureDescription.get(MESSAGES.servicesMissingDependencies());
-      }
-      final StringBuilder problem=new StringBuilder();
-      problem.append(controller.getName().getCanonicalName());
-      final StringBuilder missing=new StringBuilder();
       Set<ServiceName> immediatelyUnavailable=controller.getImmediateUnavailableDependencies();
       if (!immediatelyUnavailable.isEmpty()) {
+        if (problemList == null) {
+          problemList=failureDescription.get(MESSAGES.servicesMissingDependencies());
+        }
+        StringBuilder missing=new StringBuilder();
         for (Iterator<ServiceName> i=immediatelyUnavailable.iterator(); i.hasNext(); ) {
           ServiceName missingSvc=i.next();
+          trackedServices.add(missingSvc);
           missing.append(missingSvc.getCanonicalName());
           if (i.hasNext()) {
             missing.append(", ");
           }
         }
+        final StringBuilder problem=new StringBuilder();
+        problem.append(controller.getName().getCanonicalName());
+        problem.append(" ").append(MESSAGES.servicesMissing(missing));
+        problemList.add(problem.toString());
       }
  else {
-        missing.append(MESSAGES.transitiveDependencies());
+        if (missingTransitive == null) {
+          missingTransitive=new HashSet<ServiceController<?>>();
+        }
+        missingTransitive.add(controller);
       }
-      problem.append(" ").append(MESSAGES.servicesMissing(missing));
-      problemList.add(problem.toString());
+    }
+    if (missingTransitive != null) {
+      SortedSet<ServiceName> allMissing=findAllMissingServices(missingTransitive,trackedServices);
+      if (!allMissing.isEmpty()) {
+        ModelNode missingTransitiveDesc=failureDescription.get(MESSAGES.missingTransitiveDependencyProblem());
+        ModelNode missingTransitiveDeps=missingTransitiveDesc.get(MESSAGES.missingTransitiveDependendents());
+        Set<ServiceName> sortedNames=new TreeSet<ServiceName>();
+        for (        ServiceController<?> serviceController : missingTransitive) {
+          sortedNames.add(serviceController.getName());
+        }
+        for (        ServiceName serviceName : sortedNames) {
+          missingTransitiveDeps.add(serviceName.getCanonicalName());
+        }
+        ModelNode allMissingList=missingTransitiveDesc.get(MESSAGES.missingTransitiveDependencies());
+        for (        ServiceName serviceName : allMissing) {
+          allMissingList.add(serviceName.getCanonicalName());
+        }
+      }
     }
     if (context.isRollbackOnRuntimeFailure()) {
       context.setRollbackOnly();
