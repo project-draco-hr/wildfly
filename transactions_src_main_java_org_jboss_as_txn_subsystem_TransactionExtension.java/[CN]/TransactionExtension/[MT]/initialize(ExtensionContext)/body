@@ -3,8 +3,15 @@
   final LogStoreResource resource=new LogStoreResource();
   final boolean registerRuntimeOnly=context.isRuntimeOnlyRegistrationValid();
   final SubsystemRegistration subsystem=context.registerSubsystem(SUBSYSTEM_NAME,MANAGEMENT_API_MAJOR_VERSION,MANAGEMENT_API_MINOR_VERSION,MANAGEMENT_API_MICRO_VERSION);
-  final ManagementResourceRegistration registration=subsystem.registerSubsystemModel(new TransactionSubsystemRootResourceDefinition(registerRuntimeOnly));
+  final TransactionSubsystemRootResourceDefinition rootResourceDefinition=new TransactionSubsystemRootResourceDefinition(registerRuntimeOnly);
+  final ManagementResourceRegistration registration=subsystem.registerSubsystemModel(rootResourceDefinition);
   registration.registerOperationHandler(GenericSubsystemDescribeHandler.DEFINITION,GenericSubsystemDescribeHandler.INSTANCE);
+  if (context.getProcessType().isServer()) {
+    final ResolvePathHandler objectStorePathHandler=ResolvePathHandler.Builder.of(RESOLVE_OBJECT_STORE_PATH,context.getPathManager()).setPathAttribute(TransactionSubsystemRootResourceDefinition.OBJECT_STORE_PATH).setRelativeToAttribute(TransactionSubsystemRootResourceDefinition.OBJECT_STORE_RELATIVE_TO).build();
+    registration.registerOperationHandler(objectStorePathHandler.getOperationDefinition(),objectStorePathHandler);
+    final ResolvePathHandler resolvePathHandler=ResolvePathHandler.Builder.of(context.getPathManager()).setPathAttribute(TransactionSubsystemRootResourceDefinition.PATH).setRelativeToAttribute(TransactionSubsystemRootResourceDefinition.RELATIVE_TO).build();
+    registration.registerOperationHandler(resolvePathHandler.getOperationDefinition(),resolvePathHandler);
+  }
   ManagementResourceRegistration logStoreChild=registration.registerSubModel(new LogStoreDefinition(resource));
   if (registerRuntimeOnly) {
     ManagementResourceRegistration transactionChild=logStoreChild.registerSubModel(new LogStoreTransactionDefinition(resource));
