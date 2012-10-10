@@ -1,0 +1,31 @@
+{
+  if (deferredModules.contains(deploymentUnit.getName())) {
+    return Mode.NEVER;
+  }
+  Mode initialMode=Mode.ACTIVE;
+  DeploymentUnit parent=DeploymentUtils.getTopDeploymentUnit(deploymentUnit);
+  if (parent == deploymentUnit) {
+    List<DeploymentUnit> subDeployments=parent.getAttachmentList(Attachments.SUB_DEPLOYMENTS);
+    for (    DeploymentUnit du : subDeployments) {
+      if (du.hasAttachment(Attachments.OSGI_MANIFEST)) {
+        initialMode=Mode.LAZY;
+        break;
+      }
+    }
+    if (initialMode == Mode.LAZY) {
+      for (      DeploymentUnit du : subDeployments) {
+        parent.addToAttachmentList(UNVISITED_DEFERRED_MODULES,du);
+      }
+    }
+  }
+ else {
+    List<DeploymentUnit> unvisited=parent.getAttachmentList(UNVISITED_DEFERRED_MODULES);
+synchronized (unvisited) {
+      unvisited.remove(deploymentUnit);
+      if (!deferredModules.isEmpty() || !unvisited.isEmpty()) {
+        initialMode=Mode.PASSIVE;
+      }
+    }
+  }
+  return initialMode;
+}

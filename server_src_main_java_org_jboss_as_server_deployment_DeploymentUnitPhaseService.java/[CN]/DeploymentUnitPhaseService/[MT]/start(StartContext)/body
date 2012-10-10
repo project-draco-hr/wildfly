@@ -11,7 +11,7 @@
   final ServiceBuilder<?> phaseServiceBuilder;
   final DeploymentUnitPhaseService<?> phaseService;
   if (nextPhase != null) {
-    final ServiceName serviceName=parent == null ? Services.deploymentUnitName(name,nextPhase) : Services.deploymentUnitName(parent.getName(),name,nextPhase);
+    final ServiceName serviceName=DeploymentUtils.getDeploymentUnitPhaseServiceName(deploymentUnit,nextPhase);
     phaseService=DeploymentUnitPhaseService.create(deploymentUnit,nextPhase);
     phaseServiceBuilder=serviceTarget.addService(serviceName,phaseService);
   }
@@ -72,10 +72,13 @@
     for (    DeploymentUnit du : subDeployments) {
       phaseServiceBuilder.addDependencies(du.getServiceName().append(phase.name()));
     }
-    Boolean deferredPhase=deploymentUnit.getAttachment(Attachments.DEFERRED_MODULE_PHASE);
-    if (Boolean.TRUE.equals(deferredPhase) && nextPhase == Phase.FIRST_MODULE_USE) {
-      DEPLOYMENT_LOGGER.infoDeferredModulePhase(name);
-      phaseServiceBuilder.setInitialMode(Mode.NEVER);
+    List<String> deferredModules=DeploymentUtils.getDeferredModules(deploymentUnit);
+    if (nextPhase == Phase.FIRST_MODULE_USE) {
+      Mode initialMode=getDeferableInitialMode(deploymentUnit,deferredModules);
+      if (initialMode != Mode.ACTIVE) {
+        DEPLOYMENT_LOGGER.infoDeferDeploymentPhase(nextPhase,name,initialMode);
+        phaseServiceBuilder.setInitialMode(initialMode);
+      }
     }
     phaseServiceBuilder.install();
   }
