@@ -2,17 +2,17 @@
   if ((certs == null) || (certs.length < 1))   return (null);
   if (authenticationManager == null)   throw MESSAGES.noAuthenticationManager();
   if (authorizationManager == null)   throw MESSAGES.noAuthorizationManager();
+  Principal incomingPrincipal=certMapping.toPrincipal(certs);
   Principal userPrincipal=null;
   try {
-    userPrincipal=certMapping.toPrincipal(certs);
     Subject subject=new Subject();
-    boolean isValid=authenticationManager.isValid(userPrincipal,certs,subject);
+    boolean isValid=authenticationManager.isValid(incomingPrincipal,certs,subject);
     if (isValid) {
-      WebLogger.WEB_SECURITY_LOGGER.tracef("User: " + userPrincipal + " is authenticated");
+      WebLogger.WEB_SECURITY_LOGGER.tracef("User: " + incomingPrincipal + " is authenticated");
       SecurityContext sc=SecurityActions.getSecurityContext();
       if (sc == null)       throw new IllegalStateException("No SecurityContext found!");
+      sc.getUtil().createSubjectInfo(incomingPrincipal,certs,subject);
       userPrincipal=getPrincipal(subject);
-      sc.getUtil().createSubjectInfo(userPrincipal,certs,subject);
       SecurityContextCallbackHandler scb=new SecurityContextCallbackHandler(sc);
       if (mappingManager != null) {
         MappingContext<RoleGroup> mc=mappingManager.getMappingContext(MappingType.ROLE.name());
@@ -35,9 +35,9 @@
  else       rolesAsStringList=mapUserRoles(rolesAsStringList);
       if (authenticationManager instanceof CacheableManager) {
         @SuppressWarnings("unchecked") CacheableManager<?,Principal> cm=(CacheableManager<?,Principal>)authenticationManager;
-        userPrincipal=new JBossGenericPrincipal(this,userPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,certs,cm,subject);
+        userPrincipal=new JBossGenericPrincipal(this,incomingPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,certs,cm,subject);
       }
- else       userPrincipal=new JBossGenericPrincipal(this,userPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,certs,null,subject);
+ else       userPrincipal=new JBossGenericPrincipal(this,incomingPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,certs,null,subject);
     }
  else {
       WebLogger.WEB_SECURITY_LOGGER.tracef("User: " + userPrincipal + " is NOT authenticated");

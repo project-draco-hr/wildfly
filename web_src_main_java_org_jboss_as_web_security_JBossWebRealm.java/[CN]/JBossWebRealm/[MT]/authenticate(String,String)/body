@@ -2,16 +2,17 @@
   if (username == null && credentials == null)   return null;
   if (authenticationManager == null)   throw new IllegalStateException("Authentication Manager has not been set");
   if (authorizationManager == null)   throw new IllegalStateException("Authorization Manager has not been set");
-  Principal userPrincipal=getPrincipal(username);
+  Principal incomingPrincipal=getPrincipal(username);
+  Principal userPrincipal;
   Subject subject=new Subject();
   try {
-    boolean isValid=authenticationManager.isValid(userPrincipal,credentials,subject);
+    boolean isValid=authenticationManager.isValid(incomingPrincipal,credentials,subject);
     if (isValid) {
-      WebLogger.WEB_SECURITY_LOGGER.tracef("User: " + userPrincipal + " is authenticated");
+      WebLogger.WEB_SECURITY_LOGGER.tracef("User: " + incomingPrincipal + " is authenticated");
       SecurityContext sc=SecurityActions.getSecurityContext();
       if (sc == null)       throw new IllegalStateException("No SecurityContext found!");
+      sc.getUtil().createSubjectInfo(incomingPrincipal,credentials,subject);
       userPrincipal=getPrincipal(subject);
-      sc.getUtil().createSubjectInfo(userPrincipal,credentials,subject);
       SecurityContextCallbackHandler scb=new SecurityContextCallbackHandler(sc);
       if (mappingManager != null) {
         MappingContext<RoleGroup> mc=mappingManager.getMappingContext(MappingType.ROLE.name());
@@ -34,12 +35,12 @@
  else       rolesAsStringList=mapUserRoles(rolesAsStringList);
       if (authenticationManager instanceof CacheableManager) {
         @SuppressWarnings("unchecked") CacheableManager<?,Principal> cm=(CacheableManager<?,Principal>)authenticationManager;
-        userPrincipal=new JBossGenericPrincipal(this,userPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,credentials,cm,subject);
+        userPrincipal=new JBossGenericPrincipal(this,incomingPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,credentials,cm,subject);
         successAudit(userPrincipal,null);
         return userPrincipal;
       }
  else {
-        userPrincipal=new JBossGenericPrincipal(this,userPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,credentials,null,subject);
+        userPrincipal=new JBossGenericPrincipal(this,incomingPrincipal.getName(),null,rolesAsStringList,userPrincipal,null,credentials,null,subject);
         successAudit(userPrincipal,null);
         return userPrincipal;
       }
