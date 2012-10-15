@@ -8,7 +8,7 @@ case TYPE:
 {
         try {
           Protocol.class.getClassLoader().loadClass(org.jgroups.conf.ProtocolConfiguration.protocol_prefix + '.' + value).asSubclass(Protocol.class).newInstance();
-          CommonAttributes.TYPE.parseAndSetParameter(value,protocol,reader);
+          ProtocolResource.TYPE.parseAndSetParameter(value,protocol,reader);
         }
  catch (        Exception e) {
           throw ParseUtils.invalidAttributeValue(reader,i);
@@ -17,7 +17,7 @@ case TYPE:
       }
 case SOCKET_BINDING:
 {
-      CommonAttributes.SOCKET_BINDING.parseAndSetParameter(value,protocol,reader);
+      ProtocolResource.SOCKET_BINDING.parseAndSetParameter(value,protocol,reader);
       break;
     }
 default :
@@ -30,32 +30,25 @@ if (!protocol.hasDefined(ModelKeys.TYPE)) {
 throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.TYPE));
 }
 protocol.get(OP_ADDR).set(stackAddress);
+ModelNode protocolAddress=stackAddress.clone();
+protocolAddress.add(ModelKeys.PROTOCOL,protocol.get(ModelKeys.TYPE).asString());
+List<ModelNode> propertyOperations=new ArrayList<ModelNode>();
 while (reader.hasNext() && (reader.nextTag() != XMLStreamConstants.END_ELEMENT)) {
-if (Element.forName(reader.getLocalName()) != Element.PROPERTY) {
-throw ParseUtils.unexpectedElement(reader);
-}
-int attributes=reader.getAttributeCount();
-String property=null;
-for (int i=0; i < attributes; i++) {
-String value=reader.getAttributeValue(i);
-Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
-switch (attribute) {
-case NAME:
+Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case PROPERTY:
 {
-    property=value;
-    break;
-  }
+  this.parseProperty(reader,protocolAddress,propertyOperations);
+  break;
+}
 default :
 {
-  throw ParseUtils.unexpectedAttribute(reader,i);
+throw ParseUtils.unexpectedElement(reader);
 }
 }
-}
-if (property == null) {
-throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.NAME));
-}
-String value=reader.getElementText();
-protocol.get(ModelKeys.PROPERTIES).add(property,value);
 }
 operations.add(protocol);
+for (ModelNode propertyOperation : propertyOperations) {
+operations.add(propertyOperation);
+}
 }
