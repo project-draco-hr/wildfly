@@ -1,0 +1,46 @@
+{
+  super.setup(config);
+  final String modulePath=config.getModulePath();
+  if (modulePath == null || modulePath.length() == 0) {
+    throw new IllegalStateException("Module path must be defined in the configuration");
+  }
+  final File modulesDir=new File(config.getModulePath());
+  final ModuleLoader moduleLoader=createModuleLoader(modulesDir);
+  final ModuleIdentifier vfsModuleID=ModuleIdentifier.create(MODULE_ID_VFS);
+  final Module vfsModule;
+  try {
+    vfsModule=moduleLoader.loadModule(vfsModuleID);
+  }
+ catch (  final ModuleLoadException mle) {
+    throw new RuntimeException("Could not load VFS module",mle);
+  }
+  Module.registerURLStreamHandlerFactoryModule(vfsModule);
+  final ModuleIdentifier logModuleId=ModuleIdentifier.create(MODULE_ID_LOGMANAGER);
+  final Module logModule;
+  try {
+    logModule=moduleLoader.loadModule(logModuleId);
+  }
+ catch (  final ModuleLoadException mle) {
+    throw new RuntimeException("Could not load logging module",mle);
+  }
+  final ModuleClassLoader logModuleClassLoader=logModule.getClassLoader();
+  final ClassLoader tccl=Thread.currentThread().getContextClassLoader();
+  try {
+    Thread.currentThread().setContextClassLoader(logModuleClassLoader);
+    SecurityActions.setSystemProperty(SYSPROP_KEY_LOGMANAGER,SYSPROP_VALUE_JBOSS_LOGMANAGER);
+    final Class<?> actualLogManagerClass=LogManager.getLogManager().getClass();
+    if (actualLogManagerClass == LogManager.class) {
+      System.err.println("Could not load JBoss LogManager; the LogManager or Logging subsystem has likely been accessed prior to this initialization.");
+    }
+ else {
+      Module.setModuleLogger(new JDKModuleLogger());
+    }
+  }
+  finally {
+    Thread.currentThread().setContextClassLoader(tccl);
+  }
+  final File jbossHome=new File(config.getJbossHome());
+  SecurityActions.setSystemProperty(SYSPROP_KEY_JBOSS_HOME_DIR,jbossHome.getAbsolutePath());
+  final StandaloneServerIndirection server=new StandaloneServerIndirection(moduleLoader,jbossHome);
+  this.server=server;
+}

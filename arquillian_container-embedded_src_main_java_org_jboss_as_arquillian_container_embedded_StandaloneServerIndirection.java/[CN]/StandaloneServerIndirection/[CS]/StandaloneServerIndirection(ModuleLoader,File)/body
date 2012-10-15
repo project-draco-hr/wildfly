@@ -1,0 +1,48 @@
+{
+  if (loader == null) {
+    throw new IllegalArgumentException("loader must be specified");
+  }
+  if (jbossHome == null) {
+    throw new IllegalArgumentException("JBOSS_HOME must be specified");
+  }
+  if (!jbossHome.exists()) {
+    throw new IllegalArgumentException("JBOSS_HOME must exist: " + jbossHome.getAbsolutePath());
+  }
+  if (!jbossHome.isDirectory()) {
+    throw new IllegalArgumentException("JBOSS_HOME must be a directory: " + jbossHome.getAbsolutePath());
+  }
+  final ModuleIdentifier embeddedModuleId=MODULE_ID_EMBEDDED;
+  final Module embeddedModule;
+  try {
+    embeddedModule=loader.loadModule(embeddedModuleId);
+  }
+ catch (  final ModuleLoadException mle) {
+    throw new RuntimeException("Could not load the Embedded Server module",mle);
+  }
+  final ModuleClassLoader embeddedModuleCL=embeddedModule.getClassLoader();
+  final Class<?> embeddedServerFactoryClass;
+  try {
+    embeddedServerFactoryClass=embeddedModuleCL.loadClass(EmbeddedServerFactory.class.getName());
+  }
+ catch (  final ClassNotFoundException cnfe) {
+    throw new RuntimeException("Could not load the embedded server factory from the embedded server module; check dependencies",cnfe);
+  }
+  final Method createServerMethod;
+  try {
+    createServerMethod=embeddedServerFactoryClass.getMethod(METHOD_NAME_CREATE,ModuleLoader.class,File.class,Properties.class,Map.class);
+  }
+ catch (  final NoSuchMethodException nsme) {
+    throw new RuntimeException("Could not get a handle to the method which will create the server",nsme);
+  }
+  final Object standaloneServer;
+  try {
+    standaloneServer=createServerMethod.invoke(null,loader,jbossHome,SecurityActions.getSystemProperties(),SecurityActions.getSystemEnvironment());
+  }
+ catch (  final InvocationTargetException ite) {
+    throw new RuntimeException(ite);
+  }
+catch (  final IllegalAccessException iae) {
+    throw new RuntimeException(iae);
+  }
+  this.standaloneServer=standaloneServer;
+}
