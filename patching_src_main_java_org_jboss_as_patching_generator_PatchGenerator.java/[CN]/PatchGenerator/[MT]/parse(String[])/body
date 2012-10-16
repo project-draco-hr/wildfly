@@ -1,7 +1,89 @@
 {
-  File patchConfig=new File(args[0]);
-  File oldFile=new File(args[1]);
-  File newFile=new File(args[2]);
-  File patchFile=new File(args[3]);
+  File patchConfig=null;
+  File oldFile=null;
+  File newFile=null;
+  File patchFile=null;
+  Set<String> required=new HashSet<String>();
+  Collections.addAll(required,"--applies-to-dist","--output-file","--patch-config","--updated-dist");
+  final int argsLength=args.length;
+  for (int i=0; i < argsLength; i++) {
+    final String arg=args[i];
+    try {
+      if ("--version".equals(arg) || "-v".equals(arg) || "-version".equals(arg)|| "-V".equals(arg)) {
+        ProductConfig productConfig=new ProductConfig(Module.getBootModuleLoader(),SecurityActions.getSystemProperty("jboss.home.dir"));
+        System.out.println(productConfig.getPrettyVersionString());
+        return null;
+      }
+ else       if ("--help".equals(arg) || "-h".equals(arg) || "-H".equals(arg)) {
+        usage();
+        return null;
+      }
+ else       if (arg.startsWith("--applies-to-dist=")) {
+        String val=arg.substring("--applies-to-dist=".length());
+        oldFile=new File(val);
+        if (!oldFile.exists()) {
+          System.err.printf(PatchMessages.MESSAGES.fileDoesNotExist(arg));
+          usage();
+          return null;
+        }
+ else         if (!oldFile.isDirectory()) {
+          System.err.printf(PatchMessages.MESSAGES.fileIsNotADirectory(arg));
+          usage();
+          return null;
+        }
+        required.remove("--applies-to-dist");
+      }
+ else       if (arg.startsWith("--updated-dist=")) {
+        String val=arg.substring("--updated-dist=".length());
+        newFile=new File(val);
+        if (!newFile.exists()) {
+          System.err.printf(PatchMessages.MESSAGES.fileDoesNotExist(arg));
+          usage();
+          return null;
+        }
+ else         if (!newFile.isDirectory()) {
+          System.err.printf(PatchMessages.MESSAGES.fileIsNotADirectory(arg));
+          usage();
+          return null;
+        }
+        required.remove("--updated-dist");
+      }
+ else       if (arg.startsWith("--patch-config=")) {
+        String val=arg.substring("--patch-config=".length());
+        patchConfig=new File(val);
+        if (!patchConfig.exists()) {
+          System.err.printf(PatchMessages.MESSAGES.fileDoesNotExist(arg));
+          usage();
+          return null;
+        }
+ else         if (patchConfig.isDirectory()) {
+          System.err.printf(PatchMessages.MESSAGES.fileIsADirectory(arg));
+          usage();
+          return null;
+        }
+        required.remove("--patch-config");
+      }
+ else       if (arg.startsWith("--output-file=")) {
+        String val=arg.substring("--output-file=".length());
+        patchFile=new File(val);
+        if (patchFile.exists() && patchFile.isDirectory()) {
+          System.err.printf(PatchMessages.MESSAGES.fileIsADirectory(arg));
+          usage();
+          return null;
+        }
+        required.remove("--output-file");
+      }
+    }
+ catch (    IndexOutOfBoundsException e) {
+      System.err.printf(PatchMessages.MESSAGES.argumentExpected(arg));
+      usage();
+      return null;
+    }
+  }
+  if (!required.isEmpty()) {
+    System.err.printf(PatchMessages.MESSAGES.missingRequiredArgs(required));
+    usage();
+    return null;
+  }
   return new PatchGenerator(patchConfig,oldFile,newFile,patchFile);
 }
