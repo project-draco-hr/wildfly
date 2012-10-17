@@ -1,6 +1,28 @@
 {
-  if (!patchInfo.getCumulativeID().equals(patchId)) {
-    if (!patchInfo.getPatchIDs().contains(patchId)) {
+  final int index=patchInfo.getPatchIDs().indexOf(patchId);
+  if (index == -1) {
+    if (patchInfo.getCumulativeID().equals(patchId)) {
+      PatchLogger.ROOT_LOGGER.cannotRollbackPatch(patchId);
+      return new FailedResult(patchId,patchInfo);
+    }
+  }
+  boolean rollbackTo=false;
+  final List<String> patches=new ArrayList<String>();
+  if (index == -1) {
+    patches.addAll(patchInfo.getPatchIDs());
+    patches.add(patchId);
+  }
+ else   if (index == 0) {
+    patches.add(patchId);
+  }
+ else {
+    if (rollbackTo) {
+      final List<String> oneOffs=new ArrayList<String>();
+      for (int i=0; i <= index; i++) {
+        patches.add(oneOffs.get(i));
+      }
+    }
+ else {
       PatchLogger.ROOT_LOGGER.cannotRollbackPatch(patchId);
       return new FailedResult(patchId,patchInfo);
     }
@@ -33,7 +55,16 @@
         throw new PatchingException("inconsistent patches for '%s' expected: %s, was: %s",cumulative,historyDir,cumulativePatches);
       }
       final PatchingContext context=PatchingContext.createForRollback(patch,patchInfo,structure,overrideAll,workDir);
-      return executeTasks(patch,context);
+      final Map<Location,PatchingTasks.ContentTaskDefinition> definitions=new LinkedHashMap<Location,PatchingTasks.ContentTaskDefinition>();
+      for (      final String rollback : patches) {
+        try {
+          context.recordRollback(rollback,definitions);
+        }
+ catch (        Exception e) {
+          throw new PatchingException(e);
+        }
+      }
+      return executeTasks(patch,definitions,context);
     }
   finally {
       PatchUtils.safeClose(is);
