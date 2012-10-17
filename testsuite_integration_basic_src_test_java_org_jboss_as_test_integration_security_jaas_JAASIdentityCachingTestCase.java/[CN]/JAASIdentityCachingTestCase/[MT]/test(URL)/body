@@ -1,0 +1,26 @@
+{
+  final URI greetingUri=new URI(webAppURL.toExternalForm() + HelloEJBCallServlet.SERVLET_PATH.substring(1) + "?"+ HelloEJBCallServlet.PARAM_JNDI_NAME+ "="+ URLEncoder.encode("java:app/" + JAR_BASE_NAME + "/"+ HelloBean.class.getSimpleName(),"UTF-8"));
+  final URI counterUri=new URI(webAppURL.toExternalForm() + LMCounterServlet.SERVLET_PATH.substring(1));
+  LOGGER.info("Requesting URL " + greetingUri);
+  final DefaultHttpClient httpClient=new DefaultHttpClient();
+  try {
+    final HttpGet getCounter=new HttpGet(counterUri);
+    final HttpGet getGreeting=new HttpGet(greetingUri);
+    HttpResponse response=httpClient.execute(getGreeting);
+    assertEquals(HttpServletResponse.SC_UNAUTHORIZED,response.getStatusLine().getStatusCode());
+    EntityUtils.consume(response.getEntity());
+    response=httpClient.execute(getCounter);
+    assertEquals("0",EntityUtils.toString(response.getEntity()));
+    final UsernamePasswordCredentials credentials=new UsernamePasswordCredentials("admin",CustomLoginModule.PASSWORD);
+    httpClient.getCredentialsProvider().setCredentials(new AuthScope(greetingUri.getHost(),greetingUri.getPort()),credentials);
+    response=httpClient.execute(getGreeting);
+    assertEquals("Hello Caller!",EntityUtils.toString(response.getEntity()));
+    response=httpClient.execute(getGreeting);
+    assertEquals("Hello Caller!",EntityUtils.toString(response.getEntity()));
+    response=httpClient.execute(getCounter);
+    assertEquals("1",EntityUtils.toString(response.getEntity()));
+  }
+  finally {
+    httpClient.getConnectionManager().shutdown();
+  }
+}
