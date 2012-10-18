@@ -10,18 +10,14 @@
     throw MESSAGES.failProcessInvocation(this.getClass().getName(),invokedMethod,viewClassOfInvokedMethod,viewMethod,viewClassName);
   }
   final EJBComponent ejbComponent=(EJBComponent)component;
-  if (ejbMethodSecurityMetaData.isDenyAll()) {
-    throw MESSAGES.invocationOfMethodNotAllowed(invokedMethod,ejbComponent.getComponentName());
+  final ServerSecurityManager securityManager=ejbComponent.getSecurityManager();
+  final MethodInterfaceType methodIntfType=this.getMethodInterfaceType(componentView.getPrivateData(MethodIntf.class));
+  final String previousContextID=setContextID(this.contextID);
+  try {
+    if (!securityManager.authorize(ejbComponent.getComponentName(),componentView.getProxyClass().getProtectionDomain().getCodeSource(),methodIntfType.name(),this.viewMethod,this.getMethodRolesAsPrincipals(),this.contextID))     throw MESSAGES.invocationOfMethodNotAllowed(invokedMethod,ejbComponent.getComponentName());
   }
-  if (!ejbMethodSecurityMetaData.isPermitAll()) {
-    final Collection<String> allowedRoles=ejbMethodSecurityMetaData.getRolesAllowed();
-    if (!allowedRoles.isEmpty()) {
-      final ServerSecurityManager securityManager=ejbComponent.getSecurityManager();
-      final EJBSecurityMetaData ejbSecurityMetaData=ejbComponent.getSecurityMetaData();
-      if (!securityManager.isCallerInRole(ejbSecurityMetaData.getSecurityRoles(),ejbSecurityMetaData.getSecurityRoleLinks(),allowedRoles.toArray(new String[allowedRoles.size()]))) {
-        throw MESSAGES.invocationOfMethodNotAllowed(invokedMethod,ejbComponent.getComponentName());
-      }
-    }
+  finally {
+    setContextID(previousContextID);
   }
   return context.proceed();
 }

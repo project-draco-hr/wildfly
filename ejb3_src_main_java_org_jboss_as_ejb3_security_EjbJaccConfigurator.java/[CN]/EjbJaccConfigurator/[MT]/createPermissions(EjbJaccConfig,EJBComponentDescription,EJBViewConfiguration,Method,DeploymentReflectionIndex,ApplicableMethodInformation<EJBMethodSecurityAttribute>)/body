@@ -1,0 +1,32 @@
+{
+  MethodIdentifier methodIdentifier=MethodIdentifier.getIdentifierForMethod(viewMethod);
+  EJBMethodSecurityAttribute ejbMethodSecurityMetaData=permissions.getViewAttribute(ejbViewConfiguration.getMethodIntf(),viewMethod.getName(),methodIdentifier.getParameterTypes());
+  if (ejbMethodSecurityMetaData == null) {
+    ejbMethodSecurityMetaData=permissions.getViewAttribute(MethodIntf.BEAN,viewMethod.getName(),methodIdentifier.getParameterTypes());
+  }
+  final Method classMethod=ClassReflectionIndexUtil.findMethod(index,ejbViewConfiguration.getComponentConfiguration().getComponentClass(),viewMethod);
+  if (ejbMethodSecurityMetaData == null) {
+    if (classMethod != null) {
+      methodIdentifier=methodIdentifier.getIdentifierForMethod(classMethod);
+      ejbMethodSecurityMetaData=permissions.getAttribute(ejbViewConfiguration.getMethodIntf(),classMethod.getDeclaringClass().getName(),classMethod.getName(),methodIdentifier.getParameterTypes());
+      if (ejbMethodSecurityMetaData == null) {
+        ejbMethodSecurityMetaData=permissions.getAttribute(MethodIntf.BEAN,classMethod.getDeclaringClass().getName(),classMethod.getName(),methodIdentifier.getParameterTypes());
+      }
+    }
+  }
+  if (ejbMethodSecurityMetaData != null) {
+    final MethodInterfaceType interfaceType=this.getMethodInterfaceType(ejbViewConfiguration.getMethodIntf());
+    final EJBMethodPermission permission=new EJBMethodPermission(description.getEJBName(),methodIdentifier.getName(),interfaceType.name(),methodIdentifier.getParameterTypes());
+    if (ejbMethodSecurityMetaData.isPermitAll()) {
+      ejbJaccConfig.addPermit(permission);
+    }
+    if (ejbMethodSecurityMetaData.isDenyAll()) {
+      ejbJaccConfig.addDeny(permission);
+    }
+    for (    String role : ejbMethodSecurityMetaData.getRolesAllowed()) {
+      ejbJaccConfig.addRole(role,permission);
+    }
+    return true;
+  }
+  return false;
+}
