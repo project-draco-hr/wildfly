@@ -1,0 +1,17 @@
+{
+  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
+  File binDir=mkdir(env.getInstalledImage().getJbossHome(),"bin");
+  File standaloneShellFile=touch(binDir,"standalone.sh");
+  dump(standaloneShellFile,"original script to run standalone AS7");
+  byte[] existingHash=calculateHash(standaloneShellFile);
+  ContentModification fileRemoved=new ContentModification(new MiscContentItem(standaloneShellFile.getName(),new String[]{"bin"},NO_CONTENT),existingHash,REMOVE);
+  Patch patch=PatchBuilder.create().setPatchId(randomString()).setDescription(randomString()).setPatchType(PatchType.ONE_OFF).addAppliesTo(info.getVersion()).addContentModification(fileRemoved).build();
+  File patchDir=mkdir(tempDir,patch.getPatchId());
+  createPatchXMLFile(patchDir,patch);
+  File zippedPatch=createZippedPatchFile(patchDir,patch.getPatchId());
+  PatchingTaskRunner runner=new PatchingTaskRunner(info,env);
+  PatchingResult result=runner.executeDirect(new FileInputStream(zippedPatch),ContentVerificationPolicy.STRICT);
+  assertPatchHasBeenApplied(result,patch);
+  assertFileDoesNotExist(standaloneShellFile);
+  assertFileExists(env.getHistoryDir(patch.getPatchId()),"misc","bin",standaloneShellFile.getName());
+}

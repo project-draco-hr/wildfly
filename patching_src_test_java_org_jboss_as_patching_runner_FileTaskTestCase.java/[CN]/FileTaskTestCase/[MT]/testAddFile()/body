@@ -1,0 +1,17 @@
+{
+  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
+  String patchID=randomString();
+  File patchDir=mkdir(tempDir,patchID);
+  String fileName="my-new-standalone.sh";
+  File newFile=touch(patchDir,"misc","bin",fileName);
+  dump(newFile,"new file resource");
+  byte[] newHash=calculateHash(newFile);
+  ContentModification fileAdded=new ContentModification(new MiscContentItem(fileName,new String[]{"bin"},newHash),NO_CONTENT,ADD);
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setPatchType(PatchType.ONE_OFF).addAppliesTo(info.getVersion()).addContentModification(fileAdded).build();
+  createPatchXMLFile(patchDir,patch);
+  File zippedPatch=createZippedPatchFile(patchDir,patch.getPatchId());
+  PatchingTaskRunner runner=new PatchingTaskRunner(info,env);
+  PatchingResult result=runner.executeDirect(new FileInputStream(zippedPatch),ContentVerificationPolicy.STRICT);
+  assertPatchHasBeenApplied(result,patch);
+  assertFileExists(env.getInstalledImage().getJbossHome(),"bin",fileName);
+}

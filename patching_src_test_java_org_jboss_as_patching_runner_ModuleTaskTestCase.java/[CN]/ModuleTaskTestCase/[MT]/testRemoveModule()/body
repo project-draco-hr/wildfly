@@ -1,0 +1,18 @@
+{
+  String moduleName=randomString();
+  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
+  createModule(env.getInstalledImage().getJbossHome(),moduleName);
+  byte[] existingHash=calculateHash(new File(env.getInstalledImage().getModulesDir(),moduleName));
+  ContentModification moduleRemoved=new ContentModification(new ModuleItem(moduleName,existingHash),existingHash,REMOVE);
+  Patch patch=PatchBuilder.create().setPatchId(randomString()).setDescription(randomString()).setPatchType(PatchType.ONE_OFF).addAppliesTo(info.getVersion()).addContentModification(moduleRemoved).build();
+  File patchDir=mkdir(tempDir,patch.getPatchId());
+  createPatchXMLFile(patchDir,patch);
+  File zippedPatch=createZippedPatchFile(patchDir,patch.getPatchId());
+  PatchingTaskRunner runner=new PatchingTaskRunner(info,env);
+  PatchingResult result=runner.executeDirect(new FileInputStream(zippedPatch),ContentVerificationPolicy.STRICT);
+  assertPatchHasBeenApplied(result,patch);
+  File modulesPatchDir=env.getModulePatchDirectory(patch.getPatchId());
+  assertDirExists(modulesPatchDir);
+  assertContains(modulesPatchDir,result.getPatchInfo().getModulePath());
+  assertDefinedAbsentModule(result.getPatchInfo().getModulePath(),moduleName);
+}
