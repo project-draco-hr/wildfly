@@ -1,6 +1,4 @@
 {
-  final ModelNode stack=Util.getEmptyOperation(ModelDescriptionConstants.ADD,null);
-  List<ModelNode> additionalConfigurationOperations=new ArrayList<ModelNode>();
   String name=null;
   for (int i=0; i < reader.getAttributeCount(); i++) {
     ParseUtils.requireNoNamespaceAttribute(reader,i);
@@ -21,20 +19,20 @@ default :
 if (name == null) {
 throw ParseUtils.missingRequired(reader,EnumSet.of(Attribute.NAME));
 }
-ModelNode stackAddress=subsystemAddress.clone();
-stackAddress.add(ModelKeys.STACK,name);
-stackAddress.protect();
-stack.get(OP_ADDR).set(stackAddress);
+PathAddress stackAddress=subsystemAddress.append(ModelKeys.STACK,name);
+final ModelNode stack=Util.createAddOperation(stackAddress);
+stack.get(OP_ADDR).set(stackAddress.toModelNode());
 if (!reader.hasNext() || (reader.nextTag() == XMLStreamConstants.END_ELEMENT) || Element.forName(reader.getLocalName()) != Element.TRANSPORT) {
 throw ParseUtils.missingRequiredElement(reader,Collections.singleton(Element.TRANSPORT));
 }
-this.parseTransport(reader,stackAddress,additionalConfigurationOperations);
+operations.add(stack);
+this.parseTransport(reader,stackAddress,operations);
 while (reader.hasNext() && (reader.nextTag() != XMLStreamConstants.END_ELEMENT)) {
 Element element=Element.forName(reader.getLocalName());
 switch (element) {
 case PROTOCOL:
 {
-    this.parseProtocol(reader,stackAddress,additionalConfigurationOperations);
+    this.parseProtocol(reader,stackAddress,operations);
     break;
   }
 default :
@@ -42,9 +40,5 @@ default :
   throw ParseUtils.unexpectedElement(reader);
 }
 }
-}
-operations.add(stack);
-for (ModelNode additionalOperation : additionalConfigurationOperations) {
-operations.add(additionalOperation);
 }
 }
