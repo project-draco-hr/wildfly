@@ -32,7 +32,7 @@
     PatchLogger.ROOT_LOGGER.cannotRollbackPatch(patchId);
     return new FailedResult(patchId,patchInfo);
   }
-  final File patchXml=new File(historyDir,PatchXml.PATCH_XML);
+  final File patchXml=new File(historyDir,PatchingContext.ROLLBACK_XML);
   if (!patchXml.exists()) {
     PatchLogger.ROOT_LOGGER.cannotRollbackPatch(patchId);
     return new FailedResult(patchId,patchInfo);
@@ -47,14 +47,16 @@
       if (!cumulative.equals(patch.getPatchId())) {
         throw new PatchingException("inconsistent cumulative version expected: %s, was: %s",patch.getPatchId(),cumulative);
       }
-      final File cumulativeReferences=structure.getCumulativeRefs(cumulative);
-      final File referencesHistory=new File(historyDir,DirectoryStructure.REFERENCES);
-      final List<String> cumulativePatches=PatchUtils.readRefs(cumulativeReferences);
-      final List<String> historyPatches=PatchUtils.readRefs(referencesHistory);
-      if (!cumulativePatches.equals(historyPatches)) {
-        throw new PatchingException("inconsistent patches for '%s' expected: %s, was: %s",cumulative,historyDir,cumulativePatches);
+      if (PatchType.CUMULATIVE == patch.getPatchType()) {
+        final File cumulativeReferences=structure.getCumulativeRefs(cumulative);
+        final File referencesHistory=new File(historyDir,DirectoryStructure.REFERENCES);
+        final List<String> cumulativePatches=PatchUtils.readRefs(cumulativeReferences);
+        final List<String> historyPatches=PatchUtils.readRefs(referencesHistory);
+        if (!cumulativePatches.equals(historyPatches)) {
+          throw new PatchingException("inconsistent patches for '%s' expected: %s, was: %s",cumulative,historyDir,cumulativePatches);
+        }
       }
-      final PatchingContext context=PatchingContext.createForRollback(patch,patchInfo,structure,overrideAll,workDir);
+      final PatchingContext context=PatchingContext.createForRollback(patch,patchInfo,structure,overrideAll,workDir,patchId);
       final Map<Location,PatchingTasks.ContentTaskDefinition> definitions=new LinkedHashMap<Location,PatchingTasks.ContentTaskDefinition>();
       for (      final String rollback : patches) {
         try {
@@ -66,8 +68,13 @@
       }
       PatchingResult rollbackResult=executeTasks(patch,definitions,context);
       if (!rollbackResult.hasFailures()) {
+        for (        final String rollback : patches) {
+          recursiveDelete(structure.getPatchDirectory(rollback));
+          recursiveDelete(structure.getHistoryDir(rollback));
+        }
         recursiveDelete(structure.getPatchDirectory(patchId));
         recursiveDelete(structure.getHistoryDir(patchId));
+        recursiveDelete(structure.getCumulativeRefs(patchId));
       }
       return rollbackResult;
     }

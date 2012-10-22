@@ -1,0 +1,17 @@
+{
+  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
+  String patchID=randomString();
+  File patchDir=mkdir(tempDir,patchID);
+  String moduleName=randomString();
+  File moduleDir=createModule(patchDir,moduleName);
+  byte[] newHash=calculateHash(moduleDir);
+  ContentModification moduleAdded=new ContentModification(new ModuleItem(moduleName,newHash),NO_CONTENT,ADD);
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setPatchType(PatchType.ONE_OFF).addAppliesTo(info.getVersion()).addContentModification(moduleAdded).build();
+  createPatchXMLFile(patchDir,patch);
+  File zippedPatch=createZippedPatchFile(patchDir,patchID);
+  PatchingTaskRunner runner=new PatchingTaskRunner(info,env);
+  PatchingResult result=runner.executeDirect(new FileInputStream(zippedPatch),ContentVerificationPolicy.STRICT);
+  assertPatchHasBeenApplied(result,patch);
+  tree(result.getPatchInfo().getEnvironment().getInstalledImage().getJbossHome());
+  assertDefinedModule(result.getPatchInfo().getModulePath(),moduleName,newHash);
+}

@@ -1,0 +1,37 @@
+{
+  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
+  String moduleName=randomString();
+  createModule(env.getInstalledImage().getJbossHome(),moduleName);
+  tree(env.getInstalledImage().getJbossHome());
+  byte[] existingHash=calculateHash(new File(env.getInstalledImage().getModulesDir(),moduleName));
+  String culumativePatchID=randomString() + "-CP";
+  File cumulativePatchDir=mkdir(tempDir,culumativePatchID);
+  File moduleDir=createModule(cumulativePatchDir,moduleName,"this is a module update in a cumulative patch");
+  byte[] updatedHashCP=calculateHash(moduleDir);
+  ContentModification moduleAdded=new ContentModification(new ModuleItem(moduleName,updatedHashCP),existingHash,MODIFY);
+  Patch cumulativePatch=PatchBuilder.create().setPatchId(culumativePatchID).setDescription(randomString()).setPatchType(PatchType.CUMULATIVE).setResultingVersion(info.getVersion() + "-CP").addAppliesTo(info.getVersion()).addContentModification(moduleAdded).build();
+  createPatchXMLFile(cumulativePatchDir,cumulativePatch);
+  File zippedCumulativePatch=createZippedPatchFile(cumulativePatchDir,culumativePatchID);
+  PatchingTaskRunner runner=new PatchingTaskRunner(info,env);
+  PatchingResult resultOfCumulativePatch=runner.executeDirect(new FileInputStream(zippedCumulativePatch),ContentVerificationPolicy.STRICT);
+  assertPatchHasBeenApplied(resultOfCumulativePatch,cumulativePatch);
+  assertDefinedModule(resultOfCumulativePatch.getPatchInfo().getModulePath(),moduleName,updatedHashCP);
+  String oneOffPatchID=randomString();
+  File oneOffPatchDir=mkdir(tempDir,oneOffPatchID);
+  File oneOffmoduleDir=createModule(oneOffPatchDir,moduleName,"update module resource");
+  byte[] updatedHashOneOff=calculateHash(oneOffmoduleDir);
+  ContentModification moduleUpdated=new ContentModification(new ModuleItem(moduleName,updatedHashOneOff),updatedHashCP,MODIFY);
+  Patch oneOffPatch=PatchBuilder.create().setPatchId(oneOffPatchID + "-oneoff").setDescription(randomString()).setPatchType(PatchType.ONE_OFF).addAppliesTo(cumulativePatch.getResultingVersion()).addContentModification(moduleUpdated).build();
+  createPatchXMLFile(oneOffPatchDir,oneOffPatch);
+  File zippedOneOffPatch=createZippedPatchFile(oneOffPatchDir,oneOffPatchID);
+  runner=new PatchingTaskRunner(resultOfCumulativePatch.getPatchInfo(),resultOfCumulativePatch.getPatchInfo().getEnvironment());
+  PatchingResult resultOfOneOffPatch=runner.executeDirect(new FileInputStream(zippedOneOffPatch),ContentVerificationPolicy.STRICT);
+  assertPatchHasBeenApplied(resultOfOneOffPatch,oneOffPatch);
+  assertDefinedModule(resultOfOneOffPatch.getPatchInfo().getModulePath(),moduleName,updatedHashOneOff);
+  runner=new PatchingTaskRunner(resultOfOneOffPatch.getPatchInfo(),resultOfOneOffPatch.getPatchInfo().getEnvironment());
+  PatchingResult resultOfCumulativePatchRollback=runner.rollback(culumativePatchID,true);
+  tree(resultOfCumulativePatchRollback.getPatchInfo().getEnvironment().getInstalledImage().getJbossHome());
+  assertPatchHasBeenRolledBack(resultOfCumulativePatchRollback,cumulativePatch,info);
+  assertNoResourcesForPatch(resultOfCumulativePatchRollback.getPatchInfo(),oneOffPatch);
+  assertDefinedModule(resultOfCumulativePatchRollback.getPatchInfo().getModulePath(),moduleName,existingHash);
+}

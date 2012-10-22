@@ -1,0 +1,20 @@
+{
+  createPatchXMLFile(patchDir,patch);
+  File zippedPatch=createZippedPatchFile(patchDir,patch.getPatchId());
+  PatchingTaskRunner runner=new PatchingTaskRunner(info,env);
+  PatchingResult result=runner.executeDirect(new FileInputStream(zippedPatch),ContentVerificationPolicy.STRICT);
+  assertPatchHasBeenApplied(result,patch);
+  File backupAppclientXmlFile=assertFileExists(result.getPatchInfo().getEnvironment().getHistoryDir(patch.getPatchId()),"configuration","appclient","appclient.xml");
+  assertFileContent(originalAppClientHash,backupAppclientXmlFile);
+  File backupStandaloneXmlFile=assertFileExists(result.getPatchInfo().getEnvironment().getHistoryDir(patch.getPatchId()),"configuration","standalone","standalone.xml");
+  assertFileContent(originalStandaloneHash,backupStandaloneXmlFile);
+  File backupDomainXmlFile=assertFileExists(result.getPatchInfo().getEnvironment().getHistoryDir(patch.getPatchId()),"configuration","domain","domain.xml");
+  assertFileContent(originalDomainHash,backupDomainXmlFile);
+  dump(standaloneXmlFile,"<updated standalone configuration with changes from the added module>");
+  byte[] updatedStandaloneXmlFile=calculateHash(standaloneXmlFile);
+  runner=new PatchingTaskRunner(result.getPatchInfo(),result.getPatchInfo().getEnvironment());
+  PatchingResult rollbackResult=runner.rollback(patch.getPatchId(),true);
+  assertPatchHasBeenRolledBack(rollbackResult,patch,info);
+  File rolledBackStandaloneXmlFile=assertFileExists(rollbackResult.getPatchInfo().getEnvironment().getInstalledImage().getStandaloneDir(),"configuration","standalone.xml");
+  assertEquals("updated content was " + bytesToHexString(updatedStandaloneXmlFile),bytesToHexString(originalStandaloneHash),bytesToHexString(calculateHash(rolledBackStandaloneXmlFile)));
+}
