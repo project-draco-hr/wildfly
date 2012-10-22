@@ -1,0 +1,28 @@
+{
+  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
+  String culumativePatchID=randomString();
+  File cumulativePatchDir=mkdir(tempDir,culumativePatchID);
+  String moduleName=randomString();
+  File moduleDir=createModule(cumulativePatchDir,moduleName);
+  byte[] newHash=calculateHash(moduleDir);
+  ContentModification moduleAdded=new ContentModification(new ModuleItem(moduleName,newHash),NO_CONTENT,ADD);
+  Patch cumulativePatch=PatchBuilder.create().setPatchId(culumativePatchID).setDescription(randomString()).setPatchType(PatchType.CUMULATIVE).setResultingVersion(info.getVersion() + "-CP").addAppliesTo(info.getVersion()).addContentModification(moduleAdded).build();
+  createPatchXMLFile(cumulativePatchDir,cumulativePatch);
+  File zippedCumulativePatch=createZippedPatchFile(cumulativePatchDir,culumativePatchID);
+  PatchingTaskRunner runner=new PatchingTaskRunner(info,env);
+  PatchingResult resultOfCumulativePatch=runner.executeDirect(new FileInputStream(zippedCumulativePatch),ContentVerificationPolicy.STRICT);
+  assertPatchHasBeenApplied(resultOfCumulativePatch,cumulativePatch);
+  assertDefinedModule(resultOfCumulativePatch.getPatchInfo().getModulePath(),moduleName,newHash);
+  String oneOffPatchID=randomString();
+  File oneOffPatchDir=mkdir(tempDir,oneOffPatchID);
+  File oneOffmoduleDir=createModule(oneOffPatchDir,moduleName,"update module resource");
+  byte[] updatedHash=calculateHash(oneOffmoduleDir);
+  ContentModification moduleUpdated=new ContentModification(new ModuleItem(moduleName,updatedHash),newHash,MODIFY);
+  Patch oneOffPatch=PatchBuilder.create().setPatchId(oneOffPatchID).setDescription(randomString()).setPatchType(PatchType.ONE_OFF).addAppliesTo(cumulativePatch.getResultingVersion()).addContentModification(moduleUpdated).build();
+  createPatchXMLFile(oneOffPatchDir,oneOffPatch);
+  File zippedOneOffPatch=createZippedPatchFile(oneOffPatchDir,oneOffPatchID);
+  runner=new PatchingTaskRunner(resultOfCumulativePatch.getPatchInfo(),resultOfCumulativePatch.getPatchInfo().getEnvironment());
+  PatchingResult resultOfOneOffPatch=runner.executeDirect(new FileInputStream(zippedOneOffPatch),ContentVerificationPolicy.STRICT);
+  assertPatchHasBeenApplied(resultOfOneOffPatch,oneOffPatch);
+  assertDefinedModule(resultOfOneOffPatch.getPatchInfo().getModulePath(),moduleName,updatedHash);
+}

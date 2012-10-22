@@ -1,7 +1,7 @@
 {
   final int index=patchInfo.getPatchIDs().indexOf(patchId);
   if (index == -1) {
-    if (patchInfo.getCumulativeID().equals(patchId)) {
+    if (!patchInfo.getCumulativeID().equals(patchId)) {
       PatchLogger.ROOT_LOGGER.cannotRollbackPatch(patchId);
       return new FailedResult(patchId,patchInfo);
     }
@@ -64,7 +64,12 @@
           throw new PatchingException(e);
         }
       }
-      return executeTasks(patch,definitions,context);
+      PatchingResult rollbackResult=executeTasks(patch,definitions,context);
+      if (!rollbackResult.hasFailures()) {
+        recursiveDelete(structure.getPatchDirectory(patchId));
+        recursiveDelete(structure.getHistoryDir(patchId));
+      }
+      return rollbackResult;
     }
   finally {
       PatchUtils.safeClose(is);
