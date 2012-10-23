@@ -1,0 +1,21 @@
+{
+  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
+  String bundleName=randomString();
+  createBundle(env.getInstalledImage().getJbossHome(),bundleName,true);
+  byte[] existingHash=calculateHash(new File(env.getInstalledImage().getBundlesDir(),bundleName));
+  String patchID=randomString();
+  File patchDir=mkdir(tempDir,patchID);
+  File bundleDir=createBundle(patchDir,bundleName,true);
+  byte[] newHash=calculateHash(bundleDir);
+  ContentModification bundleModify=new ContentModification(new BundleItem(bundleName,newHash),existingHash,MODIFY);
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setOneOffType(info.getVersion()).addContentModification(bundleModify).build();
+  createPatchXMLFile(patchDir,patch);
+  File zippedPatch=createZippedPatchFile(patchDir,patchID);
+  PatchingTaskRunner runner=new PatchingTaskRunner(info,env);
+  PatchingResult result=runner.executeDirect(new FileInputStream(zippedPatch),ContentVerificationPolicy.STRICT);
+  assertPatchHasBeenApplied(result,patch);
+  File bundlesPatchingDirectory=env.getBundlesPatchDirectory(patchID);
+  assertDirExists(bundlesPatchingDirectory);
+  assertContains(bundlesPatchingDirectory,result.getPatchInfo().getBundlePath());
+  assertDefinedBundle(result.getPatchInfo().getBundlePath(),bundleName,newHash);
+}
