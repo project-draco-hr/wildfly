@@ -1,51 +1,8 @@
 {
   super.setup(config);
-  final String modulePath=config.getModulePath();
-  final File modulesDir=new File(modulePath);
-  if (!modulesDir.isDirectory()) {
-    throw new IllegalStateException("Invalid modules directory: " + modulesDir);
-  }
-  final ModuleLoader moduleLoader=createModuleLoader(modulesDir);
-  final ModuleIdentifier vfsModuleID=ModuleIdentifier.create(MODULE_ID_VFS);
-  final Module vfsModule;
-  try {
-    vfsModule=moduleLoader.loadModule(vfsModuleID);
-  }
- catch (  final ModuleLoadException mle) {
-    throw new RuntimeException("Could not load VFS module",mle);
-  }
-  Module.registerURLStreamHandlerFactoryModule(vfsModule);
-  final String bundlePath=config.getBundlePath();
-  final File bundlesDir=new File(bundlePath);
-  if (!bundlesDir.isDirectory()) {
-    throw new IllegalStateException("Invalid modules directory: " + bundlesDir);
-  }
-  SecurityActions.setSystemProperty(SYSPROP_KEY_BUNDLE_PATH,bundlePath);
-  final ModuleIdentifier logModuleId=ModuleIdentifier.create(MODULE_ID_LOGMANAGER);
-  final Module logModule;
-  try {
-    logModule=moduleLoader.loadModule(logModuleId);
-  }
- catch (  final ModuleLoadException mle) {
-    throw new RuntimeException("Could not load logging module",mle);
-  }
-  final ModuleClassLoader logModuleClassLoader=logModule.getClassLoader();
-  final ClassLoader tccl=SecurityActions.getContextClassLoader();
-  try {
-    SecurityActions.setContextClassLoader(logModuleClassLoader);
-    SecurityActions.setSystemProperty(SYSPROP_KEY_LOGMANAGER,SYSPROP_VALUE_JBOSS_LOGMANAGER);
-    final Class<?> actualLogManagerClass=LogManager.getLogManager().getClass();
-    if (actualLogManagerClass == LogManager.class) {
-      System.err.println("Could not load JBoss LogManager; the LogManager or Logging subsystem has likely been accessed prior to this initialization.");
-    }
- else {
-      Module.setModuleLogger(new JDKModuleLogger());
-    }
-  }
-  finally {
-    SecurityActions.setContextClassLoader(tccl);
-  }
-  final File jbossHome=new File(config.getJbossHome());
-  SecurityActions.setSystemProperty(SYSPROP_KEY_JBOSS_HOME_DIR,jbossHome.getAbsolutePath());
-  this.server=new StandaloneServerIndirection(moduleLoader,jbossHome);
+  final ModuleLoader moduleLoader=setupModuleLoader(config.getModulePath());
+  setupBundlePath(config.getBundlePath());
+  setupVfsModule(moduleLoader);
+  setupLoggingSystem(moduleLoader);
+  setupServer(moduleLoader,config.getJbossHome());
 }
