@@ -1,0 +1,36 @@
+{
+  final StatefulBeanA sfsbOnLocalServer=InitialContext.doLookup("java:module/" + StatefulBeanA.class.getSimpleName() + "!"+ StatefulBeanA.class.getName());
+  final int initialCount=sfsbOnLocalServer.getCountByInvokingOnRemoteServerBean();
+  Assert.assertEquals("Unexpected initial count from stateful bean",0,initialCount);
+  final int NUM_TIMES_BEFORE_PASSIVATION=5;
+  for (int i=0; i < NUM_TIMES_BEFORE_PASSIVATION; i++) {
+    sfsbOnLocalServer.incrementCountByInvokingOnRemoteServerBean();
+  }
+  final int countAfterIncrement=sfsbOnLocalServer.getCountByInvokingOnRemoteServerBean();
+  Assert.assertEquals("Unexpected count after increment, from stateful bean",NUM_TIMES_BEFORE_PASSIVATION,countAfterIncrement);
+  final String message="foo";
+  final String firstEcho=sfsbOnLocalServer.getEchoByInvokingOnRemoteServerBean(message);
+  Assert.assertEquals("Unexpected echo from remote server SLSB",message,firstEcho);
+  final CountDownLatch passivationLatch=new CountDownLatch(1);
+  sfsbOnLocalServer.registerPassivationNotificationLatch(passivationLatch);
+  logger.info("Awaiting passivation of " + StatefulBeanA.class.getSimpleName() + " bean");
+  final boolean passivated=passivationLatch.await(3,TimeUnit.SECONDS);
+  if (passivated) {
+    logger.info("pre-passivate invoked on " + StatefulBeanA.class.getSimpleName() + " bean");
+  }
+ else {
+    Assert.fail(sfsbOnLocalServer + " was not passivated");
+  }
+  Thread.sleep(1000);
+  final int countAfterActivate=sfsbOnLocalServer.getCountByInvokingOnRemoteServerBean();
+  Assert.assertEquals("Unexpected count from stateful bean after it was activated",NUM_TIMES_BEFORE_PASSIVATION,countAfterActivate);
+  Assert.assertTrue("Post-activate method was not invoked on bean " + StatefulBeanA.class.getSimpleName(),sfsbOnLocalServer.wasPostActivateInvoked());
+  final int NUM_TIMES_AFTER_ACTIVATION=2;
+  for (int i=0; i < NUM_TIMES_AFTER_ACTIVATION; i++) {
+    sfsbOnLocalServer.incrementCountByInvokingOnRemoteServerBean();
+  }
+  final int counterAfterIncrementOnPostActivate=sfsbOnLocalServer.getCountByInvokingOnRemoteServerBean();
+  Assert.assertEquals("Unexpected count after increment, on the post activated stateful bean",NUM_TIMES_BEFORE_PASSIVATION + NUM_TIMES_AFTER_ACTIVATION,counterAfterIncrementOnPostActivate);
+  final String echoAfterPostActivate=sfsbOnLocalServer.getEchoByInvokingOnRemoteServerBean(message);
+  Assert.assertEquals("Unexpected echo message from remote server SLSB",message,echoAfterPostActivate);
+}
