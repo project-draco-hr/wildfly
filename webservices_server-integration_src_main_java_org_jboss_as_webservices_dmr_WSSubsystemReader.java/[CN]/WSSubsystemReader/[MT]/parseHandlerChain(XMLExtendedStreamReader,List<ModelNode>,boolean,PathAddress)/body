@@ -1,0 +1,44 @@
+{
+  final ModelNode operation=Util.createAddOperation();
+  String handlerChainId=null;
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    requireNoNamespaceAttribute(reader,i);
+    final String value=reader.getAttributeValue(i);
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+      handlerChainId=value;
+    break;
+case PROTOCOL_BINDINGS:
+  Attributes.PROTOCOL_BINDINGS.parseAndSetParameter(value,operation,reader);
+break;
+default :
+throw unexpectedAttribute(reader,i);
+}
+}
+final String handlerChainType=isPreHandlerChain ? PRE_HANDLER_CHAIN : POST_HANDLER_CHAIN;
+PathAddress address=parentAddress.append(handlerChainType,handlerChainId);
+operation.get(OP_ADDR).set(address.toModelNode());
+final EnumSet<Element> encountered=EnumSet.noneOf(Element.class);
+final List<ModelNode> addHandlerOperations=new LinkedList<ModelNode>();
+while (reader.nextTag() != END_ELEMENT) {
+final Element element=Element.forName(reader.getLocalName());
+if (element != Element.HANDLER && !encountered.add(element)) {
+throw unexpectedElement(reader);
+}
+switch (element) {
+case HANDLER:
+{
+parseHandler(reader,addHandlerOperations,address);
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+operationList.add(operation);
+operationList.addAll(addHandlerOperations);
+}

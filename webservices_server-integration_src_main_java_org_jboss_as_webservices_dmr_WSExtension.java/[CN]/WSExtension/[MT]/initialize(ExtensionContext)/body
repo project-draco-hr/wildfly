@@ -2,31 +2,13 @@
   final boolean registerRuntimeOnly=context.isRuntimeOnlyRegistrationValid();
   final SubsystemRegistration subsystem=context.registerSubsystem(SUBSYSTEM_NAME,MANAGEMENT_API_MAJOR_VERSION,MANAGEMENT_API_MINOR_VERSION,MANAGEMENT_API_MICRO_VERSION);
   subsystem.registerXMLElementWriter(WSSubsystemWriter.getInstance());
-  final ManagementResourceRegistration registration=subsystem.registerSubsystemModel(WSSubsystemProviders.SUBSYSTEM);
-  registration.registerOperationHandler(ADD,WSSubsystemAdd.INSTANCE,WSSubsystemProviders.SUBSYSTEM_ADD,false);
-  registration.registerOperationHandler(DESCRIBE,WSSubsystemDescribe.INSTANCE,WSSubsystemProviders.SUBSYSTEM_DESCRIBE,false,PRIVATE);
-  registration.registerOperationHandler(REMOVE,WSSubsystemRemove.INSTANCE,WSSubsystemProviders.SUBSYSTEM_REMOVE,false);
-  registration.registerReadWriteAttribute(WSDL_HOST,null,new WSSubsystemAttributeChangeHandler(new StringLengthValidator(1,Integer.MAX_VALUE,true,true)),Storage.CONFIGURATION);
-  registration.registerReadWriteAttribute(WSDL_PORT,null,new WSSubsystemAttributeChangeHandler(new IntRangeValidator(1,Integer.MAX_VALUE,true,true)),Storage.CONFIGURATION);
-  registration.registerReadWriteAttribute(WSDL_SECURE_PORT,null,new WSSubsystemAttributeChangeHandler(new IntRangeValidator(1,Integer.MAX_VALUE,true,true)),Storage.CONFIGURATION);
-  registration.registerReadWriteAttribute(MODIFY_WSDL_ADDRESS,null,new WSSubsystemAttributeChangeHandler(new ModelTypeValidator(ModelType.BOOLEAN,true)),Storage.CONFIGURATION);
-  final ManagementResourceRegistration endpointConfig=registration.registerSubModel(endpointConfigPath,WSSubsystemProviders.ENDPOINT_CONFIG_DESCRIPTION);
-  endpointConfig.registerOperationHandler(ADD,EndpointConfigAdd.INSTANCE,WSSubsystemProviders.ENDPOINT_CONFIG_ADD_DESCRIPTION,false);
-  endpointConfig.registerOperationHandler(REMOVE,EndpointConfigRemove.INSTANCE,WSSubsystemProviders.ENDPOINT_CONFIG_REMOVE_DESCRIPTION,false);
-  registerProperty(endpointConfig,false);
-  registerPreHandlerChain(endpointConfig,false);
-  registerPostHandlerChain(endpointConfig,false);
-  final ManagementResourceRegistration clientConfig=registration.registerSubModel(clientConfigPath,WSSubsystemProviders.CLIENT_CONFIG_DESCRIPTION);
-  clientConfig.registerOperationHandler(ADD,ClientConfigAdd.INSTANCE,WSSubsystemProviders.CLIENT_CONFIG_ADD_DESCRIPTION,false);
-  clientConfig.registerOperationHandler(REMOVE,ClientConfigRemove.INSTANCE,WSSubsystemProviders.CLIENT_CONFIG_REMOVE_DESCRIPTION,false);
-  registerProperty(clientConfig,true);
-  registerPreHandlerChain(clientConfig,true);
-  registerPostHandlerChain(clientConfig,true);
+  ResourceBuilder propertyResource=ResourceBuilder.Factory.create(PROPERTY_PATH,getResourceDescriptionResolver(Constants.PROPERTY)).setAddOperation(PropertyAdd.INSTANCE).setRemoveOperation(PropertyRemove.INSTANCE).addReadWriteAttribute(Attributes.VALUE,null,new ReloadRequiredWriteAttributeHandler(Attributes.VALUE));
+  ResourceBuilder handlerBuilder=ResourceBuilder.Factory.create(HANDLER_PATH,getResourceDescriptionResolver("handler")).setAddOperation(HandlerAdd.INSTANCE).setRemoveOperation(HandlerRemove.INSTANCE).addReadWriteAttribute(Attributes.CLASS,null,new ReloadRequiredWriteAttributeHandler(Attributes.CLASS));
+  ResourceBuilder preHandler=ResourceBuilder.Factory.create(PRE_HANDLER_CHAIN_PATH,getResourceDescriptionResolver(Constants.PRE_HANDLER_CHAIN)).setAddOperation(HandlerChainAdd.INSTANCE).setRemoveOperation(HandlerChainRemove.INSTANCE).addReadWriteAttribute(Attributes.PROTOCOL_BINDINGS,null,new ReloadRequiredWriteAttributeHandler(Attributes.PROTOCOL_BINDINGS)).addChild(handlerBuilder).end();
+  ResourceBuilder postHandler=ResourceBuilder.Factory.create(POST_HANDLER_CHAIN_PATH,getResourceDescriptionResolver(Constants.POST_HANDLER_CHAIN)).setAddOperation(HandlerChainAdd.INSTANCE).setRemoveOperation(HandlerChainRemove.INSTANCE).addReadWriteAttribute(Attributes.PROTOCOL_BINDINGS,null,new ReloadRequiredWriteAttributeHandler(Attributes.PROTOCOL_BINDINGS)).addChild(handlerBuilder).end();
+  ResourceDefinition subsystemResource=ResourceBuilder.Factory.createSubsystemRoot(SUBSYSTEM_PATH,getResourceDescriptionResolver(),WSSubsystemAdd.INSTANCE,WSSubsystemRemove.INSTANCE).addReadWriteAttribute(Attributes.WSDL_HOST,null,new WSSubsystemAttributeChangeHandler(Attributes.WSDL_HOST)).addReadWriteAttribute(Attributes.WSDL_PORT,null,new WSSubsystemAttributeChangeHandler(Attributes.WSDL_PORT)).addReadWriteAttribute(Attributes.WSDL_SECURE_PORT,null,new WSSubsystemAttributeChangeHandler(Attributes.WSDL_SECURE_PORT)).addReadWriteAttribute(Attributes.MODIFY_WSDL_ADDRESS,null,new WSSubsystemAttributeChangeHandler(Attributes.MODIFY_WSDL_ADDRESS)).addChild(ENDPOINT_CONFIG_PATH,EndpointConfigAdd.INSTANCE,EndpointConfigRemove.INSTANCE).addChild(propertyResource).end().addChild(preHandler).end().addChild(postHandler).end().end().addChild(CLIENT_CONFIG_PATH,ClientConfigAdd.INSTANCE,ClientConfigRemove.INSTANCE).addChild(propertyResource).end().addChild(preHandler).end().addChild(postHandler).end().end().build();
+  subsystem.registerSubsystemModel(subsystemResource);
   if (registerRuntimeOnly) {
-    final ManagementResourceRegistration deployments=subsystem.registerDeploymentModel(WSSubsystemProviders.DEPLOYMENT_DESCRIPTION);
-    final ManagementResourceRegistration endpoints=deployments.registerSubModel(endpointPath,WSSubsystemProviders.ENDPOINT_DESCRIPTION);
-    for (    final String attributeName : WSEndpointMetrics.ATTRIBUTES) {
-      endpoints.registerMetric(attributeName,WSEndpointMetrics.INSTANCE);
-    }
+    subsystem.registerDeploymentModel(ResourceBuilder.Factory.create(SUBSYSTEM_PATH,getResourceDescriptionResolver("deployments")).addChild(ENDPOINT_PATH).addMetrics(WSEndpointMetrics.INSTANCE,WSEndpointMetrics.ATTRIBUTES).build());
   }
 }

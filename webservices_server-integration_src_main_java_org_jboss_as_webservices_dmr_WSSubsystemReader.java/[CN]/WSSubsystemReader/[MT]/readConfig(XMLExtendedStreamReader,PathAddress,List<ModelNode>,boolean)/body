@@ -1,0 +1,48 @@
+{
+  String configName=null;
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    requireNoNamespaceAttribute(reader,i);
+    final String value=reader.getAttributeValue(i);
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+      configName=value;
+    break;
+default :
+  throw unexpectedAttribute(reader,i);
+}
+}
+final PathAddress address=parentAddress.append(client ? CLIENT_CONFIG : ENDPOINT_CONFIG,configName);
+final ModelNode node=Util.createAddOperation(address);
+operationList.add(node);
+final EnumSet<Element> encountered=EnumSet.noneOf(Element.class);
+while (reader.nextTag() != END_ELEMENT) {
+final Element element=Element.forName(reader.getLocalName());
+if (element != Element.PRE_HANDLER_CHAIN && element != Element.POST_HANDLER_CHAIN && element != Element.PROPERTY && !encountered.add(element)) {
+throw unexpectedElement(reader);
+}
+switch (element) {
+case PRE_HANDLER_CHAIN:
+{
+  parseHandlerChain(reader,operationList,true,address);
+  break;
+}
+case POST_HANDLER_CHAIN:
+{
+parseHandlerChain(reader,operationList,false,address);
+break;
+}
+case PROPERTY:
+{
+final ModelNode operation=parseProperty(reader,address);
+operationList.add(operation);
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+}
