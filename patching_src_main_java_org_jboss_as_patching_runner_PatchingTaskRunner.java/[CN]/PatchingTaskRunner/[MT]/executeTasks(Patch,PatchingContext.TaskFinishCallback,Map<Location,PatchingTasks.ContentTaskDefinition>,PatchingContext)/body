@@ -1,0 +1,36 @@
+{
+  final List<PatchingTask> tasks=new ArrayList<PatchingTask>();
+  final List<ContentItem> problems=new ArrayList<ContentItem>();
+  for (  final PatchingTasks.ContentTaskDefinition definition : definitions.values()) {
+    final PatchingTask task=context.createTask(definition);
+    try {
+      if (!task.prepare(context) || definition.hasConflicts()) {
+        final ContentItem item=task.getContentItem();
+        if (!context.isIgnored(item)) {
+          problems.add(item);
+        }
+      }
+      tasks.add(task);
+    }
+ catch (    IOException e) {
+      throw new PatchingException(e);
+    }
+  }
+  if (!problems.isEmpty()) {
+    finishTask.rollbackCallback();
+    return new FailedResult(patch.getPatchId(),context.getPatchInfo(),problems);
+  }
+  try {
+    for (    final PatchingTask task : tasks) {
+      final ContentItem item=task.getContentItem();
+      if (item != null && context.isExcluded(item)) {
+        continue;
+      }
+      task.execute(context);
+    }
+  }
+ catch (  Exception e) {
+    throw rethrowException(e);
+  }
+  return context.finish(finishTask);
+}

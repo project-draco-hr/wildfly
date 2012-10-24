@@ -44,9 +44,6 @@
       final Patch patch=PatchXml.parse(is);
       final File previousCP=new File(historyDir,DirectoryStructure.CUMULATIVE);
       final String cumulative=PatchUtils.readRef(previousCP);
-      if (!cumulative.equals(patch.getPatchId())) {
-        throw new PatchingException("inconsistent cumulative version expected: %s, was: %s",patch.getPatchId(),cumulative);
-      }
       if (PatchType.CUMULATIVE == patch.getPatchType()) {
         final File cumulativeReferences=structure.getCumulativeRefs(cumulative);
         final File referencesHistory=new File(historyDir,DirectoryStructure.REFERENCES);
@@ -56,7 +53,7 @@
           throw new PatchingException("inconsistent patches for '%s' expected: %s, was: %s",cumulative,historyDir,cumulativePatches);
         }
       }
-      final PatchingContext context=PatchingContext.createForRollback(patch,patchInfo,structure,overrideAll,workDir,patchId);
+      final PatchingContext context=PatchingContext.createForRollback(patch,patchInfo,structure,overrideAll,workDir);
       final Map<Location,PatchingTasks.ContentTaskDefinition> definitions=new LinkedHashMap<Location,PatchingTasks.ContentTaskDefinition>();
       for (      final String rollback : patches) {
         try {
@@ -66,17 +63,8 @@
           throw new PatchingException(e);
         }
       }
-      PatchingResult rollbackResult=executeTasks(patch,definitions,context);
-      if (!rollbackResult.hasFailures()) {
-        for (        final String rollback : patches) {
-          recursiveDelete(structure.getPatchDirectory(rollback));
-          recursiveDelete(structure.getHistoryDir(rollback));
-        }
-        recursiveDelete(structure.getPatchDirectory(patchId));
-        recursiveDelete(structure.getHistoryDir(patchId));
-        recursiveDelete(structure.getCumulativeRefs(patchId));
-      }
-      return rollbackResult;
+      final PatchingContext.TaskFinishCallback task=new PatchingRollbackCallback(patchId,patch,patches,cumulative,structure);
+      return executeTasks(patch,task,definitions,context);
     }
   finally {
       PatchUtils.safeClose(is);
