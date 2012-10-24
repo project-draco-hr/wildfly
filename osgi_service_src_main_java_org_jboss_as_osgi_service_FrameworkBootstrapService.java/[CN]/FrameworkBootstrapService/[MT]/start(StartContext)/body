@@ -13,25 +13,24 @@
     JAXPServiceProvider.addService(serviceTarget);
     ResolverService.addService(serviceTarget);
     RepositoryService.addService(serviceTarget);
-    FrameworkBuilder builder=new FrameworkBuilder(props);
+    Activation activation=subsystemState.getActivationPolicy();
+    Mode initialMode=(activation == Activation.EAGER ? Mode.ACTIVE : Mode.LAZY);
+    FrameworkBuilder builder=new FrameworkBuilder(props,initialMode);
     builder.setServiceContainer(serviceContainer);
     builder.setServiceTarget(serviceTarget);
-    builder.installIntegrationService(serviceContainer,serviceTarget,new BundleLifecycleIntegration());
-    builder.installIntegrationService(serviceContainer,serviceTarget,new FrameworkModuleIntegration(props));
-    builder.installIntegrationService(serviceContainer,serviceTarget,new ModuleLoaderIntegration());
-    builder.installIntegrationService(serviceContainer,serviceTarget,new SystemServicesIntegration(resource,extensions));
-    Activation activation=subsystemState.getActivationPolicy();
+    builder.registerFrameworkServices(serviceContainer,true);
+    builder.registerIntegrationService(FrameworkPhase.CREATE,new BundleLifecycleIntegration());
+    builder.registerIntegrationService(FrameworkPhase.CREATE,new FrameworkModuleIntegration(props));
+    builder.registerIntegrationService(FrameworkPhase.CREATE,new ModuleLoaderIntegration());
+    builder.registerIntegrationService(FrameworkPhase.CREATE,new SystemServicesIntegration(resource,extensions));
+    builder.registerIntegrationService(FrameworkPhase.INIT,new BootstrapBundlesIntegration());
+    builder.registerIntegrationService(FrameworkPhase.INIT,new PersistentBundlesIntegration());
+    builder.installFrameworkServices(FrameworkPhase.CREATE,serviceTarget,verificationHandler);
     if (activation == Activation.EAGER) {
-      builder.installIntegrationService(serviceContainer,serviceTarget,new BootstrapBundlesIntegration());
-      builder.installIntegrationService(serviceContainer,serviceTarget,new PersistentBundlesIntegration());
-      builder.setInitialMode(Mode.ACTIVE);
+      builder.installFrameworkServices(FrameworkPhase.INIT,serviceTarget,verificationHandler);
+      builder.installFrameworkServices(FrameworkPhase.ACTIVE,serviceTarget,verificationHandler);
     }
- else {
-      builder.addExcludedService(IntegrationService.BOOTSTRAP_BUNDLES_INSTALL);
-      builder.addExcludedService(IntegrationService.PERSISTENT_BUNDLES_INSTALL);
-      builder.setInitialMode(Mode.LAZY);
-    }
-    builder.createFrameworkServices(true);
+    FrameworkActivator.create(builder);
   }
  catch (  Throwable th) {
     throw MESSAGES.startFailedToCreateFrameworkServices(th);
