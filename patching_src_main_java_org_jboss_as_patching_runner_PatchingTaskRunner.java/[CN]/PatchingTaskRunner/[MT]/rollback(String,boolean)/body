@@ -2,8 +2,7 @@
   final int index=patchInfo.getPatchIDs().indexOf(patchId);
   if (index == -1) {
     if (!patchInfo.getCumulativeID().equals(patchId)) {
-      PatchLogger.ROOT_LOGGER.cannotRollbackPatch(patchId);
-      return new FailedResult(patchId,patchInfo);
+      throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
     }
   }
   boolean rollbackTo=false;
@@ -23,19 +22,16 @@
       }
     }
  else {
-      PatchLogger.ROOT_LOGGER.cannotRollbackPatch(patchId);
-      return new FailedResult(patchId,patchInfo);
+      throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
     }
   }
   final File historyDir=structure.getHistoryDir(patchId);
   if (!historyDir.exists()) {
-    PatchLogger.ROOT_LOGGER.cannotRollbackPatch(patchId);
-    return new FailedResult(patchId,patchInfo);
+    throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
   }
   final File patchXml=new File(historyDir,PatchingContext.ROLLBACK_XML);
   if (!patchXml.exists()) {
-    PatchLogger.ROOT_LOGGER.cannotRollbackPatch(patchId);
-    return new FailedResult(patchId,patchInfo);
+    throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
   }
   File workDir=createTempDir();
   try {
@@ -64,7 +60,13 @@
         }
       }
       final PatchingContext.TaskFinishCallback task=new PatchingRollbackCallback(patchId,patch,patches,cumulative,structure);
-      return executeTasks(patch,task,definitions,context);
+      try {
+        return executeTasks(task,definitions,context);
+      }
+ catch (      Exception e) {
+        task.rollbackCallback();
+        throw rethrowException(e);
+      }
     }
   finally {
       PatchUtils.safeClose(is);
