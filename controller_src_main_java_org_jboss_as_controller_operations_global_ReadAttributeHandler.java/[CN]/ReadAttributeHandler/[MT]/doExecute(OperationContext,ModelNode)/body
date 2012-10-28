@@ -2,15 +2,6 @@
   validator.validate(operation);
   final String attributeName=operation.require(GlobalOperationHandlers.NAME.getName()).asString();
   final boolean defaults=operation.get(GlobalOperationHandlers.INCLUDE_DEFAULTS.getName()).asBoolean(true);
-  Resource resource=null;
-  try {
-    resource=context.readResource(PathAddress.EMPTY_ADDRESS,false);
-  }
- catch (  Exception e) {
-    context.stepCompleted();
-    return;
-  }
-  final ModelNode subModel=resource.getModel();
   final ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
   final AttributeAccess attributeAccess=registry.getAttributeAccess(PathAddress.EMPTY_ADDRESS,attributeName);
   if (attributeAccess == null) {
@@ -18,26 +9,32 @@
     if (children.contains(attributeName)) {
       throw new OperationFailedException(new ModelNode().set(MESSAGES.attributeRegisteredOnResource(attributeName,operation.get(OP_ADDR))));
     }
- else     if (subModel.hasDefined(attributeName)) {
-      final ModelNode result=subModel.get(attributeName);
-      context.getResult().set(result);
-    }
  else {
-      final ModelNode nodeDescription=getNodeDescription(registry,context,operation);
-      if (defaults && nodeDescription.get(ATTRIBUTES).hasDefined(attributeName) && nodeDescription.get(ATTRIBUTES,attributeName).hasDefined(DEFAULT)) {
-        final ModelNode result=nodeDescription.get(ATTRIBUTES,attributeName,DEFAULT);
+      final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS,false);
+      final ModelNode subModel=resource.getModel();
+      if (subModel.hasDefined(attributeName)) {
+        final ModelNode result=subModel.get(attributeName);
         context.getResult().set(result);
       }
- else       if (subModel.has(attributeName) || nodeDescription.get(ATTRIBUTES).has(attributeName)) {
-        context.getResult();
-      }
  else {
-        throw new OperationFailedException(new ModelNode().set(MESSAGES.unknownAttribute(attributeName)));
+        final ModelNode nodeDescription=getNodeDescription(registry,context,operation);
+        if (defaults && nodeDescription.get(ATTRIBUTES).hasDefined(attributeName) && nodeDescription.get(ATTRIBUTES,attributeName).hasDefined(DEFAULT)) {
+          final ModelNode result=nodeDescription.get(ATTRIBUTES,attributeName,DEFAULT);
+          context.getResult().set(result);
+        }
+ else         if (subModel.has(attributeName) || nodeDescription.get(ATTRIBUTES).has(attributeName)) {
+          context.getResult();
+        }
+ else {
+          throw new OperationFailedException(new ModelNode().set(MESSAGES.unknownAttribute(attributeName)));
+        }
       }
     }
     context.stepCompleted();
   }
  else   if (attributeAccess.getReadHandler() == null) {
+    final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS,false);
+    final ModelNode subModel=resource.getModel();
     if (subModel.hasDefined(attributeName) || !defaults) {
       final ModelNode result=subModel.get(attributeName);
       context.getResult().set(result);
