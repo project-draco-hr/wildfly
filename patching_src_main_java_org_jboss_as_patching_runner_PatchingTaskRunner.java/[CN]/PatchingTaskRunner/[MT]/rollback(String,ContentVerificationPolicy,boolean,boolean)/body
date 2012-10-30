@@ -1,0 +1,85 @@
+{
+  final int index=patchInfo.getPatchIDs().indexOf(patchId);
+  if (index == -1) {
+    if (!patchInfo.getCumulativeID().equals(patchId)) {
+      throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
+    }
+  }
+  final List<String> patches=new ArrayList<String>();
+  if (index == -1) {
+    patches.addAll(patchInfo.getPatchIDs());
+    patches.add(patchId);
+  }
+ else   if (index == 0) {
+    patches.add(patchId);
+  }
+ else {
+    if (rollbackTo) {
+      final List<String> oneOffs=new ArrayList<String>();
+      for (int i=0; i <= index; i++) {
+        patches.add(oneOffs.get(i));
+      }
+    }
+ else {
+      throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
+    }
+  }
+  final File historyDir=structure.getHistoryDir(patchId);
+  if (!historyDir.exists()) {
+    throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
+  }
+  final File patchXml=new File(historyDir,PatchingContext.ROLLBACK_XML);
+  if (!patchXml.exists()) {
+    throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
+  }
+  File workDir=createTempDir();
+  try {
+    final InputStream is=new FileInputStream(patchXml);
+    try {
+      final Patch patch=PatchXml.parse(is);
+      final File previousCP=new File(historyDir,DirectoryStructure.CUMULATIVE);
+      final String cumulative=PatchUtils.readRef(previousCP);
+      if (PatchType.CUMULATIVE == patch.getPatchType()) {
+        final File cumulativeReferences=structure.getCumulativeRefs(cumulative);
+        final File referencesHistory=new File(historyDir,DirectoryStructure.REFERENCES);
+        final List<String> cumulativePatches=PatchUtils.readRefs(cumulativeReferences);
+        final List<String> historyPatches=PatchUtils.readRefs(referencesHistory);
+        if (!cumulativePatches.equals(historyPatches)) {
+          throw new PatchingException("inconsistent patches for '%s' expected: %s, was: %s",cumulative,historyDir,cumulativePatches);
+        }
+      }
+      final PatchingContext context=PatchingContext.createForRollback(patch,patchInfo,structure,contentPolicy,workDir);
+      final Map<Location,PatchingTasks.ContentTaskDefinition> definitions=new LinkedHashMap<Location,PatchingTasks.ContentTaskDefinition>();
+      for (      final String rollback : patches) {
+        try {
+          context.recordRollback(rollback,definitions);
+        }
+ catch (        Exception e) {
+          throw new PatchingException(e);
+        }
+      }
+      final PatchingContext.TaskFinishCallback task=new PatchingRollbackCallback(patchId,patch,patches,cumulative,restoreConfiguration,structure);
+      try {
+        return executeTasks(task,definitions,context);
+      }
+ catch (      Exception e) {
+        task.rollbackCallback();
+        throw rethrowException(e);
+      }
+    }
+  finally {
+      PatchUtils.safeClose(is);
+    }
+  }
+ catch (  IOException e) {
+    throw new PatchingException(e);
+  }
+catch (  XMLStreamException e) {
+    throw new PatchingException(e);
+  }
+ finally {
+    if (workDir != null && !recursiveDelete(workDir)) {
+      PatchLogger.ROOT_LOGGER.debugf("failed to remove work directory (%s)",workDir);
+    }
+  }
+}

@@ -6,17 +6,18 @@
   }
   final PatchInfo info=service.getPatchInfo();
   final DirectoryStructure structure=service.getStructure();
-  final PatchingTaskRunner runner=new PatchingTaskRunner(info,structure);
+  final PatchTool runner=PatchTool.Factory.create(info,structure);
+  final ContentVerificationPolicy policy=PatchTool.Factory.create(operation);
   final int index=operation.get(ModelDescriptionConstants.INPUT_STREAM_INDEX).asInt(0);
   final InputStream is=context.getAttachmentStream(index);
   try {
-    final PatchingResult result=runner.executeDirect(is);
+    final PatchingResult result=runner.applyPatch(is,policy);
     context.completeStep(new OperationContext.ResultHandler(){
       @Override public void handleResult(      OperationContext.ResultAction resultAction,      OperationContext context,      ModelNode operation){
         if (resultAction == OperationContext.ResultAction.KEEP) {
-          result.commit();
           service.reloadRequired();
-          context.reloadRequired();
+          context.restartRequired();
+          result.commit();
         }
  else {
           result.rollback();

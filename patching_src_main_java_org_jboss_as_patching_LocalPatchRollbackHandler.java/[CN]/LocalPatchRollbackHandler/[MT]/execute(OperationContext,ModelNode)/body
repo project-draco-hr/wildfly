@@ -8,15 +8,17 @@
   }
   final PatchInfo info=service.getPatchInfo();
   final DirectoryStructure structure=service.getStructure();
-  final PatchingTaskRunner taskRunner=new PatchingTaskRunner(info,structure);
+  final PatchTool runner=PatchTool.Factory.create(info,structure);
+  final ContentVerificationPolicy policy=PatchTool.Factory.create(operation);
+  final boolean rollbackConfiguration=operation.get(PatchResourceDefinition.RESTORE_CONFIGURATION.getName()).asBoolean(true);
   try {
-    final PatchingResult result=taskRunner.rollback(patchId,overrideAll);
+    final PatchingResult result=runner.rollback(patchId,policy,rollbackConfiguration);
     context.completeStep(new OperationContext.ResultHandler(){
       @Override public void handleResult(      OperationContext.ResultAction resultAction,      OperationContext context,      ModelNode operation){
         if (resultAction == OperationContext.ResultAction.KEEP) {
-          result.commit();
           service.reloadRequired();
-          context.reloadRequired();
+          context.restartRequired();
+          result.commit();
         }
  else {
           result.rollback();
