@@ -1,24 +1,48 @@
 {
   container=ServiceContainer.Factory.create();
-  store=new WritableServiceBasedNamingStore(container,ContextNames.JAVA_CONTEXT_SERVICE_NAME);
-  final CountDownLatch latch=new CountDownLatch(1);
-  container.addService(ContextNames.JAVA_CONTEXT_SERVICE_NAME,new NamingStoreService(store)).setInitialMode(ServiceController.Mode.ACTIVE).addListener(new AbstractServiceListener<NamingStore>(){
-    public void transition(    ServiceController<? extends NamingStore> controller,    ServiceController.Transition transition){
+  final CountDownLatch latch1=new CountDownLatch(1);
+  container.addService(JndiNamingDependencyProcessor.serviceName(owner),new RuntimeBindReleaseService()).setInitialMode(ServiceController.Mode.ACTIVE).addListener(new AbstractServiceListener(){
+    public void transition(    ServiceController controller,    ServiceController.Transition transition){
 switch (transition) {
 case STARTING_to_UP:
 {
-          latch.countDown();
+          latch1.countDown();
           break;
         }
 case STARTING_to_START_FAILED:
 {
-        latch.countDown();
+        latch1.countDown();
         fail("Did not install store service - " + controller.getStartException().getMessage());
         break;
       }
-  }
+default :
+    break;
+}
 }
 }
 ).install();
-latch.await(10,TimeUnit.SECONDS);
+latch1.await(10,TimeUnit.SECONDS);
+store=new WritableServiceBasedNamingStore(container,ContextNames.JAVA_CONTEXT_SERVICE_NAME,container.subTarget());
+final CountDownLatch latch2=new CountDownLatch(1);
+container.addService(ContextNames.JAVA_CONTEXT_SERVICE_NAME,new NamingStoreService(store)).setInitialMode(ServiceController.Mode.ACTIVE).addListener(new AbstractServiceListener<NamingStore>(){
+public void transition(ServiceController<? extends NamingStore> controller,ServiceController.Transition transition){
+switch (transition) {
+case STARTING_to_UP:
+{
+    latch2.countDown();
+    break;
+  }
+case STARTING_to_START_FAILED:
+{
+  latch2.countDown();
+  fail("Did not install store service - " + controller.getStartException().getMessage());
+  break;
+}
+default :
+break;
+}
+}
+}
+).install();
+latch2.await(10,TimeUnit.SECONDS);
 }
