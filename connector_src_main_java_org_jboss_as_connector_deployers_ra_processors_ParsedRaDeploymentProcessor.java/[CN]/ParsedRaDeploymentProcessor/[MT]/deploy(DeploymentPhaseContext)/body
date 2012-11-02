@@ -16,16 +16,22 @@
   final IronJacamarXmlDescriptor ironJacamarXmlDescriptor=deploymentUnit.getAttachment(IronJacamarXmlDescriptor.ATTACHMENT_KEY);
   final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
   if (module == null)   throw MESSAGES.failedToGetModuleAttachment(phaseContext.getDeploymentUnit());
+  DEPLOYMENT_CONNECTOR_LOGGER.debugf("ParsedRaDeploymentProcessor: Processing=%s",deploymentUnit);
   final ClassLoader classLoader=module.getClassLoader();
   Connector cmd=connectorXmlDescriptor != null ? connectorXmlDescriptor.getConnector() : null;
   final IronJacamar ijmd=ironJacamarXmlDescriptor != null ? ironJacamarXmlDescriptor.getIronJacamar() : null;
   try {
     Annotations annotator=new Annotations();
     Map<ResourceRoot,Index> indexes=AnnotationIndexUtils.getAnnotationIndexes(deploymentUnit);
-    for (    Entry<ResourceRoot,Index> entry : indexes.entrySet()) {
-      AnnotationRepository repository=new JandexAnnotationRepositoryImpl(entry.getValue(),classLoader);
-      cmd=annotator.merge(cmd,repository,classLoader);
+    if (indexes != null && indexes.size() > 0) {
+      DEPLOYMENT_CONNECTOR_LOGGER.debugf("ParsedRaDeploymentProcessor: Found %d indexes",indexes.size());
+      for (      Entry<ResourceRoot,Index> entry : indexes.entrySet()) {
+        AnnotationRepository repository=new JandexAnnotationRepositoryImpl(entry.getValue(),classLoader);
+        cmd=annotator.merge(cmd,repository,classLoader);
+        DEPLOYMENT_CONNECTOR_LOGGER.debugf("ParsedRaDeploymentProcessor: CMD=%s",cmd);
+      }
     }
+    if (indexes == null || indexes.size() == 0)     DEPLOYMENT_CONNECTOR_LOGGER.debugf("ParsedRaDeploymentProcessor: Found 0 indexes");
     if (cmd != null) {
       cmd.validate();
       cmd=(new Merger()).mergeConnectorWithCommonIronJacamar(ijmd,cmd);
