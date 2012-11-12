@@ -1,7 +1,9 @@
 {
   final ParsedCommandLine args=ctx.getParsedCommandLine();
-  assertNotPresent(allRelevantServerGroups,args);
   final String name=this.name.getValue(args,true);
+  if (!Util.isValidPath(ctx.getModelControllerClient(),Util.DEPLOYMENT_OVERLAY,name)) {
+    throw new CommandLineException("Deployment overlay " + name + " does not exist.");
+  }
   final String contentStr=content.getValue(args,true);
   final String[] contentPairs=contentStr.split(",+");
   if (contentPairs.length == 0) {
@@ -30,59 +32,43 @@
     }
     contentPaths[i]=f;
   }
-  final String[] deployments=getLinks(this.deployments,args);
-  final String[] wildcards=getLinks(this.wildcards,args);
+  final String deploymentsStr=deployments.getValue(args);
+  if (deploymentsStr != null) {
+    throw new CommandFormatException(deployments.getFullName() + " can't be used in combination with upload.");
+  }
   final ModelControllerClient client=ctx.getModelControllerClient();
   final ModelNode composite=new ModelNode();
-  final OperationBuilder opBuilder=new OperationBuilder(composite,true);
+  final OperationBuilder opBuilder=stream ? new OperationBuilder(composite,true) : null;
   composite.get(Util.OPERATION).set(Util.COMPOSITE);
   composite.get(Util.ADDRESS).setEmptyList();
   final ModelNode steps=composite.get(Util.STEPS);
-  ModelNode op=new ModelNode();
-  ModelNode address=op.get(Util.ADDRESS);
-  address.add(Util.DEPLOYMENT_OVERLAY,name);
-  op.get(Util.OPERATION).set(Util.ADD);
-  steps.add(op);
   for (int i=0; i < contentNames.length; ++i) {
-    final String contentName=contentNames[i];
-    op=new ModelNode();
-    address=op.get(Util.ADDRESS);
+    final ModelNode op=new ModelNode();
+    ModelNode address=op.get(Util.ADDRESS);
     address.add(Util.DEPLOYMENT_OVERLAY,name);
-    address.add(Util.CONTENT,contentName);
+    address.add(Util.CONTENT,contentNames[i]);
     op.get(Util.OPERATION).set(Util.ADD);
-    op.get(Util.CONTENT).get(Util.INPUT_STREAM_INDEX).set(i);
-    opBuilder.addFileAsAttachment(contentPaths[i]);
+    if (opBuilder != null) {
+      op.get(Util.CONTENT).get(Util.INPUT_STREAM_INDEX).set(i);
+      opBuilder.addFileAsAttachment(contentPaths[i]);
+    }
+ else {
+      op.get(Util.CONTENT).get(Util.BYTES).set(Util.readBytes(contentPaths[i]));
+    }
     steps.add(op);
   }
-  if (deployments != null || wildcards != null) {
+  if (redeployAffected.isPresent(args)) {
     if (ctx.isDomainMode()) {
-      final List<String> sg=getServerGroupsToLink(ctx);
-      for (      String group : sg) {
-        op=new ModelNode();
-        address=op.get(Util.ADDRESS);
-        address.add(Util.SERVER_GROUP,group);
-        address.add(Util.DEPLOYMENT_OVERLAY,name);
-        op.get(Util.OPERATION).set(Util.ADD);
-        steps.add(op);
-        if (deployments != null) {
-          addAddRedeployLinksSteps(ctx,steps,name,group,deployments,false);
-        }
-        if (wildcards != null) {
-          addAddRedeployLinksSteps(ctx,steps,name,group,wildcards,true);
-        }
+      for (      String sgName : Util.getServerGroups(client)) {
+        addRemoveRedeployLinksSteps(client,steps,name,sgName,null,false,REDEPLOY_ALL);
       }
     }
  else {
-      if (deployments != null) {
-        addAddRedeployLinksSteps(ctx,steps,name,null,deployments,false);
-      }
-      if (wildcards != null) {
-        addAddRedeployLinksSteps(ctx,steps,name,null,wildcards,true);
-      }
+      addRemoveRedeployLinksSteps(client,steps,name,null,null,false,REDEPLOY_ALL);
     }
   }
- else   if (ctx.isDomainMode() && (serverGroups.isPresent(args) || allServerGroups.isPresent(args))) {
-    throw new CommandFormatException("server groups are specified but neither " + this.deployments.getFullName() + " nor "+ this.wildcards.getFullName()+ " is.");
+  if (opBuilder == null) {
+    return composite;
   }
   try {
     final ModelNode result=client.execute(opBuilder.build());
@@ -93,4 +79,5 @@
  catch (  IOException e) {
     throw new CommandFormatException("Failed to add overlay",e);
   }
+  return null;
 }

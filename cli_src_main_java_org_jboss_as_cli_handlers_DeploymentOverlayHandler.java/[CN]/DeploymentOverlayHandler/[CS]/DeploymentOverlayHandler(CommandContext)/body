@@ -1,5 +1,5 @@
 {
-  super("deployment-overlay",true);
+  super(ctx,"deployment-overlay",true);
   l=new ArgumentWithoutValue(this,"-l"){
     @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
       final String actionStr=action.getValue(ctx.getParsedCommandLine());
@@ -185,20 +185,20 @@
             if (groupsStr != null) {
               final String[] groups=groupsStr.split(",+");
               if (groups.length == 1) {
-                return loadLinks(client,overlay,groups[0]);
+                return filterLinks(loadLinkResources(client,overlay,groups[0]),false);
               }
  else               if (groups.length > 1) {
                 final Set<String> commonLinks=new HashSet<String>();
-                commonLinks.addAll(loadLinks(client,overlay,groups[0]));
+                commonLinks.addAll(filterLinks(loadLinkResources(client,overlay,groups[0]),false));
                 for (int i=1; i < groups.length; ++i) {
-                  commonLinks.retainAll(loadLinks(client,overlay,groups[i]));
+                  commonLinks.retainAll(filterLinks(loadLinkResources(client,overlay,groups[i]),false));
                 }
                 return commonLinks;
               }
             }
           }
  else {
-            return loadLinks(client,overlay,null);
+            return filterLinks(loadLinkResources(client,overlay,null),false);
           }
         }
  catch (        CommandLineException e) {
@@ -231,7 +231,40 @@
   deployments.addCantAppearAfter(l);
   wildcards=new ArgumentWithValue(this,new CommaSeparatedCompleter(){
     @Override protected Collection<String> getAllCandidates(    CommandContext ctx){
-      return Util.getDeployments(ctx.getModelControllerClient());
+      final String actionValue=action.getValue(ctx.getParsedCommandLine());
+      final ModelControllerClient client=ctx.getModelControllerClient();
+      if (REMOVE.equals(actionValue)) {
+        final String overlay=name.getValue(ctx.getParsedCommandLine());
+        if (overlay == null) {
+          return Collections.emptyList();
+        }
+        try {
+          if (ctx.isDomainMode()) {
+            final String groupsStr=serverGroups.getValue(ctx.getParsedCommandLine());
+            if (groupsStr != null) {
+              final String[] groups=groupsStr.split(",+");
+              if (groups.length == 1) {
+                return filterLinks(loadLinkResources(client,overlay,groups[0]),true);
+              }
+ else               if (groups.length > 1) {
+                final Set<String> commonLinks=new HashSet<String>();
+                commonLinks.addAll(filterLinks(loadLinkResources(client,overlay,groups[0]),true));
+                for (int i=1; i < groups.length; ++i) {
+                  commonLinks.retainAll(filterLinks(loadLinkResources(client,overlay,groups[i]),true));
+                }
+                return commonLinks;
+              }
+            }
+          }
+ else {
+            return filterLinks(loadLinkResources(client,overlay,null),true);
+          }
+        }
+ catch (        CommandLineException e) {
+        }
+        return Collections.emptyList();
+      }
+      return Util.getDeployments(client);
     }
   }
 ,"--wildcards"){
@@ -246,7 +279,7 @@
       if (actionStr == null) {
         return false;
       }
-      if (ADD.equals(actionStr) || LINK.equals(actionStr)) {
+      if (ADD.equals(actionStr) || LINK.equals(actionStr) || REMOVE.equals(actionStr)) {
         return super.canAppearNext(ctx);
       }
       return false;
