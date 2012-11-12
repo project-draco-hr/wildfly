@@ -26,7 +26,7 @@
     contentItem=addFromHash(hash,name,context);
   }
  else   if (hasValidContentAdditionParameterDefined(contentItemNode)) {
-    contentItem=addFromContentAdditionParameter(context,contentItemNode);
+    contentItem=addFromContentAdditionParameter(context,name,contentItemNode);
     contentItemNode=new ModelNode();
     contentItemNode.get(CONTENT_HASH.getName()).set(contentItem.getHash());
     content=new ModelNode();
@@ -39,5 +39,18 @@
   if (ENABLED.resolveModelAttribute(context,newModel).asBoolean() && context.isNormalServer()) {
     DeploymentHandlerUtil.deploy(context,runtimeName,name,vaultReader,contentItem);
   }
-  context.stepCompleted();
+  if (contentRepository != null && contentItem.getHash() != null) {
+    final byte[] contentHash=contentItem.getHash();
+    context.completeStep(new OperationContext.ResultHandler(){
+      public void handleResult(      ResultAction resultAction,      OperationContext context,      ModelNode operation){
+        if (resultAction == ResultAction.KEEP) {
+          contentRepository.addContentReference(contentHash,name);
+        }
+      }
+    }
+);
+  }
+ else {
+    context.stepCompleted();
+  }
 }
