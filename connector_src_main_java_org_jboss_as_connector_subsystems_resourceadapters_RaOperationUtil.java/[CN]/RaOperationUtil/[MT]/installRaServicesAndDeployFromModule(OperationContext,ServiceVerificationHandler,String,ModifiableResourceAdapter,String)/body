@@ -1,0 +1,70 @@
+{
+  ServiceName raServiceName=installRaServices(context,verificationHandler,name,resourceAdapter);
+  final boolean resolveProperties=true;
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  String deploymentName=moduleName;
+  if (moduleName.contains("->")) {
+    moduleName=moduleName.substring(0,moduleName.indexOf("->"));
+  }
+  String slot="main";
+  if (moduleName.contains(":")) {
+    slot=moduleName.substring(moduleName.indexOf(":") + 1);
+    moduleName=moduleName.substring(0,moduleName.indexOf(":"));
+  }
+  Module module;
+  try {
+    ModuleIdentifier moduleId=ModuleIdentifier.create(moduleName,slot);
+    module=Module.getCallerModuleLoader().loadModule(moduleId);
+  }
+ catch (  ModuleLoadException e) {
+    throw new OperationFailedException(MESSAGES.failedToLoadModuleRA(moduleName),e);
+  }
+  URL path=module.getExportedResource("META-INF/ra.xml");
+  Closeable closable=null;
+  try {
+    VirtualFile child;
+    if (path.getPath().contains("!")) {
+      child=VFS.getChild(path.getPath().split("!")[0].split(":")[1]);
+      closable=VFS.mountZip(new File(path.getPath().split("!")[0].split(":")[1]),child,TempFileProviderService.provider());
+    }
+ else {
+      child=VFS.getChild(path.getPath().split("META-INF")[0]);
+      closable=VFS.mountReal(new File(path.getPath().split("META-INF")[0]),child);
+    }
+    final MountHandle mountHandle=new MountHandle(closable);
+    final ResourceRoot resourceRoot=new ResourceRoot(child,mountHandle);
+    final VirtualFile deploymentRoot=resourceRoot.getRoot();
+    if (deploymentRoot == null || !deploymentRoot.exists())     return;
+    ConnectorXmlDescriptor connectorXmlDescriptor=RaDeploymentParsingProcessor.process(resolveProperties,deploymentRoot,null,deploymentName);
+    IronJacamarXmlDescriptor ironJacamarXmlDescriptor=IronJacamarDeploymentParsingProcessor.process(deploymentRoot,resolveProperties);
+    RaNativeProcessor.process(deploymentRoot);
+    Map<ResourceRoot,Index> annotationIndexes=new HashMap<ResourceRoot,Index>();
+    ResourceRootIndexer.indexResourceRoot(resourceRoot);
+    Index index=resourceRoot.getAttachment(Attachments.ANNOTATION_INDEX);
+    if (index != null) {
+      annotationIndexes.put(resourceRoot,index);
+    }
+    ServiceBuilder builder=ParsedRaDeploymentProcessor.process(connectorXmlDescriptor,ironJacamarXmlDescriptor,module.getClassLoader(),serviceTarget,annotationIndexes,RAR_MODULE.append(deploymentName));
+    builder.addDependency(raServiceName).setInitialMode(ServiceController.Mode.ACTIVE).install();
+    String rarName=resourceAdapter.getArchive();
+    Integer identifier=null;
+    if (rarName.contains(ConnectorServices.RA_SERVICE_NAME_SEPARATOR)) {
+      rarName=rarName.substring(0,rarName.indexOf(ConnectorServices.RA_SERVICE_NAME_SEPARATOR));
+    }
+    if (deploymentName.equals(rarName)) {
+      RaServicesFactory.createDeploymentService(connectorXmlDescriptor,module,serviceTarget,deploymentName,RAR_MODULE.append(deploymentName),resourceAdapter);
+    }
+  }
+ catch (  Exception e) {
+    throw new OperationFailedException(MESSAGES.failedToLoadModuleRA(moduleName),e);
+  }
+ finally {
+    if (closable != null) {
+      try {
+        closable.close();
+      }
+ catch (      IOException e) {
+      }
+    }
+  }
+}

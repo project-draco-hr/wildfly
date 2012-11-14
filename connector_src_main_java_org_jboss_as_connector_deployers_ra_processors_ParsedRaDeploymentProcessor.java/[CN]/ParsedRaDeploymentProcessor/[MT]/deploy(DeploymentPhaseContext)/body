@@ -6,6 +6,7 @@
   if (connectorXmlDescriptor == null) {
     return;
   }
+  final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   if (deploymentUnit.getParent() != null) {
     registration=baseRegistration.getSubModel(PathAddress.pathAddress(PathElement.pathElement("subdeployment")));
@@ -18,30 +19,9 @@
   if (module == null)   throw MESSAGES.failedToGetModuleAttachment(phaseContext.getDeploymentUnit());
   DEPLOYMENT_CONNECTOR_LOGGER.debugf("ParsedRaDeploymentProcessor: Processing=%s",deploymentUnit);
   final ClassLoader classLoader=module.getClassLoader();
-  Connector cmd=connectorXmlDescriptor != null ? connectorXmlDescriptor.getConnector() : null;
-  final IronJacamar ijmd=ironJacamarXmlDescriptor != null ? ironJacamarXmlDescriptor.getIronJacamar() : null;
-  try {
-    Annotations annotator=new Annotations();
-    Map<ResourceRoot,Index> indexes=AnnotationIndexUtils.getAnnotationIndexes(deploymentUnit);
-    if (indexes != null && indexes.size() > 0) {
-      DEPLOYMENT_CONNECTOR_LOGGER.debugf("ParsedRaDeploymentProcessor: Found %d indexes",indexes.size());
-      for (      Index index : indexes.values()) {
-        if (index.getKnownClasses() != null && index.getKnownClasses().size() > 0) {
-          AnnotationRepository repository=new JandexAnnotationRepositoryImpl(index,classLoader);
-          cmd=annotator.merge(cmd,repository,classLoader);
-          DEPLOYMENT_CONNECTOR_LOGGER.debugf("ParsedRaDeploymentProcessor: CMD=%s",cmd);
-        }
-      }
-    }
-    if (indexes == null || indexes.size() == 0)     DEPLOYMENT_CONNECTOR_LOGGER.debugf("ParsedRaDeploymentProcessor: Found 0 indexes");
-    if (cmd != null) {
-      cmd.validate();
-      cmd=(new Merger()).mergeConnectorWithCommonIronJacamar(ijmd,cmd);
-    }
-    final ServiceName deployerServiceName=ConnectorServices.RESOURCE_ADAPTER_DEPLOYER_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName());
-    final ResourceAdapterDeploymentService raDeploymentService=new ResourceAdapterDeploymentService(connectorXmlDescriptor,cmd,ijmd,module,deployerServiceName,deploymentUnit.getServiceName());
-    final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
-    ServiceBuilder builder=serviceTarget.addService(deployerServiceName,raDeploymentService).addDependency(ConnectorServices.IRONJACAMAR_MDR,AS7MetadataRepository.class,raDeploymentService.getMdrInjector()).addDependency(ConnectorServices.RA_REPOSITORY_SERVICE,ResourceAdapterRepository.class,raDeploymentService.getRaRepositoryInjector()).addDependency(ConnectorServices.MANAGEMENT_REPOSITORY_SERVICE,ManagementRepository.class,raDeploymentService.getManagementRepositoryInjector()).addDependency(ConnectorServices.RESOURCE_ADAPTER_REGISTRY_SERVICE,ResourceAdapterDeploymentRegistry.class,raDeploymentService.getRegistryInjector()).addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,raDeploymentService.getTxIntegrationInjector()).addDependency(ConnectorServices.CONNECTOR_CONFIG_SERVICE,JcaSubsystemConfiguration.class,raDeploymentService.getConfigInjector()).addDependency(SubjectFactoryService.SERVICE_NAME,SubjectFactory.class,raDeploymentService.getSubjectFactoryInjector()).addDependency(ConnectorServices.CCM_SERVICE,CachedConnectionManager.class,raDeploymentService.getCcmInjector()).addDependency(ConnectorServices.IDLE_REMOVER_SERVICE).addDependency(ConnectorServices.CONNECTION_VALIDATOR_SERVICE).addDependency(NamingService.SERVICE_NAME);
+  Map<ResourceRoot,Index> annotationIndexes=AnnotationIndexUtils.getAnnotationIndexes(deploymentUnit);
+  ServiceBuilder builder=process(connectorXmlDescriptor,ironJacamarXmlDescriptor,classLoader,serviceTarget,annotationIndexes,deploymentUnit.getServiceName());
+  if (builder != null) {
     builder.addListener(new AbstractResourceAdapterDeploymentServiceListener(registration,deploymentUnit.getName(),deploymentResource){
       @Override protected void registerIronjacamar(      final ServiceController<? extends Object> controller,      final ManagementResourceRegistration subRegistration,      final Resource subsystemResource){
         subRegistration.registerSubModel(new IronJacamarResourceDefinition());
@@ -54,8 +34,5 @@
     }
 );
     builder.setInitialMode(Mode.ACTIVE).install();
-  }
- catch (  Throwable t) {
-    throw new DeploymentUnitProcessingException(t);
   }
 }

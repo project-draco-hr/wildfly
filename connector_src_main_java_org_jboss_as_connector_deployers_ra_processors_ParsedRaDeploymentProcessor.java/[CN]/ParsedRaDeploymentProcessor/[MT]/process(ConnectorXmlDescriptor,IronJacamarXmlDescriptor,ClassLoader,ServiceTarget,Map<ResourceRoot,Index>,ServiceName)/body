@@ -1,0 +1,29 @@
+{
+  Connector cmd=connectorXmlDescriptor != null ? connectorXmlDescriptor.getConnector() : null;
+  final IronJacamar ijmd=ironJacamarXmlDescriptor != null ? ironJacamarXmlDescriptor.getIronJacamar() : null;
+  try {
+    Annotations annotator=new Annotations();
+    if (annotationIndexes != null && annotationIndexes.size() > 0) {
+      DEPLOYMENT_CONNECTOR_LOGGER.debugf("ParsedRaDeploymentProcessor: Found %d annotationIndexes",annotationIndexes.size());
+      for (      Index index : annotationIndexes.values()) {
+        if (index.getKnownClasses() != null && index.getKnownClasses().size() > 0) {
+          AnnotationRepository repository=new JandexAnnotationRepositoryImpl(index,classLoader);
+          cmd=annotator.merge(cmd,repository,classLoader);
+          DEPLOYMENT_CONNECTOR_LOGGER.debugf("ParsedRaDeploymentProcessor: CMD=%s",cmd);
+        }
+      }
+    }
+    if (annotationIndexes == null || annotationIndexes.size() == 0)     DEPLOYMENT_CONNECTOR_LOGGER.debugf("ParsedRaDeploymentProcessor: Found 0 annotationIndexes");
+    if (cmd != null) {
+      cmd.validate();
+      cmd=(new Merger()).mergeConnectorWithCommonIronJacamar(ijmd,cmd);
+    }
+    final ServiceName deployerServiceName=ConnectorServices.RESOURCE_ADAPTER_DEPLOYER_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName());
+    final ResourceAdapterDeploymentService raDeploymentService=new ResourceAdapterDeploymentService(connectorXmlDescriptor,cmd,ijmd,classLoader,deployerServiceName,duServiceName);
+    ServiceBuilder builder=serviceTarget.addService(deployerServiceName,raDeploymentService).addDependency(ConnectorServices.IRONJACAMAR_MDR,AS7MetadataRepository.class,raDeploymentService.getMdrInjector()).addDependency(ConnectorServices.RA_REPOSITORY_SERVICE,ResourceAdapterRepository.class,raDeploymentService.getRaRepositoryInjector()).addDependency(ConnectorServices.MANAGEMENT_REPOSITORY_SERVICE,ManagementRepository.class,raDeploymentService.getManagementRepositoryInjector()).addDependency(ConnectorServices.RESOURCE_ADAPTER_REGISTRY_SERVICE,ResourceAdapterDeploymentRegistry.class,raDeploymentService.getRegistryInjector()).addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,raDeploymentService.getTxIntegrationInjector()).addDependency(ConnectorServices.CONNECTOR_CONFIG_SERVICE,JcaSubsystemConfiguration.class,raDeploymentService.getConfigInjector()).addDependency(SubjectFactoryService.SERVICE_NAME,SubjectFactory.class,raDeploymentService.getSubjectFactoryInjector()).addDependency(ConnectorServices.CCM_SERVICE,CachedConnectionManager.class,raDeploymentService.getCcmInjector()).addDependency(ConnectorServices.IDLE_REMOVER_SERVICE).addDependency(ConnectorServices.CONNECTION_VALIDATOR_SERVICE).addDependency(NamingService.SERVICE_NAME);
+    return builder;
+  }
+ catch (  Throwable t) {
+    throw new DeploymentUnitProcessingException(t);
+  }
+}
