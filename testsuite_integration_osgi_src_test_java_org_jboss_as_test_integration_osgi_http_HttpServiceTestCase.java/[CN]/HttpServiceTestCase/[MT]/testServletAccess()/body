@@ -1,47 +1,17 @@
 {
-class TestHandler {
-    private final CountDownLatch latch=new CountDownLatch(1);
-    Exception lastException;
-    void performTest(    HttpService httpService){
-      String reqspec="/httpservice/servlet?test=param&param=Kermit";
-      try {
-        assertNotAvailable(reqspec);
-        httpService.registerServlet("/servlet",new HttpServiceServlet(bundle),null,null);
-        Assert.assertEquals("Hello: Kermit",performCall(reqspec));
-        httpService.unregister("/servlet");
-        assertNotAvailable(reqspec);
-      }
- catch (      Exception ex) {
-        lastException=ex;
-      }
- finally {
-        complete();
-      }
-    }
-    void complete(){
-      latch.countDown();
-    }
-    void awaitCompletion(    long timeout,    TimeUnit unit) throws InterruptedException, TimeoutException {
-      if (!latch.await(timeout,unit))       throw new TimeoutException();
-    }
+  BundleContext context=bundle.getBundleContext();
+  ServiceReference sref=FrameworkUtils.waitForServiceReference(context,HttpService.class);
+  HttpService httpService=(HttpService)context.getService(sref);
+  String reqspec="/httpservice/servlet?test=param&param=Kermit";
+  try {
+    assertNotAvailable(reqspec);
+    httpService.registerServlet("/servlet",new HttpServiceServlet(bundle),null,null);
+    Assert.assertEquals("Hello: Kermit",performCall(reqspec));
+    httpService.unregister("/servlet");
+    assertNotAvailable(reqspec);
+    assertNotAvailable(reqspec);
   }
-  final TestHandler handler=new TestHandler();
-  final BundleContext context=bundle.getBundleContext();
-  final ServiceReference[] srefholder=new ServiceReference[1];
-  ServiceTracker tracker=new ServiceTracker(context,HttpService.class.getName(),null){
-    @Override public Object addingService(    ServiceReference sref){
-      srefholder[0]=sref;
-      HttpService httpService=(HttpService)super.addingService(sref);
-      handler.performTest(httpService);
-      return httpService;
-    }
-  }
-;
-  tracker.open();
-  handler.awaitCompletion(30,TimeUnit.SECONDS);
-  if (handler.lastException != null)   throw handler.lastException;
-  ServiceReference sref=srefholder[0];
-  if (sref != null) {
+  finally {
     context.ungetService(sref);
   }
 }
