@@ -9,8 +9,8 @@
     }
     return;
   }
-  final ServiceName weldServiceName=parent.getServiceName().append(WeldService.SERVICE_NAME);
-  deploymentUnit.addToAttachmentList(Attachments.WEB_DEPENDENCIES,weldServiceName);
+  final ServiceName weldBootstrapServiceName=parent.getServiceName().append(WeldBootstrapService.SERVICE_NAME);
+  deploymentUnit.addToAttachmentList(Attachments.WEB_DEPENDENCIES,weldBootstrapServiceName);
   final Set<ServiceName> jpaServices=new HashSet<ServiceName>();
   if (deploymentUnit.getParent() != null) {
     return;
@@ -64,22 +64,21 @@
   }
   final List<Metadata<Extension>> extensions=deploymentUnit.getAttachmentList(WeldAttachments.PORTABLE_EXTENSIONS);
   final WeldDeployment deployment=new WeldDeployment(beanDeploymentArchives,extensions,module,subDeploymentLoaders);
-  final WeldContainer weldContainer=new WeldContainer(deployment,Environments.EE_INJECT);
+  final WeldBootstrapService weldBootstrapService=new WeldBootstrapService(deployment,Environments.EE_INJECT,deploymentUnit.getName());
   final ValidatorFactory factory=deploymentUnit.getAttachment(BeanValidationAttachments.VALIDATOR_FACTORY);
-  weldContainer.addWeldService(ValidationServices.class,new WeldValidationServices(factory));
+  weldBootstrapService.addWeldService(ValidationServices.class,new WeldValidationServices(factory));
   final EjbInjectionServices ejbInjectionServices=new WeldEjbInjectionServices(deploymentUnit.getServiceRegistry(),eeModuleDescription,eeApplicationDescription,deploymentRoot.getRoot());
-  weldContainer.addWeldService(EjbInjectionServices.class,ejbInjectionServices);
+  weldBootstrapService.addWeldService(EjbInjectionServices.class,ejbInjectionServices);
   rootBeanDeploymentModule.addService(EjbInjectionServices.class,ejbInjectionServices);
-  weldContainer.addWeldService(EjbServices.class,new WeldEjbServices(deploymentUnit.getServiceRegistry()));
+  weldBootstrapService.addWeldService(EjbServices.class,new WeldEjbServices(deploymentUnit.getServiceRegistry()));
   final JpaInjectionServices rootJpaInjectionServices=new WeldJpaInjectionServices(deploymentUnit,deploymentUnit.getServiceRegistry());
-  weldContainer.addWeldService(JpaInjectionServices.class,rootJpaInjectionServices);
-  final WeldService weldService=new WeldService(weldContainer,deploymentUnit.getName());
-  final ServiceBuilder<WeldContainer> weldServiceBuilder=serviceTarget.addService(weldServiceName,weldService);
-  weldServiceBuilder.addDependencies(TCCLSingletonService.SERVICE_NAME);
-  installResourceInjectionService(serviceTarget,deploymentUnit,weldService,weldServiceBuilder);
-  installSecurityService(serviceTarget,deploymentUnit,weldService,weldServiceBuilder);
-  installTransactionService(serviceTarget,deploymentUnit,weldService,weldServiceBuilder);
-  weldServiceBuilder.addDependencies(jpaServices);
-  weldServiceBuilder.addDependency(JndiNamingDependencyProcessor.serviceName(deploymentUnit.getServiceName()));
-  weldServiceBuilder.install();
+  weldBootstrapService.addWeldService(JpaInjectionServices.class,rootJpaInjectionServices);
+  final ServiceBuilder<WeldBootstrapService> weldBootstrapServiceBuilder=serviceTarget.addService(weldBootstrapServiceName,weldBootstrapService);
+  weldBootstrapServiceBuilder.addDependencies(TCCLSingletonService.SERVICE_NAME);
+  installResourceInjectionService(serviceTarget,deploymentUnit,weldBootstrapService,weldBootstrapServiceBuilder);
+  installSecurityService(serviceTarget,deploymentUnit,weldBootstrapService,weldBootstrapServiceBuilder);
+  installTransactionService(serviceTarget,deploymentUnit,weldBootstrapService,weldBootstrapServiceBuilder);
+  weldBootstrapServiceBuilder.install();
+  final WeldStartService weldStartService=new WeldStartService(module.getClassLoader());
+  serviceTarget.addService(deploymentUnit.getServiceName().append(WeldStartService.SERVICE_NAME),weldStartService).addDependency(weldBootstrapServiceName,WeldBootstrapService.class,weldStartService.getBootstrap()).addDependency(JndiNamingDependencyProcessor.serviceName(deploymentUnit.getServiceName())).addDependencies(jpaServices).install();
 }
