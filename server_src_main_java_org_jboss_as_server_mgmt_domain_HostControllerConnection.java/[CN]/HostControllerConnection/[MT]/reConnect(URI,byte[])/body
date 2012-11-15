@@ -1,13 +1,43 @@
 {
+  if (connectionManager.isConnected()) {
+    try {
+      final Future<Long> result=channelHandler.executeRequest(ManagementPingRequest.INSTANCE,null).getResult();
+      result.get(15,TimeUnit.SECONDS);
+      return true;
+    }
+ catch (    Exception e) {
+      ServerLogger.AS_ROOT_LOGGER.debugf(e,"failed to ping the host-controller, going to reconnect");
+    }
+    final Connection connection=connectionManager.getConnection();
+    StreamUtils.safeClose(connection);
+    if (connection != null) {
+      try {
+        connection.awaitClosed();
+      }
+ catch (      InterruptedException e) {
+        throw new InterruptedIOException();
+      }
+    }
+  }
   final ProtocolConnectionConfiguration config=ProtocolConnectionConfiguration.copy(configuration);
   config.setCallbackHandler(createClientCallbackHandler(userName,authKey));
   config.setUri(reconnectUri);
   this.configuration=config;
-  boolean ok=connectionManager.isConnected();
+  boolean ok=false;
   final Connection connection=connectionManager.connect();
   try {
-    channelHandler.executeRequest(new ServerReconnectRequest(),null);
-    ok=true;
+    final ActiveOperation<Boolean,Void> result=channelHandler.executeRequest(new ServerReconnectRequest(),null);
+    try {
+      boolean inSync=result.getResult().get();
+      ok=true;
+      return inSync;
+    }
+ catch (    ExecutionException e) {
+      throw new IOException(e);
+    }
+catch (    InterruptedException e) {
+      throw new InterruptedIOException();
+    }
   }
   finally {
     if (!ok) {
