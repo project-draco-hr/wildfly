@@ -1,0 +1,62 @@
+{
+  File storageDir=new File(serverEnvironment.getServerTempDir() + File.separator + alias+ File.separator+ "osgiservlet-root");
+  storageDir.mkdirs();
+  ShareableContext ctx;
+  ApplicationContext actx=null;
+  if (httpContext != null) {
+    actx=contexts.get(httpContext);
+    ctx=new ShareableContext(actx);
+  }
+ else {
+    ctx=new ShareableContext(null);
+  }
+  ctx.setDocBase(storageDir.getPath());
+  ctx.setPath(alias);
+  ctx.addLifecycleListener(new ContextConfig());
+  WebCtxLoader loader=new WebCtxLoader(servlet.getClass().getClassLoader());
+  loader.setContainer(virtualHost);
+  ctx.setLoader(loader);
+  ctx.addMimeMapping("html","text/html");
+  ctx.addMimeMapping("jpg","image/jpeg");
+  ctx.addMimeMapping("png","image/png");
+  ctx.addMimeMapping("gif","image/gif");
+  ctx.addMimeMapping("css","text/css");
+  ctx.addMimeMapping("js","text/javascript");
+  virtualHost.addChild(ctx);
+  WEB_LOGGER.registerWebapp(ctx.getName());
+  try {
+    ctx.create();
+  }
+ catch (  Exception ex) {
+    throw new NamespaceException(WebMessages.MESSAGES.createContextFailed(),ex);
+  }
+  try {
+    ctx.start();
+  }
+ catch (  LifecycleException ex) {
+    throw new NamespaceException(WebMessages.MESSAGES.startContextFailed(),ex);
+  }
+  String wrapperName=alias.substring(1);
+  Wrapper wrapper=ctx.createWrapper();
+  wrapper.setName(wrapperName);
+  wrapper.setServlet(servlet);
+  wrapper.setServletClass(servlet.getClass().getName());
+  if (initparams != null) {
+    Enumeration keys=initparams.keys();
+    while (keys.hasMoreElements()) {
+      String key=(String)keys.nextElement();
+      String val=(String)initparams.get(key);
+      wrapper.addInitParameter(key,val);
+    }
+  }
+  registry.register(alias,bundle,ctx,wrapper,type);
+  String pattern="/*";
+  ctx.addChild(wrapper);
+  ctx.addServletMapping(pattern,wrapper.getName());
+  Mapper mapper=webServer.getService().getMapper();
+  mapper.addWrapper(virtualHost.getName(),ctx.getPath(),pattern,wrapper,false);
+  if (httpContext != null && actx == null) {
+    contexts.put(httpContext,ctx.getApplicationContext());
+  }
+  return wrapper;
+}
