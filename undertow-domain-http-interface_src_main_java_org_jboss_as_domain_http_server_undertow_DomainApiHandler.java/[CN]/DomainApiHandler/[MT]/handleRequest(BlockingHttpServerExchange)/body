@@ -1,0 +1,30 @@
+{
+  HttpServerExchange exchange=blockingExchange.getExchange();
+  ModelNode dmr;
+  ModelNode response;
+  HeaderMap requestHeaders=exchange.getRequestHeaders();
+  final boolean encode=Common.APPLICATION_DMR_ENCODED.equals(requestHeaders.getFirst(Headers.ACCEPT)) || Common.APPLICATION_DMR_ENCODED.equals(requestHeaders.getFirst(Headers.CONTENT_TYPE));
+  final boolean get=exchange.getRequestMethod().equals(Methods.GET);
+  try {
+    dmr=get ? convertGetRequest(exchange) : convertPostRequest(blockingExchange,encode);
+  }
+ catch (  Exception e) {
+    ROOT_LOGGER.debugf("Unable to construct ModelNode '%s'",e.getMessage());
+    Common.sendError(blockingExchange,get,e.getLocalizedMessage());
+    return;
+  }
+  try {
+    response=modelController.execute(new OperationBuilder(dmr).build());
+  }
+ catch (  Throwable t) {
+    ROOT_LOGGER.modelRequestError(t);
+    Common.sendError(blockingExchange,get,t.getLocalizedMessage());
+    return;
+  }
+  if (response.hasDefined(OUTCOME) && FAILED.equals(response.get(OUTCOME).asString())) {
+    Common.sendError(blockingExchange,get,response.get(FAILURE_DESCRIPTION).asString());
+    return;
+  }
+  boolean pretty=dmr.hasDefined("json.pretty") && dmr.get("json.pretty").asBoolean();
+  writeResponse(blockingExchange,get,pretty,response,StatusCodes.CODE_200.getCode(),encode);
+}

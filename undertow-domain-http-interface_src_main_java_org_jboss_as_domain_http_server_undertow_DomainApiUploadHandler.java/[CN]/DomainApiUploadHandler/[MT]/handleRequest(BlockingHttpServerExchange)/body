@@ -1,0 +1,36 @@
+{
+  final HttpServerExchange exchange=blockingExchange.getExchange();
+  final FormDataParser parser=exchange.getAttachment(FormDataParser.ATTACHMENT_KEY);
+  FormData data=parser.parse().get();
+  for (  String fieldName : data) {
+    FormValue value=data.getFirst(fieldName);
+    if (value.isFile()) {
+      ModelNode response=null;
+      InputStream in=new BufferedInputStream(new FileInputStream(value.getFile()));
+      try {
+        final ModelNode dmr=new ModelNode();
+        dmr.get("operation").set("upload-deployment-stream");
+        dmr.get("address").setEmptyList();
+        dmr.get("input-stream-index").set(0);
+        OperationBuilder operation=new OperationBuilder(dmr);
+        operation.addInputStream(in);
+        response=modelController.execute(operation.build());
+        if (!response.get(OUTCOME).asString().equals(SUCCESS)) {
+          Common.sendError(blockingExchange,false,response.get(FAILURE_DESCRIPTION).asString());
+          return;
+        }
+      }
+ catch (      Throwable t) {
+        ROOT_LOGGER.uploadError(t);
+        Common.sendError(blockingExchange,false,t.getLocalizedMessage());
+        return;
+      }
+ finally {
+        IoUtils.safeClose(in);
+      }
+      writeResponse(blockingExchange,response,Common.TEXT_HTML);
+      return;
+    }
+  }
+  Common.sendError(blockingExchange,false,"No file found");
+}
