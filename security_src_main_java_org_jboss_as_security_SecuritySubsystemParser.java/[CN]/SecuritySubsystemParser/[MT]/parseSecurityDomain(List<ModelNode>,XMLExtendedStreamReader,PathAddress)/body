@@ -1,0 +1,95 @@
+{
+  ModelNode op=new ModelNode();
+  list.add(op);
+  op.get(OP).set(ADD);
+  PathElement secDomainPath=null;
+  EnumSet<Attribute> required=EnumSet.of(Attribute.NAME);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    requireNoNamespaceAttribute(reader,i);
+    final String value=reader.getAttributeValue(i);
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+    required.remove(attribute);
+switch (attribute) {
+case NAME:
+{
+        if (value == null || value.length() == 0) {
+          throw invalidAttributeValue(reader,i);
+        }
+        secDomainPath=PathElement.pathElement(SECURITY_DOMAIN,value);
+        break;
+      }
+case CACHE_TYPE:
+{
+      SecurityDomainResourceDefinition.CACHE_TYPE.parseAndSetParameter(value,op,reader);
+      break;
+    }
+default :
+  throw unexpectedAttribute(reader,i);
+}
+}
+if (required.size() > 0) {
+throw missingRequired(reader,required);
+}
+final PathAddress address=parentAddress.append(secDomainPath);
+op.get(OP_ADDR).set(address.toModelNode());
+final EnumSet<Element> visited=EnumSet.noneOf(Element.class);
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+final Element element=Element.forName(reader.getLocalName());
+if (!visited.add(element)) {
+throw unexpectedElement(reader);
+}
+switch (element) {
+case AUTHENTICATION:
+{
+  if (visited.contains(Element.AUTHENTICATION_JASPI)) {
+    throw SecurityMessages.MESSAGES.xmlStreamExceptionAuth(reader.getLocation());
+  }
+  parseAuthentication(list,address,reader);
+  break;
+}
+case AUTHORIZATION:
+{
+parseAuthorization(list,address,reader);
+break;
+}
+case ACL:
+{
+parseACL(list,address,reader);
+break;
+}
+case AUDIT:
+{
+parseAudit(list,address,reader);
+break;
+}
+case IDENTITY_TRUST:
+{
+parseIdentityTrust(list,address,reader);
+break;
+}
+case MAPPING:
+{
+parseMapping(list,address,reader);
+break;
+}
+case AUTHENTICATION_JASPI:
+{
+if (visited.contains(Element.AUTHENTICATION)) {
+throw SecurityMessages.MESSAGES.xmlStreamExceptionAuth(reader.getLocation());
+}
+parseAuthenticationJaspi(list,address,reader);
+break;
+}
+case JSSE:
+{
+parseJSSE(list,address,reader);
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
+}
+}
+}
