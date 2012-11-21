@@ -1,7 +1,6 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
-  if (deploymentUnit.hasAttachment(MARKER))   return;
-  deploymentUnit.putAttachment(MARKER,true);
+  final DeploymentUnit topLevelDeployment=deploymentUnit.getParent() == null ? deploymentUnit : deploymentUnit.getParent();
   final ResourceRoot mainRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
   if (mainRoot == null)   return;
   final ModuleSpecification moduleSpec=deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
@@ -19,7 +18,8 @@
   if (moduleIdentifier == null) {
     throw ServerMessages.MESSAGES.noModuleIdentifier(deploymentUnit.getName());
   }
-  final ServiceName moduleServiceName=createModuleService(phaseContext,deploymentUnit,resourceRoots,moduleSpec,moduleIdentifier);
+  final List<AdditionalModuleSpecification> additionalModules=topLevelDeployment.getAttachmentList(Attachments.ADDITIONAL_MODULES);
+  final ServiceName moduleServiceName=createModuleService(phaseContext,deploymentUnit,resourceRoots,moduleSpec,moduleIdentifier,additionalModules);
   phaseContext.addDeploymentDependency(moduleServiceName,Attachments.MODULE);
   for (  final DeploymentUnit subDeployment : deploymentUnit.getAttachmentList(Attachments.SUB_DEPLOYMENTS)) {
     ModuleIdentifier moduleId=subDeployment.getAttachment(Attachments.MODULE_IDENTIFIER);
@@ -27,14 +27,13 @@
       phaseContext.addToAttachmentList(Attachments.NEXT_PHASE_DEPS,ServiceModuleLoader.moduleSpecServiceName(moduleId));
     }
   }
-  final List<AdditionalModuleSpecification> additionalModules=deploymentUnit.getAttachment(Attachments.ADDITIONAL_MODULES);
-  if (additionalModules == null) {
+  if (deploymentUnit.getParent() != null) {
     return;
   }
   for (  final AdditionalModuleSpecification module : additionalModules) {
     addSystemDependencies(moduleSpec,module);
     List<ResourceRoot> roots=module.getResourceRoots();
-    ServiceName serviceName=createModuleService(phaseContext,deploymentUnit,roots,module,module.getModuleIdentifier());
+    ServiceName serviceName=createModuleService(phaseContext,deploymentUnit,roots,module,module.getModuleIdentifier(),additionalModules);
     phaseContext.addToAttachmentList(Attachments.NEXT_PHASE_DEPS,serviceName);
   }
 }
