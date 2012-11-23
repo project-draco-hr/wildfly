@@ -4,8 +4,15 @@
   final ModelNode resolvedModel=createResolvedLdapConfiguration(context,model);
   final ServiceTarget serviceTarget=context.getServiceTarget();
   final LdapConnectionManagerService connectionManagerService=new LdapConnectionManagerService(resolvedModel);
-  ServiceController<?> sc=serviceTarget.addService(LdapConnectionManagerService.BASE_SERVICE_NAME.append(name),connectionManagerService).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
-  if (newControllers != null) {
-    newControllers.add(sc);
+  ServiceBuilder<LdapConnectionManagerService> sb=serviceTarget.addService(LdapConnectionManagerService.BASE_SERVICE_NAME.append(name),connectionManagerService).setInitialMode(ServiceController.Mode.ON_DEMAND);
+  if (verificationHandler != null) {
+    sb.addListener(verificationHandler);
+  }
+  if (resolvedModel.hasDefined(SECURITY_REALM)) {
+    sb.addDependency(SecurityRealmService.BASE_SERVICE_NAME.append(resolvedModel.require(SECURITY_REALM).asString(),"ssl"),SSLIdentity.class,connectionManagerService.getSSLIdentityInjector());
+  }
+  ServiceController<LdapConnectionManagerService> sc=sb.install();
+  if (controllers != null) {
+    controllers.add(sc);
   }
 }
