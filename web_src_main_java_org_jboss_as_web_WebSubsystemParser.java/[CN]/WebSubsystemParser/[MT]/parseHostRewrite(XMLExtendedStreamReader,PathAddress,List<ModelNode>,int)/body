@@ -1,9 +1,7 @@
 {
-  final PathAddress address=PathAddress.pathAddress(parent,PathElement.pathElement(REWRITE,"rule-" + rewriteCount));
-  final ModelNode rewrite=new ModelNode();
-  rewrite.get(OP).set(ADD);
-  rewrite.get(OP_ADDR).set(address.toModelNode());
+  final ModelNode rewrite=Util.createAddOperation();
   final int count=reader.getAttributeCount();
+  String name=RULE_PREFIX + rewriteCount;
   for (int i=0; i < count; i++) {
     requireNoNamespaceAttribute(reader,i);
     final String value=reader.getAttributeValue(i);
@@ -18,10 +16,15 @@ break;
 case FLAGS:
 rewrite.get(FLAGS).set(value);
 break;
+case NAME:
+name=value;
+break;
 default :
 throw unexpectedAttribute(reader,i);
 }
 }
+final PathAddress address=PathAddress.pathAddress(parent,PathElement.pathElement(REWRITE,name));
+rewrite.get(OP_ADDR).set(address.toModelNode());
 list.add(rewrite);
 int conditionCount=0;
 while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
@@ -30,21 +33,22 @@ case WEB_1_0:
 case WEB_1_1:
 case WEB_1_2:
 case WEB_1_3:
+case WEB_1_4:
 {
 final Element element=Element.forName(reader.getLocalName());
 switch (element) {
 case CONDITION:
-PathAddress condAddress=PathAddress.pathAddress(address);
-final ModelNode condition=new ModelNode();
-condition.get(OP).set(ADD);
-condAddress=condAddress.append(PathElement.pathElement(CONDITION,"condition-" + conditionCount));
-condition.get(OP_ADDR).set(condAddress.toModelNode());
+final ModelNode condition=Util.createAddOperation();
+String condName=CONDITION_PREFIX + conditionCount;
 final int count2=reader.getAttributeCount();
 for (int i=0; i < count2; i++) {
 requireNoNamespaceAttribute(reader,i);
 final String value=reader.getAttributeValue(i);
 final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
 switch (attribute) {
+case NAME:
+condName=value;
+break;
 case TEST:
 condition.get(TEST).set(value);
 break;
@@ -58,6 +62,8 @@ default :
 throw unexpectedAttribute(reader,i);
 }
 }
+PathAddress condAddress=address.append(PathElement.pathElement(CONDITION,condName));
+condition.get(OP_ADDR).set(condAddress.toModelNode());
 requireNoContent(reader);
 list.add(condition);
 conditionCount++;
