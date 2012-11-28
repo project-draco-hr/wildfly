@@ -1,0 +1,20 @@
+{
+  VirtualFile root=VFS.getChild(this.env.getJbossHome());
+  List<VirtualFile> matches=root.getChildrenRecursively(Filters.and(this.filter,this.blacklistFilter));
+  if (sorter != null) {
+    Collections.sort(matches,sorter);
+  }
+  Limiter limiter=new Limiter(limit);
+  Iterator<VirtualFile> iter=matches.iterator();
+  while (iter.hasNext() && !limiter.isDone()) {
+    VirtualFile f=iter.next();
+    InputStream stream=limiter.limit(f);
+    for (    Sanitizer sanitizer : this.sanitizers) {
+      if (sanitizer.accepts(f)) {
+        stream=sanitizer.sanitize(stream);
+      }
+    }
+    this.env.getZip().add(f,stream);
+    Utils.safelyClose(stream);
+  }
+}
