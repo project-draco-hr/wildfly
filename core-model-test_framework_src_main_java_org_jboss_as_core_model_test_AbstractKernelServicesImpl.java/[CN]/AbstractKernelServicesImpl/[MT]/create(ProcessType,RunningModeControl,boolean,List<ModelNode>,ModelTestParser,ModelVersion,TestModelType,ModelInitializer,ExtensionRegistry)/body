@@ -1,0 +1,23 @@
+{
+  ServiceContainer container=ServiceContainer.Factory.create("test" + counter.incrementAndGet());
+  ServiceTarget target=container.subTarget();
+  File repositoryFile=new File("target/deployment-repository");
+  deleteFile(repositoryFile);
+  ContentRepository.Factory.addService(target,repositoryFile);
+  StringConfigurationPersister persister=new StringConfigurationPersister(bootOperations,testParser);
+  TestModelControllerFactory testModelControllerFactory=StandardTestModelControllerServiceFactory.INSTANCE;
+  if (legacyModelVersion != null) {
+    ServiceLoader<TestModelControllerFactory> factoryLoader=ServiceLoader.load(TestModelControllerFactory.class,AbstractKernelServicesImpl.class.getClassLoader());
+    for (    TestModelControllerFactory factory : factoryLoader) {
+      testModelControllerFactory=factory;
+      break;
+    }
+  }
+  ModelTestModelControllerService svc=testModelControllerFactory.create(processType,runningModeControl,persister,validateOperations,type,modelInitializer,extensionRegistry);
+  ServiceBuilder<ModelController> builder=target.addService(Services.JBOSS_SERVER_CONTROLLER,svc);
+  builder.addDependency(ContentRepository.SERVICE_NAME,ContentRepository.class,testModelControllerFactory.getContentRepositoryInjector(svc));
+  builder.install();
+  svc.waitForSetup();
+  AbstractKernelServicesImpl kernelServices=legacyModelVersion == null ? new MainKernelServicesImpl(container,svc,persister,svc.getRootRegistration(),new OperationValidator(svc.getRootRegistration()),legacyModelVersion,svc.isSuccessfulBoot(),svc.getBootError(),extensionRegistry) : new LegacyKernelServicesImpl(container,svc,persister,svc.getRootRegistration(),new OperationValidator(svc.getRootRegistration()),legacyModelVersion,svc.isSuccessfulBoot(),svc.getBootError(),extensionRegistry);
+  return kernelServices;
+}

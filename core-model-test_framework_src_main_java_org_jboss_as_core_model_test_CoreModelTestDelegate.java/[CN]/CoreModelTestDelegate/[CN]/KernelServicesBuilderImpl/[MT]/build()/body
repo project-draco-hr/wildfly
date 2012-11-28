@@ -1,7 +1,9 @@
 {
   bootOperationBuilder.validateNotAlreadyBuilt();
   List<ModelNode> bootOperations=bootOperationBuilder.build();
-  KernelServicesImpl kernelServices=KernelServicesImpl.create(processType,runningMode,validateOperations,bootOperations,testParser,null,type,modelInitializer);
+  RunningModeControl runningModeControl=type == TestModelType.HOST ? new HostRunningModeControl(runningMode,RestartMode.HC_ONLY) : new RunningModeControl(runningMode);
+  ExtensionRegistry registry=new ExtensionRegistry(processType,runningModeControl);
+  AbstractKernelServicesImpl kernelServices=AbstractKernelServicesImpl.create(processType,runningModeControl,validateOperations,bootOperations,testParser,null,type,modelInitializer,registry);
   CoreModelTestDelegate.this.kernelServices.add(kernelServices);
   if (validateDescription) {
     validateDescriptionProviders(type,kernelServices);
@@ -11,7 +13,7 @@
     LegacyKernelServicesInitializerImpl legacyInitializer=entry.getValue();
     List<ModelNode> transformedBootOperations=new ArrayList<ModelNode>();
     for (    ModelNode op : bootOperations) {
-      ModelNode transformed=op;
+      ModelNode transformed=kernelServices.transformOperation(entry.getKey(),op).getTransformedOperation();
       if (transformed != null) {
         transformedBootOperations.add(transformed);
       }
