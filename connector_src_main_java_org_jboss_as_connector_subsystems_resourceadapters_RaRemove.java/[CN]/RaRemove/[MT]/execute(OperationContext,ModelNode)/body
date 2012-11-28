@@ -1,8 +1,14 @@
 {
   final ModelNode opAddr=operation.require(OP_ADDR);
-  final String raName=PathAddress.pathAddress(opAddr).getLastElement().getValue();
+  final String name=PathAddress.pathAddress(opAddr).getLastElement().getValue();
   final ModelNode model=context.readModel(PathAddress.EMPTY_ADDRESS);
-  final String archive=model.get(ARCHIVE.getName()).asString();
+  final String archiveOrModuleName;
+  if (model.get(ARCHIVE.getName()).isDefined()) {
+    archiveOrModuleName=ARCHIVE.resolveModelAttribute(context,model).asString();
+  }
+ else {
+    archiveOrModuleName=MODULE.resolveModelAttribute(context,model).asString();
+  }
   final ModelNode compensating=Util.getEmptyOperation(ADD,opAddr);
   if (model.hasDefined(RESOURCEADAPTERS_NAME)) {
     for (    ModelNode raNode : model.get(RESOURCEADAPTERS_NAME).asList()) {
@@ -13,8 +19,8 @@
   context.removeResource(PathAddress.EMPTY_ADDRESS);
   context.addStep(new OperationStepHandler(){
     public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
-      final boolean wasActive=RaOperationUtil.deactivateIfActive(context,raName);
-      ServiceName raServiceName=ServiceName.of(ConnectorServices.RA_SERVICE,raName);
+      final boolean wasActive=RaOperationUtil.deactivateIfActive(context,archiveOrModuleName);
+      ServiceName raServiceName=ServiceName.of(ConnectorServices.RA_SERVICE,archiveOrModuleName);
       ServiceController<?> serviceController=context.getServiceRegistry(false).getService(raServiceName);
       final ModifiableResourceAdapter resourceAdapter;
       if (serviceController != null) {
@@ -29,13 +35,17 @@
           context.removeService(name);
         }
       }
+      if (model.get(MODULE.getName()).isDefined()) {
+        ServiceName deployerServiceName=ConnectorServices.RESOURCE_ADAPTER_DEPLOYER_SERVICE_PREFIX.append(model.get(MODULE.getName()).asString());
+        context.removeService(deployerServiceName);
+      }
       context.removeService(raServiceName);
       context.completeStep(new OperationContext.RollbackHandler(){
         @Override public void handleRollback(        OperationContext context,        ModelNode operation){
           if (resourceAdapter != null) {
-            RaOperationUtil.installRaServices(context,new ServiceVerificationHandler(),raName,resourceAdapter);
+            RaOperationUtil.installRaServices(context,new ServiceVerificationHandler(),archiveOrModuleName,resourceAdapter);
             try {
-              if (wasActive)               RaOperationUtil.activate(context,raName,archive);
+              if (wasActive)               RaOperationUtil.activate(context,archiveOrModuleName,archiveOrModuleName);
             }
  catch (            OperationFailedException e) {
             }
