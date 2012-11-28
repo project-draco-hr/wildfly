@@ -1,0 +1,52 @@
+{
+  context.acquireControllerLock();
+  final PatchInfoService service=(PatchInfoService)context.getServiceRegistry(false).getRequiredService(PatchInfoService.NAME).getValue();
+  if (service.requiresReload()) {
+    throw MESSAGES.serverRequiresReload();
+  }
+  final PatchInfo info=service.getPatchInfo();
+  final DirectoryStructure structure=service.getStructure();
+  final PatchTool runner=PatchTool.Factory.create(info,structure);
+  final ContentVerificationPolicy policy=PatchTool.Factory.create(operation);
+  final int index=operation.get(ModelDescriptionConstants.INPUT_STREAM_INDEX).asInt(0);
+  final InputStream is=context.getAttachmentStream(index);
+  try {
+    final PatchingResult result=runner.applyPatch(is,policy);
+    context.completeStep(new OperationContext.ResultHandler(){
+      @Override public void handleResult(      OperationContext.ResultAction resultAction,      OperationContext context,      ModelNode operation){
+        if (resultAction == OperationContext.ResultAction.KEEP) {
+          service.reloadRequired();
+          context.restartRequired();
+          result.commit();
+        }
+ else {
+          result.rollback();
+        }
+      }
+    }
+);
+  }
+ catch (  PatchingException e) {
+    if (e.hasConflicts()) {
+      final ModelNode failureDescription=context.getFailureDescription();
+      for (      final ContentItem item : e.getConflicts()) {
+        final ContentType type=item.getContentType();
+switch (type) {
+case BUNDLE:
+          failureDescription.get(Constants.BUNDLES).add(item.getRelativePath());
+        break;
+case MODULE:
+      failureDescription.get(Constants.MODULES).add(item.getRelativePath());
+    break;
+case MISC:
+  failureDescription.get(Constants.MISC).add(item.getRelativePath());
+break;
+}
+}
+context.stepCompleted();
+}
+ else {
+throw new OperationFailedException(e.getMessage(),e);
+}
+}
+}
