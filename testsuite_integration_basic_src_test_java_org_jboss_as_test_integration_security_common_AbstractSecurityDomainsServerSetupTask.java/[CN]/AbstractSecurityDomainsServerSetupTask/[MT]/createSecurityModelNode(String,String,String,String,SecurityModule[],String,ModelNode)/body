@@ -3,16 +3,13 @@
     if (LOGGER.isInfoEnabled()) {
       LOGGER.info("No security configuration for " + securityComponent + " module.");
     }
-    return null;
+    return false;
   }
-  final ModelNode securityComponentNode=new ModelNode();
-  securityComponentNode.get(OP).set(ADD);
-  securityComponentNode.get(OP_ADDR).add(SUBSYSTEM,SUBSYSTEM_SECURITY);
-  securityComponentNode.get(OP_ADDR).add(SECURITY_DOMAIN,domainName);
-  securityComponentNode.get(OP_ADDR).add(securityComponent,Constants.CLASSIC);
+  PathAddress address=PathAddress.pathAddress().append(SUBSYSTEM,SUBSYSTEM_SECURITY).append(SECURITY_DOMAIN,domainName).append(securityComponent,Constants.CLASSIC);
+  operations.add(Util.createAddOperation(address));
   for (  final SecurityModule config : securityModules) {
-    final ModelNode securityModuleNode=securityComponentNode.get(subnodeName).add();
     final String code=config.getName();
+    final ModelNode securityModuleNode=Util.createAddOperation(address.append(subnodeName,code));
     final String flag=StringUtils.defaultIfEmpty(config.getFlag(),flagDefaultValue);
     securityModuleNode.get(ModelDescriptionConstants.CODE).set(code);
     securityModuleNode.get(flagAttributeName).set(flag);
@@ -30,7 +27,8 @@
       final String optionValue=entry.getValue();
       moduleOptionsNode.add(optionName,optionValue);
     }
+    securityModuleNode.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+    operations.add(securityModuleNode);
   }
-  securityComponentNode.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
-  return securityComponentNode;
+  return true;
 }

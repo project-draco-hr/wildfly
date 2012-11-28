@@ -1,26 +1,23 @@
 {
-  List<ModelNode> updates=new ArrayList<ModelNode>();
-  ModelNode op=new ModelNode();
-  op.get(OP).set(ADD);
-  op.get(OP_ADDR).add(SUBSYSTEM,"security");
-  op.get(OP_ADDR).add(SECURITY_DOMAIN,getSecurityDomainName());
-  updates.add(op);
-  op=new ModelNode();
-  op.get(OP).set(ADD);
-  op.get(OP_ADDR).add(SUBSYSTEM,"security");
-  op.get(OP_ADDR).add(SECURITY_DOMAIN,getSecurityDomainName());
-  op.get(OP_ADDR).add(Constants.AUTHENTICATION,Constants.CLASSIC);
-  ModelNode loginModule=op.get(Constants.LOGIN_MODULES).add();
+  final ModelNode compositeOp=new ModelNode();
+  compositeOp.get(OP).set(COMPOSITE);
+  compositeOp.get(OP_ADDR).setEmptyList();
+  ModelNode steps=compositeOp.get(STEPS);
+  PathAddress address=PathAddress.pathAddress().append(SUBSYSTEM,"security").append(SECURITY_DOMAIN,getSecurityDomainName());
+  steps.add(Util.createAddOperation(address));
+  address=address.append(Constants.AUTHENTICATION,Constants.CLASSIC);
+  steps.add(Util.createAddOperation(address));
+  ModelNode loginModule=Util.createAddOperation(address.append(LOGIN_MODULE,loginModuleClass.getName()));
   loginModule.get(ModelDescriptionConstants.CODE).set(loginModuleClass.getName());
   loginModule.get(FLAG).set("required");
-  op.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  loginModule.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
   ModelNode moduleOptions=loginModule.get("module-options");
   for (  Map.Entry<String,String> entry : moduleOptionsCache.entrySet()) {
     moduleOptions.get(entry.getKey()).set(entry.getValue());
   }
-  updates.add(op);
+  steps.add(loginModule);
   try {
-    applyUpdates(client,updates);
+    applyUpdates(client,Arrays.asList(compositeOp));
   }
  catch (  Exception ex) {
     throw new RuntimeException(ex);

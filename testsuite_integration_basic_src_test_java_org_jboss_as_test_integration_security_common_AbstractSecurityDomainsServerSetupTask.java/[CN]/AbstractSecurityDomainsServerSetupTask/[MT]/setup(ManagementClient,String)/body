@@ -5,42 +5,38 @@
     LOGGER.warn("Empty security domain configuration.");
     return;
   }
-  final List<ModelNode> updates=new ArrayList<ModelNode>();
+  final List<ModelNode> updates=new LinkedList<ModelNode>();
   for (  final SecurityDomain securityDomain : securityDomains) {
     final String securityDomainName=securityDomain.getName();
     if (LOGGER.isInfoEnabled()) {
       LOGGER.info("Adding security domain " + securityDomainName);
     }
-    ModelNode op=new ModelNode();
-    op.get(OP).set(ADD);
-    op.get(OP_ADDR).add(SUBSYSTEM,SUBSYSTEM_SECURITY);
-    op.get(OP_ADDR).add(SECURITY_DOMAIN,securityDomainName);
+    final ModelNode compositeOp=new ModelNode();
+    compositeOp.get(OP).set(COMPOSITE);
+    compositeOp.get(OP_ADDR).setEmptyList();
+    ModelNode steps=compositeOp.get(STEPS);
+    PathAddress opAddr=PathAddress.pathAddress().append(SUBSYSTEM,SUBSYSTEM_SECURITY).append(SECURITY_DOMAIN,securityDomainName);
+    ModelNode op=Util.createAddOperation(opAddr);
     if (StringUtils.isNotEmpty(securityDomain.getCacheType())) {
       op.get(Constants.CACHE_TYPE).set(securityDomain.getCacheType());
     }
-    updates.add(op);
-    final ModelNode authnNode=createSecurityModelNode(Constants.AUTHENTICATION,Constants.LOGIN_MODULES,FLAG,Constants.REQUIRED,securityDomain.getLoginModules(),securityDomain.getName());
-    if (authnNode != null) {
-      updates.add(authnNode);
-    }
- else {
+    steps.add(op);
+    final boolean authNodeAdded=createSecurityModelNode(Constants.AUTHENTICATION,Constants.LOGIN_MODULE,FLAG,Constants.REQUIRED,securityDomain.getLoginModules(),securityDomainName,steps);
+    if (!authNodeAdded) {
       final List<ModelNode> jaspiAuthnNodes=createJaspiAuthnNodes(securityDomain.getJaspiAuthn(),securityDomain.getName());
       if (jaspiAuthnNodes != null) {
-        updates.addAll(jaspiAuthnNodes);
+        for (        ModelNode node : jaspiAuthnNodes) {
+          steps.add(node);
+        }
       }
     }
-    final ModelNode authzNode=createSecurityModelNode(Constants.AUTHORIZATION,Constants.POLICY_MODULES,FLAG,Constants.REQUIRED,securityDomain.getAuthorizationModules(),securityDomain.getName());
-    if (authzNode != null) {
-      updates.add(authzNode);
-    }
-    final ModelNode mappingNode=createSecurityModelNode(Constants.MAPPING,Constants.MAPPING_MODULES,TYPE,ROLE,securityDomain.getMappingModules(),securityDomain.getName());
-    if (mappingNode != null) {
-      updates.add(mappingNode);
-    }
+    createSecurityModelNode(Constants.AUTHORIZATION,Constants.POLICY_MODULE,FLAG,Constants.REQUIRED,securityDomain.getAuthorizationModules(),securityDomainName,steps);
+    createSecurityModelNode(Constants.MAPPING,Constants.MAPPING_MODULE,TYPE,ROLE,securityDomain.getMappingModules(),securityDomainName,steps);
     final ModelNode jsseNode=createJSSENode(securityDomain.getJsse(),securityDomain.getName());
     if (jsseNode != null) {
-      updates.add(jsseNode);
+      steps.add(jsseNode);
     }
+    updates.add(compositeOp);
   }
   Utils.applyUpdates(updates,managementClient.getControllerClient());
 }

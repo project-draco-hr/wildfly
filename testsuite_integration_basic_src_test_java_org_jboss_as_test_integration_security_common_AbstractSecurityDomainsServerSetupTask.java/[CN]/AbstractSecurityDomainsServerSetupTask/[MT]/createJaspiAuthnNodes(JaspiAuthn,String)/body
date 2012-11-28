@@ -6,15 +6,14 @@
   if (securityConfigurations.getAuthnModules() == null || securityConfigurations.getAuthnModules().length == 0 || securityConfigurations.getLoginModuleStacks() == null || securityConfigurations.getLoginModuleStacks().length == 0) {
     throw new IllegalArgumentException("Missing mandatory part of JASPI configuration in the security domain.");
   }
-  final List<ModelNode> result=new ArrayList<ModelNode>();
-  final ModelNode securityComponentNode=new ModelNode();
-  securityComponentNode.get(OP).set(ADD);
-  securityComponentNode.get(OP_ADDR).add(SUBSYSTEM,SUBSYSTEM_SECURITY);
-  securityComponentNode.get(OP_ADDR).add(SECURITY_DOMAIN,domainName);
-  securityComponentNode.get(OP_ADDR).add(Constants.AUTHENTICATION,Constants.JASPI);
+  final List<ModelNode> steps=new ArrayList<ModelNode>();
+  PathAddress domainAddress=PathAddress.pathAddress().append(SUBSYSTEM,SUBSYSTEM_SECURITY).append(SECURITY_DOMAIN,domainName);
+  PathAddress jaspiAddress=domainAddress.append(Constants.AUTHENTICATION,Constants.JASPI);
+  steps.add(Util.createAddOperation(jaspiAddress));
   for (  final AuthnModule config : securityConfigurations.getAuthnModules()) {
     LOGGER.info("Adding auth-module: " + config);
-    final ModelNode securityModuleNode=securityComponentNode.get(Constants.AUTH_MODULES).add();
+    final ModelNode securityModuleNode=Util.createAddOperation(jaspiAddress.append(AUTH_MODULE,config.getName()));
+    steps.add(securityModuleNode);
     securityModuleNode.get(ModelDescriptionConstants.CODE).set(config.getName());
     if (config.getFlag() != null) {
       securityModuleNode.get(Constants.FLAG).set(config.getFlag());
@@ -40,17 +39,12 @@
       }
     }
   }
-  result.add(securityComponentNode);
   for (  final LoginModuleStack lmStack : securityConfigurations.getLoginModuleStacks()) {
-    final ModelNode stackNode=new ModelNode();
-    stackNode.get(OP).set(ADD);
-    stackNode.get(OP_ADDR).add(SUBSYSTEM,SUBSYSTEM_SECURITY);
-    stackNode.get(OP_ADDR).add(SECURITY_DOMAIN,domainName);
-    stackNode.get(OP_ADDR).add(Constants.AUTHENTICATION,Constants.JASPI);
-    stackNode.get(OP_ADDR).add(Constants.LOGIN_MODULE_STACK,lmStack.getName());
+    PathAddress lmStackAddress=jaspiAddress.append(Constants.LOGIN_MODULE_STACK,lmStack.getName());
+    steps.add(Util.createAddOperation(lmStackAddress));
     for (    final SecurityModule config : lmStack.getLoginModules()) {
-      final ModelNode securityModuleNode=stackNode.get(Constants.LOGIN_MODULES).add();
       final String code=config.getName();
+      final ModelNode securityModuleNode=Util.createAddOperation(lmStackAddress.append(LOGIN_MODULE,code));
       final String flag=StringUtils.defaultIfEmpty(config.getFlag(),Constants.REQUIRED);
       securityModuleNode.get(ModelDescriptionConstants.CODE).set(code);
       securityModuleNode.get(Constants.FLAG).set(flag);
@@ -71,9 +65,9 @@
           LOGGER.debug("Adding module option [" + optionName + "="+ optionValue+ "]");
         }
       }
+      securityModuleNode.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+      steps.add(securityModuleNode);
     }
-    stackNode.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
-    result.add(stackNode);
   }
-  return result;
+  return steps;
 }
