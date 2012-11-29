@@ -1,22 +1,21 @@
 {
-  PathAddress ourAddress=PathAddress.pathAddress(operation.require(OP_ADDR));
-  final Resource subsystemRootResource=context.readResourceFromRoot(ourAddress.subAddress(0,ourAddress.size() - 1));
-  if (subsystemRootResource.hasChildren(CommonAttributes.GROUPING_HANDLER)) {
-    throw new OperationFailedException(new ModelNode().set(MESSAGES.childResourceAlreadyExists(CommonAttributes.GROUPING_HANDLER)));
-  }
-  if (context.isNormalServer()) {
-    context.addStep(new OperationStepHandler(){
-      public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
-        ServiceRegistry registry=context.getServiceRegistry(false);
-        final ServiceName hqServiceName=MessagingServices.getHornetQServiceName(PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)));
-        ServiceController<?> hqService=registry.getService(hqServiceName);
-        if (hqService != null) {
-          context.reloadRequired();
-        }
-        context.completeStep(OperationContext.RollbackHandler.REVERT_RELOAD_REQUIRED_ROLLBACK_HANDLER);
-      }
+  ServiceRegistry registry=context.getServiceRegistry(true);
+  final ServiceName hqServiceName=MessagingServices.getHornetQServiceName(PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)));
+  ServiceController<?> hqService=registry.getService(hqServiceName);
+  if (hqService != null) {
+    final HornetQServer hqServer=HornetQServer.class.cast(hqService.getValue());
+    if (hqServer.getGroupingHandler() != null) {
+      throw new OperationFailedException(new ModelNode().set(MESSAGES.childResourceAlreadyExists(CommonAttributes.GROUPING_HANDLER)));
     }
+    if (context.isNormalServer()) {
+      context.addStep(new OperationStepHandler(){
+        public void execute(        OperationContext context,        ModelNode operation) throws OperationFailedException {
+          context.reloadRequired();
+          context.completeStep(OperationContext.RollbackHandler.REVERT_RELOAD_REQUIRED_ROLLBACK_HANDLER);
+        }
+      }
 ,OperationContext.Stage.RUNTIME);
+    }
+    context.stepCompleted();
   }
-  context.stepCompleted();
 }
