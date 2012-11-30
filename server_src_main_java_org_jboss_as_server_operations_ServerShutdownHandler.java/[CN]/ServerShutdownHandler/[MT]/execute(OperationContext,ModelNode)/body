@@ -1,18 +1,25 @@
 {
   final boolean restart=RESTART.resolveModelAttribute(context,operation).asBoolean();
+  context.acquireControllerLock();
   context.addStep(new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
       context.getServiceRegistry(true);
-      processState.setStopping();
-      final Thread thread=new Thread(new Runnable(){
-        public void run(){
-          System.exit(restart ? ExitCodes.RESTART_PROCESS_FROM_STARTUP_SCRIPT : ExitCodes.NORMAL);
+      context.completeStep(new OperationContext.ResultHandler(){
+        @Override public void handleResult(        OperationContext.ResultAction resultAction,        OperationContext context,        ModelNode operation){
+          if (resultAction == OperationContext.ResultAction.KEEP) {
+            processState.setStopping();
+            final Thread thread=new Thread(new Runnable(){
+              public void run(){
+                System.exit(restart ? ExitCodes.RESTART_PROCESS_FROM_STARTUP_SCRIPT : ExitCodes.NORMAL);
+              }
+            }
+);
+            thread.setName("Management Triggered Shutdown");
+            thread.start();
+          }
         }
       }
 );
-      thread.setName("Management Triggered Shutdown");
-      thread.start();
-      context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
     }
   }
 ,OperationContext.Stage.RUNTIME);
