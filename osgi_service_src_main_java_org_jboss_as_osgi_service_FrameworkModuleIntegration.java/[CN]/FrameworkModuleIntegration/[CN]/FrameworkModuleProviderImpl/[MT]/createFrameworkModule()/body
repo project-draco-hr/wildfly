@@ -1,0 +1,34 @@
+{
+  ModuleSpec.Builder specBuilder=ModuleSpec.build(ModuleIdentifier.create(JBOSGI_PREFIX + ".framework"));
+  String sysmodules=(String)props.get(PROP_JBOSS_OSGI_SYSTEM_MODULES);
+  if (sysmodules == null)   sysmodules="";
+  String extramodules=(String)props.get(PROP_JBOSS_OSGI_SYSTEM_MODULES_EXTRA);
+  if (extramodules != null)   sysmodules+="," + extramodules;
+  ModuleLoader bootLoader=Module.getBootModuleLoader();
+  PathFilter acceptAll=PathFilters.acceptAll();
+  for (  String modid : sysmodules.split(",")) {
+    modid=modid.trim();
+    if (modid.length() > 0) {
+      ModuleIdentifier identifier=ModuleIdentifier.create(modid);
+      specBuilder.addDependency(DependencySpec.createModuleDependencySpec(acceptAll,acceptAll,bootLoader,identifier,false));
+    }
+  }
+  Bundle systemBundle=injectedBundleManager.getValue().getSystemBundle();
+  specBuilder.setModuleClassLoaderFactory(new BundleReferenceClassLoader.Factory<Bundle>(systemBundle));
+  try {
+    final ModuleSpec moduleSpec=specBuilder.create();
+    ModuleLoader moduleLoader=new ModuleLoader(){
+      @Override protected ModuleSpec findModule(      ModuleIdentifier identifier) throws ModuleLoadException {
+        return (moduleSpec.getModuleIdentifier().equals(identifier) ? moduleSpec : null);
+      }
+      @Override public String toString(){
+        return "FrameworkModuleLoader";
+      }
+    }
+;
+    return moduleLoader.loadModule(specBuilder.getIdentifier());
+  }
+ catch (  ModuleLoadException ex) {
+    throw new IllegalStateException(ex);
+  }
+}
