@@ -1,23 +1,16 @@
 {
-  final ModelNode pathNode=TimerServiceResourceDefinition.PATH.resolveModelAttribute(context,model);
-  final String path=pathNode.isDefined() ? pathNode.asString() : null;
-  final ModelNode relativeToNode=TimerServiceResourceDefinition.RELATIVE_TO.resolveModelAttribute(context,model);
-  final String relativeTo=relativeToNode.isDefined() ? relativeToNode.asString() : null;
+  final String defaultDataStore=TimerServiceResourceDefinition.DEFAULT_DATA_STORE.resolveModelAttribute(context,model).asString();
   final String threadPoolName=TimerServiceResourceDefinition.THREAD_POOL_NAME.resolveModelAttribute(context,model).asString();
   final ServiceName threadPoolServiceName=EJB3SubsystemModel.BASE_THREAD_POOL_SERVICE_NAME.append(threadPoolName);
   context.addStep(new AbstractDeploymentChainStep(){
     protected void execute(    DeploymentProcessorTarget processorTarget){
       ROOT_LOGGER.debug("Configuring timers");
-      if (path != null) {
-        processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME,Phase.PARSE,Phase.PARSE_TIMEOUT_ANNOTATION,new TimerServiceAnnotationProcessor());
-        processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME,Phase.PARSE,Phase.PARSE_AROUNDTIMEOUT_ANNOTATION,new AroundTimeoutAnnotationParsingProcessor());
-        processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME,Phase.POST_MODULE,Phase.POST_MODULE_EJB_TIMER_METADATA_MERGE,new TimerMethodMergingProcessor());
-        processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME,Phase.POST_MODULE,Phase.POST_MODULE_EJB_TIMER_SERVICE,new TimerServiceDeploymentProcessor(threadPoolServiceName));
-      }
+      processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME,Phase.PARSE,Phase.PARSE_TIMEOUT_ANNOTATION,new TimerServiceAnnotationProcessor());
+      processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME,Phase.PARSE,Phase.PARSE_AROUNDTIMEOUT_ANNOTATION,new AroundTimeoutAnnotationParsingProcessor());
+      processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME,Phase.POST_MODULE,Phase.POST_MODULE_EJB_TIMER_METADATA_MERGE,new TimerMethodMergingProcessor());
+      processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME,Phase.POST_MODULE,Phase.POST_MODULE_EJB_TIMER_SERVICE,new TimerServiceDeploymentProcessor(threadPoolServiceName,defaultDataStore));
     }
   }
 ,OperationContext.Stage.RUNTIME);
   newControllers.add(context.getServiceTarget().addService(TimerServiceDeploymentProcessor.TIMER_SERVICE_NAME,new TimerValueService()).install());
-  final FileTimerPersistence fileTimerPersistence=new FileTimerPersistence(true,path,relativeTo);
-  newControllers.add(context.getServiceTarget().addService(FileTimerPersistence.SERVICE_NAME,fileTimerPersistence).addDependency(Services.JBOSS_SERVICE_MODULE_LOADER,ModuleLoader.class,fileTimerPersistence.getModuleLoader()).addDependency(PathManagerService.SERVICE_NAME,PathManager.class,fileTimerPersistence.getPathManager()).addDependency(TransactionManagerService.SERVICE_NAME,TransactionManager.class,fileTimerPersistence.getTransactionManager()).addDependency(TransactionSynchronizationRegistryService.SERVICE_NAME,TransactionSynchronizationRegistry.class,fileTimerPersistence.getTransactionSynchronizationRegistry()).install());
 }

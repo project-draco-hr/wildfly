@@ -1,11 +1,11 @@
 {
-  List<TimerImpl> restorableTimers=this.getActivePersistentTimers(null);
+  List<TimerImpl> restorableTimers=this.getActivePersistentTimers();
   final List<ScheduleTimer> newAutoTimers=new LinkedList<ScheduleTimer>(autoTimers);
-  ROOT_LOGGER.debug("Found " + restorableTimers.size() + " active timers for timedObjectId: "+ getInvoker().getTimedObjectId());
+  ROOT_LOGGER.debug("Found " + restorableTimers.size() + " active persistentTimers for timedObjectId: "+ getInvoker().getTimedObjectId());
   for (  final TimerImpl activeTimer : restorableTimers) {
     if (activeTimer.isAutoTimer()) {
+      CalendarTimer calendarTimer=(CalendarTimer)activeTimer;
       boolean found=false;
-      final CalendarTimerEntity entity=(CalendarTimerEntity)activeTimer.getPersistentState();
       ListIterator<ScheduleTimer> it=newAutoTimers.listIterator();
       while (it.hasNext()) {
         ScheduleTimer timer=it.next();
@@ -14,8 +14,8 @@
         for (int i=0; i < timer.getMethod().getParameterTypes().length; ++i) {
           params[i]=timer.getMethod().getParameterTypes()[i].getName();
         }
-        if (doesTimeoutMethodMatch(entity.getTimeoutMethod(),methodName,params)) {
-          if (this.doesScheduleMatch(entity.getScheduleExpression(),timer.getScheduleExpression()) && timer.getTimerConfig().isPersistent()) {
+        if (doesTimeoutMethodMatch(calendarTimer.getTimeoutMethod(),methodName,params)) {
+          if (this.doesScheduleMatch(calendarTimer.getScheduleExpression(),timer.getScheduleExpression()) && timer.getTimerConfig().isPersistent()) {
             it.remove();
             found=true;
             break;
@@ -29,10 +29,10 @@
         startTimer(activeTimer);
         ROOT_LOGGER.debug("Started timer: " + activeTimer);
       }
-      this.persistTimer(activeTimer,true);
+      this.persistTimer(activeTimer,false);
     }
  else     if (!ineligibleTimerStates.contains(activeTimer.getState())) {
-      this.startTimer(activeTimer);
+      startTimer(activeTimer);
     }
     ROOT_LOGGER.debug("Started timer: " + activeTimer);
   }

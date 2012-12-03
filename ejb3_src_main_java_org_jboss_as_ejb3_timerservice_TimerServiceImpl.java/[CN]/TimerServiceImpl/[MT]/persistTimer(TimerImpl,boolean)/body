@@ -2,37 +2,22 @@
   if (timer == null) {
     return;
   }
-  if (!timer.persistent) {
-switch (timer.getState()) {
-case EXPIRED:
-      nonPersistentTimers.remove(timer.getId());
-    break;
-case CANCELED:
-  if (transactionActive()) {
-    registerSynchronization(new NonPersistentTimerRemoveSynchronization(timer.getId()));
+  if (timer.isTimerPersistent()) {
+    try {
+      if (timerPersistence.getOptionalValue() == null) {
+        ROOT_LOGGER.timerPersistenceNotEnable();
+        return;
+      }
+      if (newTimer) {
+        timerPersistence.getValue().addTimer(timer);
+      }
+ else {
+        timerPersistence.getValue().persistTimer(timer);
+      }
+    }
+ catch (    Throwable t) {
+      this.setRollbackOnly();
+      throw new RuntimeException(t);
+    }
   }
- else {
-    nonPersistentTimers.remove(timer.getId());
-  }
-}
-}
- else {
-final TimerEntity timerEntity=timer.getPersistentState();
-try {
-if (timerPersistence == null) {
-  ROOT_LOGGER.timerPersistenceNotEnable();
-  return;
-}
-if (newTimer) {
-  timerPersistence.getValue().addTimer(timerEntity);
-}
- else {
-  timerPersistence.getValue().persistTimer(timerEntity);
-}
-}
- catch (Throwable t) {
-this.setRollbackOnly();
-throw new RuntimeException(t);
-}
-}
 }

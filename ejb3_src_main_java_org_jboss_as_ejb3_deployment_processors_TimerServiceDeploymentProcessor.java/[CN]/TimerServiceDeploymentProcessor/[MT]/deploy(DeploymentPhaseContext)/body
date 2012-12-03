@@ -2,6 +2,23 @@
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
   final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
+  final EjbJarMetaData ejbJarMetaData=deploymentUnit.getAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_METADATA);
+  ServiceName defaultTimerPersistenceService=TimerPersistence.SERVICE_NAME.append(defaultTimerDataStore);
+  final Map<String,ServiceName> timerPersistenceServices=new HashMap<String,ServiceName>();
+  if (ejbJarMetaData != null && ejbJarMetaData.getAssemblyDescriptor() != null) {
+    List<TimerServiceMetaData> timerService=ejbJarMetaData.getAssemblyDescriptor().getAny(TimerServiceMetaData.class);
+    if (timerService != null) {
+      for (      TimerServiceMetaData data : timerService) {
+        if (data.getEjbName().equals("*")) {
+          defaultTimerPersistenceService=TimerPersistence.SERVICE_NAME.append(data.getDataStoreName());
+        }
+ else {
+          timerPersistenceServices.put(data.getEjbName(),TimerPersistence.SERVICE_NAME.append(data.getDataStoreName()));
+        }
+      }
+    }
+  }
+  final ServiceName finalDefaultTimerPersistenceService=defaultTimerPersistenceService;
   for (  final ComponentDescription component : moduleDescription.getComponentDescriptions()) {
     if (component.isTimerServiceApplicable()) {
       final String deploymentName;
@@ -24,7 +41,12 @@
           createBuilder.addDependency(TIMER_SERVICE_NAME,Timer.class,service.getTimerInjectedValue());
           createBuilder.addDependency(component.getCreateServiceName(),EJBComponent.class,service.getEjbComponentInjectedValue());
           createBuilder.addDependency(timerServiceThreadPool,ExecutorService.class,service.getExecutorServiceInjectedValue());
-          createBuilder.addDependency(FileTimerPersistence.SERVICE_NAME,TimerPersistence.class,service.getTimerPersistence());
+          if (timerPersistenceServices.containsKey(ejbComponentDescription.getEJBName())) {
+            createBuilder.addDependency(timerPersistenceServices.get(ejbComponentDescription.getEJBName()),TimerPersistence.class,service.getTimerPersistence());
+          }
+ else {
+            createBuilder.addDependency(finalDefaultTimerPersistenceService,TimerPersistence.class,service.getTimerPersistence());
+          }
           createBuilder.addDependency(invokerServiceName,TimedObjectInvoker.class,service.getTimedObjectInvoker());
           createBuilder.install();
           ejbComponentDescription.setTimerService(service);

@@ -1,48 +1,78 @@
 {
-  Date now=new Date();
-  if (ROOT_LOGGER.isDebugEnabled()) {
-    ROOT_LOGGER.debug("Timer task invoked at: " + now + " for timer "+ this.timer);
-  }
-  if (this.timer.isInRetry()) {
-    ROOT_LOGGER.skipInvokeTimeoutDuringRetry(this.timer.getTimedObjectId(),this.timer.getId(),now);
-    this.timer.setNextTimeout(calculateNextTimeout());
-    this.timerService.persistTimer(this.timer,false);
-    scheduleTimeoutIfRequired();
-    return;
-  }
-  if (this.timer.getState() == TimerState.IN_TIMEOUT && !this.timer.isCalendarTimer()) {
-    ROOT_LOGGER.skipOverlappingInvokeTimeout(this.timer.getTimedObjectId(),this.timer.getId(),now);
-    this.timer.setNextTimeout(this.calculateNextTimeout());
-    this.timerService.persistTimer(this.timer,false);
-    return;
-  }
-  if (this.timer.isActive() == false) {
-    ROOT_LOGGER.debug("Timer is not active, skipping this scheduled execution at: " + now);
-  }
-  this.timer.setPreviousRun(new Date());
-  Date nextTimeout=this.calculateNextTimeout();
-  this.timer.setNextTimeout(nextTimeout);
-  this.timer.setTimerState(TimerState.IN_TIMEOUT);
-  this.timerService.persistTimer(this.timer,false);
   try {
-    this.callTimeout();
-  }
- catch (  BeanRemovedException e) {
-    ROOT_LOGGER.debugf("Removing timer %s as EJB has been removed ",this.timer);
-    timer.cancel();
-  }
-catch (  Exception e) {
-    ROOT_LOGGER.errorInvokeTimeout(this.timer,e);
+    TimerImpl timer=timerService.getTimer(timedObjectId,timerId);
+    if (cancelled) {
+      ROOT_LOGGER.debug("Timer task was cancelled for " + timer);
+      return;
+    }
+    Date now=new Date();
+    if (ROOT_LOGGER.isDebugEnabled()) {
+      ROOT_LOGGER.debug("Timer task invoked at: " + now + " for timer "+ timer);
+    }
+    if (timer.isInRetry()) {
+      ROOT_LOGGER.skipInvokeTimeoutDuringRetry(timer.getTimedObjectId(),timer.getId(),now);
+      timer.setNextTimeout(calculateNextTimeout(timer));
+      timerService.persistTimer(timer,false);
+      scheduleTimeoutIfRequired(timer);
+      return;
+    }
+    if (timer.getState() == TimerState.IN_TIMEOUT && !timer.isCalendarTimer()) {
+      ROOT_LOGGER.skipOverlappingInvokeTimeout(timer.getTimedObjectId(),timer.getId(),now);
+      timer.setNextTimeout(this.calculateNextTimeout(timer));
+      timerService.persistTimer(timer,false);
+      return;
+    }
+    if (timer.isInRetry()) {
+      ROOT_LOGGER.debug("Timer in retry mode, skipping this scheduled execution at: " + now);
+      timer.setNextTimeout(calculateNextTimeout(timer));
+      timerService.persistTimer(timer,false);
+      scheduleTimeoutIfRequired(timer);
+      return;
+    }
+    if (timer.getState() == TimerState.IN_TIMEOUT && !timer.isCalendarTimer()) {
+      ROOT_LOGGER.skipOverlappingInvokeTimeout(timer.getTimedObjectId(),timer.getId(),now);
+      timer.setNextTimeout(this.calculateNextTimeout(timer));
+      timerService.persistTimer(timer,false);
+      return;
+    }
+    timer.lock();
     try {
-      ROOT_LOGGER.timerRetried(this.timer);
-      retryTimeout();
+      if (!timer.isActive()) {
+        ROOT_LOGGER.debug("Timer is not active, skipping this scheduled execution at: " + now + "for "+ timer);
+        return;
+      }
+      timer.setPreviousRun(new Date());
+      Date nextTimeout=this.calculateNextTimeout(timer);
+      timer.setNextTimeout(nextTimeout);
+      timer.setTimerState(TimerState.IN_TIMEOUT);
+      timerService.persistTimer(timer,false);
     }
- catch (    Exception retryException) {
-      ROOT_LOGGER.errorDuringRetryTimeout(timer,retryException);
+  finally {
+      timer.unlock();
+    }
+    try {
+      this.callTimeout(timer);
+    }
+ catch (    BeanRemovedException e) {
+      ROOT_LOGGER.debugf("Removing timer %s as EJB has been removed ",timer);
+      timer.cancel();
+    }
+catch (    Exception e) {
+      ROOT_LOGGER.errorInvokeTimeout(timer,e);
+      try {
+        ROOT_LOGGER.timerRetried(timer);
+        retryTimeout(timer);
+      }
+ catch (      Exception retryException) {
+        ROOT_LOGGER.errorDuringRetryTimeout(timer,retryException);
+      }
+    }
+ finally {
+      this.postTimeoutProcessing(timer);
+      timerService.persistTimer(timer,false);
     }
   }
- finally {
-    this.postTimeoutProcessing();
-    this.timerService.persistTimer(this.timer,false);
+ catch (  Exception e) {
+    ROOT_LOGGER.exceptionRunningTimerTask(timerId,timedObjectId,e);
   }
 }

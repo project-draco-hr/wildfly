@@ -1,0 +1,50 @@
+{
+  final Map<String,TimerImpl> timers=new HashMap<String,TimerImpl>();
+  try {
+    final File file=new File(getDirectory(timedObjectId));
+    if (!file.exists()) {
+      return timers;
+    }
+ else     if (!file.isDirectory()) {
+      ROOT_LOGGER.failToRestoreTimers(file);
+      return timers;
+    }
+    Unmarshaller unmarshaller=factory.createUnmarshaller(configuration);
+    for (    File timerFile : file.listFiles()) {
+      FileInputStream in=null;
+      try {
+        in=new FileInputStream(timerFile);
+        unmarshaller.start(new InputStreamByteInput(in));
+        final TimerEntity entity=unmarshaller.readObject(TimerEntity.class);
+        TimerImpl.Builder builder;
+        if (entity instanceof CalendarTimerEntity) {
+          CalendarTimerEntity c=(CalendarTimerEntity)entity;
+          builder=CalendarTimer.builder().setScheduleExprSecond(c.getSecond()).setScheduleExprMinute(c.getMinute()).setScheduleExprHour(c.getHour()).setScheduleExprDayOfWeek(c.getDayOfWeek()).setScheduleExprDayOfMonth(c.getDayOfMonth()).setScheduleExprMonth(c.getMonth()).setScheduleExprYear(c.getYear()).setScheduleExprStartDate(c.getStartDate()).setScheduleExprEndDate(c.getEndDate()).setScheduleExprTimezone(c.getTimezone()).setAutoTimer(c.isAutoTimer()).setTimeoutMethod(CalendarTimer.getTimeoutMethod(c.getTimeoutMethod(),timerService.getTimedObjectInvoker().getValue()));
+        }
+ else {
+          builder=TimerImpl.builder();
+        }
+        builder.setId(entity.getId()).setTimedObjectId(entity.getTimedObjectId()).setInitialDate(entity.getInitialDate()).setRepeatInterval(entity.getInterval()).setNextDate(entity.getNextDate()).setPreviousRun(entity.getPreviousRun()).setInfo(entity.getInfo()).setPrimaryKey(entity.getPreviousRun()).setTimerState(entity.getTimerState());
+        timers.put(entity.getId(),builder.build(timerService));
+        unmarshaller.finish();
+      }
+ catch (      Exception e) {
+        ROOT_LOGGER.failToRestoreTimersFromFile(timerFile,e);
+      }
+ finally {
+        if (in != null) {
+          try {
+            in.close();
+          }
+ catch (          IOException e) {
+            ROOT_LOGGER.failToCloseFile(e);
+          }
+        }
+      }
+    }
+  }
+ catch (  Exception e) {
+    ROOT_LOGGER.failToRestoreTimersForObjectId(timedObjectId,e);
+  }
+  return timers;
+}

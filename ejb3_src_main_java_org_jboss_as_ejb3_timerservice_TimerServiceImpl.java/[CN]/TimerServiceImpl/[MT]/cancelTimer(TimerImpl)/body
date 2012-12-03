@@ -1,0 +1,24 @@
+{
+  timer.lock();
+  boolean release=true;
+  try {
+    timer.assertTimerState();
+    boolean startedInTx=getWaitingOnTxCompletionTimers().containsKey(timer.getId());
+    if (timer.getState() != TimerState.EXPIRED) {
+      timer.setTimerState(TimerState.CANCELED);
+    }
+    if (transactionActive() && !startedInTx) {
+      registerSynchronization(new TimerRemoveSynchronization(timer));
+      release=false;
+    }
+ else {
+      this.cancelTimeout(timer);
+    }
+    persistTimer(timer,false);
+  }
+  finally {
+    if (release) {
+      timer.unlock();
+    }
+  }
+}

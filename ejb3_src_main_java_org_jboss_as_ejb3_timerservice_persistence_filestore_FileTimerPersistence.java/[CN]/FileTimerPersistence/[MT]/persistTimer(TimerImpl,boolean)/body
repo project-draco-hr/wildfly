@@ -1,0 +1,35 @@
+{
+  final Lock lock=getLock(timer.getTimedObjectId());
+  try {
+    final int status=transactionManager.getValue().getStatus();
+    if (status == Status.STATUS_MARKED_ROLLBACK || status == Status.STATUS_ROLLEDBACK || status == Status.STATUS_ROLLING_BACK) {
+      return;
+    }
+    lock.lock();
+    if (status == Status.STATUS_NO_TRANSACTION || status == Status.STATUS_UNKNOWN || isBeforeCompletion() || status == Status.STATUS_COMMITTED) {
+      Map<String,TimerImpl> map=getTimers(timer.getTimedObjectId(),timer.getTimerService());
+      if (timer.getState() == TimerState.CANCELED || timer.getState() == TimerState.EXPIRED) {
+        map.remove(timer.getId());
+        writeFile(timer);
+      }
+ else       if (newTimer || map.containsKey(timer.getId())) {
+        map.put(timer.getId(),timer);
+        writeFile(timer);
+      }
+    }
+ else {
+      final String key=timerTransactionKey(timer);
+      Object existing=transactionSynchronizationRegistry.getValue().getResource(key);
+      if (existing == null) {
+        transactionSynchronizationRegistry.getValue().registerInterposedSynchronization(new PersistTransactionSynchronization(lock,key,newTimer));
+      }
+      transactionSynchronizationRegistry.getValue().putResource(key,timer);
+    }
+  }
+ catch (  SystemException e) {
+    throw new RuntimeException(e);
+  }
+ finally {
+    lock.unlock();
+  }
+}
