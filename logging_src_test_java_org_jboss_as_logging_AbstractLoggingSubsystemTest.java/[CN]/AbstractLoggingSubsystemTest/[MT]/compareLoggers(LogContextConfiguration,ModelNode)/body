@@ -1,0 +1,49 @@
+{
+  final List<String> loggerNames=logContextConfiguration.getLoggerNames();
+  for (  String name : loggerNames) {
+    final LoggerConfiguration loggerConfig=logContextConfiguration.getLoggerConfiguration(name);
+    final ModelNode loggerModel=(name.isEmpty() ? model.get(CommonAttributes.ROOT_LOGGER,CommonAttributes.ROOT_LOGGER_ATTRIBUTE_NAME) : model.get(CommonAttributes.LOGGER,name));
+    final Set<String> attributes=loggerModel.keys();
+    attributes.remove(CommonAttributes.CATEGORY.getName());
+    attributes.remove(CommonAttributes.FILTER.getName());
+    for (    String attribute : attributes) {
+      if (attribute.equals(CommonAttributes.LEVEL.getName())) {
+        final String configValue=loggerConfig.getLevel();
+        final String modelValue=loggerModel.get(attribute).asString();
+        Assert.assertEquals(String.format("Levels do not match. Config Value: %s  Model Value: %s",configValue,modelValue),configValue,modelValue);
+      }
+ else       if (attribute.equals(CommonAttributes.FILTER_SPEC.getName())) {
+        final String configValue=loggerConfig.getFilter();
+        final String modelValue=loggerModel.hasDefined(attribute) ? loggerModel.get(attribute).asString() : null;
+        Assert.assertEquals(String.format("Filter expressions do not match. Config Value: %s  Model Value: %s",configValue,modelValue),configValue,modelValue);
+      }
+ else       if (attribute.equals(CommonAttributes.HANDLERS.getName())) {
+        final List<String> handlerNames=loggerConfig.getHandlerNames();
+        final ModelNode handlers=loggerModel.get(attribute);
+        if (handlers.isDefined()) {
+          final List<String> modelHandlerNames=new ArrayList<String>();
+          for (          ModelNode handler : handlers.asList()) {
+            modelHandlerNames.add(handler.asString());
+          }
+          final List<String> missingConfigHandlers=new ArrayList<String>(handlerNames);
+          missingConfigHandlers.removeAll(modelHandlerNames);
+          final List<String> missingModelHandlers=new ArrayList<String>(modelHandlerNames);
+          missingModelHandlers.removeAll(handlerNames);
+          Assert.assertTrue("Logger in model contains handlers not in the configuration: " + missingConfigHandlers,missingConfigHandlers.isEmpty());
+          Assert.assertTrue("Logger in configuration contains handlers not in the model: " + missingModelHandlers,missingModelHandlers.isEmpty());
+        }
+ else {
+          Assert.assertTrue("Handlers attached to loggers in the configuration that are not attached to loggers in the model. Logger: " + name,handlerNames.isEmpty());
+        }
+      }
+ else       if (attribute.equals(CommonAttributes.USE_PARENT_HANDLERS.getName())) {
+        final Boolean configValue=loggerConfig.getUseParentHandlers();
+        final Boolean modelValue=loggerModel.get(attribute).asBoolean();
+        Assert.assertEquals(String.format("Use parent handler attributes do not match. Config Value: %s  Model Value: %s",configValue,modelValue),configValue,modelValue);
+      }
+ else {
+        Assert.assertTrue("Invalid attribute: " + attribute,false);
+      }
+    }
+  }
+}

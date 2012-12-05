@@ -1,0 +1,99 @@
+{
+  for (  String name : handlerNames) {
+    final HandlerConfiguration handlerConfig=logContextConfig.getHandlerConfiguration(name);
+    final ModelNode handlerModel=findHandlerModel(model,name);
+    final Set<String> modelPropertyNames=handlerModel.keys();
+    final List<String> configPropertyNames=handlerConfig.getPropertyNames();
+    modelPropertyNames.remove(CommonAttributes.FILTER.getName());
+    modelPropertyNames.remove(CommonAttributes.NAME.getName());
+    for (    String modelPropertyName : modelPropertyNames) {
+      final ModelNode modelValue=handlerModel.get(modelPropertyName);
+      String modelStringValue=modelValue.asString();
+      final String configValue;
+      if (modelPropertyName.equals(CommonAttributes.ENCODING.getName())) {
+        configValue=handlerConfig.getEncoding();
+      }
+ else       if (modelPropertyName.equals(CommonAttributes.FORMATTER.getName())) {
+        final String formatterName=handlerConfig.getFormatterName();
+        if (formatterName == null) {
+          configValue=null;
+        }
+ else {
+          final FormatterConfiguration formatterConfig=logContextConfig.getFormatterConfiguration(formatterName);
+          configValue=formatterConfig.getPropertyValueString(CommonAttributes.PATTERN.getName());
+        }
+      }
+ else       if (modelPropertyName.equals(CommonAttributes.FILTER_SPEC.getName())) {
+        configValue=handlerConfig.getFilter();
+      }
+ else       if (modelPropertyName.equals(CommonAttributes.LEVEL.getName())) {
+        configValue=handlerConfig.getLevel();
+      }
+ else {
+        final String configPropertyName;
+        if (modelPropertyName.equals(CommonAttributes.AUTOFLUSH.getName())) {
+          configPropertyName=CommonAttributes.AUTOFLUSH.getPropertyName();
+        }
+ else         if (modelPropertyName.equals(CommonAttributes.MAX_BACKUP_INDEX.getName())) {
+          configPropertyName=CommonAttributes.MAX_BACKUP_INDEX.getPropertyName();
+        }
+ else         if (modelPropertyName.equals(CommonAttributes.OVERFLOW_ACTION.getName())) {
+          configPropertyName=CommonAttributes.OVERFLOW_ACTION.getPropertyName();
+        }
+ else         if (modelPropertyName.equals(CommonAttributes.QUEUE_LENGTH.getName())) {
+          configPropertyName=CommonAttributes.QUEUE_LENGTH.getPropertyName();
+        }
+ else         if (modelPropertyName.equals(CommonAttributes.ROTATE_SIZE.getName())) {
+          configPropertyName=CommonAttributes.ROTATE_SIZE.getPropertyName();
+          modelStringValue=String.valueOf(SizeResolver.INSTANCE.parseSize(modelValue));
+        }
+ else         if (modelPropertyName.equals(CommonAttributes.USE_PARENT_HANDLERS.getName())) {
+          configPropertyName=CommonAttributes.USE_PARENT_HANDLERS.getPropertyName();
+        }
+ else         if (modelPropertyName.equals(CommonAttributes.FILE.getName())) {
+          configPropertyName=CommonAttributes.FILE.getPropertyName();
+          modelStringValue=modelValue.get(CommonAttributes.PATH.getName()).asString();
+          if (modelValue.hasDefined(CommonAttributes.RELATIVE_TO.getName())) {
+            final String relativeTo=System.getProperty(modelValue.get(CommonAttributes.RELATIVE_TO.getName()).asString());
+            modelStringValue=relativeTo + File.separator + modelStringValue;
+          }
+        }
+ else         if (modelPropertyName.equals(CommonAttributes.TARGET.getName())) {
+          configPropertyName=CommonAttributes.TARGET.getPropertyName();
+          modelStringValue=Target.fromString(modelValue.asString()).name();
+        }
+ else         if (modelPropertyName.equals(CommonAttributes.SUBHANDLERS.getName())) {
+          final List<String> handlerHandlerNames=handlerConfig.getHandlerNames();
+          final ModelNode handlers=handlerModel.get(modelPropertyName);
+          if (handlers.isDefined()) {
+            final List<String> modelHandlerNames=new ArrayList<String>();
+            for (            ModelNode handler : handlers.asList()) {
+              modelHandlerNames.add(handler.asString());
+            }
+            final List<String> missingConfigHandlers=new ArrayList<String>(handlerHandlerNames);
+            missingConfigHandlers.removeAll(modelHandlerNames);
+            final List<String> missingModelHandlers=new ArrayList<String>(modelHandlerNames);
+            missingModelHandlers.removeAll(handlerHandlerNames);
+            Assert.assertTrue("Logger in model contains handlers not in the configuration: " + missingConfigHandlers,missingConfigHandlers.isEmpty());
+            Assert.assertTrue("Logger in configuration contains handlers not in the model: " + missingModelHandlers,missingModelHandlers.isEmpty());
+          }
+ else {
+            Assert.assertTrue("Handlers attached to loggers in the configuration that are not attached to loggers in the model. Logger: " + name,handlerHandlerNames.isEmpty());
+          }
+          continue;
+        }
+ else {
+          configPropertyName=modelPropertyName;
+        }
+        Assert.assertTrue("Configuration is missing property name: " + modelPropertyName,configPropertyNames.contains(configPropertyName));
+        configValue=handlerConfig.getPropertyValueString(configPropertyName);
+      }
+      if (configValue == null) {
+        Assert.assertFalse(String.format("Handler property values do not match.%nConfig Value: %s%nModel Value:  %s",configValue,modelValue),modelValue.isDefined());
+      }
+ else {
+        Assert.assertEquals(String.format("Handler property values do not match.%nConfig Value: %s%nModel Value:  %s",configValue,modelStringValue),configValue,modelStringValue);
+      }
+    }
+  }
+}
