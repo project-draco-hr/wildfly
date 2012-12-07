@@ -1,0 +1,18 @@
+{
+  final KernelServices kernelServices=boot();
+  final ModelNode validSubsystemModel=getSubsystemModel(kernelServices);
+  final CompositeOperationBuilder compositeOperationBuilder=CompositeOperationBuilder.create();
+  final PathAddress consoleHandler=createConsoleHandlerAddress(profileName,"CONSOLE");
+  compositeOperationBuilder.addStep(Operations.createRemoveOperation(consoleHandler.toModelNode(),false));
+  final PathAddress loggerAddress=createLoggerAddress(profileName,"org.jboss.as.logging");
+  compositeOperationBuilder.addStep(Operations.createRemoveOperation(loggerAddress.toModelNode(),false));
+  final ModelNode rootLoggerAddress=createRootLoggerAddress(profileName).toModelNode();
+  compositeOperationBuilder.addStep(Operations.createWriteAttributeOperation(rootLoggerAddress,CommonAttributes.LEVEL,"INFO"));
+  ModelNode result=kernelServices.executeOperation(compositeOperationBuilder.build().getOperation());
+  Assert.assertFalse("The update operation should have failed, but was successful: " + result,Operations.successful(result));
+  ModelNode currentModel=getSubsystemModel(kernelServices);
+  compare(profileName,validSubsystemModel,currentModel);
+  final LogContext logContext=(profileName == null ? LogContext.getLogContext() : LoggingProfileContextSelector.getInstance().get(profileName));
+  ConfigurationPersistence config=ConfigurationPersistence.getConfigurationPersistence(logContext);
+  compare(profileName,currentModel,config);
+}
