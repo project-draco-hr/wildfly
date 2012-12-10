@@ -1,0 +1,36 @@
+{
+  DeploymentUnit depUnit=phaseContext.getDeploymentUnit();
+  XBundle hostBundle=depUnit.getAttachment(OSGiConstants.BUNDLE_KEY);
+  WarMetaData warMetaData=depUnit.getAttachment(WarMetaData.ATTACHMENT_KEY);
+  if (warMetaData == null || hostBundle == null)   return;
+  XBundle fragment=null;
+  BundleWiring wiring=hostBundle.getBundleRevision().getWiring();
+  for (  BundleWire wire : wiring.getProvidedWires(HostNamespace.HOST_NAMESPACE)) {
+    fragment=(XBundle)wire.getRequirer().getBundle();
+    break;
+  }
+  if (fragment == null)   return;
+  URL entry=fragment.getEntry("WEB-INF/web.xml");
+  if (entry == null)   return;
+  WebMetaData fragmentMetaData=null;
+  try {
+    XMLInputFactory inputFactory=XMLInputFactory.newInstance();
+    MetaDataElementParser.DTDInfo dtdInfo=new MetaDataElementParser.DTDInfo();
+    inputFactory.setXMLResolver(dtdInfo);
+    XMLStreamReader xmlReader=inputFactory.createXMLStreamReader(entry.openStream());
+    fragmentMetaData=WebMetaDataParser.parse(xmlReader,dtdInfo,SpecDescriptorPropertyReplacement.propertyReplacer(depUnit));
+  }
+ catch (  XMLStreamException ex) {
+    OSGiLogger.LOGGER.debugf(ex,"Cannot parse web.xml in fragment: %s",fragment);
+  }
+catch (  IOException ex) {
+    OSGiLogger.LOGGER.debugf(ex,"Cannot parse web.xml in fragment: %s",fragment);
+  }
+  if (fragmentMetaData != null) {
+    warMetaData.setWebMetaData(fragmentMetaData);
+    JBossWebMetaData mergedMetaData=new JBossWebMetaData();
+    JBossWebMetaData metaData=warMetaData.getMergedJBossWebMetaData();
+    JBossWebMetaDataMerger.merge(mergedMetaData,metaData,fragmentMetaData);
+    warMetaData.setMergedJBossWebMetaData(mergedMetaData);
+  }
+}
