@@ -1,12 +1,28 @@
 {
-  final BatchServiceTarget batchTarget=target.batchTarget();
-  batchTarget.addService(this.serviceName,this.service).setInitialMode(ServiceController.Mode.NEVER).install();
-  batchTarget.addService(this.singletonServiceName.append("singleton"),new ValueService<Singleton>(new ImmediateValue<Singleton>(this))).addDependency(this.singletonServiceName).setInitialMode(ServiceController.Mode.PASSIVE).install();
+  final ServiceBuilder<T> serviceBuilder=target.addService(this.targetServiceName,this.service).setInitialMode(ServiceController.Mode.NEVER);
   final ServiceListener<T> listener=new AbstractServiceListener<T>(){
     @Override public void serviceRemoveRequested(    ServiceController<? extends T> controller){
-      batchTarget.removeServices();
+      ServiceController<?> service=controller.getServiceContainer().getService(SingletonService.this.targetServiceName);
+      if (service != null) {
+        service.setMode(ServiceController.Mode.REMOVE);
+      }
     }
   }
 ;
-  return AsynchronousService.addService(target,this.singletonServiceName,this).addDependency(ServiceProviderRegistryService.getServiceName(container),ServiceProviderRegistry.class,this.registryRef).addDependency(ServiceName.JBOSS.append(DEFAULT_CONTAINER,container),GroupRpcDispatcher.class,this.dispatcherRef).addListener(listener);
+  final ServiceBuilder<T> singletonBuilder=AsynchronousService.addService(target,this.singletonServiceName,this).addAliases(this.singletonServiceName.append("singleton")).addDependency(ServiceProviderRegistryService.getServiceName(container),ServiceProviderRegistry.class,this.registryRef).addDependency(CoreGroupCommunicationService.getServiceName(container),GroupRpcDispatcher.class,this.dispatcherRef).addListener(listener);
+  return new DelegatingServiceBuilder<T>(serviceBuilder,ServiceControllerFactory.SIMPLE){
+    @Override public ServiceBuilder<T> addAliases(    ServiceName... aliases){
+      singletonBuilder.addAliases(aliases);
+      return this;
+    }
+    @Override public ServiceBuilder<T> setInitialMode(    ServiceController.Mode mode){
+      singletonBuilder.setInitialMode(mode);
+      return this;
+    }
+    @Override public ServiceController<T> install(){
+      super.install();
+      return singletonBuilder.install();
+    }
+  }
+;
 }
