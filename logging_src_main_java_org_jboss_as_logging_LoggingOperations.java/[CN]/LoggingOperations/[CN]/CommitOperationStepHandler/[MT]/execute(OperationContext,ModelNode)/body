@@ -1,4 +1,20 @@
 {
   configurationPersistence.prepare();
-  context.completeStep(new LoggingResultHandler(configurationPersistence));
+  context.completeStep(new ResultHandler(){
+    @Override public void handleResult(    final ResultAction resultAction,    final OperationContext context,    final ModelNode operation){
+      if (resultAction == ResultAction.KEEP) {
+        configurationPersistence.commit();
+        if (!LoggingProfileOperations.isLoggingProfileAddress(getAddress(operation))) {
+          if (context.getAttachment(WRITTEN_KEY) == null) {
+            context.attachIfAbsent(WRITTEN_KEY,Boolean.TRUE);
+            configurationPersistence.writeConfiguration(context);
+          }
+        }
+      }
+ else       if (resultAction == ResultAction.ROLLBACK) {
+        configurationPersistence.rollback();
+      }
+    }
+  }
+);
 }
