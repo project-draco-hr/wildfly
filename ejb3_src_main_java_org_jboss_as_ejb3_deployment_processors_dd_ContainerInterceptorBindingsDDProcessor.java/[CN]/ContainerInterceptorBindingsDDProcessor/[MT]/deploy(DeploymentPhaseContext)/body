@@ -1,0 +1,216 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final EjbJarMetaData metaData=deploymentUnit.getAttachment(EjbDeploymentAttachmentKeys.EJB_JAR_METADATA);
+  if (metaData == null || metaData.getAssemblyDescriptor() == null) {
+    return;
+  }
+  final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
+  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
+  final DeploymentReflectionIndex index=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
+  final List<ContainerInterceptorsMetaData> containerInterceptorConfigurations=metaData.getAssemblyDescriptor().getAny(ContainerInterceptorsMetaData.class);
+  if (containerInterceptorConfigurations == null || containerInterceptorConfigurations.isEmpty()) {
+    return;
+  }
+  final ContainerInterceptorsMetaData containerInterceptorsMetaData=containerInterceptorConfigurations.get(0);
+  if (containerInterceptorsMetaData == null) {
+    return;
+  }
+  final InterceptorBindingsMetaData containerInterceptorBindings=containerInterceptorsMetaData.getInterceptorBindings();
+  if (containerInterceptorBindings == null || containerInterceptorBindings.isEmpty()) {
+    return;
+  }
+  final Map<String,List<InterceptorBindingMetaData>> bindingsPerEJB=new HashMap<String,List<InterceptorBindingMetaData>>();
+  final List<InterceptorBindingMetaData> bindingsForAllEJBs=new ArrayList<InterceptorBindingMetaData>();
+  for (  final InterceptorBindingMetaData containerInterceptorBinding : containerInterceptorBindings) {
+    if (containerInterceptorBinding.getEjbName().equals("*")) {
+      if (containerInterceptorBinding.getMethod() != null) {
+        throw MESSAGES.defaultInterceptorsNotBindToMethod();
+      }
+      if (containerInterceptorBinding.getInterceptorOrder() != null) {
+        throw MESSAGES.defaultInterceptorsNotSpecifyOrder();
+      }
+      bindingsForAllEJBs.add(containerInterceptorBinding);
+    }
+ else {
+      List<InterceptorBindingMetaData> bindings=bindingsPerEJB.get(containerInterceptorBinding.getEjbName());
+      if (bindings == null) {
+        bindings=new ArrayList<InterceptorBindingMetaData>();
+        bindingsPerEJB.put(containerInterceptorBinding.getEjbName(),bindings);
+      }
+      bindings.add(containerInterceptorBinding);
+    }
+  }
+  final List<InterceptorDescription> interceptorDescriptionsForAllEJBs=new ArrayList<InterceptorDescription>();
+  for (  InterceptorBindingMetaData binding : bindingsForAllEJBs) {
+    if (binding.getInterceptorClasses() != null) {
+      for (      final String clazz : binding.getInterceptorClasses()) {
+        interceptorDescriptionsForAllEJBs.add(new InterceptorDescription(clazz));
+      }
+    }
+  }
+  for (  final ComponentDescription componentDescription : eeModuleDescription.getComponentDescriptions()) {
+    if (!(componentDescription instanceof EJBComponentDescription)) {
+      continue;
+    }
+    final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)componentDescription;
+    final Class<?> componentClass;
+    try {
+      componentClass=module.getClassLoader().loadClass(ejbComponentDescription.getComponentClassName());
+    }
+ catch (    ClassNotFoundException e) {
+      throw MESSAGES.failToLoadComponentClass(ejbComponentDescription.getComponentClassName());
+    }
+    final List<InterceptorBindingMetaData> bindingsApplicableForCurrentEJB=bindingsPerEJB.get(ejbComponentDescription.getComponentName());
+    final Map<Method,List<InterceptorBindingMetaData>> methodInterceptors=new HashMap<Method,List<InterceptorBindingMetaData>>();
+    final List<InterceptorBindingMetaData> classLevelBindings=new ArrayList<InterceptorBindingMetaData>();
+    boolean classLevelExcludeDefaultInterceptors=false;
+    Map<Method,Boolean> methodLevelExcludeDefaultInterceptors=new HashMap<Method,Boolean>();
+    Map<Method,Boolean> methodLevelExcludeClassInterceptors=new HashMap<Method,Boolean>();
+    boolean classLevelAbsoluteOrder=false;
+    final Map<Method,Boolean> methodLevelAbsoluteOrder=new HashMap<Method,Boolean>();
+    if (bindingsApplicableForCurrentEJB != null) {
+      for (      final InterceptorBindingMetaData binding : bindingsApplicableForCurrentEJB) {
+        if (binding.getMethod() == null) {
+          classLevelBindings.add(binding);
+          if (binding.isExcludeDefaultInterceptors()) {
+            classLevelExcludeDefaultInterceptors=true;
+          }
+          if (binding.isTotalOrdering()) {
+            if (classLevelAbsoluteOrder) {
+              throw MESSAGES.twoEjbBindingsSpecifyAbsoluteOrder(componentClass.toString());
+            }
+ else {
+              classLevelAbsoluteOrder=true;
+            }
+          }
+        }
+ else {
+          final NamedMethodMetaData methodData=binding.getMethod();
+          final ClassReflectionIndex<?> classIndex=index.getClassIndex(componentClass);
+          Method resolvedMethod=null;
+          if (methodData.getMethodParams() == null) {
+            final Collection<Method> methods=classIndex.getAllMethods(methodData.getMethodName());
+            if (methods.isEmpty()) {
+              throw MESSAGES.failToFindMethodInEjbJarXml(componentClass.getName(),methodData.getMethodName());
+            }
+ else             if (methods.size() > 1) {
+              throw MESSAGES.multipleMethodReferencedInEjbJarXml(methodData.getMethodName(),componentClass.getName());
+            }
+            resolvedMethod=methods.iterator().next();
+          }
+ else {
+            final Collection<Method> methods=classIndex.getAllMethods(methodData.getMethodName(),methodData.getMethodParams().size());
+            for (            final Method method : methods) {
+              boolean match=true;
+              for (int i=0; i < method.getParameterTypes().length; ++i) {
+                if (!method.getParameterTypes()[i].getName().equals(methodData.getMethodParams().get(i))) {
+                  match=false;
+                  break;
+                }
+              }
+              if (match) {
+                resolvedMethod=method;
+                break;
+              }
+            }
+            if (resolvedMethod == null) {
+              throw MESSAGES.failToFindMethodWithParameterTypes(componentClass.getName(),methodData.getMethodName(),methodData.getMethodParams());
+            }
+          }
+          List<InterceptorBindingMetaData> methodSpecificInterceptorBindings=methodInterceptors.get(resolvedMethod);
+          if (methodSpecificInterceptorBindings == null) {
+            methodSpecificInterceptorBindings=new ArrayList<InterceptorBindingMetaData>();
+            methodInterceptors.put(resolvedMethod,methodSpecificInterceptorBindings);
+          }
+          methodSpecificInterceptorBindings.add(binding);
+          if (binding.isExcludeDefaultInterceptors()) {
+            methodLevelExcludeDefaultInterceptors.put(resolvedMethod,true);
+          }
+          if (binding.isExcludeClassInterceptors()) {
+            methodLevelExcludeClassInterceptors.put(resolvedMethod,true);
+          }
+          if (binding.isTotalOrdering()) {
+            if (methodLevelAbsoluteOrder.containsKey(resolvedMethod)) {
+              throw MESSAGES.twoEjbBindingsSpecifyAbsoluteOrder(resolvedMethod.toString());
+            }
+ else {
+              methodLevelAbsoluteOrder.put(resolvedMethod,true);
+            }
+          }
+        }
+      }
+    }
+    ejbComponentDescription.setDefaultContainerInterceptors(interceptorDescriptionsForAllEJBs);
+    if (classLevelExcludeDefaultInterceptors) {
+      ejbComponentDescription.setExcludeDefaultContainerInterceptors(true);
+    }
+    final List<InterceptorDescription> classLevelInterceptors=new ArrayList<InterceptorDescription>();
+    if (classLevelAbsoluteOrder) {
+      for (      final InterceptorBindingMetaData binding : classLevelBindings) {
+        if (binding.isTotalOrdering()) {
+          for (          final String interceptor : binding.getInterceptorOrder()) {
+            classLevelInterceptors.add(new InterceptorDescription(interceptor));
+          }
+          break;
+        }
+      }
+      ejbComponentDescription.setExcludeDefaultContainerInterceptors(true);
+    }
+ else {
+      for (      InterceptorBindingMetaData binding : classLevelBindings) {
+        if (binding.getInterceptorClasses() != null) {
+          for (          final String interceptor : binding.getInterceptorClasses()) {
+            classLevelInterceptors.add(new InterceptorDescription(interceptor));
+          }
+        }
+      }
+    }
+    ejbComponentDescription.setClassLevelContainerInterceptors(classLevelInterceptors);
+    for (    Map.Entry<Method,List<InterceptorBindingMetaData>> entry : methodInterceptors.entrySet()) {
+      final Method method=entry.getKey();
+      final List<InterceptorBindingMetaData> methodBindings=entry.getValue();
+      boolean totalOrder=methodLevelAbsoluteOrder.containsKey(method);
+      final MethodIdentifier methodIdentifier=MethodIdentifier.getIdentifierForMethod(method);
+      Boolean excludeDefaultInterceptors=methodLevelExcludeDefaultInterceptors.get(method);
+      excludeDefaultInterceptors=excludeDefaultInterceptors == null ? false : excludeDefaultInterceptors;
+      if (!excludeDefaultInterceptors) {
+        excludeDefaultInterceptors=ejbComponentDescription.isExcludeDefaultContainerInterceptors() || ejbComponentDescription.isExcludeDefaultContainerInterceptors(methodIdentifier);
+      }
+      Boolean excludeClassInterceptors=methodLevelExcludeClassInterceptors.get(method);
+      excludeClassInterceptors=excludeClassInterceptors == null ? false : excludeClassInterceptors;
+      if (!excludeClassInterceptors) {
+        excludeClassInterceptors=ejbComponentDescription.isExcludeClassLevelContainerInterceptors(methodIdentifier);
+      }
+      final List<InterceptorDescription> methodLevelInterceptors=new ArrayList<InterceptorDescription>();
+      if (totalOrder) {
+        for (        final InterceptorBindingMetaData binding : methodBindings) {
+          if (binding.isTotalOrdering()) {
+            for (            final String interceptor : binding.getInterceptorOrder()) {
+              methodLevelInterceptors.add(new InterceptorDescription(interceptor));
+            }
+          }
+        }
+      }
+ else {
+        if (!excludeDefaultInterceptors) {
+          methodLevelInterceptors.addAll(interceptorDescriptionsForAllEJBs);
+        }
+        if (!excludeClassInterceptors) {
+          for (          InterceptorDescription interceptor : classLevelInterceptors) {
+            methodLevelInterceptors.add(interceptor);
+          }
+        }
+        for (        final InterceptorBindingMetaData binding : methodBindings) {
+          if (binding.getInterceptorClasses() != null) {
+            for (            final String interceptor : binding.getInterceptorClasses()) {
+              methodLevelInterceptors.add(new InterceptorDescription(interceptor));
+            }
+          }
+        }
+      }
+      ejbComponentDescription.excludeClassLevelContainerInterceptors(methodIdentifier);
+      ejbComponentDescription.excludeDefaultContainerInterceptors(methodIdentifier);
+      ejbComponentDescription.setMethodContainerInterceptors(methodIdentifier,methodLevelInterceptors);
+    }
+  }
+}

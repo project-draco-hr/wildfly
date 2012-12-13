@@ -1,0 +1,88 @@
+{
+  final DeploymentUnit deploymentUnit=context.getDeploymentUnit();
+  final EEApplicationClasses applicationClasses=deploymentUnit.getAttachment(Attachments.EE_APPLICATION_CLASSES_DESCRIPTION);
+  final DeploymentClassIndex deploymentClassIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.CLASS_INDEX);
+  final Map<String,List<InterceptorFactory>> userAroundInvokesByInterceptorClass=new HashMap<String,List<InterceptorFactory>>();
+  final Map<String,List<InterceptorFactory>> userAroundTimeoutsByInterceptorClass;
+  if (ejbComponentDescription.isTimerServiceApplicable()) {
+    userAroundTimeoutsByInterceptorClass=new HashMap<String,List<InterceptorFactory>>();
+  }
+ else {
+    userAroundTimeoutsByInterceptorClass=null;
+  }
+  for (  final InterceptorDescription interceptorDescription : ejbComponentDescription.getAllContainerInterceptors()) {
+    final String interceptorClassName=interceptorDescription.getInterceptorClassName();
+    final ClassIndex interceptorClassIndex;
+    try {
+      interceptorClassIndex=deploymentClassIndex.classIndex(interceptorClassName);
+    }
+ catch (    ClassNotFoundException e) {
+      throw MESSAGES.cannotLoadInterceptor(e,interceptorClassName);
+    }
+    final InterceptorClassDescriptionTraversal interceptorClassDescriptionTraversal=new InterceptorClassDescriptionTraversal(interceptorClassIndex.getModuleClass(),applicationClasses,deploymentUnit,ejbComponentDescription);
+    interceptorClassDescriptionTraversal.run();
+    final List<InterceptorFactory> aroundInvokeInterceptorFactories=interceptorClassDescriptionTraversal.getAroundInvokeInterceptorFactories();
+    if (aroundInvokeInterceptorFactories != null) {
+      userAroundInvokesByInterceptorClass.put(interceptorClassName,aroundInvokeInterceptorFactories);
+    }
+    final List<InterceptorFactory> aroundTimeoutInterceptorFactories=interceptorClassDescriptionTraversal.getAroundTimeoutInterceptorFactories();
+    if (aroundTimeoutInterceptorFactories != null) {
+      userAroundTimeoutsByInterceptorClass.put(interceptorClassName,aroundTimeoutInterceptorFactories);
+    }
+  }
+  final List<InterceptorDescription> classLevelContainerInterceptors=ejbComponentDescription.getClassLevelContainerInterceptors();
+  final Map<MethodIdentifier,List<InterceptorDescription>> methodLevelContainerInterceptors=ejbComponentDescription.getMethodLevelContainerInterceptors();
+  final List<Method> viewMethods=viewConfiguration.getProxyFactory().getCachedMethods();
+  for (  final Method method : viewMethods) {
+    final MethodIdentifier methodIdentifier=MethodIdentifier.getIdentifier(method.getReturnType(),method.getName(),method.getParameterTypes());
+    final List<InterceptorFactory> aroundInvokesApplicableForMethod=new ArrayList<InterceptorFactory>();
+    final List<InterceptorFactory> aroundTimeoutsApplicableForMethod=new ArrayList<InterceptorFactory>();
+    if (!ejbComponentDescription.isExcludeDefaultContainerInterceptors() && !ejbComponentDescription.isExcludeDefaultContainerInterceptors(methodIdentifier)) {
+      for (      final InterceptorDescription interceptorDescription : ejbComponentDescription.getDefaultContainerInterceptors()) {
+        String interceptorClassName=interceptorDescription.getInterceptorClassName();
+        final List<InterceptorFactory> aroundInvokesOnInterceptor=userAroundInvokesByInterceptorClass.get(interceptorClassName);
+        if (aroundInvokesOnInterceptor != null) {
+          aroundInvokesApplicableForMethod.addAll(aroundInvokesOnInterceptor);
+        }
+        if (ejbComponentDescription.isTimerServiceApplicable()) {
+          final List<InterceptorFactory> aroundTimeoutsOnInterceptor=userAroundTimeoutsByInterceptorClass.get(interceptorClassName);
+          if (aroundTimeoutsOnInterceptor != null) {
+            aroundTimeoutsApplicableForMethod.addAll(aroundTimeoutsOnInterceptor);
+          }
+        }
+      }
+    }
+    if (!ejbComponentDescription.isExcludeClassLevelContainerInterceptors(methodIdentifier)) {
+      for (      final InterceptorDescription interceptorDescription : classLevelContainerInterceptors) {
+        String interceptorClassName=interceptorDescription.getInterceptorClassName();
+        final List<InterceptorFactory> aroundInvokesOnInterceptor=userAroundInvokesByInterceptorClass.get(interceptorClassName);
+        if (aroundInvokesOnInterceptor != null) {
+          aroundInvokesApplicableForMethod.addAll(aroundInvokesOnInterceptor);
+        }
+        if (ejbComponentDescription.isTimerServiceApplicable()) {
+          final List<InterceptorFactory> aroundTimeoutsOnInterceptor=userAroundTimeoutsByInterceptorClass.get(interceptorClassName);
+          if (aroundTimeoutsOnInterceptor != null) {
+            aroundTimeoutsApplicableForMethod.addAll(aroundTimeoutsOnInterceptor);
+          }
+        }
+      }
+    }
+    final List<InterceptorDescription> interceptorsForMethod=methodLevelContainerInterceptors.get(methodIdentifier);
+    if (interceptorsForMethod != null) {
+      for (      final InterceptorDescription methodLevelInterceptor : interceptorsForMethod) {
+        String interceptorClassName=methodLevelInterceptor.getInterceptorClassName();
+        final List<InterceptorFactory> aroundInvokesOnInterceptor=userAroundInvokesByInterceptorClass.get(interceptorClassName);
+        if (aroundInvokesOnInterceptor != null) {
+          aroundInvokesApplicableForMethod.addAll(aroundInvokesOnInterceptor);
+        }
+        if (ejbComponentDescription.isTimerServiceApplicable()) {
+          final List<InterceptorFactory> aroundTimeoutsOnInterceptor=userAroundTimeoutsByInterceptorClass.get(interceptorClassName);
+          if (aroundTimeoutsOnInterceptor != null) {
+            aroundTimeoutsApplicableForMethod.addAll(aroundTimeoutsOnInterceptor);
+          }
+        }
+      }
+    }
+    viewConfiguration.addViewInterceptor(method,new UserInterceptorFactory(weaved(aroundInvokesApplicableForMethod),weaved(aroundTimeoutsApplicableForMethod)),InterceptorOrder.View.USER_APP_SPECIFIC_CONTAINER_INTERCEPTORS);
+  }
+}

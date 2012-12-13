@@ -1,0 +1,21 @@
+{
+  final EJBClientContext ejbClientContext=EJBClientContext.requireCurrent();
+  final Map<String,Object> interceptorData=new HashMap<String,Object>();
+  interceptorData.put(FlowTrackingBean.CONTEXT_DATA_KEY,ContainerInterceptorOne.class.getName());
+  final SimpleEJBClientInterceptor clientInterceptor=new SimpleEJBClientInterceptor(interceptorData);
+  ejbClientContext.registerInterceptor(CLIENT_INTERCEPTOR_ORDER,clientInterceptor);
+  final Hashtable jndiProps=new Hashtable();
+  jndiProps.put(Context.URL_PKG_PREFIXES,"org.jboss.ejb.client.naming");
+  final Context jndiCtx=new InitialContext(jndiProps);
+  final FlowTracker bean=(FlowTracker)jndiCtx.lookup("ejb:/" + EJB_JAR_NAME + "/"+ FlowTrackingBean.class.getSimpleName()+ "!"+ FlowTracker.class.getName());
+  final String message="foo";
+  final String expectedResultForFirstInvocation=NonContainerInterceptor.class.getName() + " " + FlowTrackingBean.class.getName()+ " "+ message;
+  final String firstResult=bean.echo(message);
+  Assert.assertEquals("Unexpected result invoking on bean when passing context data via EJB client interceptor",expectedResultForFirstInvocation,firstResult);
+  interceptorData.clear();
+  interceptorData.put(FlowTrackingBean.CONTEXT_DATA_KEY,NonContainerInterceptor.class.getName());
+  final String secondMessage="bar";
+  final String expectedResultForSecondInvocation=ContainerInterceptorOne.class.getName() + " " + FlowTrackingBean.class.getName()+ " "+ secondMessage;
+  final String secondResult=bean.echo(secondMessage);
+  Assert.assertEquals("Unexpected result invoking on bean when passing context data via EJB client interceptor",expectedResultForSecondInvocation,secondResult);
+}
