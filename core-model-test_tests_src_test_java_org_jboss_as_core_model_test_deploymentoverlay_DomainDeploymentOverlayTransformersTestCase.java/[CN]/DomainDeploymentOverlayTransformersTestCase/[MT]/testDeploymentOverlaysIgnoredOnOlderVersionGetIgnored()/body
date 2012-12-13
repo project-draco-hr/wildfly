@@ -1,0 +1,43 @@
+{
+  if (modelVersion.getMajor() > 1 || modelVersion.getMinor() >= 4) {
+    return;
+  }
+  KernelServicesBuilder builder=createKernelServicesBuilder(TestModelType.DOMAIN).setModelInitializer(StandardServerGroupInitializers.XML_MODEL_INITIALIZER,StandardServerGroupInitializers.XML_MODEL_WRITE_SANITIZER).createContentRepositoryContent("12345678901234567890").setXmlResource("domain-no-servergroup-overlay.xml");
+  StandardServerGroupInitializers.addServerGroupInitializers(builder.createLegacyKernelServicesBuilder(modelVersion,testControllerVersion)).setDontUseBootOperations();
+  KernelServices mainServices=builder.build();
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  mainServices.applyMasterDomainModel(modelVersion,Collections.singletonList(new IgnoreDomainResourceTypeResource(ModelDescriptionConstants.DEPLOYMENT_OVERLAY,new ModelNode(),true)));
+  ModelNode masterModel=mainServices.readWholeModel();
+  ModelNode legacyModel=legacyServices.readWholeModel();
+  Assert.assertTrue(masterModel.hasDefined(ModelDescriptionConstants.DEPLOYMENT_OVERLAY) && masterModel.get(ModelDescriptionConstants.DEPLOYMENT_OVERLAY).hasDefined("test-overlay"));
+  Assert.assertFalse(legacyModel.hasDefined(ModelDescriptionConstants.DEPLOYMENT_OVERLAY));
+  checkCoreModelTransformation(mainServices,modelVersion,new ModelFixer(){
+    @Override public ModelNode fixModel(    ModelNode modelNode){
+      ModelNode socketBindingGroup=modelNode.get(SOCKET_BINDING_GROUP,"test-sockets");
+      if (socketBindingGroup.isDefined()) {
+        Set<String> names=new HashSet<String>();
+        for (        String key : socketBindingGroup.keys()) {
+          if (!socketBindingGroup.get(key).isDefined()) {
+            names.add(key);
+          }
+        }
+        for (        String name : names) {
+          socketBindingGroup.remove(name);
+        }
+        if (socketBindingGroup.keys().size() == 0) {
+          socketBindingGroup.clear();
+        }
+      }
+      return modelNode;
+    }
+  }
+,new ModelFixer(){
+    @Override public ModelNode fixModel(    ModelNode modelNode){
+      modelNode.remove(ModelDescriptionConstants.DEPLOYMENT_OVERLAY);
+      return modelNode;
+    }
+  }
+);
+}
