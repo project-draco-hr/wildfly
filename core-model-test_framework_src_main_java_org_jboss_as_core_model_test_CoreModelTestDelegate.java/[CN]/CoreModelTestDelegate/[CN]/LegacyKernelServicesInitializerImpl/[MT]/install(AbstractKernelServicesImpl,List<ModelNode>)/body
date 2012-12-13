@@ -1,0 +1,25 @@
+{
+  if (testControllerVersion == null) {
+    throw new IllegalStateException();
+  }
+  classLoaderBuilder.addParentFirstClassPattern("org.jboss.as.core.model.bridge.shared.*");
+  File file=new File("target","cached-classloader" + modelVersion + "_"+ testControllerVersion);
+  boolean cached=file.exists();
+  ClassLoader legacyCl;
+  if (cached) {
+    classLoaderBuilder.createFromFile(file);
+    legacyCl=classLoaderBuilder.build();
+  }
+ else {
+    classLoaderBuilder.addMavenResourceURL("org.jboss.as:jboss-as-core-model-test-framework:7.2.0.Alpha1-SNAPSHOT");
+    classLoaderBuilder.addMavenResourceURL("org.jboss.as:jboss-as-model-test:7.2.0.Alpha1-SNAPSHOT");
+    if (testControllerVersion != TestControllerVersion.MASTER) {
+      classLoaderBuilder.addRecursiveMavenResourceURL(testControllerVersion.getLegacyControllerMavenGav());
+      classLoaderBuilder.addMavenResourceURL("org.jboss.as:jboss-as-core-model-test-controller-" + testControllerVersion.getTestControllerVersion() + ":"+ VERSION);
+    }
+    legacyCl=classLoaderBuilder.build(file);
+  }
+  ScopedKernelServicesBootstrap scopedBootstrap=new ScopedKernelServicesBootstrap(legacyCl);
+  LegacyControllerKernelServicesProxy legacyServices=scopedBootstrap.createKernelServices(bootOperations,validateOperations,modelVersion,modelInitializerEntries);
+  return legacyServices;
+}

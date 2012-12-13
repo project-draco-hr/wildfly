@@ -1,7 +1,7 @@
 {
   bootOperationBuilder.validateNotAlreadyBuilt();
   List<ModelNode> bootOperations=bootOperationBuilder.build();
-  AbstractKernelServicesImpl kernelServices=AbstractKernelServicesImpl.create(processType,runningModeControl,validateOperations,bootOperations,testParser,null,type,modelInitializer,extensionRegistry);
+  AbstractKernelServicesImpl kernelServices=AbstractKernelServicesImpl.create(processType,runningModeControl,validateOperations,bootOperations,testParser,null,type,modelInitializer,extensionRegistry,contentRepositoryContents);
   CoreModelTestDelegate.this.kernelServices.add(kernelServices);
   if (validateDescription) {
     validateDescriptionProviders(type,kernelServices);
@@ -9,14 +9,20 @@
   ModelTestUtils.validateModelDescriptions(PathAddress.EMPTY_ADDRESS,kernelServices.getRootRegistration());
   for (  Map.Entry<ModelVersion,LegacyKernelServicesInitializerImpl> entry : legacyControllerInitializers.entrySet()) {
     LegacyKernelServicesInitializerImpl legacyInitializer=entry.getValue();
-    List<ModelNode> transformedBootOperations=new ArrayList<ModelNode>();
-    for (    ModelNode op : bootOperations) {
-      ModelNode transformed=kernelServices.transformOperation(entry.getKey(),op).getTransformedOperation();
-      if (transformed != null) {
-        transformedBootOperations.add(transformed);
+    List<ModelNode> transformedBootOperations;
+    if (legacyInitializer.isDontUseBootOperations()) {
+      transformedBootOperations=Collections.emptyList();
+    }
+ else {
+      transformedBootOperations=new ArrayList<ModelNode>();
+      for (      ModelNode op : bootOperations) {
+        ModelNode transformed=kernelServices.transformOperation(entry.getKey(),op).getTransformedOperation();
+        if (transformed != null) {
+          transformedBootOperations.add(transformed);
+        }
       }
     }
-    KernelServices legacyServices=legacyInitializer.install(transformedBootOperations);
+    LegacyControllerKernelServicesProxy legacyServices=legacyInitializer.install(kernelServices,transformedBootOperations);
     kernelServices.addLegacyKernelService(entry.getKey(),legacyServices);
   }
   return kernelServices;
