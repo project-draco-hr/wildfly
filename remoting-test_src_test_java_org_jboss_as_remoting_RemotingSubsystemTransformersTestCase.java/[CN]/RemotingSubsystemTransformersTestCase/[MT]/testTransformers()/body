@@ -1,0 +1,33 @@
+{
+  String subsystemXml=readResource("remoting-without-expressions.xml");
+  KernelServicesBuilder builder=createKernelServicesBuilder(createAdditionalInitialization()).setSubsystemXml(subsystemXml);
+  ModelVersion version_1_1=ModelVersion.create(1,1);
+  builder.createLegacyKernelServicesBuilder(createAdditionalInitialization(),version_1_1).addMavenResourceURL("org.jboss.as:jboss-as-remoting:7.1.2.Final");
+  KernelServices mainServices=builder.build();
+  assertTrue(mainServices.isSuccessfulBoot());
+  KernelServices legacyServices=mainServices.getLegacyServices(version_1_1);
+  assertNotNull(legacyServices);
+  assertTrue(legacyServices.isSuccessfulBoot());
+  checkSubsystemModelTransformation(mainServices,version_1_1);
+  ModelNode operation=new ModelNode();
+  operation.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
+  ModelNode address=new ModelNode();
+  address.add(SUBSYSTEM,RemotingExtension.SUBSYSTEM_NAME);
+  operation.get(OP_ADDR).set(address);
+  operation.get(NAME).set("worker-read-threads");
+  operation.get(VALUE).set("${worker.read.threads:5}");
+  ModelNode mainResult=mainServices.executeOperation(operation);
+  assertEquals(mainResult.toJSONString(true),SUCCESS,mainResult.get(OUTCOME).asString());
+  ModelNode successResult=new ModelNode();
+  successResult.get(OUTCOME).set(SUCCESS);
+  successResult.protect();
+  ModelNode failedResult=new ModelNode();
+  failedResult.get(OUTCOME).set(FAILED);
+  failedResult.protect();
+  ModelNode ignoreResult=new ModelNode();
+  ignoreResult.get(OUTCOME).set(IGNORED);
+  ignoreResult.protect();
+  final OperationTransformer.TransformedOperation op=mainServices.transformOperation(version_1_1,operation);
+  final ModelNode result=mainServices.executeOperation(version_1_1,op);
+  assertEquals("should reject the expression",FAILED,result.get(OUTCOME).asString());
+}
