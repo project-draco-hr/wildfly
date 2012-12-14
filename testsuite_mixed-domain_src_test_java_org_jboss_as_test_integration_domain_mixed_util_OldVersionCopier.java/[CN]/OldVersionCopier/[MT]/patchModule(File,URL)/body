@@ -1,0 +1,45 @@
+{
+  assertTrue(moduleMainDir.exists());
+  assertNotNull(patchedJar);
+  if (patchedJar == null) {
+    throw new RuntimeException("Null url");
+  }
+  String oldJarName=null;
+  for (  String fileName : moduleMainDir.list()) {
+    if (fileName.endsWith(".jar")) {
+      if (oldJarName != null) {
+        throw new RuntimeException("Could not determine old jar in " + moduleMainDir);
+      }
+      oldJarName=fileName;
+    }
+  }
+  if (oldJarName == null) {
+    throw new RuntimeException("Could not determine old jar in " + moduleMainDir);
+  }
+  File patchedJarFile=new File(patchedJar.toURI());
+  inputStreamToFile(new FileInputStream(patchedJarFile),new File(moduleMainDir,patchedJarFile.getName()));
+  File moduleXml=new File(moduleMainDir,"module.xml");
+  StringBuffer moduleXmlContents=new StringBuffer();
+  BufferedReader reader=new BufferedReader(new FileReader(moduleXml));
+  try {
+    String line=reader.readLine();
+    while (line != null) {
+      moduleXmlContents.append(line);
+      moduleXmlContents.append("\n");
+      line=reader.readLine();
+    }
+  }
+  finally {
+    IoUtils.safeClose(reader);
+  }
+  int index=moduleXmlContents.indexOf(oldJarName);
+  moduleXmlContents.replace(index,index + oldJarName.length(),patchedJarFile.getName());
+  moduleXml.delete();
+  BufferedWriter writer=new BufferedWriter(new FileWriter(moduleXml));
+  try {
+    writer.write(moduleXmlContents.toString());
+  }
+  finally {
+    IoUtils.safeClose(writer);
+  }
+}
