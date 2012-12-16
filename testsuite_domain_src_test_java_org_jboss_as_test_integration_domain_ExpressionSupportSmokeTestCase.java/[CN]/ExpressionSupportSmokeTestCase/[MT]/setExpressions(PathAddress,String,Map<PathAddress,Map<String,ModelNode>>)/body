@@ -1,0 +1,40 @@
+{
+  ModelNode description=readResourceDescription(address);
+  ModelNode resource=readResource(address,true);
+  ModelNode resourceNoDefaults=readResource(address,false);
+  Map<String,String> expressionAttrs=new HashMap<String,String>();
+  Map<String,ModelNode> otherAttrs=new HashMap<String,ModelNode>();
+  organizeAttributes(address,description,resource,resourceNoDefaults,expressionAttrs,otherAttrs);
+  Map<String,ModelNode> modifiedAttrs=new HashMap<String,ModelNode>();
+  for (  Map.Entry<String,String> entry : expressionAttrs.entrySet()) {
+    writeAttributeExpression(address,entry.getKey(),entry.getValue());
+    modifiedAttrs.put(entry.getKey(),new ModelNode().setExpression(entry.getValue()));
+  }
+  for (  Map.Entry<String,ModelNode> entry : otherAttrs.entrySet()) {
+    writeAttribute(address,entry.getKey(),entry.getValue());
+    modifiedAttrs.put(entry.getKey(),entry.getValue());
+  }
+  if (modifiedAttrs.size() > 0) {
+    ModelNode modifiedResource=readResource(address,true);
+    for (    Map.Entry<String,ModelNode> entry : modifiedAttrs.entrySet()) {
+      ModelNode expectedValue=entry.getValue();
+      ModelNode modVal=modifiedResource.get(entry.getKey());
+      validateAttributeValue(address,entry.getKey(),expectedValue,modVal);
+    }
+  }
+  expectedValues.put(address,modifiedAttrs);
+  boolean isHost=address.size() == 1 && HOST.equals(address.getLastElement().getKey());
+  for (  Property descProp : description.get(CHILDREN).asPropertyList()) {
+    String childType=descProp.getName();
+    if (isHost && SERVER.equals(childType)) {
+      continue;
+    }
+    boolean hostChild=address.size() == 0 && HOST.equals(childType);
+    List<String> children=readChildrenNames(address,childType);
+    for (    String child : children) {
+      if (!hostChild || hostName.equals(child)) {
+        setExpressions(address.append(PathElement.pathElement(childType,child)),hostName,expectedValues);
+      }
+    }
+  }
+}

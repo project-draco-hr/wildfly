@@ -6,9 +6,16 @@
     final URI connectionURI=new URI("remote://" + address + ":"+ port);
     connection=clientConfiguration.createConnection(connectionURI,getCallbackHandler());
     String jbossHomeDir=configuration.getJbossHome();
-    final String additionalJavaOpts=System.getProperty("jboss.options");
+    final List<String> additionalJavaOpts=new ArrayList<String>();
+    final String jbossOptions=System.getProperty("jboss.options");
+    if (jbossOptions != null) {
+      Collections.addAll(additionalJavaOpts,jbossOptions.split("\\s+"));
+    }
+    if (configuration.getJavaVmArguments() != null) {
+      Collections.addAll(additionalJavaOpts,configuration.getJavaVmArguments().split("\\s+"));
+    }
     File modulesJar=new File(jbossHomeDir + File.separatorChar + "jboss-modules.jar");
-    if (modulesJar.exists() == false)     throw new IllegalStateException("Cannot find: " + modulesJar);
+    if (!modulesJar.exists())     throw new IllegalStateException("Cannot find: " + modulesJar);
     String javaHome=configuration.getJavaHome();
     String java=(javaHome != null) ? javaHome + File.separatorChar + "bin"+ File.separatorChar+ "java" : "java";
     File domainDir=configuration.getDomainDirectory() != null ? new File(configuration.getDomainDirectory()) : new File(new File(jbossHomeDir),"domain");
@@ -40,11 +47,7 @@
     fos.close();
     List<String> cmd=new ArrayList<String>();
     cmd.add(java);
-    if (additionalJavaOpts != null) {
-      for (      String opt : additionalJavaOpts.split("\\s+")) {
-        cmd.add(opt);
-      }
-    }
+    cmd.addAll(additionalJavaOpts);
     TestSuiteEnvironment.getIpv6Args(cmd);
     cmd.add("-Djboss.home.dir=" + jbossHomeDir);
     cmd.add("-Dorg.jboss.boot.log.file=" + domainPath + "/log/process-controller.log");
@@ -62,18 +65,15 @@
     cmd.add("-Dorg.jboss.boot.log.file=" + domainPath + "/log/host-controller.log");
     cmd.add("-Dlogging.configuration=file:" + jbossHomeDir + "/domain/configuration/logging.properties");
     TestSuiteEnvironment.getIpv6Args(cmd);
-    if (additionalJavaOpts != null) {
-      for (      String opt : additionalJavaOpts.split("\\s+")) {
-        cmd.add(opt);
-      }
-    }
+    cmd.addAll(additionalJavaOpts);
     cmd.add("--");
     cmd.add("-default-jvm");
     cmd.add(java);
     if (configuration.getHostCommandLineProperties() != null) {
-      for (      String opt : configuration.getHostCommandLineProperties().split("\\s+")) {
-        cmd.add(opt);
-      }
+      Collections.addAll(cmd,configuration.getHostCommandLineProperties().split("\\s+"));
+    }
+    if (configuration.isAdminOnly()) {
+      cmd.add("--admin-only");
     }
     String domainDirectory=configuration.getDomainDirectory();
     if (domainDirectory != null) {
@@ -103,9 +103,15 @@
     wrapper.start();
     process=wrapper;
     long start=System.currentTimeMillis();
-    TimeUnit.SECONDS.sleep(2);
-    awaitServers(start);
-    log.info("All servers started in " + (System.currentTimeMillis() - start) + " ms");
+    if (configuration.isAdminOnly()) {
+      awaitHostController(start);
+      log.info("HostController started in " + (System.currentTimeMillis() - start) + " ms");
+    }
+ else {
+      TimeUnit.SECONDS.sleep(2);
+      awaitServers(start);
+      log.info("All servers started in " + (System.currentTimeMillis() - start) + " ms");
+    }
   }
  catch (  Exception e) {
     throw new RuntimeException("Could not start container",e);

@@ -1,0 +1,55 @@
+{
+  ModelNode attributeDescriptions=description.get(ATTRIBUTES);
+  for (  Property descProp : attributeDescriptions.asPropertyList()) {
+    String attrName=descProp.getName();
+    ModelNode attrDesc=descProp.getValue();
+    if (isAttributeExcluded(address,attrName,attrDesc)) {
+      continue;
+    }
+    ModelNode noDefaultValue=resourceNoDefaults.get(attrName);
+    if (!noDefaultValue.isDefined()) {
+      Set<String> base=new HashSet<String>();
+      base.add(attrName);
+      if (attrDesc.hasDefined(REQUIRES)) {
+        for (        ModelNode node : attrDesc.get(REQUIRES).asList()) {
+          base.add(node.asString());
+        }
+      }
+      boolean conflict=false;
+      for (      String baseAttr : base) {
+        ModelNode baseAttrAlts=attributeDescriptions.get(baseAttr,ALTERNATIVES);
+        if (baseAttrAlts.isDefined()) {
+          for (          ModelNode alt : baseAttrAlts.asList()) {
+            String altName=alt.asString();
+            if (resourceNoDefaults.hasDefined(alt.asString()) || expressionAttrs.containsKey(altName) || otherAttrs.containsKey(altName)) {
+              conflict=true;
+              break;
+            }
+          }
+        }
+      }
+      if (conflict) {
+        continue;
+      }
+    }
+    ModelNode attrValue=resource.get(attrName);
+    if (attrDesc.get(EXPRESSIONS_ALLOWED).asBoolean(false)) {
+      ModelType attrType=attrValue.getType();
+      if (attrType != ModelType.UNDEFINED && attrType != ModelType.EXPRESSION) {
+        if (attrType == ModelType.LIST || attrType == ModelType.OBJECT || attrType == ModelType.PROPERTY) {
+          otherAttrs.put(attrName,attrValue);
+        }
+ else {
+          if (attrType == ModelType.STRING) {
+            checkForUnconvertedExpression(address,attrName,attrValue);
+          }
+          String expression="${exp.test:" + attrValue.asString() + "}";
+          expressionAttrs.put(attrName,expression);
+        }
+      }
+    }
+ else {
+      otherAttrs.put(attrName,attrValue);
+    }
+  }
+}
