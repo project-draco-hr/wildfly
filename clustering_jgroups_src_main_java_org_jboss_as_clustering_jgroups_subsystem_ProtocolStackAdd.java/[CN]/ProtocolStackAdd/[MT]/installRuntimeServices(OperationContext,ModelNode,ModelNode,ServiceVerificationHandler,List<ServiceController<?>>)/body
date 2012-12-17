@@ -20,7 +20,27 @@
   transportConfig.setShared(shared);
   transportConfig.setTopology(site,rack,machine);
   initProtocolProperties(context,transport,transportConfig);
-  ProtocolStack stackConfig=new ProtocolStack(name,transportConfig);
+  Relay relayConfig=null;
+  List<Map.Entry<String,Injector<ChannelFactory>>> stacks=new LinkedList<Map.Entry<String,Injector<ChannelFactory>>>();
+  if (model.hasDefined(ModelKeys.RELAY)) {
+    final ModelNode relay=model.get(ModelKeys.RELAY,ModelKeys.RELAY_NAME);
+    final String siteName=RelayResource.SITE.resolveModelAttribute(context,relay).asString();
+    relayConfig=new Relay(siteName);
+    initProtocolProperties(context,relay,relayConfig);
+    if (relay.hasDefined(ModelKeys.REMOTE_SITE)) {
+      List<RemoteSiteConfiguration> remoteSites=relayConfig.getRemoteSites();
+      for (      Property remoteSiteProperty : relay.get(ModelKeys.REMOTE_SITE).asPropertyList()) {
+        final String remoteSiteName=remoteSiteProperty.getName();
+        final ModelNode remoteSite=remoteSiteProperty.getValue();
+        final String cluster=RemoteSiteResource.CLUSTER.resolveModelAttribute(context,remoteSite).asString();
+        final String stack=RemoteSiteResource.STACK.resolveModelAttribute(context,remoteSite).asString();
+        final InjectedValue<ChannelFactory> channelFactory=new InjectedValue<ChannelFactory>();
+        remoteSites.add(new RemoteSite(remoteSiteName,cluster,channelFactory));
+        stacks.add(new AbstractMap.SimpleImmutableEntry<String,Injector<ChannelFactory>>(stack,channelFactory));
+      }
+    }
+  }
+  ProtocolStack stackConfig=new ProtocolStack(name,transportConfig,relayConfig);
   List<Map.Entry<Protocol,String>> protocolSocketBindings=new ArrayList<Map.Entry<Protocol,String>>(orderedProtocols.size());
   for (  Property protocolProperty : orderedProtocols) {
     ModelNode protocol=protocolProperty.getValue();
@@ -31,8 +51,7 @@
     final String protocolSocketBinding=(resolvedValue=ProtocolResourceDefinition.SOCKET_BINDING.resolveModelAttribute(context,protocol)).isDefined() ? resolvedValue.asString() : null;
     protocolSocketBindings.add(new AbstractMap.SimpleImmutableEntry<Protocol,String>(protocolConfig,protocolSocketBinding));
   }
-  ServiceTarget target=context.getServiceTarget();
-  ServiceController<ChannelFactory> cfsController=installChannelFactoryService(target,name,diagnosticsSocketBinding,defaultExecutor,oobExecutor,timerExecutor,threadFactory,transportSocketBinding,protocolSocketBindings,transportConfig,stackConfig,verificationHandler);
+  ServiceController<ChannelFactory> cfsController=installChannelFactoryService(context.getServiceTarget(),name,diagnosticsSocketBinding,defaultExecutor,oobExecutor,timerExecutor,threadFactory,transportSocketBinding,protocolSocketBindings,transportConfig,stackConfig,stacks,verificationHandler);
   if (newControllers != null) {
     newControllers.add(cfsController);
   }
