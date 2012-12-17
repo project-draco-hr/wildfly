@@ -1,5 +1,5 @@
 {
-  KernelServicesBuilder builder=createKernelServicesBuilder(TestModelType.DOMAIN).setXmlResource(xmlResource);
+  KernelServicesBuilder builder=createKernelServicesBuilder(TestModelType.DOMAIN).setXmlResource(serverGroup ? "domain-servergroup-systemproperties.xml" : "domain-systemproperties.xml");
   if (serverGroup) {
     builder.setModelInitializer(StandardServerGroupInitializers.XML_MODEL_INITIALIZER,StandardServerGroupInitializers.XML_MODEL_WRITE_SANITIZER);
   }
@@ -25,4 +25,15 @@
   Assert.assertEquals(3,properties.get("sys.prop.test.three",VALUE).asInt());
   Assert.assertEquals(expectedUndefined,properties.get("sys.prop.test.four",BOOT_TIME));
   Assert.assertFalse(properties.get("sys.prop.test.four",VALUE).isDefined());
+  PathAddress baseAddress=serverGroup ? PathAddress.pathAddress(PathElement.pathElement(SERVER_GROUP,"test")) : PathAddress.EMPTY_ADDRESS;
+  PathAddress propAddress=baseAddress.append(SYSTEM_PROPERTY,"sys.prop.test.two");
+  ModelNode op=Util.getWriteAttributeOperation(propAddress,VALUE,new ModelNode("test12"));
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,op)));
+  Assert.assertEquals("test12",ModelTestUtils.getSubModel(legacyServices.readWholeModel(),propAddress).get(VALUE).asString());
+  op=Util.getWriteAttributeOperation(propAddress,BOOT_TIME,new ModelNode());
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,op)));
+  Assert.assertTrue(ModelTestUtils.getSubModel(legacyServices.readWholeModel(),propAddress).get(BOOT_TIME).asBoolean());
+  op=Util.getUndefineAttributeOperation(propAddress,BOOT_TIME);
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,op)));
+  Assert.assertTrue(ModelTestUtils.getSubModel(legacyServices.readWholeModel(),propAddress).get(BOOT_TIME).asBoolean());
 }

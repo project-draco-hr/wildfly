@@ -1,0 +1,21 @@
+{
+  KernelServicesBuilder builder=createKernelServicesBuilder(TestModelType.DOMAIN).setXmlResource(serverGroup ? "domain-servergroup-systemproperties-with-expressions.xml" : "domain-systemproperties-with-expressions.xml");
+  if (serverGroup) {
+    builder.setModelInitializer(StandardServerGroupInitializers.XML_MODEL_INITIALIZER,StandardServerGroupInitializers.XML_MODEL_WRITE_SANITIZER);
+  }
+  LegacyKernelServicesInitializer legacyInitializer=builder.createLegacyKernelServicesBuilder(modelVersion,testControllerVersion);
+  if (serverGroup) {
+    StandardServerGroupInitializers.addServerGroupInitializers(legacyInitializer);
+  }
+  KernelServices mainServices=builder.build();
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  PathAddress baseAddress=serverGroup ? PathAddress.pathAddress(PathElement.pathElement(SERVER_GROUP,"test")) : PathAddress.EMPTY_ADDRESS;
+  PathAddress propAddress=baseAddress.append(SYSTEM_PROPERTY,"sys.prop.test.two");
+  ModelNode op=Util.getWriteAttributeOperation(propAddress,VALUE,new ModelNode().setExpression("${sys.prop.test.two}"));
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,op)));
+  ModelNode value=ModelTestUtils.getSubModel(legacyServices.readWholeModel(),propAddress).get(VALUE);
+  Assert.assertTrue(value.getType() == ModelType.EXPRESSION);
+  Assert.assertEquals("${sys.prop.test.two}",value.asString());
+}
