@@ -1,0 +1,18 @@
+{
+  OperationStepHandler addHandler=context.getResourceRegistration().getSubModel(PathAddress.EMPTY_ADDRESS.append(newKeyName)).getOperationHandler(PathAddress.EMPTY_ADDRESS,"add");
+  for (  ModelNode module : operation.get(VALUE).asList()) {
+    ModelNode addModuleOp=module.clone();
+    String code=addModuleOp.get(Constants.CODE).asString();
+    PathElement relativePath=PathElement.pathElement(newKeyName,code);
+    PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR)).append(relativePath);
+    boolean exists=context.readResource(PathAddress.EMPTY_ADDRESS).hasChild(relativePath);
+    addModuleOp.get(OP_ADDR).set(address.toModelNode());
+    addModuleOp.get(OP).set(ADD);
+    context.addStep(addModuleOp,addHandler,OperationContext.Stage.IMMEDIATE);
+    if (exists) {
+      ModelNode removeModuleOp=Util.createRemoveOperation(address);
+      context.addStep(removeModuleOp,new SecurityDomainReloadRemoveHandler(),OperationContext.Stage.IMMEDIATE);
+    }
+    context.stepCompleted();
+  }
+}
