@@ -25,6 +25,10 @@
   final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
   final EEApplicationDescription eeApplicationDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_APPLICATION_DESCRIPTION);
   bdmsByIdentifier.put(module.getIdentifier(),rootBeanDeploymentModule);
+  for (  final BeanDeploymentModule additional : deploymentUnit.getAttachmentList(WeldAttachments.VISIBLE_ADDITIONAL_BEAN_DEPLOYMENT_MODULE)) {
+    additional.addBeanDeploymentModule(rootBeanDeploymentModule);
+    rootBeanDeploymentModule.addBeanDeploymentModule(additional);
+  }
   moduleSpecByIdentifier.put(module.getIdentifier(),moduleSpecification);
   beanDeploymentArchives.addAll(rootBeanDeploymentModule.getBeanDeploymentArchives());
   final List<DeploymentUnit> subDeployments=deploymentUnit.getAttachmentList(Attachments.SUB_DEPLOYMENTS);
@@ -44,10 +48,16 @@
     }
     beanDeploymentArchives.addAll(bdm.getBeanDeploymentArchives());
     bdmsByIdentifier.put(subDeploymentModule.getIdentifier(),bdm);
+    List<BeanDeploymentModule> additionalModules=subDeployment.getAttachmentList(WeldAttachments.VISIBLE_ADDITIONAL_BEAN_DEPLOYMENT_MODULE);
     moduleSpecByIdentifier.put(subDeploymentModule.getIdentifier(),subDeploymentModuleSpec);
     final ResourceRoot subDeploymentRoot=subDeployment.getAttachment(Attachments.DEPLOYMENT_ROOT);
     final EjbInjectionServices ejbInjectionServices=new WeldEjbInjectionServices(deploymentUnit.getServiceRegistry(),eeModuleDescription,eeApplicationDescription,subDeploymentRoot.getRoot());
     bdm.addService(EjbInjectionServices.class,ejbInjectionServices);
+    for (    final BeanDeploymentModule additional : additionalModules) {
+      additional.addBeanDeploymentModule(bdm);
+      bdm.addBeanDeploymentModule(additional);
+      bdm.addService(EjbInjectionServices.class,ejbInjectionServices);
+    }
   }
   for (  Map.Entry<ModuleIdentifier,BeanDeploymentModule> entry : bdmsByIdentifier.entrySet()) {
     final ModuleSpecification bdmSpec=moduleSpecByIdentifier.get(entry.getKey());
@@ -62,14 +72,18 @@
       }
     }
   }
+  final EjbInjectionServices ejbInjectionServices=new WeldEjbInjectionServices(deploymentUnit.getServiceRegistry(),eeModuleDescription,eeApplicationDescription,deploymentRoot.getRoot());
+  rootBeanDeploymentModule.addService(EjbInjectionServices.class,ejbInjectionServices);
+  for (  final BeanDeploymentModule additional : deploymentUnit.getAttachmentList(WeldAttachments.ADDITIONAL_BEAN_DEPLOYMENT_MODULES)) {
+    beanDeploymentArchives.addAll(additional.getBeanDeploymentArchives());
+    additional.addService(EjbInjectionServices.class,ejbInjectionServices);
+  }
   final List<Metadata<Extension>> extensions=deploymentUnit.getAttachmentList(WeldAttachments.PORTABLE_EXTENSIONS);
   final WeldDeployment deployment=new WeldDeployment(beanDeploymentArchives,extensions,module,subDeploymentLoaders);
   final WeldBootstrapService weldBootstrapService=new WeldBootstrapService(deployment,Environments.EE_INJECT,deploymentUnit.getName());
   final ValidatorFactory factory=deploymentUnit.getAttachment(BeanValidationAttachments.VALIDATOR_FACTORY);
   weldBootstrapService.addWeldService(ValidationServices.class,new WeldValidationServices(factory));
-  final EjbInjectionServices ejbInjectionServices=new WeldEjbInjectionServices(deploymentUnit.getServiceRegistry(),eeModuleDescription,eeApplicationDescription,deploymentRoot.getRoot());
   weldBootstrapService.addWeldService(EjbInjectionServices.class,ejbInjectionServices);
-  rootBeanDeploymentModule.addService(EjbInjectionServices.class,ejbInjectionServices);
   weldBootstrapService.addWeldService(EjbServices.class,new WeldEjbServices(deploymentUnit.getServiceRegistry()));
   final JpaInjectionServices rootJpaInjectionServices=new WeldJpaInjectionServices(deploymentUnit,deploymentUnit.getServiceRegistry());
   weldBootstrapService.addWeldService(JpaInjectionServices.class,rootJpaInjectionServices);
