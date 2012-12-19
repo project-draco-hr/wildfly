@@ -1,7 +1,7 @@
 {
   nameValidator.validate(operation);
   final String attributeName=operation.require(NAME).asString();
-  final ModelNode newValue=operation.hasDefined(VALUE) ? operation.get(VALUE) : new ModelNode();
+  ModelNode newValue=operation.hasDefined(VALUE) ? operation.get(VALUE) : new ModelNode();
   validateUnresolvedValue(attributeName,newValue);
   final Resource resource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
   final ModelNode submodel=resource.getModel();
@@ -11,16 +11,18 @@
     final ModelNode syntheticOp=new ModelNode();
     syntheticOp.get(attributeName).set(newValue);
     attributeDefinition.validateAndSet(syntheticOp,submodel);
+    newValue=submodel.get(attributeName);
   }
  else {
     submodel.get(attributeName).set(newValue);
   }
-  validateUpdatedModel(context,operation,resource);
+  finishModelStage(context,operation,attributeName,newValue,currentValue,resource);
   if (requiresRuntime(context)) {
+    final ModelNode updatedValue=newValue;
     context.addStep(new OperationStepHandler(){
       @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
-        final ModelNode resolvedValue=attributeDefinition != null ? attributeDefinition.resolveModelAttribute(context,submodel) : newValue.resolve();
-        validateResolvedValue(attributeName,newValue);
+        final ModelNode resolvedValue=attributeDefinition != null ? attributeDefinition.resolveModelAttribute(context,submodel) : updatedValue.resolve();
+        validateResolvedValue(attributeName,updatedValue);
         final HandbackHolder<T> handback=new HandbackHolder<T>();
         final boolean reloadRequired=applyUpdateToRuntime(context,operation,attributeName,resolvedValue,currentValue,handback);
         if (reloadRequired) {
