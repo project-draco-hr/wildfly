@@ -1,31 +1,16 @@
 {
-  long start=0;
-  long settleTime=100;
-  while (outstanding > 0 || (settleTime > 0 && !problem.isEmpty())) {
-    try {
-      long wait=outstanding > 0 ? 0 : settleTime;
-      wait(wait);
-      if (outstanding == 0) {
-        if (start == 0) {
-          start=System.currentTimeMillis();
-        }
- else {
-          settleTime-=System.currentTimeMillis() - start;
-        }
-      }
- else {
-        start=0;
-        settleTime=100;
-      }
-    }
- catch (    InterruptedException e) {
-      Thread.currentThread().interrupt();
-      context.getFailureDescription().set(MESSAGES.operationCancelled());
-      context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
-      return;
-    }
+  final Set<ServiceController<?>> failed=new HashSet<ServiceController<?>>();
+  final Set<ServiceController<?>> problems=new HashSet<ServiceController<?>>();
+  try {
+    monitor.awaitStability(failed,problems);
   }
-  if (!failed.isEmpty() || !problem.isEmpty()) {
+ catch (  InterruptedException e) {
+    Thread.currentThread().interrupt();
+    context.getFailureDescription().set(MESSAGES.operationCancelled());
+    context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+    return;
+  }
+  if (!failed.isEmpty() || !problems.isEmpty()) {
     Set<ServiceController<?>> missingTransitive=null;
     Set<ServiceName> trackedServices=new HashSet<ServiceName>();
     final ModelNode failureDescription=context.getFailureDescription();
@@ -39,7 +24,7 @@
       failedList.get(serviceName.getCanonicalName()).set(getServiceFailureDescription(controller.getStartException()));
     }
     ModelNode problemList=null;
-    for (    ServiceController<?> controller : problem) {
+    for (    ServiceController<?> controller : problems) {
       Set<ServiceName> immediatelyUnavailable=controller.getImmediateUnavailableDependencies();
       if (!immediatelyUnavailable.isEmpty()) {
         if (problemList == null) {
@@ -87,9 +72,6 @@
     if (context.isRollbackOnRuntimeFailure()) {
       context.setRollbackOnly();
     }
-  }
-  for (  ServiceController<?> controller : set) {
-    controller.removeListener(this);
   }
   context.stepCompleted();
 }
