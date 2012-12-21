@@ -12,10 +12,26 @@
   KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
   Assert.assertTrue(legacyServices.isSuccessfulBoot());
   PathAddress baseAddress=serverGroup ? PathAddress.pathAddress(PathElement.pathElement(SERVER_GROUP,"test")) : PathAddress.EMPTY_ADDRESS;
-  PathAddress propAddress=baseAddress.append(SYSTEM_PROPERTY,"sys.prop.test.two");
-  ModelNode op=Util.getWriteAttributeOperation(propAddress,VALUE,new ModelNode().setExpression("${sys.prop.test.two}"));
-  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,op)));
-  ModelNode value=ModelTestUtils.getSubModel(legacyServices.readWholeModel(),propAddress).get(VALUE);
-  Assert.assertTrue(value.getType() == ModelType.EXPRESSION);
-  Assert.assertEquals("${sys.prop.test.two}",value.asString());
+  PathAddress propNewAddress=baseAddress.append(SYSTEM_PROPERTY,"sys.prop.test.new");
+  PathAddress propTwoAddress=baseAddress.append(SYSTEM_PROPERTY,"sys.prop.test.two");
+  ModelNode addParams=new ModelNode();
+  addParams.get(VALUE).setExpression("${sys.prop.test.two}");
+  ModelNode addWithExpression=Util.getOperation(ADD,propNewAddress,addParams);
+  ModelNode writeWithExpression=Util.getWriteAttributeOperation(propTwoAddress,VALUE,new ModelNode().setExpression("${sys.prop.test.one}"));
+  if (allowExpressions()) {
+    ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,addWithExpression)));
+    ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,writeWithExpression)));
+    ModelNode legacyModel=legacyServices.readWholeModel();
+    ModelNode value=ModelTestUtils.getSubModel(legacyModel,propNewAddress).get(VALUE);
+    Assert.assertTrue(value.getType() == ModelType.EXPRESSION);
+    Assert.assertEquals("${sys.prop.test.two}",value.asString());
+    value=ModelTestUtils.getSubModel(legacyModel,propTwoAddress).get(VALUE);
+    Assert.assertTrue(value.getType() == ModelType.EXPRESSION);
+    Assert.assertEquals("${sys.prop.test.one}",value.asString());
+  }
+ else {
+    ModelTestUtils.checkFailed(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,addWithExpression)));
+    ModelTestUtils.checkFailed(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,writeWithExpression)));
+  }
+  ModelNode model=mainServices.readTransformedModel(modelVersion);
 }
