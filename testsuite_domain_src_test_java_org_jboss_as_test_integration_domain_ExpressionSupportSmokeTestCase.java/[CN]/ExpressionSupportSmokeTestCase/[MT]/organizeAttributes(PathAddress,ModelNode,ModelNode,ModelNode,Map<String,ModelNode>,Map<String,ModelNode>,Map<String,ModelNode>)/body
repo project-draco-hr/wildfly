@@ -33,23 +33,38 @@
       }
     }
     ModelNode attrValue=resource.get(attrName);
+    ModelType attrType=attrValue.getType();
     if (attrDesc.get(EXPRESSIONS_ALLOWED).asBoolean(false)) {
-      ModelType attrType=attrValue.getType();
       if (attrType != ModelType.UNDEFINED && attrType != ModelType.EXPRESSION) {
-        if (attrType == ModelType.LIST || attrType == ModelType.OBJECT || attrType == ModelType.PROPERTY) {
-          otherAttrs.put(attrName,attrValue);
+        if (COMPLEX_TYPES.contains(attrType)) {
+          ModelNode valueType=attrDesc.get(VALUE_TYPE);
+          if (valueType.getType() == ModelType.TYPE) {
+            handleSimpleCollection(address,attrName,attrValue,valueType.asType(),expressionAttrs,otherAttrs,expectedAttrs);
+          }
+ else           if (valueType.isDefined()) {
+            handleComplexCollection(address,attrName,attrValue,valueType,expressionAttrs,otherAttrs,expectedAttrs);
+          }
+ else {
+            otherAttrs.put(attrName,attrValue);
+            expectedAttrs.put(attrName,attrValue);
+          }
         }
  else {
           if (attrType == ModelType.STRING) {
             checkForUnconvertedExpression(address,attrName,attrValue);
           }
           String expression="${exp.test:" + attrValue.asString() + "}";
-          expressionAttrs.put(attrName,expression);
+          expressionAttrs.put(attrName,new ModelNode(expression));
+          expectedAttrs.put(attrName,new ModelNode().setExpression(expression));
         }
       }
     }
+ else     if (COMPLEX_TYPES.contains(attrType) && attrDesc.get(VALUE_TYPE).getType() != ModelType.TYPE && attrDesc.get(VALUE_TYPE).isDefined()) {
+      handleComplexCollection(address,attrName,attrValue,attrDesc.get(VALUE_TYPE),expressionAttrs,otherAttrs,expectedAttrs);
+    }
  else {
       otherAttrs.put(attrName,attrValue);
+      expectedAttrs.put(attrName,attrValue);
     }
   }
 }

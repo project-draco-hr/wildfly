@@ -1,0 +1,54 @@
+{
+  if (COMPLEX_TYPES.contains(valueType)) {
+    otherAttrs.put(attrName,attrValue);
+  }
+ else {
+    boolean hasExpression=false;
+    ModelNode updated=new ModelNode();
+    ModelNode expected=new ModelNode();
+    for (    ModelNode item : attrValue.asList()) {
+      ModelType itemType=item.getType();
+      if (itemType == ModelType.PROPERTY) {
+        Property prop=item.asProperty();
+        ModelNode propVal=prop.getValue();
+        ModelType propValType=propVal.getType();
+        if (propVal.isDefined() && propValType != ModelType.EXPRESSION) {
+          if (propValType == ModelType.STRING) {
+            checkForUnconvertedExpression(address,attrName,propVal);
+          }
+          String expression="${exp.test:" + propVal.asString() + "}";
+          updated.get(prop.getName()).set(expression);
+          expected.get(prop.getName()).set(new ModelNode().setExpression(expression));
+          hasExpression=true;
+        }
+ else {
+          updated.get(prop.getName()).set(propVal);
+          expected.get(prop.getName()).set(propVal);
+        }
+      }
+ else       if (item.isDefined() && itemType != ModelType.EXPRESSION) {
+        if (itemType == ModelType.STRING) {
+          checkForUnconvertedExpression(address,attrName,item);
+        }
+        ModelNode updatedItem=new ModelNode().setExpression("${exp.test:" + item.asString() + "}");
+        String expression="${exp.test:" + item.asString() + "}";
+        updated.add(expression);
+        expected.add(new ModelNode().setExpression(expression));
+        hasExpression=true;
+      }
+ else {
+        updated.add(item);
+        expected.add(item);
+      }
+    }
+    if (hasExpression) {
+      System.out.println("Added expression to collection attribute " + attrName + " at "+ address.toModelNode().asString()+ " with original value "+ attrValue+ " and new value "+ updated);
+      expressionAttrs.put(attrName,updated);
+      expectedAttrs.put(attrName,expected);
+    }
+ else {
+      otherAttrs.put(attrName,attrValue);
+      expectedAttrs.put(attrName,attrValue);
+    }
+  }
+}
