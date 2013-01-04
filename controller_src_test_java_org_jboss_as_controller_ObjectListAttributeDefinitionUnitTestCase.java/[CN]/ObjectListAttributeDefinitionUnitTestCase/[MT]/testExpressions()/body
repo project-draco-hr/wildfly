@@ -1,0 +1,41 @@
+{
+  AttributeDefinition a=SimpleAttributeDefinitionBuilder.create("a",ModelType.INT).build();
+  AttributeDefinition b=SimpleAttributeDefinitionBuilder.create("b",ModelType.BOOLEAN).setAllowExpression(true).build();
+  ObjectTypeAttributeDefinition otad=new ObjectTypeAttributeDefinition.Builder("",a,b).setAllowExpression(true).build();
+  ObjectListAttributeDefinition ld=ObjectListAttributeDefinition.Builder.of("test",otad).build();
+  ModelNode op=new ModelNode();
+  ModelNode one=op.get("test").add();
+  one.get("a").set(2);
+  one.get("b").set(true);
+  ModelNode two=op.get("test").add();
+  two.get("a").set(2);
+  two.get("b").set("${test:1}");
+  ModelNode validated=ld.validateOperation(op);
+  Assert.assertEquals(op.get("test").get(0),validated.get(0));
+  Assert.assertEquals(op.get("test").get(1).get("a"),validated.get(1).get("a"));
+  Assert.assertEquals(new ModelNode().setExpression(op.get("test").get(1).get("b").asString()),validated.get(1).get("b"));
+  ModelNode model=new ModelNode();
+  ld.validateAndSet(op,model);
+  Assert.assertEquals(op.get("test").get(0),model.get("test").get(0));
+  Assert.assertEquals(op.get("test").get(1).get("a"),model.get("test").get(1).get("a"));
+  Assert.assertEquals(new ModelNode().setExpression(op.get("test").get(1).get("b").asString()),model.get("test").get(1).get("b"));
+  op=new ModelNode();
+  one=op.get("test").add();
+  one.get("a").set(2);
+  one.get("b").set(true);
+  two=op.get("test").add();
+  two.get("a").set("${test:1}");
+  two.get("b").set(false);
+  try {
+    ld.validateOperation(op);
+    org.junit.Assert.fail("Did not reject " + op);
+  }
+ catch (  OperationFailedException good) {
+  }
+  try {
+    ld.validateAndSet(op,new ModelNode());
+    org.junit.Assert.fail("Did not reject " + op);
+  }
+ catch (  OperationFailedException good) {
+  }
+}
