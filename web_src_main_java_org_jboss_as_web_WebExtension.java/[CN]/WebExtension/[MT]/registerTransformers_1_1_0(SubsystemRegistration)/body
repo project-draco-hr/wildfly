@@ -1,39 +1,6 @@
 {
   final int defaultRedirectPort=443;
-  final TransformersSubRegistration transformers=registration.registerModelTransformers(ModelVersion.create(1,1,0),new AbstractSubsystemTransformer(SUBSYSTEM_NAME){
-    @Override protected ModelNode transformModel(    TransformationContext context,    ModelNode model){
-      if (model.hasDefined(Constants.CONNECTOR)) {
-        for (        String name : model.get(Constants.CONNECTOR).keys()) {
-          ModelNode connector=model.get(Constants.CONNECTOR,name);
-          if (!connector.hasDefined(WebConnectorDefinition.REDIRECT_PORT.getName())) {
-            connector.get(WebConnectorDefinition.REDIRECT_PORT.getName()).set(defaultRedirectPort);
-          }
-          swap(connector,SSL_PATH,SSL_ALIAS);
-        }
-      }
-      if (model.hasDefined(Constants.VIRTUAL_SERVER)) {
-        for (        String name : model.get(Constants.VIRTUAL_SERVER).keys()) {
-          ModelNode virtualServer=model.get(Constants.VIRTUAL_SERVER,name);
-          swap(virtualServer,SSO_PATH,SSO_ALIAS);
-          swap(virtualServer,ACCESS_LOG_PATH,ACCESS_LOG_ALIAS);
-          ModelNode accessLog=virtualServer.get(ACCESS_LOG_ALIAS.getKey(),ACCESS_LOG_ALIAS.getValue());
-          swap(accessLog,DIRECTORY_PATH,DIRECTORY_ALIAS);
-        }
-      }
-      return model;
-    }
-    private void swap(    ModelNode parent,    PathElement original,    PathElement old){
-      if (parent.hasDefined(original.getKey()) && parent.get(original.getKey()).hasDefined(original.getValue())) {
-        ModelNode sslConfig=parent.get(original.getKey(),original.getValue());
-        parent.get(old.getKey(),old.getValue()).set(sslConfig.clone());
-        parent.get(original.getKey()).remove(original.getValue());
-        if (parent.get(original.getKey()).asList().isEmpty()) {
-          parent.remove(original.getKey());
-        }
-      }
-    }
-  }
-);
+  final TransformersSubRegistration transformers=registration.registerModelTransformers(ModelVersion.create(1,1,0),ResourceTransformer.DEFAULT);
   transformers.registerSubResource(VALVE_PATH,true);
   TransformersSubRegistration connectors=transformers.registerSubResource(CONNECTOR_PATH);
   connectors.registerOperationTransformer(ADD,new OperationTransformer(){
@@ -47,18 +14,15 @@
         transformedOperation=operation;
       }
       final boolean hasDefinedVirtualServer=operation.hasDefined(Constants.VIRTUAL_SERVER);
-      return new TransformedOperation(transformedOperation,new OperationResultTransformer(){
-        @Override public ModelNode transformResult(        ModelNode result){
-          if (!hasDefinedVirtualServer) {
-            return result;
-          }
-          if (result.get(OUTCOME).asString().equals(FAILED)) {
-            result.get(FAILURE_DESCRIPTION).set(WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314());
-          }
-          return result;
+      return new TransformedOperation(operation,new OperationRejectionPolicy(){
+        @Override public boolean rejectOperation(        ModelNode preparedResult){
+          return hasDefinedVirtualServer;
+        }
+        @Override public String getFailureDescription(){
+          return WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314();
         }
       }
-);
+,OperationResultTransformer.ORIGINAL_RESULT);
     }
   }
 );
@@ -73,19 +37,16 @@
  else {
         transformedOperation=operation;
       }
-      final boolean isVirtualServer=attributeName.equals(Constants.VIRTUAL_SERVER);
-      return new TransformedOperation(transformedOperation,new OperationResultTransformer(){
-        @Override public ModelNode transformResult(        ModelNode result){
-          if (!isVirtualServer) {
-            return result;
-          }
-          if (result.get(OUTCOME).asString().equals(FAILED)) {
-            result.get(FAILURE_DESCRIPTION).set(WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314());
-          }
-          return result;
+      final boolean isVirtualServer=operation.get(NAME).asString().equals(Constants.VIRTUAL_SERVER);
+      return new TransformedOperation(operation,new OperationRejectionPolicy(){
+        @Override public boolean rejectOperation(        ModelNode preparedResult){
+          return isVirtualServer;
+        }
+        @Override public String getFailureDescription(){
+          return WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314();
         }
       }
-);
+,OperationResultTransformer.ORIGINAL_RESULT);
     }
   }
 );
