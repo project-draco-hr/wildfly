@@ -2,8 +2,11 @@
   final int defaultRedirectPort=443;
   final TransformersSubRegistration transformers=registration.registerModelTransformers(ModelVersion.create(1,1,0),ResourceTransformer.DEFAULT);
   transformers.registerSubResource(VALVE_PATH,true);
-  TransformersSubRegistration connectors=transformers.registerSubResource(CONNECTOR_PATH);
-  connectors.registerOperationTransformer(ADD,new OperationTransformer(){
+  rejectExpressions(transformers,JSP_CONFIGURATION_PATH,WebJSPDefinition.ATTRIBUTES_MAP.keySet());
+  rejectExpressions(transformers,STATIC_RESOURCES_PATH,WebStaticResources.STATIC_ATTRIBUTES);
+  final RejectExpressionValuesChainedTransformer reject=new RejectExpressionValuesChainedTransformer(WebConnectorDefinition.CONNECTOR_ATTRIBUTES);
+  final TransformersSubRegistration connectors=transformers.registerSubResource(CONNECTOR_PATH,new ChainedResourceTransformer(reject));
+  connectors.registerOperationTransformer(ADD,new ChainedOperationTransformer(new OperationTransformer(){
     @Override public TransformedOperation transformOperation(    final TransformationContext context,    final PathAddress address,    final ModelNode operation) throws OperationFailedException {
       final ModelNode transformedOperation;
       if (!operation.hasDefined(WebConnectorDefinition.REDIRECT_PORT.getName())) {
@@ -25,8 +28,8 @@
 ,OperationResultTransformer.ORIGINAL_RESULT);
     }
   }
-);
-  connectors.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,new OperationTransformer(){
+,reject));
+  connectors.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,new ChainedOperationTransformer(new OperationTransformer(){
     @Override public TransformedOperation transformOperation(    final TransformationContext context,    final PathAddress address,    final ModelNode operation) throws OperationFailedException {
       final String attributeName=operation.get(NAME).asString();
       final ModelNode transformedOperation;
@@ -49,23 +52,13 @@
 ,OperationResultTransformer.ORIGINAL_RESULT);
     }
   }
-);
-  connectors.registerOperationTransformer(UNDEFINE_ATTRIBUTE_OPERATION,new OperationTransformer(){
-    @Override public TransformedOperation transformOperation(    final TransformationContext context,    final PathAddress address,    final ModelNode operation) throws OperationFailedException {
-      final String attributeName=operation.get(NAME).asString();
-      final ModelNode transformedOperation;
-      if (WebConnectorDefinition.REDIRECT_PORT.getName().equals(attributeName)) {
-        transformedOperation=operation.clone();
-        transformedOperation.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-        transformedOperation.get(VALUE).set(defaultRedirectPort);
-      }
- else {
-        transformedOperation=operation;
-      }
-      return new TransformedOperation(transformedOperation,OperationResultTransformer.ORIGINAL_RESULT);
-    }
-  }
-);
+,reject.getWriteAttributeTransformer()));
+  final TransformersSubRegistration virtualHost=rejectExpressions(transformers,HOST_PATH,WebVirtualHostDefinition.DEFAULT_WEB_MODULE);
+  rejectExpressions(virtualHost,SSL_PATH,WebSSLDefinition.SSL_ATTRIBUTES);
+  rejectExpressions(virtualHost,ACCESS_LOG_PATH,WebAccessLogDefinition.ACCESS_LOG_ATTRIBUTES);
+  final TransformersSubRegistration rewritePath=rejectExpressions(virtualHost,REWRITE_PATH,WebReWriteDefinition.FLAGS,WebReWriteDefinition.PATTERN,WebReWriteDefinition.SUBSTITUTION);
+  rejectExpressions(rewritePath,REWRITECOND_PATH,WebReWriteConditionDefinition.FLAGS,WebReWriteConditionDefinition.PATTERN);
+  rejectExpressions(virtualHost,SSO_PATH,WebSSODefinition.SSO_ATTRIBUTES);
   TransformersSubRegistration ssl=connectors.registerSubResource(SSL_PATH,AliasOperationTransformer.replaceLastElement(SSL_ALIAS));
   TransformersSubRegistration virtualServer=transformers.registerSubResource(HOST_PATH);
   TransformersSubRegistration sso=virtualServer.registerSubResource(SSO_PATH,AliasOperationTransformer.replaceLastElement(SSO_ALIAS));
