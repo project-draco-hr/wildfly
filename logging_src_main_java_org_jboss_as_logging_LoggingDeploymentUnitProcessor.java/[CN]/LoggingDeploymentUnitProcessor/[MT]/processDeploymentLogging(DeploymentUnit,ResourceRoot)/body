@@ -1,0 +1,32 @@
+{
+  boolean result=false;
+  if (Boolean.valueOf(SecurityActions.getSystemProperty(PER_DEPLOYMENT_LOGGING,Boolean.toString(true)))) {
+    LoggingLogger.ROOT_LOGGER.trace("Scanning for logging configuration files.");
+    final List<DeploymentUnit> subDeployments=getSubDeployments(deploymentUnit);
+    final VirtualFile configFile=findConfigFile(root);
+    if (configFile != null) {
+      result=true;
+      final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+      final LogContext logContext=LogContext.create();
+      configure(configFile,module.getClassLoader(),logContext);
+      for (      DeploymentUnit subDeployment : subDeployments) {
+        if (subDeployment.hasAttachment(Attachments.DEPLOYMENT_ROOT) && processDeploymentLogging(subDeployment,subDeployment.getAttachment(Attachments.DEPLOYMENT_ROOT))) {
+          result=true;
+        }
+ else {
+          final Module subDeploymentModule=subDeployment.getAttachment(Attachments.MODULE);
+          if (subDeploymentModule != null) {
+            LoggingExtension.CONTEXT_SELECTOR.registerLogContext(subDeploymentModule.getClassLoader(),logContext);
+          }
+        }
+      }
+    }
+ else {
+      for (      DeploymentUnit subDeployment : subDeployments) {
+        final ResourceRoot subDeploymentRoot=subDeployment.getAttachment(Attachments.DEPLOYMENT_ROOT);
+        if (processDeploymentLogging(subDeployment,subDeploymentRoot))         result=true;
+      }
+    }
+  }
+  return result;
+}
