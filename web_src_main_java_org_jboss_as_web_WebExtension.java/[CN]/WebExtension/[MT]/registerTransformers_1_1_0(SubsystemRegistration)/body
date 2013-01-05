@@ -1,9 +1,14 @@
 {
+  final int defaultRedirectPort=443;
   final TransformersSubRegistration transformers=registration.registerModelTransformers(ModelVersion.create(1,1,0),new AbstractSubsystemTransformer(SUBSYSTEM_NAME){
     @Override protected ModelNode transformModel(    TransformationContext context,    ModelNode model){
       if (model.hasDefined(Constants.CONNECTOR)) {
         for (        String name : model.get(Constants.CONNECTOR).keys()) {
-          swap(model.get(Constants.CONNECTOR,name),SSL_PATH,SSL_ALIAS);
+          ModelNode connector=model.get(Constants.CONNECTOR,name);
+          if (!connector.hasDefined(WebConnectorDefinition.REDIRECT_PORT.getName())) {
+            connector.get(WebConnectorDefinition.REDIRECT_PORT.getName()).set(defaultRedirectPort);
+          }
+          swap(connector,SSL_PATH,SSL_ALIAS);
         }
       }
       if (model.hasDefined(Constants.VIRTUAL_SERVER)) {
@@ -33,8 +38,16 @@
   TransformersSubRegistration connectors=transformers.registerSubResource(CONNECTOR_PATH);
   connectors.registerOperationTransformer(ADD,new OperationTransformer(){
     @Override public TransformedOperation transformOperation(    final TransformationContext context,    final PathAddress address,    final ModelNode operation) throws OperationFailedException {
+      final ModelNode transformedOperation;
+      if (!operation.hasDefined(WebConnectorDefinition.REDIRECT_PORT.getName())) {
+        transformedOperation=operation.clone();
+        transformedOperation.get(WebConnectorDefinition.REDIRECT_PORT.getName()).set(defaultRedirectPort);
+      }
+ else {
+        transformedOperation=operation;
+      }
       final boolean hasDefinedVirtualServer=operation.hasDefined(Constants.VIRTUAL_SERVER);
-      return new TransformedOperation(operation,new OperationResultTransformer(){
+      return new TransformedOperation(transformedOperation,new OperationResultTransformer(){
         @Override public ModelNode transformResult(        ModelNode result){
           if (!hasDefinedVirtualServer) {
             return result;
@@ -51,8 +64,17 @@
 );
   connectors.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,new OperationTransformer(){
     @Override public TransformedOperation transformOperation(    final TransformationContext context,    final PathAddress address,    final ModelNode operation) throws OperationFailedException {
-      final boolean isVirtualServer=operation.get(NAME).asString().equals(Constants.VIRTUAL_SERVER);
-      return new TransformedOperation(operation,new OperationResultTransformer(){
+      final String attributeName=operation.get(NAME).asString();
+      final ModelNode transformedOperation;
+      if (WebConnectorDefinition.REDIRECT_PORT.getName().equals(attributeName) && !operation.hasDefined(VALUE)) {
+        transformedOperation=operation.clone();
+        transformedOperation.get(VALUE).set(defaultRedirectPort);
+      }
+ else {
+        transformedOperation=operation;
+      }
+      final boolean isVirtualServer=attributeName.equals(Constants.VIRTUAL_SERVER);
+      return new TransformedOperation(transformedOperation,new OperationResultTransformer(){
         @Override public ModelNode transformResult(        ModelNode result){
           if (!isVirtualServer) {
             return result;
@@ -64,6 +86,22 @@
         }
       }
 );
+    }
+  }
+);
+  connectors.registerOperationTransformer(UNDEFINE_ATTRIBUTE_OPERATION,new OperationTransformer(){
+    @Override public TransformedOperation transformOperation(    final TransformationContext context,    final PathAddress address,    final ModelNode operation) throws OperationFailedException {
+      final String attributeName=operation.get(NAME).asString();
+      final ModelNode transformedOperation;
+      if (WebConnectorDefinition.REDIRECT_PORT.getName().equals(attributeName)) {
+        transformedOperation=operation.clone();
+        transformedOperation.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
+        transformedOperation.get(VALUE).set(defaultRedirectPort);
+      }
+ else {
+        transformedOperation=operation;
+      }
+      return new TransformedOperation(transformedOperation,OperationResultTransformer.ORIGINAL_RESULT);
     }
   }
 );
