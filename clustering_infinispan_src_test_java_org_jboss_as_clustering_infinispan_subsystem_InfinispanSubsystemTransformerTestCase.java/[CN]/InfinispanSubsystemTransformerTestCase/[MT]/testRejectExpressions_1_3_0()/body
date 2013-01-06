@@ -5,10 +5,16 @@
   KernelServices mainServices=builder.build();
   KernelServices legacyServices=mainServices.getLegacyServices(version_1_3_0);
   junit.framework.Assert.assertNotNull(legacyServices);
-  ModelNode operation=getCacheStorePropertyAddOperation("maximal","repl",ModelKeys.REPLICATED_CACHE,"some_property","${some_property_value:new}");
-  ModelNode mainResult=mainServices.executeOperation(operation);
-  assertEquals(mainResult.toJSONString(true),SUCCESS,mainResult.get(OUTCOME).asString());
-  OperationTransformer.TransformedOperation transformedOperation=mainServices.transformOperation(version_1_3_0,operation);
-  final ModelNode result=mainServices.executeOperation(version_1_3_0,transformedOperation);
-  junit.framework.Assert.assertEquals("should reject the expression",FAILED,result.get(OUTCOME).asString());
+  ModelNode cacheStorePropertyAddOp=getCacheStorePropertyAddOperation("maximal","repl",ModelKeys.REPLICATED_CACHE,"some_property","${some_property_value:new}");
+  testRejectExpressionsForOperation(mainServices,version_1_3_0,cacheStorePropertyAddOp,true);
+  ModelNode cacheStorePropertyWriteOp=getCacheStorePropertyWriteOperation("maximal","repl",ModelKeys.REPLICATED_CACHE,"some_property","${some_property_value:new}");
+  testRejectExpressionsForOperation(mainServices,version_1_3_0,cacheStorePropertyWriteOp,true);
+  ModelNode cacheContainerAddOp=Util.createAddOperation(getCacheContainerAddress("somecontainer"));
+  cacheContainerAddOp.get(DEFAULT_CACHE).set("${some_default_cache:default}");
+  testRejectExpressionsForOperation(mainServices,version_1_3_0,cacheContainerAddOp,false);
+  ModelNode cacheContainerWriteOp=getCacheContainerWriteOperation("maximal",ModelKeys.DEFAULT_CACHE,"${some_default_cache:local2}");
+  testRejectExpressionsForOperation(mainServices,version_1_3_0,cacheContainerWriteOp,false);
+  ModelNode stringKeyedTable=createStringKeyedTable("ispn_bucket",100,100,new String[]{"id","VARCHAR"},new String[]{"datun","BINARY"},new String[]{"version","${someversion:BIGINT}"});
+  ModelNode stringKeyedTableWriteOp=getMixedKeyedJDBCCacheStoreWriteOperation("maximal",ModelKeys.DISTRIBUTED_CACHE,"dist","string-keyed-table",stringKeyedTable);
+  testRejectExpressionsForOperation(mainServices,version_1_3_0,stringKeyedTableWriteOp,true);
 }
