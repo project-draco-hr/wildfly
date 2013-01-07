@@ -1,7 +1,12 @@
 {
-  RejectExpressionValuesTransformer rejectNewerExpressions=new RejectExpressionValuesTransformer(JPADefinition.DEFAULT_DATASOURCE,JPADefinition.DEFAULT_EXTENDEDPERSISTENCE_INHERITANCE);
-  TransformersSubRegistration reg=subsystemRegistration.registerModelTransformers(ModelVersion.create(1,1,0),new JPASubsystemTransformer_1_1());
-  reg.registerOperationTransformer(ADD,new AbstractOperationTransformer(){
+  final RejectExpressionValuesChainedTransformer rejectNewerExpressions=new RejectExpressionValuesChainedTransformer(JPADefinition.DEFAULT_DATASOURCE,JPADefinition.DEFAULT_EXTENDEDPERSISTENCE_INHERITANCE);
+  TransformersSubRegistration reg=subsystemRegistration.registerModelTransformers(ModelVersion.create(1,1,0),new ChainedResourceTransformer(new ChainedResourceTransformerEntry(){
+    @Override public void transformResource(    ChainedResourceTransformationContext context,    PathAddress address,    Resource resource) throws OperationFailedException {
+      resource.getModel().remove(JPADefinition.DEFAULT_EXTENDEDPERSISTENCE_INHERITANCE.getName());
+    }
+  }
+,rejectNewerExpressions));
+  reg.registerOperationTransformer(ADD,new ChainedOperationTransformer(new AbstractOperationTransformer(){
     @Override protected ModelNode transform(    TransformationContext context,    PathAddress address,    ModelNode operation){
       if (operation.has(JPADefinition.DEFAULT_EXTENDEDPERSISTENCE_INHERITANCE.getName())) {
         operation.remove(JPADefinition.DEFAULT_EXTENDEDPERSISTENCE_INHERITANCE.getName());
@@ -9,6 +14,14 @@
       return operation;
     }
   }
-);
-  reg.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,rejectNewerExpressions.getWriteAttributeTransformer());
+,rejectNewerExpressions));
+  reg.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,new ChainedOperationTransformer(new OperationTransformer(){
+    @Override public TransformedOperation transformOperation(    TransformationContext context,    PathAddress address,    ModelNode operation) throws OperationFailedException {
+      if (operation.get(NAME).equals(JPADefinition.DEFAULT_EXTENDEDPERSISTENCE_INHERITANCE.getName())) {
+        return OperationTransformer.DEFAULT.transformOperation(context,address,operation);
+      }
+      return rejectNewerExpressions.getWriteAttributeTransformer().transformOperation(context,address,operation);
+    }
+  }
+));
 }

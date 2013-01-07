@@ -1,0 +1,15 @@
+{
+  ModelVersion oldVersion=ModelVersion.create(1,1,0);
+  KernelServicesBuilder builder=createKernelServicesBuilder(null);
+  builder.createLegacyKernelServicesBuilder(null,oldVersion).setExtensionClassName(JPAExtension.class.getName()).addMavenResourceURL("org.jboss.as:jboss-as-jpa:7.1.2.Final").addMavenResourceURL("org.jboss.as:jboss-as-controller:7.1.2.Final").addParentFirstClassPattern("org.jboss.as.controller.*");
+  KernelServices mainServices=builder.build();
+  KernelServices legacyServices=mainServices.getLegacyServices(oldVersion);
+  Assert.assertNotNull(legacyServices);
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  List<ModelNode> ops=builder.parseXml(getSubsystemXml());
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,oldVersion,ops,new FailedOperationTransformationConfig().addFailedAttribute(PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,JPAExtension.SUBSYSTEM_NAME)),new FailedOperationTransformationConfig.RejectExpressionsConfig(DEFAULT_DATASOURCE,DEFAULT_EXTENDEDPERSISTENCE_INHERITANCE)));
+  ModelNode legacyModel=legacyServices.readWholeModel().require(SUBSYSTEM).require(JPAExtension.SUBSYSTEM_NAME);
+  Assert.assertEquals(1,legacyModel.keys().size());
+  Assert.assertEquals("test-ds",legacyModel.get(DEFAULT_DATASOURCE.getName()).asString());
+}
