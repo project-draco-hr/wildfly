@@ -1,0 +1,35 @@
+{
+  System.setProperty("sys.prop.test.one","ONE");
+  KernelServicesBuilder builder=createKernelServicesBuilder(TestModelType.DOMAIN);
+  if (serverGroup) {
+    builder.setModelInitializer(StandardServerGroupInitializers.XML_MODEL_INITIALIZER,StandardServerGroupInitializers.XML_MODEL_WRITE_SANITIZER);
+  }
+  LegacyKernelServicesInitializer legacyInitializer=builder.createLegacyKernelServicesBuilder(modelVersion,testControllerVersion);
+  if (serverGroup) {
+    StandardServerGroupInitializers.addServerGroupInitializers(legacyInitializer);
+  }
+  KernelServices mainServices=builder.build();
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  List<ModelNode> ops=builder.parseXmlResource(serverGroup ? "domain-servergroup-systemproperties-with-expressions.xml" : "domain-systemproperties-with-expressions.xml");
+  FailedOperationTransformationConfig config;
+  if (allowExpressions()) {
+    config=FailedOperationTransformationConfig.NO_FAILURES;
+  }
+ else {
+    PathAddress root=serverGroup ? PathAddress.pathAddress(PathElement.pathElement(SERVER_GROUP)) : PathAddress.EMPTY_ADDRESS;
+    config=new FailedOperationTransformationConfig().addFailedAttribute(root.append(PathElement.pathElement(SYSTEM_PROPERTY)),new FailedOperationTransformationConfig.RejectExpressionsConfig(VALUE));
+  }
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,modelVersion,ops,config);
+  checkCoreModelTransformation(mainServices,modelVersion,null,new ModelFixer(){
+    @Override public ModelNode fixModel(    ModelNode modelNode){
+      modelNode.remove(SOCKET_BINDING_GROUP);
+      if (!allowExpressions()) {
+        modelNode=modelNode.resolve();
+      }
+      return modelNode;
+    }
+  }
+);
+}
