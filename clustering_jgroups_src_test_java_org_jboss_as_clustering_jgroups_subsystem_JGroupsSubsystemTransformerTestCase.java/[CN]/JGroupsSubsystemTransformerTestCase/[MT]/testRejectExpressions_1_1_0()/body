@@ -1,20 +1,12 @@
 {
-  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT).setSubsystemXml(getSubsystemXml());
+  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT);
   ModelVersion version_1_1_0=ModelVersion.create(1,1,0);
   builder.createLegacyKernelServicesBuilder(null,version_1_1_0).addMavenResourceURL("org.jboss.as:jboss-as-clustering-jgroups:7.1.2.Final");
   KernelServices mainServices=builder.build();
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
   KernelServices legacyServices=mainServices.getLegacyServices(version_1_1_0);
   Assert.assertNotNull(legacyServices);
-  ModelNode operation=getTransportPropertyAddOperation("maximal","bundler_type","${the_bundler_type:new}");
-  ModelNode mainResult=mainServices.executeOperation(operation);
-  assertEquals(mainResult.toJSONString(true),SUCCESS,mainResult.get(OUTCOME).asString());
-  OperationTransformer.TransformedOperation transformedOperation=mainServices.transformOperation(version_1_1_0,operation);
-  final ModelNode result=mainServices.executeOperation(version_1_1_0,transformedOperation);
-  Assert.assertEquals("should reject the expression",FAILED,result.get(OUTCOME).asString());
-  ModelNode operation1=getProtocolPropertyAddOperation("maximal","MPING","timeout","${the_timeout:1000}");
-  ModelNode mainResult1=mainServices.executeOperation(operation1);
-  assertEquals(mainResult1.toJSONString(true),SUCCESS,mainResult1.get(OUTCOME).asString());
-  OperationTransformer.TransformedOperation transformedOperation1=mainServices.transformOperation(version_1_1_0,operation1);
-  final ModelNode result1=mainServices.executeOperation(version_1_1_0,transformedOperation1);
-  Assert.assertEquals("should reject the expression",FAILED,result1.get(OUTCOME).asString());
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  PathAddress subsystemAddress=PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,JGroupsExtension.SUBSYSTEM_NAME));
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,version_1_1_0,builder.parseXmlResource("/subsystem-jgroups-test.xml"),new FailedOperationTransformationConfig().addFailedAttribute(subsystemAddress.append(PathElement.pathElement("stack")).append(PathElement.pathElement("transport")).append("property"),new FailedOperationTransformationConfig.RejectExpressionsConfig(VALUE)).addFailedAttribute(subsystemAddress.append(PathElement.pathElement("stack")).append(PathElement.pathElement("protocol")).append("property"),new FailedOperationTransformationConfig.RejectExpressionsConfig(VALUE)));
 }
