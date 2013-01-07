@@ -1,0 +1,40 @@
+{
+  start(CONTAINER_1);
+  deploy(DEPLOYMENT_1);
+  start(CONTAINER_2);
+  deploy(DEPLOYMENT_2);
+  final ContextSelector<EJBClientContext> previousSelector=EJBClientContextSelector.setup(CLIENT_PROPERTIES);
+  int numberOfServers=2;
+  int numberOfCalls=50;
+  double serversProcessedAtLeast=0.2;
+  try {
+    ViewChangeListener listener=context.lookupStateless(ViewChangeListenerBean.class,ViewChangeListener.class);
+    this.establishView(listener,NODES);
+    Stateless bean=context.lookupStateless(StatelessBean.class,Stateless.class);
+    String node=bean.getNodeName();
+    log.info("Node called : " + node);
+    validateBalancing(bean,numberOfCalls,numberOfServers,serversProcessedAtLeast);
+    Properties contextChangeProperties=new Properties();
+    contextChangeProperties.put(REMOTE_PORT_PROPERTY_NAME,PORT_2.toString());
+    contextChangeProperties.put(REMOTE_HOST_PROPERTY_NAME,HOST_2.toString());
+    EJBClientContextSelector.setup(CLIENT_PROPERTIES,contextChangeProperties);
+    bean=context.lookupStateless(StatelessBean.class,Stateless.class);
+    node=bean.getNodeName();
+    log.info("Node called : " + node);
+    validateBalancing(bean,numberOfCalls,numberOfServers,serversProcessedAtLeast);
+    stop(CONTAINER_1);
+    this.establishView(listener,NODES[1]);
+    node=bean.getNodeName();
+    log.info("Node called : " + node);
+    start(CONTAINER_1);
+    this.establishView(listener,NODES);
+    node=bean.getNodeName();
+    log.info("Node called : " + node);
+    validateBalancing(bean,numberOfCalls,numberOfServers,serversProcessedAtLeast);
+  }
+  finally {
+    if (previousSelector != null) {
+      EJBClientContext.setSelector(previousSelector);
+    }
+  }
+}
