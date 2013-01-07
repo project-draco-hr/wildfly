@@ -1,0 +1,33 @@
+{
+  Set<String> keys=valueTypeDesc.keys();
+  boolean timeAttr=keys.size() == 2 && keys.contains("time") && keys.contains("unit");
+  boolean changed=false;
+  for (  Property fieldProp : valueTypeDesc.asPropertyList()) {
+    String fieldName=fieldProp.getName();
+    if (!item.has(fieldName)) {
+      continue;
+    }
+    boolean timeunit=timeAttr && "unit".equals(fieldName);
+    ModelNode fieldDesc=fieldProp.getValue();
+    ModelNode fieldValue=item.get(fieldName);
+    ModelType valueType=fieldValue.getType();
+    if (valueType == ModelType.UNDEFINED || valueType == ModelType.EXPRESSION || COMPLEX_TYPES.contains(valueType) || !fieldDesc.get(EXPRESSIONS_ALLOWED).asBoolean(false)) {
+      updatedItem.get(fieldName).set(fieldValue);
+      itemToExpect.get(fieldName).set(fieldValue);
+    }
+ else {
+      if (valueType == ModelType.STRING) {
+        checkForUnconvertedExpression(address,attrName,item);
+      }
+      String valueString=timeunit ? fieldValue.asString().toLowerCase() : fieldValue.asString();
+      String expression="${exp.test:" + valueString + "}";
+      updatedItem.get(fieldName).set(expression);
+      itemToExpect.get(fieldName).set(new ModelNode().setExpression(expression));
+      changed=true;
+    }
+  }
+  if (!changed) {
+    updatedItem.set(item);
+    itemToExpect.set(item);
+  }
+}
