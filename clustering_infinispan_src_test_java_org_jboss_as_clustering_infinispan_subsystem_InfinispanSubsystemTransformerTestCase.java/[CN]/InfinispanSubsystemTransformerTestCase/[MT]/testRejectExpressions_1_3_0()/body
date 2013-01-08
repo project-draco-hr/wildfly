@@ -1,20 +1,13 @@
 {
-  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT).setSubsystemXml(getSubsystemXml());
+  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT);
   ModelVersion version_1_3_0=ModelVersion.create(1,3,0);
   builder.createLegacyKernelServicesBuilder(null,version_1_3_0).addMavenResourceURL("org.jboss.as:jboss-as-clustering-infinispan:7.1.2.Final");
   KernelServices mainServices=builder.build();
   KernelServices legacyServices=mainServices.getLegacyServices(version_1_3_0);
-  junit.framework.Assert.assertNotNull(legacyServices);
-  ModelNode cacheStorePropertyAddOp=getCacheStorePropertyAddOperation("maximal","repl",ModelKeys.REPLICATED_CACHE,"some_property","${some_property_value:new}");
-  testRejectExpressionsForOperation(mainServices,version_1_3_0,cacheStorePropertyAddOp,true);
-  ModelNode cacheStorePropertyWriteOp=getCacheStorePropertyWriteOperation("maximal","repl",ModelKeys.REPLICATED_CACHE,"some_property","${some_property_value:new}");
-  testRejectExpressionsForOperation(mainServices,version_1_3_0,cacheStorePropertyWriteOp,true);
-  ModelNode cacheContainerAddOp=Util.createAddOperation(getCacheContainerAddress("somecontainer"));
-  cacheContainerAddOp.get(DEFAULT_CACHE).set("${some_default_cache:default}");
-  testRejectExpressionsForOperation(mainServices,version_1_3_0,cacheContainerAddOp,false);
-  ModelNode cacheContainerWriteOp=getCacheContainerWriteOperation("maximal",ModelKeys.DEFAULT_CACHE,"${some_default_cache:local2}");
-  testRejectExpressionsForOperation(mainServices,version_1_3_0,cacheContainerWriteOp,false);
-  ModelNode stringKeyedTable=createStringKeyedTable("ispn_bucket",100,100,new String[]{"id","VARCHAR"},new String[]{"datun","BINARY"},new String[]{"version","${someversion:BIGINT}"});
-  ModelNode stringKeyedTableWriteOp=getMixedKeyedJDBCCacheStoreWriteOperation("maximal",ModelKeys.DISTRIBUTED_CACHE,"dist","string-keyed-table",stringKeyedTable);
-  testRejectExpressionsForOperation(mainServices,version_1_3_0,stringKeyedTableWriteOp,true);
+  Assert.assertNotNull(legacyServices);
+  Assert.assertTrue("main services did not boot",mainServices.isSuccessfulBoot());
+  ;
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  List<ModelNode> xmlOps=builder.parseXmlResource("infinispan-transformer_1_4-expressions.xml");
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,version_1_3_0,xmlOps,getConfig());
 }
