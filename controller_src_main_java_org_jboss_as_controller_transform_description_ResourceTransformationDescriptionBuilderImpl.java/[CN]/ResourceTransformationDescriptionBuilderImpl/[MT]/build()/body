@@ -1,0 +1,48 @@
+{
+  final List<TransformationRule> rules=new ArrayList<TransformationRule>();
+  final Map<String,AttributeTransformationDescription> attributes=new HashMap<String,AttributeTransformationDescription>();
+  for (  final Map.Entry<String,AttributeTransformationRequirementChecker> checks : attributeRestrictions.entrySet()) {
+    final String attribtueName=checks.getKey();
+    final AttributeTransformationRequirementChecker checker=checks.getValue();
+    final RestrictedAttributeTransformationDescription description=new RestrictedAttributeTransformationDescription(checker);
+    attributes.put(attribtueName,description);
+  }
+  for (  final ModelTransformer t : steps) {
+    rules.add(new TransformationRule(){
+      @Override void transformOperation(      ModelNode operation,      PathAddress address,      OperationContext context) throws OperationFailedException {
+        final TransformationContext ctx=context.getContext();
+        final boolean reject=t.transform(operation,address,ctx);
+        final OperationRejectionPolicy policy;
+        if (reject) {
+          policy=new OperationRejectionPolicy(){
+            @Override public boolean rejectOperation(            ModelNode preparedResult){
+              return true;
+            }
+            @Override public String getFailureDescription(){
+              return "";
+            }
+          }
+;
+          context.invokeNext(new OperationTransformer.TransformedOperation(operation,policy,OperationResultTransformer.ORIGINAL_RESULT));
+        }
+ else {
+          context.invokeNext(operation);
+        }
+      }
+      @Override void tranformResource(      Resource resource,      PathAddress address,      ResourceContext context) throws OperationFailedException {
+        final ModelNode model=resource.getModel();
+        final TransformationContext ctx=context.getContext();
+        boolean reject=t.transform(model,address,ctx);
+        if (reject) {
+        }
+        context.invokeNext(resource);
+      }
+    }
+);
+  }
+  final List<TransformationDescription> children=new ArrayList<TransformationDescription>();
+  for (  final TransformationDescriptionBuilder builder : this.children) {
+    children.add(builder.build());
+  }
+  return new TransformingDescription(pathElement,pathTransformation,rules,attributes,children);
+}
