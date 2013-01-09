@@ -1,15 +1,17 @@
 {
-  final InfinispanOperationTransformer_1_3 removeSelectedCacheAttributes=new InfinispanOperationTransformer_1_3();
+  TransformersSubRegistration registration=subsystem.registerModelTransformers(ModelVersion.create(1,3),ResourceTransformer.DEFAULT);
   final RejectExpressionValuesTransformer cacheContainerReject=new RejectExpressionValuesTransformer(InfinispanRejectedExpressions_1_3.REJECT_CONTAINER_ATTRIBUTES);
+  TransformersSubRegistration containerRegistration=registerTransformer(registration,CacheContainerResource.CONTAINER_PATH,cacheContainerReject,cacheContainerReject,cacheContainerReject.getWriteAttributeTransformer(),null);
   final RejectExpressionValuesTransformer transportReject=new RejectExpressionValuesTransformer(InfinispanRejectedExpressions_1_3.REJECT_TRANSPORT_ATTRIBUTES);
+  registerTransformer(containerRegistration,TransportResource.TRANSPORT_PATH,transportReject,transportReject,transportReject.getWriteAttributeTransformer(),null);
+  final DiscardAttributesTransformer removeSelectedCacheAttributes=new DiscardAttributesTransformer(ModelKeys.INDEXING_PROPERTIES,ModelKeys.SEGMENTS,ModelKeys.VIRTUAL_NODES);
   final RejectExpressionValuesTransformer cacheReject=new RejectExpressionValuesTransformer(InfinispanRejectedExpressions_1_3.REJECT_CACHE_ATTRIBUTES);
-  final ChainedOperationTransformer chained=new ChainedOperationTransformer(removeSelectedCacheAttributes,cacheReject);
-  TransformersSubRegistration registration=subsystem.registerModelTransformers(ModelVersion.create(1,3),new InfinispanSubsystemTransformer_1_3());
-  TransformersSubRegistration containerRegistration=registration.registerSubResource(CacheContainerResource.CONTAINER_PATH,(OperationTransformer)cacheContainerReject);
-  containerRegistration.registerSubResource(TransportResource.TRANSPORT_PATH,(OperationTransformer)transportReject);
+  final ChainedResourceTransformer chainedResource=new ChainedResourceTransformer(removeSelectedCacheAttributes,cacheReject.getChainedTransformer());
+  final ChainedOperationTransformer chainedAdd=new ChainedOperationTransformer(removeSelectedCacheAttributes,cacheReject);
+  final ChainedOperationTransformer chainedWrite=new ChainedOperationTransformer(removeSelectedCacheAttributes.getWriteAttributeTransformer(),cacheReject.getWriteAttributeTransformer());
   PathElement[] cachePaths={LocalCacheResource.LOCAL_CACHE_PATH,InvalidationCacheResource.INVALIDATION_CACHE_PATH,ReplicatedCacheResource.REPLICATED_CACHE_PATH,DistributedCacheResource.DISTRIBUTED_CACHE_PATH};
   for (int i=0; i < cachePaths.length; i++) {
-    TransformersSubRegistration cacheRegistration=containerRegistration.registerSubResource(cachePaths[i],(OperationTransformer)chained);
+    TransformersSubRegistration cacheRegistration=registerTransformer(containerRegistration,cachePaths[i],chainedResource,chainedAdd,chainedWrite,removeSelectedCacheAttributes.getUndefineAttributeTransformer());
     registerCacheChildrenTransformers(cacheRegistration);
   }
 }
