@@ -10,11 +10,45 @@
     moduleName=null;
   }
   final HandlerConfiguration configuration;
-  if (constructionProperties == null) {
-    configuration=logContextConfiguration.addHandlerConfiguration(moduleName,className,name);
+  if (moduleName != null) {
+    final ModuleLoader moduleLoader=ModuleLoader.forClass(HandlerOperations.class);
+    final ModuleIdentifier id=ModuleIdentifier.create(moduleName);
+    try {
+      final Class<?> actualClass=Class.forName(className,false,moduleLoader.loadModule(id).getClassLoader());
+      if (Appender.class.isAssignableFrom(actualClass)) {
+        if (constructionProperties == null) {
+          logContextConfiguration.addPojoConfiguration(moduleName,className,name);
+        }
+ else {
+          logContextConfiguration.addPojoConfiguration(moduleName,className,name,constructionProperties);
+        }
+        configuration=logContextConfiguration.addHandlerConfiguration("org.jboss.as.logging",Log4jAppenderHandler.class.getName(),name);
+        configuration.addPostConfigurationMethod("activate");
+        configuration.setPropertyValueString("appender",name);
+      }
+ else {
+        if (constructionProperties == null) {
+          configuration=logContextConfiguration.addHandlerConfiguration(moduleName,className,name);
+        }
+ else {
+          configuration=logContextConfiguration.addHandlerConfiguration(moduleName,className,name,constructionProperties);
+        }
+      }
+    }
+ catch (    ClassNotFoundException e) {
+      throw createOperationFailure(LoggingMessages.MESSAGES.classNotFound(e,className));
+    }
+catch (    ModuleLoadException e) {
+      throw LoggingMessages.MESSAGES.cannotLoadModule(e,moduleName,"handler",name);
+    }
   }
  else {
-    configuration=logContextConfiguration.addHandlerConfiguration(moduleName,className,name,constructionProperties);
+    if (constructionProperties == null) {
+      configuration=logContextConfiguration.addHandlerConfiguration(moduleName,className,name);
+    }
+ else {
+      configuration=logContextConfiguration.addHandlerConfiguration(moduleName,className,name,constructionProperties);
+    }
   }
   return configuration;
 }
