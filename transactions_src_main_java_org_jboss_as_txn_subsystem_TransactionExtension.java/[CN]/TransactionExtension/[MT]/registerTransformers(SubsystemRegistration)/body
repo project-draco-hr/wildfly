@@ -1,13 +1,6 @@
 {
-  final ModelVersion version111=ModelVersion.create(1,1,1);
-  final DiscardUndefinedAttributesTransformer discardTransformer=new DiscardUndefinedAttributesTransformer(TransactionSubsystemRootResourceDefinition.attributes_1_2);
-  final TransformersSubRegistration transformers111=subsystem.registerModelTransformers(version111,discardTransformer);
-  transformers111.registerOperationTransformer(ADD,discardTransformer);
-  transformers111.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,discardTransformer.getWriteAttributeTransformer());
-  transformers111.registerOperationTransformer(UNDEFINE_ATTRIBUTE_OPERATION,discardTransformer.getUndefineAttributeTransformer());
-  final ModelVersion version110=ModelVersion.create(1,1,0);
-  final RejectExpressionValuesTransformer reject=new RejectExpressionValuesTransformer(TransactionSubsystemRootResourceDefinition.attributes);
-  final TransformersSubRegistration registration=subsystem.registerModelTransformers(version110,new ChainedResourceTransformer(new ChainedResourceTransformerEntry(){
+  final DiscardUndefinedAttributesTransformer discardJdbcStoreTransformer=new DiscardUndefinedAttributesTransformer(TransactionSubsystemRootResourceDefinition.attributes_1_2);
+  final ChainedResourceTransformerEntry addUUIDTransformer=new ChainedResourceTransformerEntry(){
     @Override public void transformResource(    ChainedResourceTransformationContext context,    PathAddress address,    Resource resource) throws OperationFailedException {
       ModelNode model=resource.getModel();
       if (!model.hasDefined(TransactionSubsystemRootResourceDefinition.PROCESS_ID_UUID.getName())) {
@@ -15,8 +8,16 @@
       }
     }
   }
-,reject.getChainedTransformer(),discardTransformer));
-  registration.registerOperationTransformer(ADD,reject);
-  registration.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,new ChainedOperationTransformer(reject.getWriteAttributeTransformer(),discardTransformer.getWriteAttributeTransformer()));
-  registration.registerOperationTransformer(UNDEFINE_ATTRIBUTE_OPERATION,discardTransformer.getUndefineAttributeTransformer());
+;
+  final ModelVersion version111=ModelVersion.create(1,1,1);
+  final TransformersSubRegistration transformers111=subsystem.registerModelTransformers(version111,new ChainedResourceTransformer(UnneededJDBCStoreTransformer.INSTANCE,discardJdbcStoreTransformer,addUUIDTransformer));
+  transformers111.registerOperationTransformer(ADD,new ChainedOperationTransformer(UnneededJDBCStoreTransformer.INSTANCE,discardJdbcStoreTransformer));
+  transformers111.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,discardJdbcStoreTransformer.getWriteAttributeTransformer());
+  transformers111.registerOperationTransformer(UNDEFINE_ATTRIBUTE_OPERATION,discardJdbcStoreTransformer.getUndefineAttributeTransformer());
+  final ModelVersion version110=ModelVersion.create(1,1,0);
+  final RejectExpressionValuesTransformer reject=new RejectExpressionValuesTransformer(TransactionSubsystemRootResourceDefinition.attributes);
+  final TransformersSubRegistration registration=subsystem.registerModelTransformers(version110,new ChainedResourceTransformer(UnneededJDBCStoreTransformer.INSTANCE,discardJdbcStoreTransformer,reject.getChainedTransformer(),addUUIDTransformer));
+  registration.registerOperationTransformer(ADD,new ChainedOperationTransformer(UnneededJDBCStoreTransformer.INSTANCE,discardJdbcStoreTransformer,reject.getChainedTransformer()));
+  registration.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,new ChainedOperationTransformer(discardJdbcStoreTransformer.getWriteAttributeTransformer(),reject.getWriteAttributeTransformer()));
+  registration.registerOperationTransformer(UNDEFINE_ATTRIBUTE_OPERATION,discardJdbcStoreTransformer.getUndefineAttributeTransformer());
 }
