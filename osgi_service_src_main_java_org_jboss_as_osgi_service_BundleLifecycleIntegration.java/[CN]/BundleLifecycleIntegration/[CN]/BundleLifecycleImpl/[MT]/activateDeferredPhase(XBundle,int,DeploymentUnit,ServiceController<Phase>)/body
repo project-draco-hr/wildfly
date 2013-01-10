@@ -6,23 +6,6 @@
     return;
   }
   LOGGER.infoActivateDeferredModulePhase(bundle);
-  ServiceTracker<Object> serviceTracker=new ServiceTracker<Object>("DeferredActivation"){
-    private final AtomicInteger count=new AtomicInteger();
-    @Override public void serviceListenerAdded(    ServiceController<? extends Object> controller){
-      LOGGER.debugf("Added: [%d] %s ",count.incrementAndGet(),controller.getName());
-    }
-    @Override protected void serviceStarted(    ServiceController<?> controller){
-      LOGGER.debugf("Started: [%d] %s ",count.decrementAndGet(),controller.getName());
-    }
-    @Override protected void serviceStartFailed(    ServiceController<?> controller){
-      LOGGER.debugf("Failed: [%d] %s ",count.decrementAndGet(),controller.getName());
-    }
-    @Override protected void complete(){
-      LOGGER.debugf("Complete: [%d]",count.get());
-    }
-  }
-;
-  phaseService.addListener(Inheritance.ALL,serviceTracker);
   if (!bundle.isResolved()) {
     XEnvironment env=injectedEnvironment.getValue();
     XResolver resolver=injectedResolver.getValue();
@@ -31,20 +14,25 @@
       resolver.resolveAndApply(context);
     }
  catch (    ResolutionException ex) {
-      phaseService.removeListener(serviceTracker);
       throw FrameworkMessages.MESSAGES.cannotResolveBundle(ex,bundle);
     }
   }
   depUnit.getAttachment(Attachments.DEFERRED_ACTIVATION_COUNT).incrementAndGet();
   phaseService.setMode(Mode.ACTIVE);
+  final StabilityMonitor monitor=new StabilityMonitor();
+  monitor.addController(phaseService);
+  final Set<ServiceController<?>> failed=new HashSet<ServiceController<?>>();
   try {
-    serviceTracker.awaitCompletion();
+    monitor.awaitStability(failed,null);
   }
- catch (  InterruptedException ex) {
+ catch (  final InterruptedException ex) {
   }
-  if (serviceTracker.hasFailedServices()) {
+ finally {
+    monitor.removeController(phaseService);
+  }
+  if (failed.size() > 0) {
     StartException startex=null;
-    for (    ServiceController<?> aux : serviceTracker.getFailedServices()) {
+    for (    ServiceController<?> aux : failed) {
       if (aux.getStartException() != null) {
         startex=aux.getStartException();
         break;

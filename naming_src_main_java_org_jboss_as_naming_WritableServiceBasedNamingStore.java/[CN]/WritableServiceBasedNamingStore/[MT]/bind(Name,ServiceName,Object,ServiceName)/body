@@ -1,10 +1,20 @@
 {
   try {
     final BinderService binderService=new BinderService(name.toString());
-    final BindListener listener=new BindListener();
-    final ServiceBuilder<?> builder=serviceTarget.addService(bindName,binderService).addDependency(getServiceNameBase(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addInjection(binderService.getManagedObjectInjector(),new ValueManagedReferenceFactory(new ImmediateValue<Object>(object))).setInitialMode(ServiceController.Mode.ACTIVE).addListener(listener);
-    builder.install();
-    listener.await();
+    final ServiceBuilder<?> builder=serviceTarget.addService(bindName,binderService).addDependency(getServiceNameBase(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addInjection(binderService.getManagedObjectInjector(),new ValueManagedReferenceFactory(new ImmediateValue<Object>(object))).setInitialMode(ServiceController.Mode.ACTIVE);
+    final ServiceController<?> binderServiceController=builder.install();
+    final StabilityMonitor monitor=new StabilityMonitor();
+    monitor.addController(binderServiceController);
+    try {
+      monitor.awaitStability();
+    }
+  finally {
+      monitor.removeController(binderServiceController);
+    }
+    final Exception startException=binderServiceController.getStartException();
+    if (startException != null) {
+      throw startException;
+    }
     binderService.acquire();
     final Set<ServiceName> duBindingReferences=(Set<ServiceName>)getServiceRegistry().getService(JndiNamingDependencyProcessor.serviceName(deploymentUnitServiceName)).getValue();
     duBindingReferences.add(bindName);

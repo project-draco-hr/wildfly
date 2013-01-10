@@ -6,26 +6,17 @@
   ArquillianConfig arqConfig=new ArquillianConfig(arqService,depUnit,testClasses);
   ServiceController<?> service=arqService.getServiceContainer().getService(arqConfig.getServiceName());
   if (service != null) {
-    final CountDownLatch latch=new CountDownLatch(1);
     service.setMode(ServiceController.Mode.REMOVE);
-    service.addListener(new AbstractServiceListener<Object>(){
-      @Override public void listenerAdded(      ServiceController<? extends Object> serviceController){
-        if (serviceController.getState() == ServiceController.State.REMOVED) {
-          latch.countDown();
-        }
-      }
-      @Override public void transition(      ServiceController<? extends Object> serviceController,      ServiceController.Transition transition){
-        if (serviceController.getState() == ServiceController.State.REMOVED) {
-          latch.countDown();
-        }
-      }
-    }
-);
+    final StabilityMonitor monitor=new StabilityMonitor();
+    monitor.addController(service);
     try {
-      latch.await(20,TimeUnit.SECONDS);
+      monitor.awaitStability(20,TimeUnit.SECONDS);
     }
  catch (    InterruptedException e) {
       throw new RuntimeException(e);
+    }
+ finally {
+      monitor.removeController(service);
     }
   }
   depUnit.putAttachment(ArquillianConfig.KEY,arqConfig);

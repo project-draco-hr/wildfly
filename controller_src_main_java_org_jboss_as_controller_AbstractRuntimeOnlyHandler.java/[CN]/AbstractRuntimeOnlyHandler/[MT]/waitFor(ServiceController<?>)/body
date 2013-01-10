@@ -1,28 +1,17 @@
 {
-  ServiceWaitListener listener=null;
-  int time=100;
-  while (time > 0) {
-    if (controller.getState() == ServiceController.State.UP) {
-      return;
-    }
-    if (listener == null) {
-      listener=new ServiceWaitListener();
-      controller.addListener(listener);
-    }
-synchronized (listener) {
-      try {
-        long start=System.currentTimeMillis();
-        listener.wait(time);
-        time-=System.currentTimeMillis() - start;
-      }
- catch (      InterruptedException e) {
-        Thread.currentThread().interrupt();
-        controller.removeListener(listener);
-        throw new OperationFailedException((new ModelNode()).set("Interrupted waiting for service: " + controller.getName()));
-      }
-    }
+  if (controller.getState() == ServiceController.State.UP)   return;
+  final StabilityMonitor monitor=new StabilityMonitor();
+  monitor.addController(controller);
+  try {
+    monitor.awaitStability(100,MILLISECONDS);
   }
-  controller.removeListener(listener);
+ catch (  final InterruptedException e) {
+    Thread.currentThread().interrupt();
+    throw new OperationFailedException((new ModelNode()).set("Interrupted waiting for service: " + controller.getName()));
+  }
+ finally {
+    monitor.removeController(controller);
+  }
   if (controller.getState() != ServiceController.State.UP) {
     throw new OperationFailedException(new ModelNode().set("Required service is not available: " + controller.getName()));
   }
