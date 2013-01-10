@@ -2,8 +2,20 @@
   if (!java.util.logging.LogManager.getLogManager().getClass().getName().equals(org.jboss.logmanager.LogManager.class.getName())) {
     throw LoggingMessages.MESSAGES.extensionNotInitialized();
   }
-  LogContext.setLogContextSelector(CONTEXT_SELECTOR);
+  LogContext.setLogContextSelector(THREAD_LOCAL_CONTEXT_SELECTOR);
   StdioContext.setStdioContextSelector(new LogContextStdioContextSelector(StdioContext.getStdioContext()));
+  try {
+    final ModuleLoader moduleLoader=Module.forClass(LoggingExtension.class).getModuleLoader();
+    for (    ModuleIdentifier moduleIdentifier : LOGGING_API_MODULES) {
+      try {
+        CONTEXT_SELECTOR.addLogApiClassLoader(moduleLoader.loadModule(moduleIdentifier).getClassLoader());
+      }
+ catch (      Throwable ignore) {
+      }
+    }
+  }
+ catch (  Exception ignore) {
+  }
   final SubsystemRegistration subsystem=context.registerSubsystem(SUBSYSTEM_NAME,MANAGEMENT_API_MAJOR_VERSION,MANAGEMENT_API_MINOR_VERSION,MANAGEMENT_API_MICRO_VERSION);
   final ManagementResourceRegistration registration=subsystem.registerSubsystemModel(LoggingRootResource.INSTANCE);
   registration.registerOperationHandler(GenericSubsystemDescribeHandler.DEFINITION,DESCRIBE_HANDLER);
