@@ -19,7 +19,7 @@
   }
  else {
     PathAddress root=serverGroup ? PathAddress.pathAddress(PathElement.pathElement(SERVER_GROUP)) : PathAddress.EMPTY_ADDRESS;
-    config=new FailedOperationTransformationConfig().addFailedAttribute(root.append(PathElement.pathElement(SYSTEM_PROPERTY)),new FailedOperationTransformationConfig.RejectExpressionsConfig(VALUE));
+    config=new FailedOperationTransformationConfig().addFailedAttribute(root.append(PathElement.pathElement(SYSTEM_PROPERTY)),new FailedOperationTransformationConfig.RejectExpressionsConfig(BOOT_TIME,VALUE));
   }
   ModelTestUtils.checkFailedTransformedBootOperations(mainServices,modelVersion,ops,config);
   checkCoreModelTransformation(mainServices,modelVersion,null,new ModelFixer(){
@@ -27,6 +27,13 @@
       modelNode.remove(SOCKET_BINDING_GROUP);
       if (!allowExpressions()) {
         modelNode=modelNode.resolve();
+        ModelNode sysPropRoot=serverGroup ? modelNode.get(SERVER_GROUP,"test") : modelNode;
+        for (        Property sysprop : sysPropRoot.get(SYSTEM_PROPERTY).asPropertyList()) {
+          ModelNode bootTime;
+          if (sysprop.getValue().hasDefined(BOOT_TIME) && (bootTime=sysprop.getValue().get(BOOT_TIME)).getType() == ModelType.STRING) {
+            sysPropRoot.get(SYSTEM_PROPERTY,sysprop.getName(),BOOT_TIME).set(bootTime.asBoolean());
+          }
+        }
       }
       return modelNode;
     }
