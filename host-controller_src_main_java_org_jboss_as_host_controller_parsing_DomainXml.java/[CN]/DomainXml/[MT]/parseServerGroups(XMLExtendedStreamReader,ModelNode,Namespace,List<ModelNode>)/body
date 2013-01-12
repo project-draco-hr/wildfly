@@ -7,9 +7,11 @@
     if (Element.SERVER_GROUP != serverGroup) {
       throw unexpectedElement(reader);
     }
+    final ModelNode groupAddOp=new ModelNode();
+    groupAddOp.get(OP).set(ADD);
+    groupAddOp.get(OP_ADDR);
     String name=null;
-    String profile=null;
-    Boolean managementSubsystemEndpoint=null;
+    Set<Attribute> required=EnumSet.of(Attribute.NAME,Attribute.PROFILE);
     final int count=reader.getAttributeCount();
     for (int i=0; i < count; i++) {
       final String value=reader.getAttributeValue(i);
@@ -18,12 +20,10 @@
       }
  else {
         final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+        required.remove(attribute);
 switch (attribute) {
 case NAME:
 {
-            if (name != null) {
-              throw ParseUtils.duplicateAttribute(reader,attribute.getLocalName());
-            }
             if (!names.add(value)) {
               throw ParseUtils.duplicateNamedElement(reader,value);
             }
@@ -32,18 +32,12 @@ case NAME:
           }
 case PROFILE:
 {
-          if (profile != null) {
-            throw ParseUtils.duplicateAttribute(reader,attribute.getLocalName());
-          }
-          profile=value;
+          ServerGroupResourceDefinition.PROFILE.parseAndSetParameter(value,groupAddOp,reader);
           break;
         }
 case MANAGEMENT_SUBSYSTEM_ENDPOINT:
 {
-        if (managementSubsystemEndpoint != null) {
-          throw ParseUtils.duplicateAttribute(reader,attribute.getLocalName());
-        }
-        managementSubsystemEndpoint=Boolean.valueOf(value);
+        ServerGroupResourceDefinition.MANAGEMENT_SUBSYSTEM_ENDPOINT.parseAndSetParameter(value,groupAddOp,reader);
         break;
       }
 default :
@@ -51,22 +45,13 @@ default :
 }
 }
 }
-if (name == null) {
-throw missingRequired(reader,Collections.singleton(Attribute.NAME));
-}
-if (profile == null) {
-throw missingRequired(reader,Collections.singleton(Attribute.PROFILE));
+if (!required.isEmpty()) {
+throw missingRequired(reader,required);
 }
 final ModelNode groupAddress=new ModelNode().set(address);
 groupAddress.add(ModelDescriptionConstants.SERVER_GROUP,name);
-final ModelNode group=new ModelNode();
-group.get(OP).set(ADD);
-group.get(OP_ADDR).set(groupAddress);
-group.get(PROFILE).set(profile);
-if (managementSubsystemEndpoint != null) {
-group.get(MANAGEMENT_SUBSYSTEM_ENDPOINT).set(managementSubsystemEndpoint);
-}
-list.add(group);
+groupAddOp.get(OP_ADDR).set(groupAddress);
+list.add(groupAddOp);
 boolean sawDeployments=false;
 while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 requireNamespace(reader,expectedNs);
@@ -79,7 +64,7 @@ case JVM:
 }
 case SOCKET_BINDING_GROUP:
 {
-parseSocketBindingGroupRef(reader,group,ServerGroupResourceDefinition.SOCKET_BINDING_GROUP,ServerGroupResourceDefinition.SOCKET_BINDING_PORT_OFFSET);
+parseSocketBindingGroupRef(reader,groupAddOp,ServerGroupResourceDefinition.SOCKET_BINDING_GROUP,ServerGroupResourceDefinition.SOCKET_BINDING_PORT_OFFSET);
 break;
 }
 case DEPLOYMENTS:
