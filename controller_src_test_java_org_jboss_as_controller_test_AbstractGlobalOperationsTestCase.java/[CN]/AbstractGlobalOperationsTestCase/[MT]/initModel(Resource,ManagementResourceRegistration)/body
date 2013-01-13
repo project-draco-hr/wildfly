@@ -1,6 +1,6 @@
 {
   GlobalOperationHandlers.registerGlobalOperations(rootRegistration,processType);
-  rootRegistration.registerOperationHandler("setup",new OperationStepHandler(){
+  rootRegistration.registerOperationHandler(SETUP_OP_DEF,new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
       final ModelNode model=new ModelNode();
       model.get("profile","profileA","subsystem","subsystem1","attr1").add(1);
@@ -32,27 +32,9 @@
       context.stepCompleted();
     }
   }
-,new DescriptionProvider(){
-    @Override public ModelNode getModelDescription(    Locale locale){
-      return new ModelNode();
-    }
-  }
-,false,OperationEntry.EntryType.PRIVATE);
-  ManagementResourceRegistration profileReg=rootRegistration.registerSubModel(PathElement.pathElement("profile","*"),new DescriptionProvider(){
-    @Override public ModelNode getModelDescription(    Locale locale){
-      ModelNode node=new ModelNode();
-      node.get(DESCRIPTION).set("A named set of subsystem configs");
-      node.get(ATTRIBUTES,NAME,TYPE).set(ModelType.STRING);
-      node.get(ATTRIBUTES,NAME,DESCRIPTION).set("The name of the profile");
-      node.get(ATTRIBUTES,NAME,REQUIRED).set(true);
-      node.get(ATTRIBUTES,NAME,MIN_LENGTH).set(1);
-      node.get(CHILDREN,SUBSYSTEM,DESCRIPTION).set("The subsystems that make up the profile");
-      node.get(CHILDREN,SUBSYSTEM,MIN_OCCURS).set(1);
-      node.get(CHILDREN,SUBSYSTEM,MODEL_DESCRIPTION);
-      return node;
-    }
-  }
 );
+  ResourceDefinition profileDef=ResourceBuilder.Factory.create(PathElement.pathElement("profile","*"),new NonResolvingResourceDescriptionResolver()).addReadOnlyAttribute(SimpleAttributeDefinitionBuilder.create("name",ModelType.STRING,false).setMinSize(1).build()).build();
+  ManagementResourceRegistration profileReg=rootRegistration.registerSubModel(profileDef);
   ManagementResourceRegistration profileSub1Reg=profileReg.registerSubModel(PathElement.pathElement("subsystem","subsystem1"),new DescriptionProvider(){
     @Override public ModelNode getModelDescription(    Locale locale){
       ModelNode node=new ModelNode();
@@ -80,40 +62,14 @@
     }
   }
 );
-  profileSub1Reg.registerReadOnlyAttribute("read-only",null,AttributeAccess.Storage.CONFIGURATION);
-  profileSub1Reg.registerReadWriteAttribute("read-write",null,new WriteAttributeHandlers.ModelTypeValidatingHandler(ModelType.INT),AttributeAccess.Storage.CONFIGURATION);
-  profileSub1Reg.registerMetric("metric1",TestMetricHandler.INSTANCE);
-  profileSub1Reg.registerMetric("metric2",TestMetricHandler.INSTANCE);
-  DescriptionProvider thingProvider=new DescriptionProvider(){
-    @Override public ModelNode getModelDescription(    Locale locale){
-      ModelNode node=new ModelNode();
-      node.get(DESCRIPTION).set("A type 1");
-      node.get(ATTRIBUTES,"name",TYPE).set(ModelType.STRING);
-      node.get(ATTRIBUTES,"name",DESCRIPTION).set("The name of the thing");
-      node.get(ATTRIBUTES,"name",REQUIRED).set(true);
-      node.get(ATTRIBUTES,"value",TYPE).set(ModelType.INT);
-      node.get(ATTRIBUTES,"value",DESCRIPTION).set("The value of the thing");
-      node.get(ATTRIBUTES,"value",REQUIRED).set(true);
-      return node;
-    }
-  }
-;
-  ManagementResourceRegistration profileSub1RegChildType11=profileSub1Reg.registerSubModel(PathElement.pathElement("type1","*"),thingProvider);
-  ManagementResourceRegistration profileSub1RegChildType2=profileSub1Reg.registerSubModel(PathElement.pathElement("type2","other"),new DescriptionProvider(){
-    @Override public ModelNode getModelDescription(    Locale locale){
-      ModelNode node=new ModelNode();
-      node.get(DESCRIPTION).set("A type 2");
-      node.get(ATTRIBUTES,"name",TYPE).set(ModelType.STRING);
-      node.get(ATTRIBUTES,"name",DESCRIPTION).set("The name of the thing");
-      node.get(ATTRIBUTES,"name",REQUIRED).set(true);
-      node.get(ATTRIBUTES,"default",TYPE).set(ModelType.STRING);
-      node.get(ATTRIBUTES,"default",DESCRIPTION).set("The name of the thing");
-      node.get(ATTRIBUTES,"default",REQUIRED).set(false);
-      node.get(ATTRIBUTES,"default",DEFAULT).set("Default string");
-      return node;
-    }
-  }
-);
+  profileSub1Reg.registerReadOnlyAttribute(createAttribute("read-only",ModelType.INT),null);
+  profileSub1Reg.registerReadWriteAttribute(createAttribute("read-write",ModelType.INT),null,new WriteAttributeHandlers.ModelTypeValidatingHandler(ModelType.INT));
+  profileSub1Reg.registerMetric(createMetric("metric1",ModelType.INT),TestMetricHandler.INSTANCE);
+  profileSub1Reg.registerMetric(createMetric("metric2",ModelType.INT),TestMetricHandler.INSTANCE);
+  ResourceDefinition profileSub1RegType1Def=ResourceBuilder.Factory.create(PathElement.pathElement("type1","*"),new NonResolvingResourceDescriptionResolver()).addReadOnlyAttribute(createAttribute("name",ModelType.STRING)).addReadOnlyAttribute(createAttribute("value",ModelType.INT)).build();
+  profileSub1Reg.registerSubModel(profileSub1RegType1Def);
+  ResourceDefinition profileSub1RegType2Def=ResourceBuilder.Factory.create(PathElement.pathElement("type2","other"),new NonResolvingResourceDescriptionResolver()).addReadOnlyAttribute(createAttribute("name",ModelType.STRING)).addReadOnlyAttribute(SimpleAttributeDefinitionBuilder.create("default",ModelType.STRING).setDefaultValue(new ModelNode("Default string")).build()).build();
+  profileSub1Reg.registerSubModel(profileSub1RegType2Def);
   ManagementResourceRegistration profileASub2Reg=profileReg.registerSubModel(PathElement.pathElement("subsystem","subsystem2"),new DescriptionProvider(){
     @Override public ModelNode getModelDescription(    Locale locale){
       ModelNode node=new ModelNode();
@@ -167,7 +123,7 @@
     }
   }
 );
-  profileASub2Reg.registerReadWriteAttribute("long",null,new WriteAttributeHandlers.ModelTypeValidatingHandler(ModelType.LONG,false),AttributeAccess.Storage.CONFIGURATION);
+  profileASub2Reg.registerReadWriteAttribute(createAttribute("long",ModelType.LONG),null,new WriteAttributeHandlers.ModelTypeValidatingHandler(ModelType.LONG,false));
   ManagementResourceRegistration profileBSub3Reg=profileReg.registerSubModel(PathElement.pathElement("subsystem","subsystem3"),new DescriptionProvider(){
     @Override public ModelNode getModelDescription(    Locale locale){
       ModelNode node=new ModelNode();
@@ -180,48 +136,21 @@
     }
   }
 );
-  profileSub1Reg.registerOperationHandler("testA1-1",new OperationStepHandler(){
+  profileSub1Reg.registerOperationHandler(createOperationDefinition("testA1-1",createAttribute("paramA1",ModelType.INT)),new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation){
-      return;
     }
   }
-,new DescriptionProvider(){
-    @Override public ModelNode getModelDescription(    Locale locale){
-      ModelNode node=new ModelNode();
-      node.get(OPERATION_NAME).set("testA1");
-      node.get(REQUEST_PROPERTIES,"paramA1",TYPE).set(ModelType.INT);
-      return node;
-    }
-  }
-,false);
-  profileSub1Reg.registerOperationHandler("testA1-2",new OperationStepHandler(){
+);
+  profileSub1Reg.registerOperationHandler(createOperationDefinition("testA1-2",createAttribute("paramA2",ModelType.STRING)),new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation){
-      return;
     }
   }
-,new DescriptionProvider(){
-    @Override public ModelNode getModelDescription(    Locale locale){
-      ModelNode node=new ModelNode();
-      node.get(OPERATION_NAME).set("testA2");
-      node.get(REQUEST_PROPERTIES,"paramA2",TYPE).set(ModelType.STRING);
-      return node;
-    }
-  }
-,false);
-  profileASub2Reg.registerOperationHandler("testA2",new OperationStepHandler(){
+);
+  profileASub2Reg.registerOperationHandler(createOperationDefinition("testA2",createAttribute("paramB",ModelType.LONG)),new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation){
-      return;
     }
   }
-,new DescriptionProvider(){
-    @Override public ModelNode getModelDescription(    Locale locale){
-      ModelNode node=new ModelNode();
-      node.get(OPERATION_NAME).set("testB");
-      node.get(REQUEST_PROPERTIES,"paramB",TYPE).set(ModelType.LONG);
-      return node;
-    }
-  }
-,false);
+);
   ManagementResourceRegistration profileCSub4Reg=profileReg.registerSubModel(PathElement.pathElement("subsystem","subsystem4"),new DescriptionProvider(){
     @Override public ModelNode getModelDescription(    Locale locale){
       ModelNode node=new ModelNode();
@@ -250,19 +179,13 @@
     }
   }
 );
-  profileCSub5Reg.registerReadOnlyAttribute("name",new OperationStepHandler(){
+  profileCSub5Reg.registerReadOnlyAttribute(createAttribute("name",ModelType.STRING),new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation){
       context.getResult().set("Overridden by special read handler");
       context.stepCompleted();
     }
   }
-,AttributeAccess.Storage.CONFIGURATION);
-  ManagementResourceRegistration profileCSub5Type1Reg=profileCSub5Reg.registerSubModel(PathElement.pathElement("type1","thing1"),new DescriptionProvider(){
-    @Override public ModelNode getModelDescription(    Locale locale){
-      ModelNode node=new ModelNode();
-      node.get(DESCRIPTION).set("A subsystem");
-      return node;
-    }
-  }
 );
+  ResourceDefinition profileCSub5Type1RegDef=ResourceBuilder.Factory.create(PathElement.pathElement("type1","thing1"),new NonResolvingResourceDescriptionResolver()).build();
+  ManagementResourceRegistration profileCSub5Type1Reg=profileCSub5Reg.registerSubModel(profileCSub5Type1RegDef);
 }
