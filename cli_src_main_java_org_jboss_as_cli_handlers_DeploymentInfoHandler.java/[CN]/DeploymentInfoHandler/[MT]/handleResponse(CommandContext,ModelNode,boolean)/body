@@ -20,52 +20,105 @@
         throw new CommandFormatException("Failed to read the main resource info of the deployment: " + Util.getFailureDescription(step));
       }
       ModelNode stepResponse=step.get(Util.RESULT);
-      final StrictSizeTable table=new StrictSizeTable(1);
-      table.addCell(Util.NAME,stepResponse.get(Util.NAME).asString());
-      table.addCell(Util.RUNTIME_NAME,stepResponse.get(Util.RUNTIME_NAME).asString());
-      ctx.printLine(table.toString());
-      final SimpleTable groups=new SimpleTable(new String[]{"SERVER GROUP","STATE"});
-      if (addedServerGroups == null) {
-        if (steps.hasNext()) {
-          throw new CommandFormatException("Didn't expect results for server groups but received " + (result.asPropertyList().size() - 1) + " more steps.");
+      if (serverGroup.isPresent(ctx.getParsedCommandLine())) {
+        step=result.get(Util.STEP_1);
+        if (!step.isDefined()) {
+          throw new CommandFormatException("No step outcome for deployment resources (step-1): " + result);
+        }
+        final ModelNode allDeployments=step.get(Util.RESULT);
+        if (!allDeployments.isDefined()) {
+          throw new CommandFormatException("No result for deployment resources (step-1): " + result);
+        }
+        step=result.get(Util.STEP_2);
+        if (!step.isDefined()) {
+          throw new CommandFormatException("No step outcome for server-group deployment resources (step-2): " + result);
+        }
+        final ModelNode sgDeployments=step.get(Util.RESULT);
+        if (!sgDeployments.isDefined()) {
+          throw new CommandFormatException("No result for server-group deployment resources (step-2): " + result);
+        }
+        final String deploymentName=name.getValue(ctx.getParsedCommandLine());
+        final Pattern pattern=Pattern.compile(Util.wildcardToJavaRegex(deploymentName == null ? "*" : deploymentName));
+        final SimpleTable table=new SimpleTable(new String[]{NAME,RUNTIME_NAME,STATE});
+        for (        String name : allDeployments.keys()) {
+          if (!pattern.matcher(name).matches()) {
+            continue;
+          }
+          if (sgDeployments.hasDefined(name)) {
+            final ModelNode node=sgDeployments.get(name);
+            table.addLine(new String[]{node.get(Util.NAME).asString(),node.get(Util.RUNTIME_NAME).asString(),node.get(Util.ENABLED).asBoolean() ? Util.ENABLED : ADDED});
+          }
+ else {
+            final ModelNode resource=allDeployments.get(name);
+            table.addLine(new String[]{resource.get(Util.NAME).asString(),resource.get(Util.RUNTIME_NAME).asString(),NOT_ADDED});
+          }
+        }
+        if (!table.isEmpty()) {
+          ctx.printLine(table.toString(true));
         }
       }
  else {
-        for (        String sg : addedServerGroups) {
-          final Property prop=steps.next();
-          stepResponse=prop.getValue();
-          if (stepResponse.has(prop.getName())) {
-            stepResponse=stepResponse.get(prop.getName());
+        final StrictSizeTable table=new StrictSizeTable(1);
+        table.addCell(Util.NAME,stepResponse.get(Util.NAME).asString());
+        table.addCell(Util.RUNTIME_NAME,stepResponse.get(Util.RUNTIME_NAME).asString());
+        ctx.printLine(table.toString());
+        final SimpleTable groups=new SimpleTable(new String[]{SERVER_GROUP,STATE});
+        if (addedServerGroups == null) {
+          if (steps.hasNext()) {
+            throw new CommandFormatException("Didn't expect results for server groups but received " + (result.asPropertyList().size() - 1) + " more steps.");
           }
-          if (stepResponse.hasDefined(Util.RESULT)) {
-            final ModelNode stepResult=stepResponse.get(Util.RESULT);
-            if (stepResult.hasDefined(Util.ENABLED)) {
-              groups.addLine(new String[]{sg,stepResult.get(Util.ENABLED).asBoolean() ? Util.ENABLED : "added"});
+        }
+ else {
+          for (          String sg : addedServerGroups) {
+            final Property prop=steps.next();
+            stepResponse=prop.getValue();
+            if (stepResponse.has(prop.getName())) {
+              stepResponse=stepResponse.get(prop.getName());
+            }
+            if (stepResponse.hasDefined(Util.RESULT)) {
+              final ModelNode stepResult=stepResponse.get(Util.RESULT);
+              if (stepResult.hasDefined(Util.ENABLED)) {
+                groups.addLine(new String[]{sg,stepResult.get(Util.ENABLED).asBoolean() ? Util.ENABLED : ADDED});
+              }
+ else {
+                groups.addLine(new String[]{sg,N_A});
+              }
             }
  else {
-              groups.addLine(new String[]{sg,"n/a"});
+              groups.addLine(new String[]{sg,"no response"});
             }
           }
- else {
-            groups.addLine(new String[]{sg,"no response"});
+        }
+        if (otherServerGroups != null) {
+          for (          String sg : otherServerGroups) {
+            groups.addLine(new String[]{sg,NOT_ADDED});
           }
         }
+        ctx.printLine(groups.toString(true));
       }
-      if (otherServerGroups != null) {
-        for (        String sg : otherServerGroups) {
-          groups.addLine(new String[]{sg,"not added"});
-        }
-      }
-      ctx.printLine(groups.toString(true));
     }
  else {
-      final StrictSizeTable table=new StrictSizeTable(1);
-      table.addCell(Util.NAME,result.get(Util.NAME).asString());
-      table.addCell(Util.RUNTIME_NAME,result.get(Util.RUNTIME_NAME).asString());
-      table.addCell(Util.PERSISTENT,result.get(Util.PERSISTENT).asString());
-      table.addCell(Util.ENABLED,result.get(Util.ENABLED).asString());
-      table.addCell(Util.STATUS,result.get(Util.STATUS).asString());
-      ctx.printLine(table.toString());
+      final SimpleTable table=new SimpleTable(new String[]{NAME,RUNTIME_NAME,PERSISTENT,ENABLED,STATUS});
+      final String deploymentName=name.getValue(ctx.getParsedCommandLine());
+      if (deploymentName == null || deploymentName.indexOf('*') >= 0) {
+        final List<Property> list=result.asPropertyList();
+        if (!list.isEmpty()) {
+          final Pattern pattern=Pattern.compile(Util.wildcardToJavaRegex(deploymentName == null ? "*" : deploymentName));
+          for (          Property p : list) {
+            final ModelNode node=p.getValue();
+            final String name=node.get(Util.NAME).asString();
+            if (pattern.matcher(name).matches()) {
+              table.addLine(new String[]{name,node.get(Util.RUNTIME_NAME).asString(),node.get(Util.PERSISTENT).asString(),node.get(Util.ENABLED).asString(),node.get(Util.STATUS).asString()});
+            }
+          }
+        }
+      }
+ else {
+        table.addLine(new String[]{result.get(Util.NAME).asString(),result.get(Util.RUNTIME_NAME).asString(),result.get(Util.PERSISTENT).asString(),result.get(Util.ENABLED).asString(),result.get(Util.STATUS).asString()});
+      }
+      if (!table.isEmpty()) {
+        ctx.printLine(table.toString());
+      }
     }
   }
   finally {
