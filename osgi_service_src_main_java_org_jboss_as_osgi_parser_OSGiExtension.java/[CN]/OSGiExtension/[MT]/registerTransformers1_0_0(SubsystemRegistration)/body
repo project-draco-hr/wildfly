@@ -1,21 +1,14 @@
 {
-  ModelVersion version=ModelVersion.create(1,0,0);
-  TransformersSubRegistration subsystemTransformer=subsystem.registerModelTransformers(version,ResourceTransformer.DEFAULT);
-  TransformersSubRegistration capability=subsystemTransformer.registerSubResource(PathElement.pathElement(ModelConstants.CAPABILITY),new ResourceTransformer(){
-    @Override public void transformResource(    ResourceTransformationContext context,    PathAddress address,    Resource resource) throws OperationFailedException {
-      ModelNode model=resource.getModel();
-      removeUndefinedStartLevel(model);
-      ResourceTransformationContext childContext=context.addTransformedResource(PathAddress.EMPTY_ADDRESS,resource);
-      childContext.processChildren(resource);
-    }
-  }
-);
-  capability.registerOperationTransformer(ModelDescriptionConstants.ADD,new OperationTransformer(){
-    @Override public TransformedOperation transformOperation(    TransformationContext context,    PathAddress address,    ModelNode operation) throws OperationFailedException {
-      ModelNode op=operation.clone();
-      removeUndefinedStartLevel(op);
-      return new TransformedOperation(op,OperationResultTransformer.ORIGINAL_RESULT);
-    }
-  }
-);
+  RejectExpressionValuesTransformer rootReject=new RejectExpressionValuesTransformer(OSGiRootResource.ACTIVATION);
+  TransformersSubRegistration subsystemTransformer=subsystem.registerModelTransformers(ModelVersion.create(1,0,0),rootReject);
+  subsystemTransformer.registerOperationTransformer(ModelDescriptionConstants.ADD,rootReject);
+  subsystemTransformer.registerOperationTransformer(ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION,rootReject.getWriteAttributeTransformer());
+  RemoveUndefinedTransformer undefinedTransformer=new RemoveUndefinedTransformer();
+  RejectExpressionValuesTransformer capabilityReject=new RejectExpressionValuesTransformer(FrameworkCapabilityResource.STARTLEVEL);
+  TransformersSubRegistration capability=subsystemTransformer.registerSubResource(FrameworkCapabilityResource.CAPABILITY_PATH,new ChainedResourceTransformer(undefinedTransformer,capabilityReject.getChainedTransformer()));
+  capability.registerOperationTransformer(ModelDescriptionConstants.ADD,new ChainedOperationTransformer(undefinedTransformer,capabilityReject));
+  RejectExpressionValuesTransformer valueReject=new RejectExpressionValuesTransformer(FrameworkPropertyResource.VALUE);
+  TransformersSubRegistration property=subsystemTransformer.registerSubResource(FrameworkPropertyResource.PROPERTY_PATH,(ResourceTransformer)valueReject);
+  property.registerOperationTransformer(ModelDescriptionConstants.ADD,valueReject);
+  property.registerOperationTransformer(ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION,valueReject.getWriteAttributeTransformer());
 }
