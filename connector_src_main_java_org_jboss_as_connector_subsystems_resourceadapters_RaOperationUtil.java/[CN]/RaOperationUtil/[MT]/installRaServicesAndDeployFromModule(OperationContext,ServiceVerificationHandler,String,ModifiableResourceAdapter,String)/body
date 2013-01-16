@@ -2,14 +2,14 @@
   ServiceName raServiceName=installRaServices(context,verificationHandler,name,resourceAdapter);
   final boolean resolveProperties=true;
   final ServiceTarget serviceTarget=context.getServiceTarget();
-  String deploymentName=moduleName;
-  if (moduleName.contains("->")) {
-    moduleName=moduleName.substring(0,moduleName.indexOf("->"));
-  }
+  final String moduleName;
   String slot="main";
-  if (moduleName.contains(":")) {
-    slot=moduleName.substring(moduleName.indexOf(":") + 1);
-    moduleName=moduleName.substring(0,moduleName.indexOf(":"));
+  if (fullModuleName.contains(":")) {
+    slot=fullModuleName.substring(fullModuleName.indexOf(":") + 1);
+    moduleName=fullModuleName.substring(0,fullModuleName.indexOf(":"));
+  }
+ else {
+    moduleName=fullModuleName;
   }
   Module module;
   try {
@@ -24,8 +24,7 @@
   try {
     VirtualFile child;
     if (path.getPath().contains("!")) {
-      child=VFS.getChild(path.getPath().split("!")[0].split("file:")[1]);
-      closable=VFS.mountZip(new File(path.getPath().split("!")[0].split("file:")[1]),child,TempFileProviderService.provider());
+      throw new OperationFailedException(MESSAGES.compressedRarNotSupportedInModuleRA(moduleName));
     }
  else {
       child=VFS.getChild(path.getPath().split("META-INF")[0]);
@@ -35,7 +34,7 @@
     final ResourceRoot resourceRoot=new ResourceRoot(child,mountHandle);
     final VirtualFile deploymentRoot=resourceRoot.getRoot();
     if (deploymentRoot == null || !deploymentRoot.exists())     return;
-    ConnectorXmlDescriptor connectorXmlDescriptor=RaDeploymentParsingProcessor.process(resolveProperties,deploymentRoot,null,deploymentName);
+    ConnectorXmlDescriptor connectorXmlDescriptor=RaDeploymentParsingProcessor.process(resolveProperties,deploymentRoot,null,name);
     IronJacamarXmlDescriptor ironJacamarXmlDescriptor=IronJacamarDeploymentParsingProcessor.process(deploymentRoot,resolveProperties);
     RaNativeProcessor.process(deploymentRoot);
     Map<ResourceRoot,Index> annotationIndexes=new HashMap<ResourceRoot,Index>();
@@ -48,15 +47,18 @@
       ConnectorLogger.SUBSYSTEM_RA_LOGGER.forceIJToNull();
       ironJacamarXmlDescriptor=null;
     }
-    ServiceBuilder builder=ParsedRaDeploymentProcessor.process(connectorXmlDescriptor,ironJacamarXmlDescriptor,module.getClassLoader(),serviceTarget,annotationIndexes,RAR_MODULE.append(deploymentName),verificationHandler);
-    builder.addDependency(raServiceName).setInitialMode(ServiceController.Mode.ACTIVE).install();
-    String rarName=resourceAdapter.getArchive();
-    Integer identifier=null;
-    if (rarName.contains(ConnectorServices.RA_SERVICE_NAME_SEPARATOR)) {
-      rarName=rarName.substring(0,rarName.indexOf(ConnectorServices.RA_SERVICE_NAME_SEPARATOR));
+    final ServiceName deployerServiceName=ConnectorServices.RESOURCE_ADAPTER_DEPLOYER_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName());
+    final ServiceController<?> deployerService=context.getServiceRegistry(true).getService(deployerServiceName);
+    if (deployerService == null) {
+      ServiceBuilder builder=ParsedRaDeploymentProcessor.process(connectorXmlDescriptor,ironJacamarXmlDescriptor,module.getClassLoader(),serviceTarget,annotationIndexes,RAR_MODULE.append(name),verificationHandler);
+      builder.addDependency(raServiceName).setInitialMode(ServiceController.Mode.ACTIVE).install();
     }
-    if (deploymentName.equals(rarName)) {
-      RaServicesFactory.createDeploymentService(connectorXmlDescriptor,module,serviceTarget,deploymentName,RAR_MODULE.append(deploymentName),resourceAdapter,verificationHandler);
+    String rarName=resourceAdapter.getArchive();
+    if (fullModuleName.equals(rarName)) {
+      ServiceName serviceName=ConnectorServices.INACTIVE_RESOURCE_ADAPTER_SERVICE.append(name);
+      InactiveResourceAdapterDeploymentService service=new InactiveResourceAdapterDeploymentService(connectorXmlDescriptor,module,name,name,RAR_MODULE.append(name),null,serviceTarget,null);
+      ServiceBuilder builder=serviceTarget.addService(serviceName,service);
+      builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
     }
   }
  catch (  Exception e) {
