@@ -1,0 +1,39 @@
+{
+  resourceModel.get("value1").set("one");
+  resourceModel.get("value2").set("two");
+  final ResourceTransformationDescriptionBuilder builder=TransformationDescriptionBuilder.Factory.createInstance(PATH);
+  builder.getStringAttributeBuilder().convertValue(new AttributeConverter(){
+    @Override public void convertAttribute(    String name,    ModelNode attributeValue,    TransformationContext context){
+      if (name.equals("value2") && attributeValue.asString().equals("two")) {
+        attributeValue.set(1);
+      }
+    }
+  }
+,"value1","value2").end().build().register(transformersSubRegistration);
+  final Resource resource=transformResource();
+  Assert.assertNotNull(resource);
+  final Resource toto=resource.getChild(PATH);
+  Assert.assertNotNull(toto);
+  final ModelNode model=toto.getModel();
+  Assert.assertEquals(2,model.keys().size());
+  Assert.assertEquals("one",model.get("value1").asString());
+  Assert.assertEquals(ModelType.INT,model.get("value2").getType());
+  Assert.assertEquals(1,model.get("value2").asInt());
+  ModelNode add=Util.createAddOperation(PathAddress.pathAddress(PATH));
+  add.get("value1").set("one");
+  add.get("value2").set("two");
+  OperationTransformer.TransformedOperation transformedAdd=transformOperation(add);
+  Assert.assertFalse(transformedAdd.rejectOperation(success()));
+  Assert.assertEquals("one",transformedAdd.getTransformedOperation().get("value1").asString());
+  Assert.assertEquals(ModelType.INT,transformedAdd.getTransformedOperation().get("value2").getType());
+  Assert.assertEquals(1,transformedAdd.getTransformedOperation().get("value2").asInt());
+  ModelNode write=Util.getWriteAttributeOperation(PathAddress.pathAddress(PATH),"value1",new ModelNode("value"));
+  OperationTransformer.TransformedOperation transformedWrite=transformOperation(write);
+  Assert.assertFalse(transformedWrite.rejectOperation(success()));
+  Assert.assertEquals(write,transformedWrite.getTransformedOperation());
+  ModelNode write2=Util.getWriteAttributeOperation(PathAddress.pathAddress(PATH),"value2",new ModelNode("two"));
+  OperationTransformer.TransformedOperation transformedWrite2=transformOperation(write2);
+  Assert.assertFalse(transformedWrite2.rejectOperation(success()));
+  Assert.assertEquals(ModelType.INT,transformedWrite2.getTransformedOperation().get("value").getType());
+  Assert.assertEquals(1,transformedWrite2.getTransformedOperation().get("value").asInt());
+}
