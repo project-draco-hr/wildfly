@@ -4,14 +4,19 @@
   if (description == null) {
     return new TransformedOperation(operation,OperationResultTransformer.ORIGINAL_RESULT);
   }
+  ModelNode attributeValue=operation.get(ModelDescriptionConstants.VALUE);
   final ModelNode originalModel=operation.clone();
-  originalModel.protect();
-  final boolean reject=!description.checkAttributeValueIsValid(operation.get(ModelDescriptionConstants.VALUE),new TransformationRule.AbstractTransformationContext(context,originalModel){
+  TransformationRule.AbstractTransformationContext ctx=new TransformationRule.AbstractTransformationContext(context,originalModel){
     @Override protected TransformationContext getContext(){
       return super.getContext();
     }
   }
-);
+;
+  originalModel.protect();
+  if (description.shouldDiscard(attributeValue,ctx)) {
+    return OperationTransformer.DISCARD.transformOperation(context,address,operation);
+  }
+  final boolean reject=!description.checkAttributeValueIsValid(attributeValue,ctx);
   final OperationRejectionPolicy policy;
   if (reject) {
     policy=new OperationRejectionPolicy(){
@@ -26,6 +31,11 @@
   }
  else {
     policy=DEFAULT_REJECTION_POLICY;
+  }
+  description.convertValue(attributeValue,ctx);
+  String newName=description.getNewName();
+  if (newName != null) {
+    operation.get(NAME).set(newName);
   }
   return new TransformedOperation(operation,policy,OperationResultTransformer.ORIGINAL_RESULT);
 }
