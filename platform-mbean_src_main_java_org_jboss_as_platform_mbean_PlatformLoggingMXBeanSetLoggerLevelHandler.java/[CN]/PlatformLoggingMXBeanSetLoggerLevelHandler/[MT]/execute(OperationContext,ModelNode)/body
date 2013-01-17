@@ -2,8 +2,10 @@
   parametersValidator.validate(operation);
   final String loggerName=operation.require(PlatformMBeanConstants.LOGGER_NAME).asString();
   final String levelName=operation.hasDefined(PlatformMBeanConstants.LEVEL_NAME) ? operation.require(PlatformMBeanConstants.LEVEL_NAME).asString() : null;
+  final String priorLevel;
   try {
-    ManagementFactory.getPlatformMBeanServer().invoke(PlatformMBeanConstants.PLATFORM_LOGGING_OBJECT_NAME,"setLoggerLevel",new String[]{loggerName,levelName},SIGNATURE);
+    priorLevel=(String)ManagementFactory.getPlatformMBeanServer().invoke(PlatformMBeanConstants.PLATFORM_LOGGING_OBJECT_NAME,"getLoggerLevel",new String[]{loggerName},GET_LOGGER_LEVEL_SIGNATURE);
+    ManagementFactory.getPlatformMBeanServer().invoke(PlatformMBeanConstants.PLATFORM_LOGGING_OBJECT_NAME,"setLoggerLevel",new String[]{loggerName,levelName},SET_LOGGER_LEVEL_SIGNATURE);
     context.getResult();
   }
  catch (  JMRuntimeException e) {
@@ -12,5 +14,18 @@
 catch (  JMException e) {
     throw new RuntimeException(e);
   }
-  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+  context.completeStep(new OperationContext.RollbackHandler(){
+    @Override public void handleRollback(    OperationContext context,    ModelNode operation){
+      try {
+        ManagementFactory.getPlatformMBeanServer().invoke(PlatformMBeanConstants.PLATFORM_LOGGING_OBJECT_NAME,"setLoggerLevel",new String[]{loggerName,priorLevel},SET_LOGGER_LEVEL_SIGNATURE);
+      }
+ catch (      JMRuntimeException e) {
+        throw e;
+      }
+catch (      JMException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+);
 }
