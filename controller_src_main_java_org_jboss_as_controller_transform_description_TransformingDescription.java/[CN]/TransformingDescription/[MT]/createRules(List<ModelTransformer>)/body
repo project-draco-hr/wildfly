@@ -1,0 +1,37 @@
+{
+  List<TransformationRule> rules=new ArrayList<TransformationRule>(steps.size());
+  for (  final ModelTransformer step : steps) {
+    rules.add(new TransformationRule(){
+      @Override void transformOperation(      ModelNode operation,      PathAddress address,      OperationContext context) throws OperationFailedException {
+        final TransformationContext ctx=context.getContext();
+        final boolean reject=!step.transform(operation,address,ctx);
+        final OperationRejectionPolicy policy;
+        if (reject) {
+          policy=new OperationRejectionPolicy(){
+            @Override public boolean rejectOperation(            ModelNode preparedResult){
+              return true;
+            }
+            @Override public String getFailureDescription(){
+              return "";
+            }
+          }
+;
+          context.invokeNext(new OperationTransformer.TransformedOperation(operation,policy,OperationResultTransformer.ORIGINAL_RESULT));
+        }
+ else {
+          context.invokeNext(operation);
+        }
+      }
+      @Override void tranformResource(      Resource resource,      PathAddress address,      ResourceContext context) throws OperationFailedException {
+        final ModelNode model=resource.getModel();
+        final TransformationContext ctx=context.getContext();
+        boolean reject=step.transform(model,address,ctx);
+        if (reject) {
+        }
+        context.invokeNext(resource);
+      }
+    }
+);
+  }
+  return rules;
+}
