@@ -1,0 +1,30 @@
+{
+  final ModelNode list=new ModelNode().add("one").add("two").add("three");
+  resourceModel.get("reject").set(list.clone());
+  final RejectTwoChecker checker=new RejectTwoChecker();
+  final ResourceTransformationDescriptionBuilder builder=TransformationDescriptionBuilder.Factory.createInstance(PATH);
+  builder.getAttributeBuilder().addRejectCheck(new RejectAttributeChecker.ListRejectAttributeChecker(checker),"reject").end().build().register(transformersSubRegistration);
+  final Resource resource=transformResource();
+  Assert.assertNotNull(resource);
+  final Resource toto=resource.getChild(PATH);
+  Assert.assertNotNull(toto);
+  final ModelNode model=toto.getModel();
+  Assert.assertTrue(model.hasDefined("reject"));
+  Assert.assertEquals(2,checker.count);
+  Assert.assertTrue(checker.rejected);
+  checker.count=0;
+  checker.rejected=false;
+  ModelNode add=Util.createAddOperation(PathAddress.pathAddress(PATH));
+  add.get("reject").set(list.clone());
+  OperationTransformer.TransformedOperation transformedAdd=transformOperation(add);
+  Assert.assertTrue(transformedAdd.rejectOperation(success()));
+  Assert.assertEquals(2,checker.count);
+  Assert.assertTrue(checker.rejected);
+  checker.count=0;
+  checker.rejected=false;
+  ModelNode write=Util.getWriteAttributeOperation(PathAddress.pathAddress(PATH),"reject",list.clone());
+  OperationTransformer.TransformedOperation transformedWrite=transformOperation(write);
+  Assert.assertTrue(transformedWrite.rejectOperation(success()));
+  Assert.assertEquals(2,checker.count);
+  Assert.assertTrue(checker.rejected);
+}
