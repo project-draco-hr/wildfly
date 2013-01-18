@@ -1,0 +1,66 @@
+{
+  if (super.login() == true) {
+    Object username=sharedState.get("javax.security.auth.login.name");
+    if (username instanceof Principal)     identity=(Principal)username;
+ else {
+      String name=username.toString();
+      try {
+        identity=createIdentity(name);
+      }
+ catch (      Exception e) {
+        LoginException le=new LoginException();
+        le.initCause(e);
+        throw le;
+      }
+    }
+    return true;
+  }
+  super.loginOk=false;
+  if (callbackHandler == null) {
+    throw new LoginException();
+  }
+  SecurityAssociationCallback callback=new SecurityAssociationCallback();
+  Callback[] callbacks={callback};
+  final String username;
+  try {
+    callbackHandler.handle(callbacks);
+    username=callback.getPrincipal().getName();
+    final Object c=callback.getCredential();
+    if (c instanceof SASCurrent) {
+      credential=(SASCurrent)c;
+    }
+ else {
+      return false;
+    }
+  }
+ catch (  IOException e) {
+    LoginException le=new LoginException();
+    le.initCause(e);
+    throw le;
+  }
+catch (  UnsupportedCallbackException e) {
+    LoginException le=new LoginException();
+    le.initCause(e);
+    throw le;
+  }
+  validateCredential(username,credential);
+  if (username == null) {
+    return false;
+  }
+  if (identity == null) {
+    try {
+      identity=createIdentity(username);
+    }
+ catch (    Exception e) {
+      LoginException le=new LoginException();
+      le.initCause(e);
+      throw le;
+    }
+  }
+  if (getUseFirstPass() == true) {
+    sharedState.put("javax.security.auth.login.name",identity);
+    sharedState.put("javax.security.auth.login.password",credential);
+  }
+  super.loginOk=true;
+  return true;
+}
