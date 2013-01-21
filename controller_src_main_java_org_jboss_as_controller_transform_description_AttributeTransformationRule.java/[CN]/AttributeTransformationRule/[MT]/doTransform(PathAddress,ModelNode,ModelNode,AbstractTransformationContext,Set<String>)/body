@@ -5,20 +5,31 @@
     final String attributeName=entry.getKey();
     final ModelNode attributeValue=modelOrOp.get(attributeName);
     AttributeTransformationDescription description=entry.getValue();
+    boolean discarded=false;
     if (description.shouldDiscard(attributeValue,operation,context)) {
       modelOrOp.remove(attributeName);
+      discarded=true;
     }
     if (!description.checkAttributeValueIsValid(attributeValue,operation,context)) {
       reject.add(attributeName);
     }
+    boolean isNewAttribute;
+    if (operation != null) {
+      isNewAttribute=!operation.has(attributeName);
+    }
+ else {
+      isNewAttribute=!modelOrOp.has(attributeName);
+    }
     description.convertValue(address,attributeValue,operation,context);
+    if (!attributeValue.isDefined()) {
+      modelOrOp.remove(attributeName);
+    }
+ else     if (isNewAttribute && !discarded) {
+      adds.put(attributeName,attributeValue);
+    }
     String newName=description.getNewName();
     if (newName != null) {
       renames.put(attributeName,newName);
-    }
-    ModelNode added=description.addAttribute(address,operation,context);
-    if (added != null) {
-      adds.put(attributeName,added);
     }
   }
   if (renames.size() > 0) {
