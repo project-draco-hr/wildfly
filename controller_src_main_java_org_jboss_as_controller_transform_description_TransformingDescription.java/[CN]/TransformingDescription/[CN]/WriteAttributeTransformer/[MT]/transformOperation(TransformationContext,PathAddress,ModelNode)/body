@@ -16,15 +16,22 @@
   if (description.shouldDiscard(attributeValue,operation,ctx)) {
     return OperationTransformer.DISCARD.transformOperation(context,address,operation);
   }
-  final boolean reject=!description.checkAttributeValueIsValid(attributeValue,originalModel,ctx);
+  final RejectedAttributesLogContext rejectedAttributes=new RejectedAttributesLogContext(context,address,operation);
+  description.rejectAttributes(rejectedAttributes,attributeValue);
   final OperationRejectionPolicy policy;
-  if (reject) {
+  if (rejectedAttributes.hasRejections()) {
+    rejectedAttributes.errorOrWarn();
     policy=new OperationRejectionPolicy(){
       @Override public boolean rejectOperation(      ModelNode preparedResult){
         return true;
       }
       @Override public String getFailureDescription(){
-        return "";
+        try {
+          return rejectedAttributes.errorOrWarn();
+        }
+ catch (        OperationFailedException e) {
+          return null;
+        }
       }
     }
 ;

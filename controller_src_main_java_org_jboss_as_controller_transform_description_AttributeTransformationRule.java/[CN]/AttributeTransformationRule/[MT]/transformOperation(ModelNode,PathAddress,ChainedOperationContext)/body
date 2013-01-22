@@ -1,7 +1,27 @@
 {
   final ModelNode transformed=operation.clone();
-  final Set<String> reject=new HashSet<String>();
-  doTransform(address,transformed,transformed.clone(),context,reject);
-  final OperationRejectionPolicy policy=createPolicy(!reject.isEmpty(),reject);
+  final RejectedAttributesLogContext rejectedAttributes=new RejectedAttributesLogContext(context.getContext(),address,operation);
+  doTransform(address,transformed,transformed.clone(),context,rejectedAttributes);
+  final OperationRejectionPolicy policy;
+  if (!rejectedAttributes.hasRejections()) {
+    policy=OperationTransformer.DEFAULT_REJECTION_POLICY;
+  }
+ else {
+    rejectedAttributes.errorOrWarn();
+    policy=new OperationRejectionPolicy(){
+      @Override public boolean rejectOperation(      ModelNode preparedResult){
+        return true;
+      }
+      @Override public String getFailureDescription(){
+        try {
+          return rejectedAttributes.errorOrWarn();
+        }
+ catch (        OperationFailedException e) {
+          return null;
+        }
+      }
+    }
+;
+  }
   context.invokeNext(new OperationTransformer.TransformedOperation(transformed,policy,OperationResultTransformer.ORIGINAL_RESULT));
 }
