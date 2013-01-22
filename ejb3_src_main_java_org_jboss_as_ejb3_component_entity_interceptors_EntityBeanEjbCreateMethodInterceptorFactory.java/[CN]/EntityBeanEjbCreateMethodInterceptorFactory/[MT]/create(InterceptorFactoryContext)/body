@@ -22,19 +22,22 @@
       primaryKeyReference.set(primaryKey);
       boolean synchronizationRegistered=false;
       boolean exception=false;
+      final boolean instanceCachedBefore=entityBeanComponent.getCache().contains(primaryKey);
       entityBeanComponent.getCache().create(instance);
       try {
         invokeEjbPostCreate(context,ejbPostCreate,instance,params);
         final TransactionSynchronizationRegistry transactionSynchronizationRegistry=entityBeanComponent.getTransactionSynchronizationRegistry();
         if (transactionSynchronizationRegistry.getTransactionKey() != null) {
-          transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
-            @Override public void beforeCompletion(){
+          if (!instanceCachedBefore) {
+            transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
+              @Override public void beforeCompletion(){
+              }
+              @Override public void afterCompletion(              final int status){
+                entityBeanComponent.getCache().release(instance,status == Status.STATUS_COMMITTED);
+              }
             }
-            @Override public void afterCompletion(            final int status){
-              entityBeanComponent.getCache().release(instance,status == Status.STATUS_COMMITTED);
-            }
-          }
 );
+          }
           synchronizationRegistered=true;
         }
         return context.proceed();
