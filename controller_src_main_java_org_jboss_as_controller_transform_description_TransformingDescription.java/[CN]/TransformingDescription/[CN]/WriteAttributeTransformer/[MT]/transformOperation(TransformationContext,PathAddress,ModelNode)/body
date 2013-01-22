@@ -5,44 +5,48 @@
     return new TransformedOperation(operation,OperationResultTransformer.ORIGINAL_RESULT);
   }
   ModelNode attributeValue=operation.get(ModelDescriptionConstants.VALUE);
-  final ModelNode originalModel=operation.clone();
   TransformationRule.AbstractChainedContext ctx=new TransformationRule.AbstractChainedContext(context){
     @Override protected TransformationContext getContext(){
       return super.getContext();
     }
   }
 ;
-  originalModel.protect();
   if (description.shouldDiscard(address,attributeValue,operation,ctx)) {
     return OperationTransformer.DISCARD.transformOperation(context,address,operation);
   }
-  final RejectedAttributesLogContext rejectedAttributes=new RejectedAttributesLogContext(context,address,operation);
-  description.rejectAttributes(rejectedAttributes,attributeValue);
-  final OperationRejectionPolicy policy;
-  if (rejectedAttributes.hasRejections()) {
-    rejectedAttributes.errorOrWarn();
-    policy=new OperationRejectionPolicy(){
-      @Override public boolean rejectOperation(      ModelNode preparedResult){
-        return true;
-      }
-      @Override public String getFailureDescription(){
-        try {
-          return rejectedAttributes.errorOrWarn();
+  ctx.setImmutableResource(true);
+  try {
+    final RejectedAttributesLogContext rejectedAttributes=new RejectedAttributesLogContext(ctx,address,TransformationRule.cloneAndProtect(operation));
+    description.rejectAttributes(rejectedAttributes,attributeValue);
+    final OperationRejectionPolicy policy;
+    if (rejectedAttributes.hasRejections()) {
+      rejectedAttributes.errorOrWarn();
+      policy=new OperationRejectionPolicy(){
+        @Override public boolean rejectOperation(        ModelNode preparedResult){
+          return true;
         }
- catch (        OperationFailedException e) {
-          return null;
+        @Override public String getFailureDescription(){
+          try {
+            return rejectedAttributes.errorOrWarn();
+          }
+ catch (          OperationFailedException e) {
+            return null;
+          }
         }
       }
-    }
 ;
-  }
+    }
  else {
-    policy=DEFAULT_REJECTION_POLICY;
+      policy=DEFAULT_REJECTION_POLICY;
+    }
+    description.convertValue(address,attributeValue,TransformationRule.cloneAndProtect(operation),ctx);
+    String newName=description.getNewName();
+    if (newName != null) {
+      operation.get(NAME).set(newName);
+    }
+    return new TransformedOperation(operation,policy,OperationResultTransformer.ORIGINAL_RESULT);
   }
-  description.convertValue(address,attributeValue,originalModel,ctx);
-  String newName=description.getNewName();
-  if (newName != null) {
-    operation.get(NAME).set(newName);
+  finally {
+    ctx.setImmutableResource(false);
   }
-  return new TransformedOperation(operation,policy,OperationResultTransformer.ORIGINAL_RESULT);
 }

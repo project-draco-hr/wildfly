@@ -1,34 +1,48 @@
 {
   Map<String,String> renames=new HashMap<String,String>();
   Map<String,ModelNode> adds=new HashMap<String,ModelNode>();
-  for (  final Map.Entry<String,AttributeTransformationDescription> entry : descriptions.entrySet()) {
-    final String attributeName=entry.getKey();
-    final ModelNode attributeValue=modelOrOp.get(attributeName);
-    AttributeTransformationDescription description=entry.getValue();
-    boolean discarded=false;
-    if (description.shouldDiscard(address,attributeValue,operation,context)) {
-      modelOrOp.remove(attributeName);
-      discarded=true;
+  Set<String> newAttributes=new HashSet<String>();
+  Set<String> discardedAttributes=new HashSet<String>();
+  context.setImmutableResource(true);
+  try {
+    for (    final Map.Entry<String,AttributeTransformationDescription> entry : descriptions.entrySet()) {
+      final String attributeName=entry.getKey();
+      final boolean isNewAttribute=!modelOrOp.has(attributeName);
+      final ModelNode attributeValue=modelOrOp.get(attributeName);
+      if (isNewAttribute) {
+        newAttributes.add(attributeName);
+      }
+      AttributeTransformationDescription description=entry.getValue();
+      if (description.shouldDiscard(address,TransformationRule.cloneAndProtect(attributeValue),operation,context)) {
+        modelOrOp.remove(attributeName);
+        discardedAttributes.add(attributeName);
+      }
+      String newName=description.getNewName();
+      if (newName != null) {
+        renames.put(attributeName,newName);
+      }
     }
-    description.rejectAttributes(rejectedAttributes,attributeValue);
-    boolean isNewAttribute;
-    if (operation != null) {
-      isNewAttribute=!operation.has(attributeName);
+    for (    final Map.Entry<String,AttributeTransformationDescription> entry : descriptions.entrySet()) {
+      final String attributeName=entry.getKey();
+      final ModelNode attributeValue=modelOrOp.get(attributeName);
+      AttributeTransformationDescription description=entry.getValue();
+      description.rejectAttributes(rejectedAttributes,TransformationRule.cloneAndProtect(attributeValue));
     }
- else {
-      isNewAttribute=!modelOrOp.has(attributeName);
+    for (    final Map.Entry<String,AttributeTransformationDescription> entry : descriptions.entrySet()) {
+      final String attributeName=entry.getKey();
+      final ModelNode attributeValue=modelOrOp.get(attributeName);
+      AttributeTransformationDescription description=entry.getValue();
+      description.convertValue(address,attributeValue,operation,context);
+      if (!attributeValue.isDefined()) {
+        modelOrOp.remove(attributeName);
+      }
+ else       if (newAttributes.contains(attributeName) && !discardedAttributes.contains(attributeName)) {
+        adds.put(attributeName,attributeValue);
+      }
     }
-    description.convertValue(address,attributeValue,operation,context);
-    if (!attributeValue.isDefined()) {
-      modelOrOp.remove(attributeName);
-    }
- else     if (isNewAttribute && !discarded) {
-      adds.put(attributeName,attributeValue);
-    }
-    String newName=description.getNewName();
-    if (newName != null) {
-      renames.put(attributeName,newName);
-    }
+  }
+  finally {
+    context.setImmutableResource(false);
   }
   if (renames.size() > 0) {
     for (    Map.Entry<String,String> entry : renames.entrySet()) {
