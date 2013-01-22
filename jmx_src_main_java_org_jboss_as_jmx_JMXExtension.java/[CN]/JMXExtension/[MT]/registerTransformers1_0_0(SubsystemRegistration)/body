@@ -2,11 +2,20 @@
   final TransformersSubRegistration transformers=registration.registerModelTransformers(ModelVersion.create(1,0,0),new ResourceTransformer(){
     @Override public void transformResource(    ResourceTransformationContext context,    PathAddress address,    Resource resource) throws OperationFailedException {
       ModelNode model=resource.getModel();
-      boolean showModel=model.get(CommonAttributes.EXPOSE_MODEL,CommonAttributes.RESOLVED).isDefined();
-      ModelNode result=model.clone();
-      result.get(CommonAttributes.SHOW_MODEL).set(showModel);
-      result.remove(CommonAttributes.EXPOSE_MODEL);
-      context.processChildren(resource);
+      Resource exposeResolvedResource=resource.getChild(PathElement.pathElement(CommonAttributes.EXPOSE_MODEL,CommonAttributes.RESOLVED));
+      boolean showModel=false;
+      if (exposeResolvedResource != null) {
+        showModel=model.isDefined();
+      }
+      model.get(CommonAttributes.SHOW_MODEL).set(showModel);
+      ResourceTransformationContext childContext=context.addTransformedResource(PathAddress.EMPTY_ADDRESS,resource);
+      for (      String type : resource.getChildTypes()) {
+        if (!type.equals(CommonAttributes.EXPOSE_MODEL)) {
+          for (          ResourceEntry child : resource.getChildren(type)) {
+            childContext.processChild(child.getPathElement(),child);
+          }
+        }
+      }
     }
   }
 );
