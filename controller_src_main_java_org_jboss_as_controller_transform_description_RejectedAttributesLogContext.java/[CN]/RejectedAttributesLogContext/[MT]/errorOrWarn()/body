@@ -7,33 +7,29 @@
   final ModelVersion coreVersion=tgt.getVersion();
   final String subsystemName=findSubsystemName(address);
   final ModelVersion usedVersion=subsystemName == null ? coreVersion : tgt.getSubsystemVersion(subsystemName);
-  List<String> messages=new ArrayList<String>();
-  for (  Map.Entry<RejectAttributeLogAdapter,Set<String>> entry : failedAttributes.entrySet()) {
-    messages.add(entry.getKey().getDetailMessage(entry.getValue()));
-  }
-  if (op == null) {
-    if (coreVersion.getMajor() >= 1 && coreVersion.getMinor() >= 4) {
-      if (subsystemName != null) {
-        throw ControllerMessages.MESSAGES.rejectAttributesSubsystemModelResourceTransformer(address,legacyHostName,subsystemName,usedVersion,messages);
+  final TransformersLogger logger=context.getContext().getLogger();
+  final boolean error=op == null && context.getContext().doesTargetSupportIgnoredResources(context.getContext().getTarget());
+  List<String> messages=error ? new ArrayList<String>() : null;
+  for (  Map.Entry<String,Map<String,ModelNode>> entry : failedAttributes.entrySet()) {
+    RejectAttributeChecker checker=failedCheckers.get(entry.getKey());
+    String message=checker.getRejectionLogMessage(entry.getValue());
+    if (error) {
+      messages.add(message);
+    }
+ else {
+      if (op == null) {
+        logger.logWarning(address,null,message,entry.getValue().keySet());
       }
-      throw ControllerMessages.MESSAGES.rejectAttributesCoreModelResourceTransformer(address,legacyHostName,usedVersion,messages);
+ else {
+        return logger.getWarning(address,op,message,entry.getValue().keySet());
+      }
     }
   }
-  if (op == null) {
+  if (error) {
     if (subsystemName != null) {
-      ControllerLogger.TRANSFORMER_LOGGER.rejectAttributesSubsystemModelResourceTransformer(address,legacyHostName,subsystemName,usedVersion,messages);
+      throw ControllerMessages.MESSAGES.rejectAttributesSubsystemModelResourceTransformer(address,legacyHostName,subsystemName,usedVersion,messages);
     }
- else {
-      ControllerLogger.TRANSFORMER_LOGGER.rejectAttributesCoreModelResourceTransformer(address,legacyHostName,usedVersion,messages);
-    }
-    return null;
+    throw ControllerMessages.MESSAGES.rejectAttributesCoreModelResourceTransformer(address,legacyHostName,usedVersion,messages);
   }
- else {
-    if (subsystemName != null) {
-      return ControllerMessages.MESSAGES.rejectAttributesSubsystemModelOperationTransformer(op,address,legacyHostName,subsystemName,usedVersion,messages);
-    }
- else {
-      return ControllerMessages.MESSAGES.rejectAttributesCoreModelOperationTransformer(op,address,legacyHostName,usedVersion,messages);
-    }
-  }
+  return null;
 }
