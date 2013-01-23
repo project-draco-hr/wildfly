@@ -6,8 +6,15 @@
       expressionKeys.add(def.getName());
     }
   }
-  final RejectExpressionValuesTransformer rejectTransformer=new RejectExpressionValuesTransformer(expressionKeys);
-  final TransformersSubRegistration registration=subsystem.registerModelTransformers(version110,new ChainedResourceTransformer(rejectTransformer.getChainedTransformer(),SecurityInterceptorTransformer.INSTANCE));
-  registration.registerOperationTransformer(ADD,new ChainedOperationTransformer(rejectTransformer,SecurityInterceptorTransformer.INSTANCE));
-  registration.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,new ChainedOperationTransformer(rejectTransformer.getWriteAttributeTransformer(),SecurityInterceptorTransformer.INSTANCE));
+  ResourceTransformationDescriptionBuilder builder=TransformationDescriptionBuilder.Factory.createSubsystemInstance();
+  builder.getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,expressionKeys.toArray(new String[expressionKeys.size()])).setValueConverter(new AttributeConverter.DefaultAttributeConverter(){
+    @Override protected void convertAttribute(    PathAddress address,    String attributeName,    ModelNode attributeValue,    TransformationContext context){
+      final String security=attributeValue.asString();
+      if (security.equals(CLIENT) || security.equals(IDENTITY)) {
+        attributeValue.set("on");
+      }
+    }
+  }
+,SECURITY).end();
+  TransformationDescription.Tools.register(builder.build(),subsystem,version110);
 }
