@@ -1,0 +1,76 @@
+{
+  final String key=address.getLastElement().getKey();
+  final String name=address.getLastElement().getValue();
+  final String operationName=operation.get(ModelDescriptionConstants.OP).asString();
+  final ModelNode originalOperation=operation.clone();
+  if (operationName.equals(CommonAttributes.ADD_HANDLER_OPERATION_NAME)) {
+    if (key.equals(RootLoggerResourceDefinition.ROOT_LOGGER_PATH_NAME)) {
+      operation.get(ModelDescriptionConstants.OP).set(RootLoggerResourceDefinition.ROOT_LOGGER_ADD_HANDLER_OPERATION_NAME);
+    }
+ else     if (key.equals(LoggerResourceDefinition.LOGGER)) {
+      operation.get(ModelDescriptionConstants.OP).set(LoggerResourceDefinition.LEGACY_ADD_HANDLER_OPERATION_NAME);
+    }
+ else     if (key.equals(AsyncHandlerResourceDefinition.ASYNC_HANDLER)) {
+      operation.get(ModelDescriptionConstants.OP).set(AsyncHandlerResourceDefinition.ADD_SUBHANDLER_OPERATION_NAME);
+    }
+  }
+ else   if (operationName.equals(CommonAttributes.REMOVE_HANDLER_OPERATION_NAME)) {
+    if (key.equals(RootLoggerResourceDefinition.ROOT_LOGGER_PATH_NAME)) {
+      operation.get(ModelDescriptionConstants.OP).set(RootLoggerResourceDefinition.ROOT_LOGGER_REMOVE_HANDLER_OPERATION_NAME);
+    }
+ else     if (key.equals(LoggerResourceDefinition.LOGGER)) {
+      operation.get(ModelDescriptionConstants.OP).set(LoggerResourceDefinition.LEGACY_REMOVE_HANDLER_OPERATION_NAME);
+    }
+ else     if (key.equals(AsyncHandlerResourceDefinition.ASYNC_HANDLER)) {
+      operation.get(ModelDescriptionConstants.OP).set(AsyncHandlerResourceDefinition.REMOVE_SUBHANDLER_OPERATION_NAME);
+    }
+  }
+ else   if (operationName.equals(ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION)) {
+    final String attributeName=operation.get(ModelDescriptionConstants.NAME).asString();
+    if (operation.get(ModelDescriptionConstants.VALUE).getType() != ModelType.EXPRESSION) {
+      if (attributeName.equals(CommonAttributes.FORMATTER.getName())) {
+        final String currentPattern=operation.get(ModelDescriptionConstants.VALUE).asString();
+        operation.get(ModelDescriptionConstants.VALUE).set(Logging.fixFormatPattern(currentPattern));
+      }
+ else       if (attributeName.equals(CommonAttributes.FILTER_SPEC.getName())) {
+        operation.get(ModelDescriptionConstants.NAME).set(CommonAttributes.FILTER.getName());
+        final String filterExpression=operation.get(ModelDescriptionConstants.VALUE).asString();
+        operation.get(ModelDescriptionConstants.VALUE).set(Filters.filterSpecToFilter(filterExpression));
+      }
+ else       if (attributeName.equals(CommonAttributes.ENABLED.getName())) {
+        final boolean enabled=operation.get(ModelDescriptionConstants.VALUE).asBoolean();
+        if (enabled) {
+          operation.get(ModelDescriptionConstants.OP).set(AbstractHandlerDefinition.ENABLE_HANDLER.getName());
+        }
+ else {
+          operation.get(ModelDescriptionConstants.OP).set(AbstractHandlerDefinition.DISABLE_HANDLER.getName());
+        }
+        operation.remove(ModelDescriptionConstants.NAME);
+        operation.remove(ModelDescriptionConstants.VALUE);
+      }
+    }
+  }
+ else   if (operationName.equals(ModelDescriptionConstants.ADD)) {
+    if (LoggerResourceDefinition.LOGGER.equals(key)) {
+      operation.get(LoggerResourceDefinition.CATEGORY.getName()).set(name);
+    }
+ else     if (!RootLoggerResourceDefinition.ROOT_LOGGER_PATH_NAME.equals(key)) {
+      operation.get(CommonAttributes.NAME.getName()).set(name);
+    }
+  }
+ else   if (operationName.equals(RootLoggerResourceDefinition.ROOT_LOGGER_ADD_OPERATION_NAME)) {
+    operation.remove(CommonAttributes.NAME.getName());
+  }
+  if (operation.hasDefined(CommonAttributes.FORMATTER.getName()) && operation.get(CommonAttributes.FORMATTER.getName()).getType() != ModelType.EXPRESSION) {
+    final String currentPattern=operation.get(CommonAttributes.FORMATTER.getName()).asString();
+    operation.get(CommonAttributes.FORMATTER.getName()).set(Logging.fixFormatPattern(currentPattern));
+  }
+  if (operation.hasDefined(CommonAttributes.FILTER_SPEC.getName()) && operation.get(CommonAttributes.FILTER_SPEC.getName()).getType() != ModelType.EXPRESSION) {
+    final String filterExpression=operation.get(CommonAttributes.FILTER_SPEC.getName()).asString();
+    operation.get(CommonAttributes.FILTER.getName()).set(Filters.filterSpecToFilter(filterExpression));
+  }
+  operation.remove(CommonAttributes.FILTER_SPEC.getName());
+  operation.remove(CommonAttributes.ENABLED.getName());
+  LoggingLogger.ROOT_LOGGER.tracef("Changed operation from: %s%nto: %s",originalOperation,operation);
+  return operation;
+}

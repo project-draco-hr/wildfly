@@ -1,0 +1,42 @@
+{
+  final PathAddress consoleAddress=createConsoleHandlerAddress("CONSOLE");
+  final ModelNode consoleHandler=legacyModel.get(consoleAddress.getElement(0).getKey(),consoleAddress.getElement(0).getValue(),consoleAddress.getElement(1).getKey(),consoleAddress.getElement(1).getValue());
+  String formatPattern=consoleHandler.get(CommonAttributes.FORMATTER.getName()).asString();
+  Assert.assertFalse("Pattern (" + formatPattern + ") contains a color attribute not supported in legacy models.",COLOR_PATTERN.matcher(formatPattern).find());
+  ModelNode op=SubsystemOperations.createWriteAttributeOperation(consoleAddress.toModelNode(),CommonAttributes.FORMATTER,"%K{level}" + formatPattern);
+  executeTransformOperation(mainServices,modelVersion,op);
+  validateLegacyFormatter(mainServices,modelVersion,consoleAddress.toModelNode());
+  op=SubsystemOperations.createOperation(AbstractHandlerDefinition.UPDATE_OPERATION_NAME,consoleAddress.toModelNode());
+  op.get(CommonAttributes.FORMATTER.getName()).set("%K{level}" + formatPattern);
+  executeTransformOperation(mainServices,modelVersion,op);
+  validateLegacyFormatter(mainServices,modelVersion,consoleAddress.toModelNode());
+  final String filterExpression="not(match(\"ARJUNA\\\\d\"))";
+  op=SubsystemOperations.createWriteAttributeOperation(consoleAddress.toModelNode(),CommonAttributes.FILTER_SPEC,filterExpression);
+  executeTransformOperation(mainServices,modelVersion,op);
+  validateLegacyFilter(mainServices,modelVersion,consoleAddress.toModelNode(),filterExpression);
+  op=SubsystemOperations.createOperation(AbstractHandlerDefinition.UPDATE_OPERATION_NAME,consoleAddress.toModelNode());
+  op.get(CommonAttributes.FILTER_SPEC.getName()).set(filterExpression);
+  executeTransformOperation(mainServices,modelVersion,op);
+  validateLegacyFilter(mainServices,modelVersion,consoleAddress.toModelNode(),filterExpression);
+  final PathAddress loggerAddress=createLoggerAddress("org.jboss.as.logging");
+  op=SubsystemOperations.createReadResourceOperation(loggerAddress.toModelNode());
+  if (!SubsystemOperations.isSuccessfulOutcome(mainServices.executeOperation(op))) {
+    op=SubsystemOperations.createAddOperation(loggerAddress.toModelNode());
+    executeTransformOperation(mainServices,modelVersion,op);
+  }
+  op=SubsystemOperations.createWriteAttributeOperation(loggerAddress.toModelNode(),CommonAttributes.FILTER_SPEC,filterExpression);
+  executeTransformOperation(mainServices,modelVersion,op);
+  validateLegacyFilter(mainServices,modelVersion,loggerAddress.toModelNode(),filterExpression);
+  final PathAddress handlerAddress=createFileHandlerAddress("fh");
+  op=SubsystemOperations.createAddOperation(handlerAddress.toModelNode());
+  op.get(CommonAttributes.FILE.getName(),PathResourceDefinition.RELATIVE_TO.getName()).set("jboss.server.log.dir");
+  op.get(CommonAttributes.FILE.getName(),PathResourceDefinition.PATH.getName()).set("fh.log");
+  op.get(CommonAttributes.AUTOFLUSH.getName()).set(true);
+  executeTransformOperation(mainServices,modelVersion,op);
+  final PathAddress rootLoggerAddress=createRootLoggerAddress();
+  final String handlerName=handlerAddress.getLastElement().getValue();
+  addRemoveHandler(mainServices,modelVersion,rootLoggerAddress.toModelNode(),CommonAttributes.HANDLERS,handlerName);
+  addRemoveHandler(mainServices,modelVersion,loggerAddress.toModelNode(),CommonAttributes.HANDLERS,handlerName);
+  final PathAddress asyncHandlerAddress=createAsyncHandlerAddress("async");
+  addRemoveHandler(mainServices,modelVersion,asyncHandlerAddress.toModelNode(),AsyncHandlerResourceDefinition.SUBHANDLERS,handlerName);
+}
