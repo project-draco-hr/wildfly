@@ -2,21 +2,18 @@
   final String attributeName=operation.require(ModelDescriptionConstants.NAME).asString();
   final AttributeTransformationDescription description=attributeTransformations.get(attributeName);
   if (description == null) {
-    return new TransformedOperation(operation,OperationResultTransformer.ORIGINAL_RESULT);
+    context.invokeNext(operation);
+    return;
   }
-  ModelNode attributeValue=operation.get(ModelDescriptionConstants.VALUE);
-  TransformationRule.AbstractChainedContext ctx=new TransformationRule.AbstractChainedContext(context){
-    @Override protected TransformationContext getContext(){
-      return super.getContext();
-    }
+  final TransformationContext ctx=context.getContext();
+  final ModelNode attributeValue=operation.get(ModelDescriptionConstants.VALUE);
+  if (description.shouldDiscard(address,attributeValue,operation,context)) {
+    context.recordTransformedOperation(OperationTransformer.DISCARD.transformOperation(ctx,address,operation));
+    return;
   }
-;
-  if (description.shouldDiscard(address,attributeValue,operation,ctx)) {
-    return OperationTransformer.DISCARD.transformOperation(context,address,operation);
-  }
-  ctx.setImmutableResource(true);
+  context.setImmutableResource(true);
   try {
-    final RejectedAttributesLogContext rejectedAttributes=new RejectedAttributesLogContext(ctx,address,TransformationRule.cloneAndProtect(operation));
+    final RejectedAttributesLogContext rejectedAttributes=new RejectedAttributesLogContext(context,address,TransformationRule.cloneAndProtect(operation));
     description.rejectAttributes(rejectedAttributes,attributeValue);
     final OperationRejectionPolicy policy;
     if (rejectedAttributes.hasRejections()) {
@@ -37,16 +34,16 @@
 ;
     }
  else {
-      policy=DEFAULT_REJECTION_POLICY;
+      policy=OperationTransformer.DEFAULT_REJECTION_POLICY;
     }
-    description.convertValue(address,attributeValue,TransformationRule.cloneAndProtect(operation),ctx);
+    description.convertValue(address,attributeValue,TransformationRule.cloneAndProtect(operation),context);
     String newName=description.getNewName();
     if (newName != null) {
       operation.get(NAME).set(newName);
     }
-    return new TransformedOperation(operation,policy,OperationResultTransformer.ORIGINAL_RESULT);
+    context.invokeNext(new OperationTransformer.TransformedOperation(operation,policy,OperationResultTransformer.ORIGINAL_RESULT));
   }
   finally {
-    ctx.setImmutableResource(false);
+    context.setImmutableResource(false);
   }
 }

@@ -1,34 +1,16 @@
 {
   final AttributeTransformationDescriptionBuilderRegistry registry=resultingRegistry(resourceRegistry);
-  final AttributeTransformationRule first=new AttributeTransformationRule(registry.buildAttributes());
-  return new OperationTransformer(){
-    @Override public TransformedOperation transformOperation(    final TransformationContext ctx,    final PathAddress address,    final ModelNode operation) throws OperationFailedException {
-      final DiscardPolicy.DiscardType type=discardPolicy.discard(operation,address,ctx);
-      if (type == DiscardPolicy.DiscardType.SILENT) {
-        return OperationTransformer.DISCARD.transformOperation(ctx,address,operation);
-      }
-      final Iterator<TransformationRule> iterator=Collections.<TransformationRule>emptyList().iterator();
-      final TransformationRule.ChainedOperationContext context=new TransformationRule.ChainedOperationContext(ctx){
-        @Override void invokeNext(        OperationTransformer.TransformedOperation transformedOperation) throws OperationFailedException {
-          recordTransformedOperation(transformedOperation);
-          if (iterator.hasNext()) {
-            final TransformationRule next=iterator.next();
-            next.transformOperation(transformedOperation.getTransformedOperation(),address,this);
-          }
- else {
-            if (newName != null) {
-              transformedOperation.getTransformedOperation().get(OP).set(newName);
-            }
-            final TransformationContext ctx=getContext();
-            recordTransformedOperation(transformer.transformOperation(ctx,address,transformedOperation.getTransformedOperation()));
-          }
-        }
-      }
-;
-      operation.get(ModelDescriptionConstants.OP_ADDR).set(address.toModelNode());
-      first.transformOperation(operation,address,context);
-      return context.createOp();
-    }
+  final Map<String,AttributeTransformationDescription> descriptions=registry.buildAttributes();
+  if (WRITE_ATTRIBUTE_OPERATION.equals(operationName)) {
+    final TransformationRule first=new OperationTransformationRules.WriteAttributeRule(descriptions);
+    return createTransformer(first);
   }
-;
+ else   if (UNDEFINE_ATTRIBUTE_OPERATION.equals(operationName)) {
+    final TransformationRule first=new OperationTransformationRules.UndefineAttributeRule(descriptions);
+    return createTransformer(first);
+  }
+ else {
+    final AttributeTransformationRule first=new AttributeTransformationRule(descriptions);
+    return createTransformer(first);
+  }
 }
