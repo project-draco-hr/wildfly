@@ -2,7 +2,28 @@
   TransformersSubRegistration domain=registry.getDomainRegistration(modelVersion);
   if (modelVersion == VERSION_1_2 || modelVersion == VERSION_1_3) {
     domain.registerSubResource(JSF_EXTENSION,IGNORED_EXTENSIONS);
-    registry.registerSubsystemTransformers(JSF_SUBSYSTEM,IGNORED_SUBSYSTEMS,ResourceTransformer.DISCARD);
+    registry.registerSubsystemTransformers(JSF_SUBSYSTEM,IGNORED_SUBSYSTEMS,new ResourceTransformer(){
+      @Override public void transformResource(      ResourceTransformationContext context,      PathAddress address,      Resource resource) throws OperationFailedException {
+        final String slotAttributeName="default-jsf-impl-slot";
+        final String slotDefaultValue="main";
+        ModelNode model=resource.getModel();
+        if (model.hasDefined(slotAttributeName)) {
+          ModelNode slot=model.get(slotAttributeName);
+          if (!slotDefaultValue.equals(slot.asString())) {
+            context.getLogger().logWarning(address,slotAttributeName,MESSAGES.invalidJSFSlotValue(slot.asString()));
+          }
+        }
+        Set<String> attributes=new HashSet<String>();
+        for (        Property prop : resource.getModel().asPropertyList()) {
+          attributes.add(prop.getName());
+        }
+        attributes.remove(slotAttributeName);
+        if (!attributes.isEmpty()) {
+          context.getLogger().logWarning(address,ControllerMessages.MESSAGES.attributesAreNotUnderstoodAndWillBeIgnored(),attributes);
+        }
+      }
+    }
+);
     PathsTransformers.registerTransformers120(domain);
     DeploymentTransformers.registerTransformers120(domain);
     SystemPropertyTransformers.registerTransformers120(domain);
