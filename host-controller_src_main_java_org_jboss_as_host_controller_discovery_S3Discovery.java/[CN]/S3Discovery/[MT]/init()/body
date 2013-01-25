@@ -1,0 +1,35 @@
+{
+  validatePreSignedUrls();
+  try {
+    conn=new AWSAuthConnection(access_key,secret_access_key);
+    if (prefix != null && prefix.length() > 0) {
+      ListAllMyBucketsResponse bucket_list=conn.listAllMyBuckets(null);
+      List buckets=bucket_list.entries;
+      if (buckets != null) {
+        boolean found=false;
+        for (        Object tmp : buckets) {
+          if (tmp instanceof Bucket) {
+            Bucket bucket=(Bucket)tmp;
+            if (bucket.name.startsWith(prefix)) {
+              location=bucket.name;
+              found=true;
+            }
+          }
+        }
+        if (!found) {
+          location=prefix + "-" + java.util.UUID.randomUUID().toString();
+        }
+      }
+    }
+    if (usingPreSignedUrls()) {
+      PreSignedUrlParser parsedPut=new PreSignedUrlParser(pre_signed_put_url);
+      location=parsedPut.getBucket();
+    }
+    if (!conn.checkBucketExists(location)) {
+      conn.createBucket(location,AWSAuthConnection.LOCATION_DEFAULT,null).connection.getResponseMessage();
+    }
+  }
+ catch (  Exception e) {
+    throw MESSAGES.cannotAccessS3Bucket(location,e.getLocalizedMessage());
+  }
+}
