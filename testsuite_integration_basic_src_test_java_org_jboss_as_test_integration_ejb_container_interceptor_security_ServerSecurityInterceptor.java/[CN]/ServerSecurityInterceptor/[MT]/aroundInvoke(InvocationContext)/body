@@ -1,0 +1,47 @@
+{
+  Principal desiredUser=null;
+  RealmUser connectionUser=null;
+  Map<String,Object> contextData=invocationContext.getContextData();
+  if (contextData.containsKey(DELEGATED_USER_KEY)) {
+    desiredUser=new SimplePrincipal((String)contextData.get(DELEGATED_USER_KEY));
+    Connection con=RemotingContext.getConnection();
+    if (con != null) {
+      UserInfo userInfo=con.getUserInfo();
+      if (userInfo instanceof SubjectUserInfo) {
+        SubjectUserInfo sinfo=(SubjectUserInfo)userInfo;
+        for (        Principal current : sinfo.getPrincipals()) {
+          if (current instanceof RealmUser) {
+            connectionUser=(RealmUser)current;
+            break;
+          }
+        }
+      }
+    }
+ else {
+      throw new IllegalStateException("Delegation user requested but no user on connection found.");
+    }
+  }
+  SecurityContext cachedSecurityContext=null;
+  boolean contextSet=false;
+  try {
+    if (desiredUser != null && connectionUser != null && (desiredUser.getName().equals(connectionUser.getName()) == false)) {
+      try {
+        cachedSecurityContext=SecurityContextAssociation.getSecurityContext();
+        final SecurityContext nextContext=SecurityContextFactory.createSecurityContext(desiredUser,new CurrentUserCredential(connectionUser.getName()),new Subject(),"fooSecurityDomain");
+        SecurityContextAssociation.setSecurityContext(nextContext);
+        contextSet=true;
+        RemotingContext.clear();
+      }
+ catch (      Exception e) {
+        LOGGER.error("Failed to switch security context for user",e);
+        throw new EJBAccessException("Unable to attempt switching of user.");
+      }
+    }
+    return invocationContext.proceed();
+  }
+  finally {
+    if (contextSet) {
+      SecurityContextAssociation.setSecurityContext(cachedSecurityContext);
+    }
+  }
+}

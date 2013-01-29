@@ -1,0 +1,29 @@
+{
+  this.managementClient=managementClient;
+  securityRealms=getSecurityRealms();
+  if (securityRealms == null || securityRealms.length == 0) {
+    LOGGER.warn("Empty security realm configuration.");
+    return;
+  }
+  final List<ModelNode> updates=new LinkedList<ModelNode>();
+  for (  final SecurityRealm securityRealm : securityRealms) {
+    final String securityRealmName=securityRealm.getName();
+    LOGGER.info("Adding security realm " + securityRealmName);
+    final ModelNode compositeOp=new ModelNode();
+    compositeOp.get(OP).set(COMPOSITE);
+    compositeOp.get(OP_ADDR).setEmptyList();
+    ModelNode steps=compositeOp.get(STEPS);
+    final PathAddress realmAddr=PathAddress.pathAddress().append(CORE_SERVICE,MANAGEMENT).append(SECURITY_REALM,securityRealmName);
+    ModelNode op=Util.createAddOperation(realmAddr);
+    steps.add(op);
+    final ServerIdentity serverIdentity=securityRealm.getServerIdentity();
+    if (serverIdentity != null && StringUtils.isNotEmpty(serverIdentity.getSecret())) {
+      final ModelNode secretModuleNode=Util.createAddOperation(realmAddr.append(SERVER_IDENTITY,SECRET));
+      secretModuleNode.get(Constants.VALUE).set(serverIdentity.getSecret());
+      secretModuleNode.get(OPERATION_HEADERS,ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+      steps.add(secretModuleNode);
+    }
+    updates.add(compositeOp);
+  }
+  Utils.applyUpdates(updates,managementClient.getControllerClient());
+}
