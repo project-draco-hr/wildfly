@@ -1,0 +1,25 @@
+{
+  ModelVersion modelVersion=ModelVersion.create(1,0,0);
+  try {
+    System.setProperty("jboss.test.core.model.version.override","1.2.0");
+    KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT);
+    builder.createLegacyKernelServicesBuilder(null,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-ee:7.1.2.Final");
+    KernelServices mainServices=builder.build();
+    KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+    Assert.assertTrue(mainServices.isSuccessfulBoot());
+    Assert.assertTrue(legacyServices.isSuccessfulBoot());
+    List<ModelNode> bootOps=builder.parseXmlResource("subsystem.xml");
+    ModelTestUtils.checkFailedTransformedBootOperations(mainServices,modelVersion,bootOps,new FailedOperationTransformationConfig().addFailedAttribute(PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,EeExtension.SUBSYSTEM_NAME)),new Test712Config(EESubsystemModel.JBOSS_DESCRIPTOR_PROPERTY_REPLACEMENT)));
+    checkSubsystemModelTransformation(mainServices,modelVersion,new ModelFixer(){
+      @Override public ModelNode fixModel(      ModelNode modelNode){
+        Assert.assertTrue(modelNode.get(EESubsystemModel.JBOSS_DESCRIPTOR_PROPERTY_REPLACEMENT).asBoolean());
+        modelNode.get(EESubsystemModel.JBOSS_DESCRIPTOR_PROPERTY_REPLACEMENT).setExpression("${test-exp2:false}");
+        return modelNode;
+      }
+    }
+);
+  }
+  finally {
+    System.clearProperty("jboss.test.core.model.version.override");
+  }
+}
