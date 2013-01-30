@@ -1,13 +1,23 @@
 {
   deployer.deploy("eb");
-  EntityBean eb=setUpEB();
-  SecurityClient client=this.login();
-  ITestResultsSingleton results=this.getResultsSingleton();
+  final ITestResultsSingleton results=this.getResultsSingleton();
+  EntityBeanHome ebHome=getHome(EntityBeanHome.class,"EntityBeanCallerPrincipal");
+  EntityBean entityBean=null;
   try {
-    Assert.assertEquals(OK,results.getEb("ejbactivate"));
+    entityBean=ebHome.findByPrimaryKey("test");
+  }
+ catch (  ObjectNotFoundException e) {
+    entityBean=ebHome.create("test");
+  }
+  Assert.assertNotNull("EntityBean was not created or found!",entityBean);
+  SecurityClient client=this.login();
+  try {
+    Assert.assertNull("ejbActivate was called after create/findByPrimaryKey which is a spec violation!",results.getEb("ejbactivate"));
+    Assert.assertEquals("EntityBean does not have the correct id","test",entityBean.getId());
+    Assert.assertEquals("ejbActivate was NOT called after invoke a business method which is a spec violation!",OK,results.getEb("ejbactivate"));
   }
   finally {
-    tearDownEB(eb);
+    tearDownEB(entityBean);
     client.logout();
   }
   deployer.undeploy("eb");
