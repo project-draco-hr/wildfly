@@ -1,39 +1,22 @@
 {
-  TransformersSubRegistration reg=parent.registerSubResource(SystemPropertyResourceDefinition.PATH,new ChainedResourceTransformer(new ChainedResourceTransformerEntry(){
-    @Override public void transformResource(    ChainedResourceTransformationContext context,    PathAddress address,    Resource resource) throws OperationFailedException {
-      ModelNode model=resource.getModel();
-      if (!model.hasDefined(BOOT_TIME)) {
-        model.get(BOOT_TIME).set(true);
+  ResourceTransformationDescriptionBuilder builder=TransformationDescriptionBuilder.Factory.createInstance(SystemPropertyResourceDefinition.PATH).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,SystemPropertyResourceDefinition.VALUE,SystemPropertyResourceDefinition.BOOT_TIME).setValueConverter(new AttributeConverter.DefaultAttributeConverter(){
+    @Override protected void convertAttribute(    PathAddress address,    String attributeName,    ModelNode attributeValue,    TransformationContext context){
+      if (!attributeValue.isDefined()) {
+        attributeValue.set(true);
       }
     }
   }
-,rejectExpressions));
-  reg.registerOperationTransformer(ADD,new ChainedOperationTransformer(new OperationTransformer(){
+,BOOT_TIME).end().addRawOperationTransformationOverride(UNDEFINE_ATTRIBUTE_OPERATION,new OperationTransformer(){
     @Override public TransformedOperation transformOperation(    TransformationContext context,    PathAddress address,    ModelNode operation) throws OperationFailedException {
-      ModelNode transformed=operation.clone();
-      if (!transformed.hasDefined(BOOT_TIME)) {
-        transformed.get(BOOT_TIME).set(true);
+      if (operation.get(NAME).asString().equals(BOOT_TIME)) {
+        ModelNode op=operation.clone();
+        op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
+        op.get(VALUE).set(true);
+        return new TransformedOperation(op,OperationResultTransformer.ORIGINAL_RESULT);
       }
-      return new TransformedOperation(transformed,OperationResultTransformer.ORIGINAL_RESULT);
+      return OperationTransformer.DEFAULT.transformOperation(context,address,operation);
     }
   }
-,rejectExpressions));
-  OperationTransformer forceTrue=new OperationTransformer(){
-    @Override public TransformedOperation transformOperation(    TransformationContext context,    PathAddress address,    ModelNode operation) throws OperationFailedException {
-      ModelNode transformed=operation;
-      if (transformed.get(NAME).asString().equals(BOOT_TIME)) {
-        transformed=transformed.clone();
-        if (!transformed.get(VALUE).isDefined()) {
-          transformed.get(VALUE).set(true);
-          if (UNDEFINE_ATTRIBUTE_OPERATION.equals(transformed.get(OP).asString())) {
-            transformed.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-          }
-        }
-      }
-      return new TransformedOperation(transformed,OperationResultTransformer.ORIGINAL_RESULT);
-    }
-  }
-;
-  reg.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,new ChainedOperationTransformer(forceTrue,rejectExpressions));
-  reg.registerOperationTransformer(UNDEFINE_ATTRIBUTE_OPERATION,new ChainedOperationTransformer(forceTrue,rejectExpressions));
+);
+  TransformationDescription.Tools.register(builder.build(),parent);
 }
