@@ -1,0 +1,31 @@
+{
+  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT);
+  ModelVersion version_1_1_0=ModelVersion.create(1,1,0);
+  builder.createLegacyKernelServicesBuilder(AdditionalInitialization.MANAGEMENT,version_1_1_0).addMavenResourceURL("org.jboss.as:jboss-as-jacorb:" + asVersion);
+  KernelServices mainServices=builder.build();
+  assertTrue(mainServices.isSuccessfulBoot());
+  KernelServices legacyServices=mainServices.getLegacyServices(version_1_1_0);
+  assertNotNull(legacyServices);
+  assertTrue(legacyServices.isSuccessfulBoot());
+  FailedOperationTransformationConfig config=new FailedOperationTransformationConfig().addFailedAttribute(PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,"jacorb")),new FailedOperationTransformationConfig.AttributesPathAddressConfig(JacORBSubsystemConstants.ORB_INIT_SECURITY){
+    @Override protected boolean isAttributeWritable(    String attributeName){
+      return true;
+    }
+    @Override protected boolean checkValue(    String attrName,    ModelNode attribute,    boolean isWriteAttribute){
+      return attribute.asString().equals("client");
+    }
+    @Override protected ModelNode correctValue(    ModelNode toResolve,    boolean isWriteAttribute){
+      return new ModelNode("off");
+    }
+  }
+);
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,version_1_1_0,builder.parseXmlResource("subsystem-1.2-security-client.xml"),config);
+  checkSubsystemModelTransformation(mainServices,version_1_1_0,new ModelFixer(){
+    @Override public ModelNode fixModel(    ModelNode modelNode){
+      Assert.assertEquals("off",modelNode.get(JacORBSubsystemConstants.ORB_INIT_SECURITY).asString());
+      modelNode.get(JacORBSubsystemConstants.ORB_INIT_SECURITY).set("client");
+      return modelNode;
+    }
+  }
+);
+}
