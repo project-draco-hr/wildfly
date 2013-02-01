@@ -39,4 +39,24 @@
   addRemoveHandler(mainServices,modelVersion,loggerAddress.toModelNode(),CommonAttributes.HANDLERS,handlerName);
   final PathAddress asyncHandlerAddress=createAsyncHandlerAddress("async");
   addRemoveHandler(mainServices,modelVersion,asyncHandlerAddress.toModelNode(),AsyncHandlerResourceDefinition.SUBHANDLERS,handlerName);
+  final CompositeOperationBuilder compositeOperationBuilder=CompositeOperationBuilder.create();
+  final ModelNode compositeLoggerAddress=createLoggerAddress("compositeLogger").toModelNode();
+  compositeOperationBuilder.addStep(SubsystemOperations.createAddOperation(compositeLoggerAddress));
+  compositeOperationBuilder.addStep(SubsystemOperations.createRemoveOperation(handlerAddress.toModelNode()));
+  op=SubsystemOperations.createAddOperation(handlerAddress.toModelNode());
+  op.get(CommonAttributes.FILE.getName(),PathResourceDefinition.RELATIVE_TO.getName()).set("jboss.server.log.dir");
+  op.get(CommonAttributes.FILE.getName(),PathResourceDefinition.PATH.getName()).set("fh.log");
+  op.get(CommonAttributes.AUTOFLUSH.getName()).set(true);
+  op.get(CommonAttributes.ENABLED.getName()).set(true);
+  compositeOperationBuilder.addStep(op);
+  compositeOperationBuilder.addStep(SubsystemOperations.createAddOperation(createAddress(CommonAttributes.LOGGING_PROFILE,"composite-profile").toModelNode()));
+  final TransformedOperation transformedOp=mainServices.transformOperation(modelVersion,compositeOperationBuilder.build().getOperation());
+  op=transformedOp.getTransformedOperation();
+  final List<ModelNode> steps=op.get(ClientConstants.STEPS).asList();
+  Assert.assertEquals("Logging profile step should have been removed",3,steps.size());
+  ModelNode stepOp=steps.get(0);
+  Assert.assertTrue("category attribute should have been added",stepOp.hasDefined(LoggerResourceDefinition.CATEGORY.getName()));
+  stepOp=steps.get(2);
+  Assert.assertFalse("enabled attribute should have been removed",stepOp.hasDefined(CommonAttributes.ENABLED.getName()));
+  executeTransformOperation(mainServices,modelVersion,transformedOp);
 }
