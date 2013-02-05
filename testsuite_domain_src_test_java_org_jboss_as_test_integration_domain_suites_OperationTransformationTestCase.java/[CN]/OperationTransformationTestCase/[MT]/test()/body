@@ -1,6 +1,7 @@
 {
   final PathAddress extension=PathAddress.pathAddress(PathElement.pathElement(EXTENSION,VersionedExtensionCommon.EXTENSION_NAME));
   final PathAddress address=PathAddress.pathAddress(PathElement.pathElement(PROFILE,"default"),PathElement.pathElement(SUBSYSTEM,VersionedExtensionCommon.SUBSYSTEM_NAME));
+  final PathAddress ignored=PathAddress.pathAddress(PathElement.pathElement(PROFILE,"ignored"),PathElement.pathElement(SUBSYSTEM,VersionedExtensionCommon.SUBSYSTEM_NAME));
   final ModelNode serverAddress=getRunningServerAddress("slave","main-three");
   serverAddress.add(SUBSYSTEM,VersionedExtensionCommon.SUBSYSTEM_NAME);
   final DomainClient client=master.getDomainClient();
@@ -10,6 +11,9 @@
   executeForResult(subsystemAdd,client);
   final ModelNode mExt=create(READ_RESOURCE_OPERATION,extension.append(PathElement.pathElement(SUBSYSTEM,VersionedExtensionCommon.SUBSYSTEM_NAME)));
   assertVersion(executeForResult(mExt,client),ModelVersion.create(2));
+  final ModelNode newIgnored=createAdd(ignored);
+  executeForResult(newIgnored,client);
+  Assert.assertTrue(exists(ignored,client));
   final PathAddress newElement=address.append(PathElement.pathElement("new-element","new1"));
   final ModelNode addNew=createAdd(newElement);
   executeForResult(addNew,client);
@@ -17,6 +21,11 @@
   final ModelNode newElementOnSlave=serverAddress.clone();
   newElementOnSlave.add("new-element","new1");
   Assert.assertFalse(exists(newElementOnSlave,client));
+  final PathElement otherNewElementPath=PathElement.pathElement("other-new-element","new1");
+  final ModelNode addOtherNew=createAdd(address.append(otherNewElementPath));
+  executeForFailure(addOtherNew,client);
+  final ModelNode addOtherNewIgnored=createAdd(ignored.append(otherNewElementPath));
+  executeForResult(addOtherNewIgnored,client);
   final PathAddress renamedAddress=address.append(PathElement.pathElement("renamed","element"));
   final ModelNode renamedAdd=createAdd(renamedAddress);
   executeForResult(renamedAdd,client);

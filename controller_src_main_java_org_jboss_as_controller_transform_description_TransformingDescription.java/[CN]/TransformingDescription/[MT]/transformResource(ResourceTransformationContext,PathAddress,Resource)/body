@@ -1,21 +1,28 @@
 {
   final ModelNode originalModel=TransformationRule.cloneAndProtect(original.getModel());
-  if (discardPolicy.discard(originalModel,address,ctx) == DiscardPolicy.DiscardType.SILENT) {
-    return;
-  }
-  final Iterator<TransformationRule> iterator=rules.iterator();
-  final TransformationRule.ChainedResourceContext context=new TransformationRule.ChainedResourceContext(ctx){
-    @Override void invokeNext(    final Resource resource) throws OperationFailedException {
-      if (iterator.hasNext()) {
-        final TransformationRule next=iterator.next();
-        next.transformResource(resource,address,this);
-      }
+  final DiscardPolicy.DiscardType type=discardPolicy.discard(originalModel,address,ctx);
+switch (type) {
+case DISCARD_AND_WARN:
+case REJECT_AND_WARN:
+    ctx.getLogger().logRejectedResourceWarning(address,null);
+  return;
+case SILENT:
+ResourceTransformer.DISCARD.transformResource(ctx,address,original);
+return;
+}
+final Iterator<TransformationRule> iterator=rules.iterator();
+final TransformationRule.ChainedResourceContext context=new TransformationRule.ChainedResourceContext(ctx){
+@Override void invokeNext(final Resource resource) throws OperationFailedException {
+if (iterator.hasNext()) {
+final TransformationRule next=iterator.next();
+next.transformResource(resource,address,this);
+}
  else {
-        resourceTransformer.transformResource(ctx,address,resource);
-      }
-    }
-  }
+resourceTransformer.transformResource(ctx,address,resource);
+}
+}
+}
 ;
-  final TransformationRule rule=new AttributeTransformationRule(attributeTransformations);
-  rule.transformResource(original,address,context);
+final TransformationRule rule=new AttributeTransformationRule(attributeTransformations);
+rule.transformResource(original,address,context);
 }
