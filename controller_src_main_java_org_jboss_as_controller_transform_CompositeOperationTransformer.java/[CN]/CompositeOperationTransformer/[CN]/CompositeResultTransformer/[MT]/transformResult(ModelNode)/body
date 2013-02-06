@@ -2,14 +2,23 @@
   final ModelNode response=original.clone();
   final ModelNode result=response.get(RESULT).setEmptyObject();
   for (  final Step step : steps) {
-    final String id="step-" + step.getStepCount();
-    final ModelNode stepResult=original.get(RESULT,id);
+    final String stepIdx="step-" + step.getStepCount();
+    if (step.isDiscarded()) {
+      result.get(stepIdx).set(SUCCESSFUL);
+      continue;
+    }
+    final String resultIdx="step-" + step.getResultingIdx();
+    final ModelNode stepResult=original.get(RESULT,resultIdx);
     if (IGNORED.equals(stepResult.get(OUTCOME).asString())) {
-      result.get(id).set(stepResult);
+      result.get(stepIdx).set(SUCCESSFUL);
     }
  else {
       final OperationResultTransformer transformer=step.getResult();
-      result.get(id).set(transformer.transformResult(stepResult));
+      if (step.getResult().rejectOperation(stepResult)) {
+        stepResult.get(OUTCOME).set(FAILED);
+        stepResult.get(FAILURE_DESCRIPTION).set(step.getResult().getFailureDescription());
+      }
+      result.get(stepIdx).set(transformer.transformResult(stepResult));
     }
   }
   return response;
