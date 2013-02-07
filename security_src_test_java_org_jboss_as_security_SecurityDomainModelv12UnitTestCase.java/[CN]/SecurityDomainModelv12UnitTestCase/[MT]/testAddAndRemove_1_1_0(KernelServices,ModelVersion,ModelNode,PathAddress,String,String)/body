@@ -1,0 +1,36 @@
+{
+  final ModelNode parentModel=ModelTestUtils.getSubModel(subsystemModel,parentAddress);
+  Set<String> originalKeys=new HashSet<String>(parentModel.get(resourceType).keys());
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  final List<ModelNode> originalAttribute=getLegacyAttribute(legacyServices,parentAddress,attributeName);
+  Assert.assertEquals(originalKeys.size(),originalAttribute.size());
+  checkSimilarEntries(originalAttribute,parentModel.get(resourceType));
+  ModelNode add=Util.createAddOperation(parentAddress.append(PathElement.pathElement(resourceType,"new-added-by-test")));
+  add.get(Constants.CODE).set("new-added-by-test");
+  add.get(Constants.FLAG).set("required");
+  if (resourceType.equals(Constants.MAPPING_MODULE)) {
+    add.get(Constants.TYPE).set("role");
+  }
+  add.get("module-options","password-stacking").set("useFirstPass");
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(add));
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,add)));
+  List<ModelNode> attributes=getLegacyAttribute(legacyServices,parentAddress,attributeName);
+  Assert.assertEquals(originalKeys.size() + 1,attributes.size());
+  final ModelNode removeAdded=Util.createRemoveOperation(parentAddress.append(PathElement.pathElement(resourceType,"new-added-by-test")));
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(removeAdded));
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,removeAdded)));
+  attributes=getLegacyAttribute(legacyServices,parentAddress,attributeName);
+  Assert.assertEquals(originalKeys.size(),attributes.size());
+  checkSimilarEntries(attributes,parentModel.get(resourceType));
+  int i=originalKeys.size();
+  for (  String childName : originalKeys) {
+    if (i-- == 1) {
+      break;
+    }
+    final ModelNode remove=Util.createRemoveOperation(parentAddress.append(PathElement.pathElement(resourceType,childName)));
+    ModelTestUtils.checkOutcome(mainServices.executeOperation(remove));
+    ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,remove)));
+    attributes=getLegacyAttribute(legacyServices,parentAddress,attributeName);
+    Assert.assertEquals(i,attributes.size());
+  }
+}
