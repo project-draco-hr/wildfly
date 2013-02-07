@@ -50,13 +50,23 @@
   op.get(CommonAttributes.ENABLED.getName()).set(true);
   compositeOperationBuilder.addStep(op);
   compositeOperationBuilder.addStep(SubsystemOperations.createAddOperation(createAddress(CommonAttributes.LOGGING_PROFILE,"composite-profile").toModelNode()));
-  final TransformedOperation transformedOp=mainServices.transformOperation(modelVersion,compositeOperationBuilder.build().getOperation());
+  final ModelNode composite=compositeOperationBuilder.build().getOperation();
+  final TransformedOperation transformedOp=mainServices.transformOperation(modelVersion,composite);
   op=transformedOp.getTransformedOperation();
   final List<ModelNode> steps=op.get(ClientConstants.STEPS).asList();
-  Assert.assertEquals("Logging profile step should have been removed",3,steps.size());
+  Assert.assertEquals("Logging profile step should not have been removed",4,steps.size());
   ModelNode stepOp=steps.get(0);
   Assert.assertTrue("category attribute should have been added",stepOp.hasDefined(LoggerResourceDefinition.CATEGORY.getName()));
   stepOp=steps.get(2);
   Assert.assertFalse("enabled attribute should have been removed",stepOp.hasDefined(CommonAttributes.ENABLED.getName()));
-  executeTransformOperation(mainServices,modelVersion,transformedOp);
+  ModelTestUtils.checkFailed(mainServices.executeOperation(modelVersion,transformedOp));
+  final ModelNode success=new ModelNode();
+  success.get(OUTCOME).set(SUCCESS);
+  Assert.assertTrue(transformedOp.rejectOperation(success));
+  final List<ModelNode> newSteps=new ArrayList<ModelNode>(steps);
+  newSteps.remove(3);
+  final ModelNode newComposite=composite.clone();
+  newComposite.get(STEPS).set(newSteps);
+  final TransformedOperation newTransformedOperation=mainServices.transformOperation(modelVersion,newComposite);
+  Assert.assertFalse(newTransformedOperation.rejectOperation(success));
 }
