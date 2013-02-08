@@ -1,6 +1,6 @@
 {
   stop(DEPLOYMENT_2,CONTAINER_2);
-  DefaultHttpClient client=HttpClientUtils.relaxedCookieHttpClient();
+  DefaultHttpClient client=org.jboss.as.test.http.util.HttpClientUtils.relaxedCookieHttpClient();
   String xpc1_create_url=baseURL1 + "count?command=createEmployee";
   String xpc1_get_url=baseURL1 + "count?command=getEmployee";
   String xpc2_get_url=baseURL2 + "count?command=getEmployee";
@@ -8,6 +8,7 @@
   String xpc2_getempsecond_url=baseURL2 + "count?command=getSecondBeanEmployee";
   String xpc2_getdestroy_url=baseURL2 + "count?command=destroy";
   try {
+    this.establishView(client,baseURL1,NODE_1);
     System.out.println(new Date() + "create employee entity ");
     String employeeName=executeUrlWithAnswer(client,xpc1_create_url,"create entity that lives in the extended persistence context that this test will verify is always available");
     assertEquals(employeeName,"Tom Brady");
@@ -17,12 +18,14 @@
     employeeName=executeUrlWithAnswer(client,xpc1_getempsecond_url,"1. xpc on node1, node1 should be able to read entity from second bean on node1");
     assertEquals(employeeName,"Tom Brady");
     start(DEPLOYMENT_2,CONTAINER_2);
+    this.establishView(client,baseURL1,NODE_1,NODE_2);
     System.out.println(new Date() + "2. started node2 + deployed, about to read entity on node1");
     employeeName=executeUrlWithAnswer(client,xpc2_get_url,"2. started node2, xpc on node1, node1 should be able to read entity on node1");
     assertEquals(employeeName,"Tom Brady");
     employeeName=executeUrlWithAnswer(client,xpc2_getempsecond_url,"2. started node2, xpc on node1, node1 should be able to read entity from second bean on node1");
     assertEquals(employeeName,"Tom Brady");
     stop(DEPLOYMENT_1,CONTAINER_1);
+    this.establishView(client,baseURL2,NODE_2);
     System.out.println(new Date() + "3. stopped node1 to force failover, about to read entity on node2");
     employeeName=executeUrlWithAnswer(client,xpc2_get_url,"3. stopped deployment on node1, xpc should failover to node2, node2 should be able to read entity from xpc");
     assertEquals(employeeName,"Tom Brady");
@@ -33,7 +36,7 @@
     System.out.println(new Date() + "4. test is done");
   }
   finally {
-    client.getConnectionManager().shutdown();
+    HttpClientUtils.closeQuietly(client);
     stop(DEPLOYMENT_1,CONTAINER_1);
     stop(DEPLOYMENT_2,CONTAINER_2);
   }

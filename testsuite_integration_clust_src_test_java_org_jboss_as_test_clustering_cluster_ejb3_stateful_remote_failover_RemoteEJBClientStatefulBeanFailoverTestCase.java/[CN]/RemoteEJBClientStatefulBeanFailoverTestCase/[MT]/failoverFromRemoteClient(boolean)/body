@@ -7,6 +7,8 @@
   boolean container1Stopped=false;
   boolean container2Stopped=false;
   try {
+    final ViewChangeListener listener=context.lookupStateless(ViewChangeListenerBean.class,ViewChangeListener.class);
+    this.establishView(listener,NODE_1,NODE_2);
     final RemoteCounter remoteCounter=context.lookupStateful(CounterBean.class,RemoteCounter.class);
     final DestructionCounterRemote destructionCounter=context.lookupSingleton(DestructionCounterSingleton.class,DestructionCounterRemote.class);
     final int NUM_TIMES=25;
@@ -22,24 +24,21 @@
     final int totalCountBeforeShuttingDownANode=result.getCount();
     final String previousInvocationNodeName=result.getNodeName();
     if (previousInvocationNodeName.equals(NODE_1)) {
-      if (undeployOnly) {
-        this.deployer.undeploy(DEPLOYMENT_1);
-      }
- else {
+      this.deployer.undeploy(DEPLOYMENT_1);
+      if (!undeployOnly) {
         this.container.stop(CONTAINER_1);
+        container1Stopped=true;
       }
-      container1Stopped=true;
+      this.establishView(listener,NODE_2);
     }
  else {
-      if (undeployOnly) {
-        this.deployer.undeploy(DEPLOYMENT_2);
-      }
- else {
+      this.deployer.undeploy(DEPLOYMENT_2);
+      if (!undeployOnly) {
         this.container.stop(CONTAINER_2);
+        container2Stopped=true;
       }
-      container2Stopped=true;
+      this.establishView(listener,NODE_1);
     }
-    Thread.sleep(GRACE_TIME_TO_MEMBERSHIP_CHANGE);
     CounterResult resultAfterShuttingDownANode=remoteCounter.increment();
     Assert.assertNotNull("Result from remote stateful counter, after shutting down a node was null",resultAfterShuttingDownANode);
     Assert.assertEquals("Unexpected count from remote counter, after shutting down a node",totalCountBeforeShuttingDownANode + 1,resultAfterShuttingDownANode.getCount());

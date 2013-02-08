@@ -1,57 +1,89 @@
 {
-  DefaultHttpClient client=HttpClientUtils.relaxedCookieHttpClient();
+  DefaultHttpClient client=org.jboss.as.test.http.util.HttpClientUtils.relaxedCookieHttpClient();
   String url1=baseURL1.toString() + "home.jsf";
   String url2=baseURL2.toString() + "home.jsf";
   System.out.println("URLs are: " + url1 + ", "+ url2);
   try {
     HttpResponse response;
     NumberGuessState state;
-    response=tryGet(client,buildGetRequest(url1,null));
-    Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
-    state=parseState(response,null);
+    response=client.execute(buildGetRequest(url1,null));
+    try {
+      Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+      state=parseState(response,null);
+    }
+  finally {
+      HttpClientUtils.closeQuietly(response);
+    }
     String sessionId=state.sessionId;
     Assert.assertNotNull(sessionId);
     Assert.assertEquals("0",state.smallest);
     Assert.assertEquals("100",state.biggest);
     Assert.assertEquals("10",state.remainingGuesses);
     response=client.execute(buildPostRequest(url1,state.sessionId,state.jsfViewState,"1"));
-    Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
-    state=parseState(response,sessionId);
+    try {
+      Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+      state=parseState(response,sessionId);
+    }
+  finally {
+      HttpClientUtils.closeQuietly(response);
+    }
     Assert.assertEquals("2",state.smallest);
     Assert.assertEquals("100",state.biggest);
     Assert.assertEquals("9",state.remainingGuesses);
     controller.stop(CONTAINER_1);
-    response=tryGet(client,buildPostRequest(url2,state.sessionId,state.jsfViewState,"100"));
-    Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
-    state=parseState(response,sessionId);
+    this.establishView(client,baseURL2,NODE_2);
+    response=client.execute(buildPostRequest(url2,state.sessionId,state.jsfViewState,"100"));
+    try {
+      Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+      state=parseState(response,sessionId);
+    }
+  finally {
+      HttpClientUtils.closeQuietly(response);
+    }
     Assert.assertEquals("Session failed to replicate after container 1 was shutdown.","8",state.remainingGuesses);
     Assert.assertEquals(sessionId,state.sessionId);
     Assert.assertEquals("2",state.smallest);
     Assert.assertEquals("99",state.biggest);
     response=client.execute(buildPostRequest(url2,sessionId,state.jsfViewState,"99"));
-    Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
-    state=parseState(response,sessionId);
+    try {
+      Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+      state=parseState(response,sessionId);
+    }
+  finally {
+      HttpClientUtils.closeQuietly(response);
+    }
     Assert.assertEquals("7",state.remainingGuesses);
     Assert.assertEquals("2",state.smallest);
     Assert.assertEquals("98",state.biggest);
     controller.start(CONTAINER_1);
-    response=tryGet(client,buildPostRequest(url1,state.sessionId,state.jsfViewState,"2"));
-    Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
-    state=parseState(response,sessionId);
+    this.establishView(client,baseURL2,NODE_1,NODE_2);
+    response=client.execute(buildPostRequest(url1,state.sessionId,state.jsfViewState,"2"));
+    try {
+      Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+      state=parseState(response,sessionId);
+    }
+  finally {
+      HttpClientUtils.closeQuietly(response);
+    }
     Assert.assertEquals("Session failed to replicate after container 1 was brought up.","6",state.remainingGuesses);
     Assert.assertEquals(sessionId,state.sessionId);
     Assert.assertEquals("3",state.smallest);
     Assert.assertEquals("98",state.biggest);
     response=client.execute(buildPostRequest(url1,state.sessionId,state.jsfViewState,"50"));
-    Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
-    state=parseState(response,sessionId);
+    try {
+      Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+      state=parseState(response,sessionId);
+    }
+  finally {
+      HttpClientUtils.closeQuietly(response);
+    }
     Assert.assertEquals(sessionId,state.sessionId);
     Assert.assertEquals("5",state.remainingGuesses);
     Assert.assertEquals("3",state.smallest);
     Assert.assertEquals("49",state.biggest);
   }
   finally {
-    client.getConnectionManager().shutdown();
+    HttpClientUtils.closeQuietly(client);
   }
   deployer.undeploy(DEPLOYMENT_1);
   controller.stop(CONTAINER_1);
