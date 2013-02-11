@@ -1,0 +1,24 @@
+{
+  ModelVersion modelVersion=ModelVersion.create(1,0,0);
+  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT).setSubsystemXml(SUBSYSTEM_XML_1_2);
+  LegacyKernelServicesInitializer legacyInitializer=builder.createLegacyKernelServicesBuilder(AdditionalInitialization.MANAGEMENT,controllerVersion,modelVersion);
+  for (  String mavenGAV : mavenGAVs) {
+    legacyInitializer.addMavenResourceURL(mavenGAV);
+  }
+  KernelServices mainServices=builder.build();
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  Assert.assertTrue(mainServices.getLegacyServices(modelVersion).isSuccessfulBoot());
+  ModelNode current=mainServices.readWholeModel();
+  ModelNode legacy=mainServices.getLegacyServices(modelVersion).readWholeModel();
+  checkSubsystemModelTransformation(mainServices,modelVersion);
+  ModelNode currentModule1=current.get(ModelDescriptionConstants.SUBSYSTEM,getMainSubsystemName(),ModelConstants.CAPABILITY,"org.acme.module1");
+  Assert.assertTrue(currentModule1.isDefined());
+  Assert.assertTrue(currentModule1.has(ModelConstants.STARTLEVEL));
+  Assert.assertFalse(currentModule1.hasDefined(ModelConstants.STARTLEVEL));
+  ModelNode legacyModule1=legacy.get(ModelDescriptionConstants.SUBSYSTEM,getMainSubsystemName(),ModelConstants.CAPABILITY,"org.acme.module1");
+  Assert.assertTrue(legacyModule1.isDefined());
+  Assert.assertFalse(legacyModule1.has(ModelConstants.STARTLEVEL));
+  ModelNode transformedModule1=mainServices.readTransformedModel(modelVersion).get(SUBSYSTEM,getMainSubsystemName(),ModelConstants.CAPABILITY,"org.acme.module1");
+  Assert.assertTrue(transformedModule1.isDefined());
+  Assert.assertFalse(legacyModule1.has(ModelConstants.STARTLEVEL));
+}

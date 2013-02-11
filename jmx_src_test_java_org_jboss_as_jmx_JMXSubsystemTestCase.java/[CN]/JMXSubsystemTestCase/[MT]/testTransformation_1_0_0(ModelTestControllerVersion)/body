@@ -1,0 +1,86 @@
+{
+  String subsystemXml="<subsystem xmlns=\"" + Namespace.CURRENT.getUriString() + "\">"+ "   <expose-resolved-model domain-name=\"jboss.as\" proper-property-format=\"false\"/>"+ "   <remoting-connector />"+ "</subsystem>";
+  ModelVersion oldVersion=ModelVersion.create(1,0,0);
+  KernelServicesBuilder builder=createKernelServicesBuilder(new BaseAdditionalInitalization()).setSubsystemXml(subsystemXml);
+  builder.createLegacyKernelServicesBuilder(null,controllerVersion,oldVersion).setExtensionClassName(JMXExtension.class.getName()).addMavenResourceURL("org.jboss.as:jboss-as-jmx:" + controllerVersion.getMavenGavVersion()).configureReverseControllerCheck(AdditionalInitialization.MANAGEMENT,new ModelFixer(){
+    @Override public ModelNode fixModel(    ModelNode modelNode){
+      modelNode.get(CommonAttributes.EXPOSE_MODEL,CommonAttributes.RESOLVED,CommonAttributes.PROPER_PROPERTY_FORMAT).set(false);
+      return modelNode;
+    }
+  }
+);
+  KernelServices mainServices=builder.build();
+  KernelServices legacyServices=mainServices.getLegacyServices(oldVersion);
+  Assert.assertNotNull(legacyServices);
+  ModelFixer modelFixer7_1_x=new ModelFixer(){
+    public ModelNode fixModel(    ModelNode modelNode){
+      if (modelNode.hasDefined("remoting-connector")) {
+        if (modelNode.get("remoting-connector").hasDefined("jmx")) {
+          if (modelNode.get("remoting-connector","jmx").keys().size() == 0) {
+            modelNode.get("remoting-connector","jmx","use-management-endpoint").set(true);
+          }
+        }
+      }
+      return modelNode;
+    }
+  }
+;
+  ModelNode legacyModel=checkSubsystemModelTransformation(mainServices,oldVersion,modelFixer7_1_x);
+  check_1_0_0_Model(legacyModel.get(SUBSYSTEM,JMXExtension.SUBSYSTEM_NAME),true,true);
+  ModelNode op=createOperation(ADD,CommonAttributes.EXPOSE_MODEL,CommonAttributes.EXPRESSION);
+  TransformedOperation transformedOp=mainServices.transformOperation(oldVersion,op);
+  Assert.assertTrue(transformedOp.rejectOperation(null));
+  op=createOperation(WRITE_ATTRIBUTE_OPERATION,CommonAttributes.EXPOSE_MODEL,CommonAttributes.EXPRESSION);
+  op.get(NAME).set(CommonAttributes.DOMAIN_NAME);
+  op.get(VALUE).set("discarded");
+  transformedOp=mainServices.transformOperation(oldVersion,op);
+  Assert.assertTrue(transformedOp.rejectOperation(null));
+  op=createOperation(READ_ATTRIBUTE_OPERATION,CommonAttributes.EXPOSE_MODEL,CommonAttributes.EXPRESSION);
+  op.get(NAME).set(CommonAttributes.DOMAIN_NAME);
+  transformedOp=mainServices.transformOperation(oldVersion,op);
+  Assert.assertTrue(transformedOp.rejectOperation(null));
+  op=createOperation(REMOVE,CommonAttributes.EXPOSE_MODEL,CommonAttributes.EXPRESSION);
+  transformedOp=mainServices.transformOperation(oldVersion,op);
+  Assert.assertTrue(transformedOp.rejectOperation(null));
+  op=createOperation(WRITE_ATTRIBUTE_OPERATION,CommonAttributes.EXPOSE_MODEL,CommonAttributes.RESOLVED);
+  op.get(NAME).set(CommonAttributes.DOMAIN_NAME);
+  op.get(VALUE).set("discarded");
+  transformedOp=mainServices.transformOperation(oldVersion,op);
+  Assert.assertTrue(transformedOp.rejectOperation(null));
+  op=createOperation(WRITE_ATTRIBUTE_OPERATION,CommonAttributes.EXPOSE_MODEL,CommonAttributes.RESOLVED);
+  op.get(NAME).set(CommonAttributes.DOMAIN_NAME);
+  op.get(VALUE).set("jboss.as");
+  transformedOp=mainServices.transformOperation(oldVersion,op);
+  Assert.assertNull(transformedOp.getTransformedOperation());
+  Assert.assertFalse(transformedOp.rejectOperation(null));
+  op=createOperation(UNDEFINE_ATTRIBUTE_OPERATION,CommonAttributes.EXPOSE_MODEL,CommonAttributes.RESOLVED);
+  op.get(NAME).set(CommonAttributes.DOMAIN_NAME);
+  transformedOp=mainServices.transformOperation(oldVersion,op);
+  Assert.assertFalse(transformedOp.rejectOperation(null));
+  op=createOperation(READ_ATTRIBUTE_OPERATION,CommonAttributes.EXPOSE_MODEL,CommonAttributes.RESOLVED);
+  op.get(NAME).set(CommonAttributes.DOMAIN_NAME);
+  transformedOp=mainServices.transformOperation(oldVersion,op);
+  Assert.assertNull(transformedOp.getTransformedOperation());
+  Assert.assertEquals(CommonAttributes.DEFAULT_RESOLVED_DOMAIN,mainServices.executeOperation(oldVersion,transformedOp).get(RESULT).asString());
+  op=createOperation(REMOVE,CommonAttributes.EXPOSE_MODEL,CommonAttributes.RESOLVED);
+  transformedOp=mainServices.transformOperation(oldVersion,op);
+  checkOutcome(mainServices.executeOperation(op));
+  checkOutcome(mainServices.executeOperation(oldVersion,transformedOp));
+  legacyModel=checkSubsystemModelTransformation(mainServices,oldVersion,modelFixer7_1_x);
+  check_1_0_0_Model(legacyModel.get(SUBSYSTEM,getMainSubsystemName()),true,false);
+  op=createOperation(ADD,CommonAttributes.EXPOSE_MODEL,CommonAttributes.RESOLVED);
+  op.get(CommonAttributes.PROPER_PROPERTY_FORMAT).set(false);
+  transformedOp=mainServices.transformOperation(oldVersion,op);
+  checkOutcome(mainServices.executeOperation(op));
+  checkOutcome(mainServices.executeOperation(oldVersion,transformedOp));
+  legacyModel=checkSubsystemModelTransformation(mainServices,oldVersion,modelFixer7_1_x);
+  check_1_0_0_Model(legacyModel.get(SUBSYSTEM,getMainSubsystemName()),true,true);
+  op=Util.getWriteAttributeOperation(PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,getMainSubsystemName()),PathElement.pathElement(CommonAttributes.REMOTING_CONNECTOR,CommonAttributes.JMX)),CommonAttributes.USE_MANAGEMENT_ENDPOINT,false);
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(oldVersion,mainServices.transformOperation(oldVersion,op)));
+  transformedOp=mainServices.transformOperation(oldVersion,op);
+  checkOutcome(mainServices.executeOperation(op));
+  checkOutcome(mainServices.executeOperation(oldVersion,transformedOp));
+  legacyModel=checkSubsystemModelTransformation(mainServices,oldVersion,modelFixer7_1_x);
+  check_1_0_0_Model(legacyModel.get(SUBSYSTEM,getMainSubsystemName()),true,true);
+  Assert.assertFalse(legacyModel.get(SUBSYSTEM,getMainSubsystemName(),CommonAttributes.REMOTING_CONNECTOR,CommonAttributes.JMX,CommonAttributes.USE_MANAGEMENT_ENDPOINT).asBoolean());
+}

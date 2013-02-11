@@ -1,0 +1,87 @@
+{
+  String subsystemXml=readResource("subsystem-1.1.0.xml");
+  ModelVersion modelVersion=ModelVersion.create(1,1,0);
+  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT).setSubsystemXml(subsystemXml);
+  builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-web:" + controllerVersion.getMavenGavVersion());
+  KernelServices mainServices=builder.build();
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  checkSubsystemModelTransformation(mainServices,modelVersion);
+  ModelNode mainModel=mainServices.readWholeModel().get(SUBSYSTEM,SUBSYSTEM_NAME);
+  ModelNode legacyModel=legacyServices.readWholeModel().get(SUBSYSTEM,SUBSYSTEM_NAME);
+  ModelNode sslConfig=mainModel.get(Constants.CONNECTOR,"https",Constants.CONFIGURATION,Constants.SSL);
+  Assert.assertTrue(sslConfig.isDefined());
+  Assert.assertFalse(legacyModel.get(Constants.CONNECTOR,"https",Constants.CONFIGURATION,Constants.SSL).isDefined());
+  compare(sslConfig,legacyModel.get(Constants.CONNECTOR,"https",Constants.SSL,Constants.CONFIGURATION),true);
+  ModelNode ssoConfig=mainModel.get(Constants.VIRTUAL_SERVER,"default-host",Constants.CONFIGURATION,Constants.SSO);
+  Assert.assertTrue(ssoConfig.isDefined());
+  Assert.assertFalse(legacyModel.get(Constants.VIRTUAL_SERVER,"default-host",Constants.CONFIGURATION,Constants.SSO).isDefined());
+  compare(ssoConfig,legacyModel.get(Constants.VIRTUAL_SERVER,"default-host",Constants.SSO,Constants.CONFIGURATION),true);
+  ModelNode mainAccessLog=mainModel.get(Constants.VIRTUAL_SERVER,"default-host",Constants.CONFIGURATION,Constants.ACCESS_LOG);
+  Assert.assertTrue(mainAccessLog.isDefined());
+  Assert.assertFalse(legacyModel.get(Constants.VIRTUAL_SERVER,"default-host",Constants.CONFIGURATION,Constants.ACCESS_LOG).isDefined());
+  ModelNode legacyAccessLog=legacyModel.get(Constants.VIRTUAL_SERVER,"default-host",Constants.ACCESS_LOG,Constants.CONFIGURATION);
+  Assert.assertTrue(legacyAccessLog.isDefined());
+  ModelNode mainDir=mainAccessLog.remove(Constants.SETTING).get(Constants.DIRECTORY);
+  Assert.assertTrue(mainDir.isDefined());
+  Assert.assertFalse(legacyAccessLog.hasDefined(Constants.SETTING));
+  ModelNode legacyDir=legacyAccessLog.remove(Constants.DIRECTORY).get(Constants.CONFIGURATION);
+  Assert.assertTrue(legacyDir.isDefined());
+  compare(mainDir,legacyDir);
+  compare(mainAccessLog,legacyAccessLog,true);
+  ModelNode connectorWriteVirtualServer=createOperation(WRITE_ATTRIBUTE_OPERATION,SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,Constants.CONNECTOR,"http");
+  connectorWriteVirtualServer.get(NAME).set(VIRTUAL_SERVER);
+  connectorWriteVirtualServer.get(VALUE).add("vs1");
+  mainServices.executeForResult(connectorWriteVirtualServer);
+  ModelNode result=mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,connectorWriteVirtualServer));
+  Assert.assertTrue(result.get(FAILURE_DESCRIPTION).asString().endsWith(WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314()));
+  ModelNode connectorValues=mainServices.readWholeModel().get(SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,Constants.CONNECTOR,"http");
+  Assert.assertTrue(connectorValues.hasDefined(VIRTUAL_SERVER));
+  ModelNode connectorRemove=createOperation(REMOVE,SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,Constants.CONNECTOR,"http");
+  mainServices.executeForResult(connectorRemove);
+  checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,connectorRemove)));
+  ModelNode connectorAdd=createOperation(ADD,SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,Constants.CONNECTOR,"test");
+  for (  String key : connectorValues.keys()) {
+    connectorAdd.get(key).set(connectorValues.get(key));
+  }
+  checkOutcome(mainServices.executeOperation(connectorAdd));
+  TransformedOperation transOp=mainServices.transformOperation(modelVersion,connectorAdd);
+  result=mainServices.executeOperation(modelVersion,transOp);
+  Assert.assertEquals(FAILED,result.get(OUTCOME).asString());
+  Assert.assertTrue(result.get(FAILURE_DESCRIPTION).asString().endsWith(WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314()));
+  connectorAdd=createOperation(ADD,SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,Constants.CONNECTOR,"as75871");
+  for (  String key : connectorValues.keys()) {
+    if (!key.equals(REDIRECT_PORT) && !key.equals(VIRTUAL_SERVER)) {
+      connectorAdd.get(key).set(connectorValues.get(key));
+    }
+  }
+  Assert.assertFalse(connectorAdd.hasDefined(REDIRECT_PORT));
+  checkOutcome(mainServices.executeOperation(connectorAdd));
+  transOp=mainServices.transformOperation(modelVersion,connectorAdd);
+  Assert.assertTrue(transOp.getTransformedOperation().hasDefined(REDIRECT_PORT));
+  Assert.assertEquals(443,transOp.getTransformedOperation().get(REDIRECT_PORT).asInt());
+  checkOutcome(mainServices.executeOperation(modelVersion,transOp));
+  ModelNode transformed=mainServices.readTransformedModel(modelVersion).get(SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,CONNECTOR,"as75871");
+  Assert.assertTrue(transformed.hasDefined(REDIRECT_PORT));
+  Assert.assertEquals(443,transformed.get(REDIRECT_PORT).asInt());
+  ModelNode write=createOperation(WRITE_ATTRIBUTE_OPERATION,SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,Constants.CONNECTOR,"as75871");
+  write.get(NAME).set(REDIRECT_PORT);
+  write.get(VALUE);
+  transOp=mainServices.transformOperation(modelVersion,write);
+  ModelNode translatedWrite=transOp.getTransformedOperation();
+  Assert.assertTrue(translatedWrite.hasDefined(VALUE));
+  Assert.assertEquals(443,translatedWrite.get(VALUE).asInt());
+  checkOutcome(mainServices.executeOperation(modelVersion,transOp));
+  transformed=mainServices.readTransformedModel(modelVersion).get(SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,CONNECTOR,"as75871");
+  Assert.assertTrue(transformed.hasDefined(REDIRECT_PORT));
+  Assert.assertEquals(443,transformed.get(REDIRECT_PORT).asInt());
+  ModelNode undefine=createOperation(UNDEFINE_ATTRIBUTE_OPERATION,SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,Constants.CONNECTOR,"as75871");
+  undefine.get(NAME).set(REDIRECT_PORT);
+  transOp=mainServices.transformOperation(modelVersion,undefine);
+  Assert.assertEquals(translatedWrite,transOp.getTransformedOperation());
+  checkOutcome(mainServices.executeOperation(modelVersion,transOp));
+  transformed=mainServices.readTransformedModel(modelVersion).get(SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,CONNECTOR,"as75871");
+  Assert.assertTrue(transformed.hasDefined(REDIRECT_PORT));
+  Assert.assertEquals(443,transformed.get(REDIRECT_PORT).asInt());
+}
