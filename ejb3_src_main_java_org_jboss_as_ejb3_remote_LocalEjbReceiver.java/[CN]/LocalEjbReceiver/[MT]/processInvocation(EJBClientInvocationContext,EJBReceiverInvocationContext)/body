@@ -25,20 +25,38 @@
       parameters[i]=clone(method.getParameterTypes()[i],parameterCloner,invocation.getParameters()[i],allowPassByReference);
     }
   }
-  final InterceptorContext context=new InterceptorContext();
-  context.setParameters(parameters);
-  context.setMethod(method);
-  context.setTarget(invocation.getInvokedProxy());
-  context.setContextData(new HashMap<String,Object>());
-  context.putPrivateData(Component.class,ejbComponent);
-  context.putPrivateData(ComponentView.class,view);
+  final InterceptorContext interceptorContext=new InterceptorContext();
+  interceptorContext.setParameters(parameters);
+  interceptorContext.setMethod(method);
+  interceptorContext.setTarget(invocation.getInvokedProxy());
+  final Map<Object,Object> privateAttachments=invocation.getAttachments();
+  final Map<String,Object> invocationContextData=invocation.getContextData();
+  if (invocationContextData == null && privateAttachments.isEmpty()) {
+    interceptorContext.setContextData(new HashMap<String,Object>());
+  }
+ else {
+    final Map<String,Object> data=new HashMap<String,Object>();
+    interceptorContext.setContextData(data);
+    for (    Map.Entry<String,Object> entry : invocationContextData.entrySet()) {
+      data.put(entry.getKey(),entry.getValue());
+    }
+    if (!privateAttachments.isEmpty()) {
+      data.put(EJBClientInvocationContext.PRIVATE_ATTACHMENTS_KEY,privateAttachments);
+    }
+    final boolean txIdAttachmentPresent=privateAttachments.containsKey(AttachmentKeys.TRANSACTION_ID_KEY);
+    if (txIdAttachmentPresent) {
+      data.put(TransactionID.PRIVATE_DATA_KEY,privateAttachments.get(AttachmentKeys.TRANSACTION_ID_KEY));
+    }
+  }
+  interceptorContext.putPrivateData(Component.class,ejbComponent);
+  interceptorContext.putPrivateData(ComponentView.class,view);
   if (locator instanceof StatefulEJBLocator) {
     final SessionID sessionID=((StatefulEJBLocator)locator).getSessionId();
-    context.putPrivateData(SessionID.class,sessionID);
+    interceptorContext.putPrivateData(SessionID.class,sessionID);
   }
  else   if (locator instanceof EntityEJBLocator) {
     final Object primaryKey=((EntityEJBLocator)locator).getPrimaryKey();
-    context.putPrivateData(EntityBeanComponent.PRIMARY_KEY_CONTEXT_KEY,primaryKey);
+    interceptorContext.putPrivateData(EntityBeanComponent.PRIMARY_KEY_CONTEXT_KEY,primaryKey);
   }
   final ClonerConfiguration config=new ClonerConfiguration();
   config.setClassCloner(new LocalInvocationClassCloner(invocation.getInvokedProxy().getClass().getClassLoader()));
@@ -52,7 +70,7 @@
         @Override protected Object runInvocation() throws Exception {
           setSecurityContextOnAssociation(securityContext);
           try {
-            return view.invoke(context);
+            return view.invoke(interceptorContext);
           }
   finally {
             clearSecurityContextOnAssociation();
@@ -60,7 +78,7 @@
         }
       }
 ;
-      context.putPrivateData(CancellationFlag.class,flag);
+      interceptorContext.putPrivateData(CancellationFlag.class,flag);
       component.getAsynchronousExecutor().submit(task);
       receiverContext.resultReady(new ImmediateResultProducer(task));
     }
@@ -71,7 +89,7 @@
  else {
     final Object result;
     try {
-      result=view.invoke(context);
+      result=view.invoke(interceptorContext);
     }
  catch (    Exception e) {
       throw (Exception)clone(resultCloner,e);
