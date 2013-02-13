@@ -1,0 +1,50 @@
+{
+  super.registerOperations(resourceRegistration);
+  resourceRegistration.registerOperationHandler(SUSPEND,new AbstractTimerHandler(){
+    @Override void executeRuntime(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      final TimerImpl timer=getTimer(context,operation);
+      timer.suspend();
+      context.completeStep(new OperationContext.RollbackHandler(){
+        @Override public void handleRollback(        OperationContext context,        ModelNode operation){
+          timer.scheduleTimeout(true);
+        }
+      }
+);
+    }
+  }
+);
+  resourceRegistration.registerOperationHandler(ACTIVATE,new AbstractTimerHandler(){
+    @Override void executeRuntime(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      final TimerImpl timer=getTimer(context,operation);
+      if (!timer.isActive()) {
+        timer.scheduleTimeout(true);
+        context.completeStep(new OperationContext.RollbackHandler(){
+          @Override public void handleRollback(          OperationContext context,          ModelNode operation){
+            timer.suspend();
+          }
+        }
+);
+      }
+ else {
+        throw MESSAGES.timerIsActive(timer.getId());
+      }
+    }
+  }
+);
+  resourceRegistration.registerOperationHandler(CANCEL,new AbstractTimerHandler(){
+    @Override void executeRuntime(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      final TimerImpl timer=getTimer(context,operation);
+      timer.cancel();
+      context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+    }
+  }
+);
+  resourceRegistration.registerOperationHandler(TRIGGER,new AbstractTimerHandler(){
+    @Override void executeRuntime(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      final TimerImpl timer=getTimer(context,operation);
+      timer.invoke();
+      context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+    }
+  }
+);
+}
