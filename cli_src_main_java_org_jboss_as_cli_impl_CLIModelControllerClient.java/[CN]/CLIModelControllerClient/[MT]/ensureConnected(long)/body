@@ -1,0 +1,33 @@
+{
+  boolean doTry=true;
+  final long start=System.currentTimeMillis();
+  IOException ioe=null;
+  while (doTry) {
+synchronized (lock) {
+      try {
+        getOrCreateChannel().getConnection();
+        doTry=false;
+      }
+ catch (      IOException e) {
+        ioe=e;
+        if (strategy != null) {
+          StreamUtils.safeClose(strategy);
+          strategy=null;
+        }
+      }
+      lock.notifyAll();
+    }
+    if (ioe != null) {
+      if (System.currentTimeMillis() - start > timeoutMillis) {
+        throw new CommandLineException("Failed to establish connection in " + (System.currentTimeMillis() - start) + "ms",ioe);
+      }
+      ioe=null;
+      try {
+        Thread.sleep(500);
+      }
+ catch (      InterruptedException e1) {
+        e1.printStackTrace();
+      }
+    }
+  }
+}

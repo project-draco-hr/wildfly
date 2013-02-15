@@ -1,20 +1,12 @@
 {
-  if (strategy == null) {
-    final ProtocolChannelClient setup=ProtocolChannelClient.create(channelConfig);
-    strategy=ManagementClientChannelStrategy.create(setup,channelAssociation,handler,null,sslContext,new CloseHandler<Channel>(){
-      @Override public void handleClose(      final Channel closed,      final IOException exception){
-        channelAssociation.handleChannelClosed(closed,exception);
-      }
+synchronized (lock) {
+    if (strategy == null) {
+      final ProtocolChannelClient setup=ProtocolChannelClient.create(channelConfig);
+      final ChannelCloseHandler channelCloseHandler=new ChannelCloseHandler();
+      strategy=ManagementClientChannelStrategy.create(setup,channelAssociation,handler,null,sslContext,channelCloseHandler);
+      channelCloseHandler.setOriginalStrategy(strategy);
     }
-);
-    strategy.getChannel().getConnection().addCloseHandler(new CloseHandler<Connection>(){
-      @Override public void handleClose(      Connection closed,      IOException exception){
-        closeHandler.handleClose();
-        StreamUtils.safeClose(strategy);
-        strategy=null;
-      }
-    }
-);
+    lock.notifyAll();
+    return strategy.getChannel();
   }
-  return strategy.getChannel();
 }
