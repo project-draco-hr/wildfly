@@ -1,5 +1,6 @@
 {
-  final TransformersSubRegistration transformers=registration.registerModelTransformers(ModelVersion.create(1,0,0),new ResourceTransformer(){
+  ResourceTransformationDescriptionBuilder builder=TransformationDescriptionBuilder.Factory.createSubsystemInstance();
+  builder.setCustomResourceTransformer(new ResourceTransformer(){
     @Override public void transformResource(    ResourceTransformationContext context,    PathAddress address,    Resource resource) throws OperationFailedException {
       ModelNode model=resource.getModel();
       Resource exposeResolvedResource=resource.getChild(PathElement.pathElement(CommonAttributes.EXPOSE_MODEL,CommonAttributes.RESOLVED));
@@ -19,34 +20,38 @@
     }
   }
 );
-  TransformersSubRegistration expressions=transformers.registerSubResource(ExposeModelResourceExpression.INSTANCE.getPathElement());
-  expressions.discardOperations(ADD,REMOVE,WRITE_ATTRIBUTE_OPERATION,READ_ATTRIBUTE_OPERATION);
-  TransformersSubRegistration resolved=transformers.registerSubResource(ExposeModelResourceResolved.INSTANCE.getPathElement());
-  resolved.discardOperations(WRITE_ATTRIBUTE_OPERATION);
-  resolved.registerOperationTransformer(ADD,new AbstractOperationTransformer(){
-    @Override protected ModelNode transform(    TransformationContext context,    PathAddress address,    ModelNode operation){
-      ModelNode node=new ModelNode();
-      node.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-      node.get(OP_ADDR).set(address.subAddress(0,address.size() - 1).toModelNode());
-      node.get(NAME).set(CommonAttributes.SHOW_MODEL);
-      node.get(VALUE).set(true);
-      return node;
+  builder.rejectChildResource(PathElement.pathElement(CommonAttributes.EXPOSE_MODEL,CommonAttributes.EXPRESSION));
+  ResourceTransformationDescriptionBuilder resolvedBuilder=builder.addChildResource(PathElement.pathElement(CommonAttributes.EXPOSE_MODEL,CommonAttributes.RESOLVED));
+  resolvedBuilder.getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,CommonAttributes.DOMAIN_NAME,CommonAttributes.PROPER_PROPERTY_FORMAT).addRejectCheck(new RejectAttributeChecker.DefaultRejectAttributeChecker(){
+    @Override public String getRejectionLogMessage(    Map<String,ModelNode> attributes){
+      return JmxMessages.MESSAGES.domainNameMustBeJBossAs();
+    }
+    @Override protected boolean rejectAttribute(    PathAddress address,    String attributeName,    ModelNode attributeValue,    TransformationContext context){
+      return attributeValue.isDefined() && !attributeValue.asString().equals("jboss.as");
     }
   }
-);
-  resolved.registerOperationTransformer(REMOVE,new AbstractOperationTransformer(){
-    @Override protected ModelNode transform(    TransformationContext context,    PathAddress address,    ModelNode operation){
-      ModelNode node=new ModelNode();
-      node.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-      node.get(OP_ADDR).set(address.subAddress(0,address.size() - 1).toModelNode());
-      node.get(NAME).set(CommonAttributes.SHOW_MODEL);
-      node.get(VALUE).set(false);
-      return node;
+,CommonAttributes.DOMAIN_NAME).addRejectCheck(new RejectAttributeChecker.DefaultRejectAttributeChecker(){
+    @Override public String getRejectionLogMessage(    Map<String,ModelNode> attributes){
+      return JmxMessages.MESSAGES.properPropertyFormatMustBeFalse();
+    }
+    @Override public boolean rejectOperationParameter(    PathAddress address,    String attributeName,    ModelNode attributeValue,    ModelNode operation,    TransformationContext context){
+      if (operation.get(OP).asString().equals(REMOVE)) {
+        return false;
+      }
+      return super.rejectOperationParameter(address,attributeName,attributeValue,operation,context);
+    }
+    @Override protected boolean rejectAttribute(    PathAddress address,    String attributeName,    ModelNode attributeValue,    TransformationContext context){
+      return !attributeValue.isDefined() || (attributeValue.getType() == ModelType.BOOLEAN && attributeValue.asBoolean());
     }
   }
-);
-  resolved.registerOperationTransformer(READ_ATTRIBUTE_OPERATION,new OperationTransformer(){
-    @Override public TransformedOperation transformOperation(    final TransformationContext context,    final PathAddress address,    final ModelNode operation){
+,CommonAttributes.PROPER_PROPERTY_FORMAT);
+  resolvedBuilder.setCustomResourceTransformer(ResourceTransformer.DISCARD);
+  resolvedBuilder.addOperationTransformationOverride(ADD).inheritResourceAttributeDefinitions().setCustomOperationTransformer(new ResolvedOperationTransformer(true));
+  resolvedBuilder.addOperationTransformationOverride(REMOVE).inheritResourceAttributeDefinitions().setCustomOperationTransformer(new ResolvedOperationTransformer(false));
+  resolvedBuilder.addOperationTransformationOverride(UNDEFINE_ATTRIBUTE_OPERATION).inheritResourceAttributeDefinitions().setCustomOperationTransformer(OperationTransformer.DISCARD);
+  resolvedBuilder.addOperationTransformationOverride(WRITE_ATTRIBUTE_OPERATION).inheritResourceAttributeDefinitions().setCustomOperationTransformer(OperationTransformer.DISCARD);
+  resolvedBuilder.addOperationTransformationOverride(READ_ATTRIBUTE_OPERATION).setCustomOperationTransformer(new OperationTransformer(){
+    @Override public TransformedOperation transformOperation(    final TransformationContext context,    final PathAddress address,    final ModelNode operation) throws OperationFailedException {
       return new TransformedOperation(null,new OperationResultTransformer(){
         @Override public ModelNode transformResult(        ModelNode result){
           if (operation.get(NAME).asString().equals(CommonAttributes.DOMAIN_NAME)) {
@@ -61,8 +66,6 @@
     }
   }
 );
-  RejectExpressionValuesTransformer rejectTransformer=new RejectExpressionValuesTransformer(RemotingConnectorResource.USE_MANAGEMENT_ENDPOINT);
-  TransformersSubRegistration remoting=transformers.registerSubResource(RemotingConnectorResource.REMOTE_CONNECTOR_CONFIG_PATH,(ResourceTransformer)rejectTransformer);
-  remoting.registerOperationTransformer(ADD,rejectTransformer);
-  remoting.registerOperationTransformer(WRITE_ATTRIBUTE_OPERATION,rejectTransformer.getWriteAttributeTransformer());
+  builder.addChildResource(RemotingConnectorResource.REMOTE_CONNECTOR_CONFIG_PATH).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,RemotingConnectorResource.USE_MANAGEMENT_ENDPOINT);
+  TransformationDescription.Tools.register(builder.build(),registration,ModelVersion.create(1,0,0));
 }
