@@ -4,12 +4,29 @@
   for (  AttributeDefinition attr : DISTRIBUTED_CACHE_ATTRIBUTES) {
     resourceRegistration.registerReadWriteAttribute(attr,null,writeHandler);
   }
-  final OperationStepHandler virtualNodesWriteHandler=new ModelOnlyWriteAttributeHandler(VIRTUAL_NODES){
+  final OperationStepHandler virtualNodesWriteHandler=new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
       if (operation.hasDefined(VALUE) && operation.get(VALUE).asInt() != 1) {
-        throw InfinispanMessages.MESSAGES.attributeDeprecated(ModelKeys.VIRTUAL_NODES);
+        InfinispanLogger.ROOT_LOGGER.virtualNodesAttributeDeprecated();
+        ModelNode convertedValue=SegmentsAndVirtualNodeConverter.virtualNodesToSegments(operation.get(VALUE));
+        final ModelNode submodel=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel();
+        final ModelNode syntheticOp=new ModelNode();
+        syntheticOp.get(ModelKeys.SEGMENTS).set(convertedValue);
+        SEGMENTS.validateAndSet(syntheticOp,submodel);
+        if (requiresRuntime(context)) {
+          context.addStep(new OperationStepHandler(){
+            @Override public void execute(            OperationContext context,            ModelNode operation) throws OperationFailedException {
+              context.reloadRequired();
+              context.completeStep(OperationContext.RollbackHandler.REVERT_RELOAD_REQUIRED_ROLLBACK_HANDLER);
+            }
+          }
+,OperationContext.Stage.RUNTIME);
+        }
       }
       context.stepCompleted();
+    }
+    protected boolean requiresRuntime(    OperationContext context){
+      return context.getProcessType().isServer() && !context.isBooting();
     }
   }
 ;
