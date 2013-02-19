@@ -1,3 +1,17 @@
 {
-  doJvmTransformer("domain-with-expressions.xml");
+  KernelServicesBuilder builder=createKernelServicesBuilder(TestModelType.DOMAIN).setModelInitializer(StandardServerGroupInitializers.XML_MODEL_INITIALIZER,StandardServerGroupInitializers.XML_MODEL_WRITE_SANITIZER);
+  StandardServerGroupInitializers.addServerGroupInitializers(builder.createLegacyKernelServicesBuilder(modelVersion,testControllerVersion));
+  KernelServices mainServices=builder.build();
+  assertTrue(mainServices.isSuccessfulBoot());
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  assertTrue(legacyServices.isSuccessfulBoot());
+  List<ModelNode> operations=builder.parseXmlResource("domain-with-expressions.xml");
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,modelVersion,operations,getConfig());
+  checkCoreModelTransformation(mainServices,modelVersion,REMOVE_SOCKET_BINDING_GROUP_FIXER,new ModelFixer(){
+    @Override public ModelNode fixModel(    ModelNode modelNode){
+      modelNode=REMOVE_SOCKET_BINDING_GROUP_FIXER.fixModel(modelNode);
+      return isFailExpressions() ? modelNode.resolve() : modelNode;
+    }
+  }
+);
 }
