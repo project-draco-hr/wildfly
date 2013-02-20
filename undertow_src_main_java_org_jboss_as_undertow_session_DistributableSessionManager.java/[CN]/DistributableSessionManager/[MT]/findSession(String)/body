@@ -1,0 +1,22 @@
+{
+  String realId=this.parse(id).getKey();
+  ClusteredSession<O> session=cast(this.sessions.get(realId));
+  if (session == null && !SessionInvalidationTracker.isSessionInvalidated(realId,this)) {
+    log.tracef("Checking for session %s in the distributed cache",realId);
+    session=loadSession(realId);
+  }
+ else   if (session != null && this.outdatedSessionChecker.isSessionOutdated(session)) {
+    log.tracef("Updating session %s from the distributed cache",realId);
+    session=loadSession(realId);
+    if (session == null) {
+      this.sessions.remove(realId);
+    }
+  }
+  if (session != null) {
+    SessionReplicationContext.bindSession(session,snapshotManager);
+    if (session.getNeedsPostReplicateActivation()) {
+      session.notifyDidActivate(ClusteredSessionNotificationCause.REPLICATION);
+    }
+  }
+  return session;
+}

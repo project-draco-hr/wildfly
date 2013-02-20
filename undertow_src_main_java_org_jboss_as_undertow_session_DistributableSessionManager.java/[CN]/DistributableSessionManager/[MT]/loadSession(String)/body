@@ -1,0 +1,69 @@
+{
+  if (realId == null)   return null;
+  try {
+    boolean inLockingValve=SessionReplicationContext.isLocallyActive();
+    if (inLockingValve || this.valveLock.tryLock(0,TimeUnit.SECONDS)) {
+      try {
+        long begin=System.currentTimeMillis();
+        boolean mustAdd=false;
+        boolean passivated=false;
+        ClusteredSession<O> session=cast(this.sessions.get(realId));
+        boolean initialLoad=false;
+        if (session == null) {
+          initialLoad=true;
+          mustAdd=true;
+          session=createEmptyClusteredSession();
+          ClusteredSession<O> embryo=this.embryonicSessions.putIfAbsent(realId,session);
+          if (embryo != null) {
+            session=embryo;
+          }
+          OwnedSessionUpdate osu=unloadedSessions.get(realId);
+          passivated=(osu != null && osu.isPassivated());
+        }
+synchronized (session) {
+          if (initialLoad && session.isOutdated() == false) {
+            return session;
+          }
+          IncomingDistributableSessionData data=this.distributedCacheManager.getSessionData(realId,initialLoad);
+          if (data != null) {
+            session.update(data);
+          }
+ else {
+            session=null;
+          }
+          if (session != null) {
+            ClusteredSessionNotificationCause cause=passivated ? ClusteredSessionNotificationCause.ACTIVATION : ClusteredSessionNotificationCause.FAILOVER;
+            session.notifyDidActivate(cause);
+          }
+          if (session != null) {
+            if (mustAdd) {
+              add(session,false);
+              if (!passivated) {
+                session.tellNew(ClusteredSessionNotificationCause.FAILOVER);
+              }
+            }
+            long elapsed=System.currentTimeMillis() - begin;
+            this.getReplicationStatistics().updateLoadStats(realId,elapsed);
+            log.tracef("loadSession(): id=%s, session=%s",realId,session);
+          }
+ else {
+            log.tracef("loadSession(): session %s not found in distributed cache",realId);
+          }
+          if (initialLoad) {
+            embryonicSessions.remove(realId);
+          }
+        }
+        return session;
+      }
+  finally {
+        if (!inLockingValve) {
+          this.valveLock.unlock();
+        }
+      }
+    }
+  }
+ catch (  InterruptedException e) {
+    Thread.currentThread().interrupt();
+  }
+  return null;
+}

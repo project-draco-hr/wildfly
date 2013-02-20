@@ -1,0 +1,30 @@
+{
+  if (log.isTraceEnabled()) {
+    log.tracef("handling request %s",exchange.getRequestURI());
+  }
+  SessionReplicationContext.enterWebapp(exchange,true);
+  boolean startedBatch=startBatchTransaction();
+  try {
+    String requestedId=deployment.getServletContext().getSessionCookieConfig().findSessionId(exchange);
+    if (requestedId != null) {
+      manager.getSession(exchange,deployment.getServletContext().getSessionCookieConfig());
+    }
+    next.handleRequest(exchange);
+  }
+  finally {
+    try {
+      SessionReplicationContext ctx=SessionReplicationContext.exitWebapp();
+      if (ctx.getSoleSnapshotManager() != null) {
+        ctx.getSoleSnapshotManager().snapshot(ctx.getSoleSession());
+      }
+ else {
+        handleCrossContextSessions(ctx);
+      }
+    }
+  finally {
+      if (startedBatch) {
+        tm.endBatch();
+      }
+    }
+  }
+}

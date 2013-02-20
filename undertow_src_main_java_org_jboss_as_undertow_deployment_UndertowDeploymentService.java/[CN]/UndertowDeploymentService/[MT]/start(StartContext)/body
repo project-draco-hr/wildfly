@@ -1,0 +1,34 @@
+{
+  if (jBossWebMetaData.getDistributable() != null) {
+    String instanceId=undertowService.getValue().getInstanceId();
+    ClassResolver resolver=ModularClassResolver.getInstance(module.getModuleLoader());
+    sessionManager=new DistributableSessionManager<OutgoingDistributableSessionData>(this.distributedCacheManagerFactoryInjectedValue.getValue(),jBossWebMetaData,new ClassLoaderAwareClassResolver(resolver,module.getClassLoader()),deploymentInfo.getContextPath(),module.getClassLoader(),instanceId);
+    deploymentInfo.setSessionManager(sessionManager);
+  }
+  final List<ThreadSetupAction> setup=new ArrayList<ThreadSetupAction>();
+  setup.add(new ContextClassLoaderSetupAction(deploymentInfo.getClassLoader()));
+  setup.addAll(deploymentInfo.getThreadSetupActions());
+  final CompositeThreadSetupAction threadSetupAction=new CompositeThreadSetupAction(setup);
+  SecurityDomainContext sdc=securityDomainContextValue.getValue();
+  deploymentInfo.setIdentityManager(new JAASIdentityManagerImpl(sdc,jBossWebMetaData.getPrincipalVersusRolesMap(),threadSetupAction));
+  AuditManager auditManager=sdc.getAuditManager();
+  if (auditManager != null) {
+    deploymentInfo.addNotificationReceiver(new AuditNotificationReceiver(auditManager));
+  }
+  deploymentInfo.setConfidentialPortManager(getConfidentialPortManager());
+  StartupContext.setInjectionContainer(webInjectionContainer);
+  try {
+    deploymentManager=container.getValue().getServletContainer().addDeployment(deploymentInfo);
+    deploymentManager.deploy();
+    try {
+      HttpHandler handler=deploymentManager.start();
+      host.getValue().registerDeployment(deploymentInfo,handler);
+    }
+ catch (    ServletException e) {
+      throw new StartException(e);
+    }
+  }
+  finally {
+    StartupContext.setInjectionContainer(null);
+  }
+}

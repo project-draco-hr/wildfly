@@ -1,0 +1,36 @@
+{
+  final AuthenticationManager authenticationManager=securityDomainContext.getAuthenticationManager();
+  final MappingManager mappingManager=securityDomainContext.getMappingManager();
+  final AuthorizationManager authorizationManager=securityDomainContext.getAuthorizationManager();
+  final SecurityContext sc=SecurityActions.getSecurityContext();
+  Principal incomingPrincipal=account.getPrincipal();
+  Subject subject=new Subject();
+  try {
+    boolean isValid=authenticationManager.isValid(incomingPrincipal,credential,subject);
+    if (isValid) {
+      UndertowLogger.ROOT_LOGGER.tracef("User: " + incomingPrincipal + " is authenticated");
+      if (sc == null)       throw new IllegalStateException("No SecurityContext found!");
+      Principal userPrincipal=getPrincipal(subject);
+      sc.getUtil().createSubjectInfo(incomingPrincipal,credential,subject);
+      SecurityContextCallbackHandler scb=new SecurityContextCallbackHandler(sc);
+      if (mappingManager != null) {
+        MappingContext<RoleGroup> mc=mappingManager.getMappingContext(MappingType.ROLE.name());
+        if (mc != null && mc.hasModules()) {
+          SecurityRolesAssociation.setSecurityRoles(principalVersusRolesMap);
+        }
+      }
+      RoleGroup roles=authorizationManager.getSubjectRoles(subject,scb);
+      Set<String> roleSet=new HashSet<String>();
+      for (      Role role : roles.getRoles()) {
+        roleSet.add(role.getRoleName());
+      }
+      AccountImpl accountImpl=new AccountImpl(userPrincipal);
+      accountImpl.setRoles(roleSet);
+      return accountImpl;
+    }
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(e);
+  }
+  return null;
+}

@@ -1,0 +1,47 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (!DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit)) {
+    return;
+  }
+  final Map<String,ComponentDescription> componentByClass=new HashMap<String,ComponentDescription>();
+  final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
+  final EEApplicationClasses applicationClassesDescription=deploymentUnit.getAttachment(Attachments.EE_APPLICATION_CLASSES_DESCRIPTION);
+  final CompositeIndex compositeIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.COMPOSITE_ANNOTATION_INDEX);
+  if (moduleDescription == null) {
+    return;
+  }
+  for (  ComponentDescription component : moduleDescription.getComponentDescriptions()) {
+    componentByClass.put(component.getComponentClassName(),component);
+  }
+  final WarMetaData warMetaData=deploymentUnit.getAttachment(WarMetaData.ATTACHMENT_KEY);
+  final TldsMetaData tldsMetaData=deploymentUnit.getAttachment(TldsMetaData.ATTACHMENT_KEY);
+  final Set<String> classes=getAllComponentClasses(deploymentUnit,compositeIndex,warMetaData,tldsMetaData);
+  for (  String clazz : classes) {
+    if (clazz == null || clazz.trim().isEmpty()) {
+      continue;
+    }
+    ComponentDescription description=componentByClass.get(clazz);
+    if (description != null) {
+      if (!(description.getViews().size() == 1)) {
+        throw UndertowMessages.MESSAGES.wrongComponentType(clazz);
+      }
+    }
+ else {
+      if (compositeIndex.getClassByName(DotName.createSimple(clazz)) == null) {
+        boolean found=false;
+        for (        String pack : BUILTIN_TAGLIBS) {
+          if (clazz.startsWith(pack)) {
+            found=true;
+            break;
+          }
+        }
+        if (found) {
+          continue;
+        }
+      }
+      description=new WebComponentDescription(clazz,clazz,moduleDescription,deploymentUnit.getServiceName(),applicationClassesDescription);
+      moduleDescription.addComponent(description);
+      deploymentUnit.addToAttachmentList(WebComponentDescription.WEB_COMPONENTS,description.getStartServiceName());
+    }
+  }
+}
