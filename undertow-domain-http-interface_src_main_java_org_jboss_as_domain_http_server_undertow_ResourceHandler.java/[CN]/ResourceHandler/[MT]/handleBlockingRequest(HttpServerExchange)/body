@@ -1,0 +1,61 @@
+{
+  final HttpString requestMethod=exchange.getRequestMethod();
+  if (!Methods.GET.equals(requestMethod)) {
+    HttpHandlers.executeHandler(Common.METHOD_NOT_ALLOWED_HANDLER,exchange);
+    return;
+  }
+  String path=exchange.getRelativePath();
+  String resource=path.startsWith("/") ? path.substring(1) : path;
+  if (resource.equals("")) {
+    HeaderMap responseHeaders=exchange.getResponseHeaders();
+    responseHeaders.add(Headers.LOCATION,getDefaultPath());
+    HttpHandlers.executeHandler(Common.TEMPORARY_REDIRECT,exchange);
+    return;
+  }
+ else   if (!resource.contains(".")) {
+    HttpHandlers.executeHandler(ResponseCodeHandler.HANDLE_404,exchange);
+    return;
+  }
+  if (resource.startsWith("META-INF")) {
+    HttpHandlers.executeHandler(ResponseCodeHandler.HANDLE_403,exchange);
+    return;
+  }
+  ResourceHandle handle=getResourceHandle(resource);
+  if (handle.getInputStream() != null) {
+    InputStream inputStream=handle.getInputStream();
+    try {
+      final HeaderMap responseHeaders=exchange.getResponseHeaders();
+      responseHeaders.add(Headers.CONTENT_TYPE,resolveContentType(path));
+      if (!skipCache(resource)) {
+        if (System.currentTimeMillis() > lastExpiryDate) {
+          lastExpiryDate=calculateExpiryDate();
+          lastExpiryHeader=createDateFormat().format(new Date(lastExpiryDate));
+        }
+        responseHeaders.add(Headers.CACHE_CONTROL,"public, max-age=2678400");
+        responseHeaders.add(Headers.EXPIRES,lastExpiryHeader);
+      }
+ else {
+        responseHeaders.add(Headers.CACHE_CONTROL,"no-cache");
+      }
+      responseHeaders.add(Headers.CONTENT_LENGTH,String.valueOf(handle.getSize()));
+      exchange.setResponseCode(StatusCodes.CODE_200.getCode());
+      OutputStream outputStream=new UndertowOutputStream(exchange);
+      try {
+        fastChannelCopy(inputStream,outputStream);
+        outputStream.flush();
+      }
+ catch (      IOException e) {
+        throw new IllegalStateException(e);
+      }
+ finally {
+        safeClose(outputStream);
+      }
+    }
+  finally {
+      IoUtils.safeClose(inputStream);
+    }
+  }
+ else {
+    HttpHandlers.executeHandler(ResponseCodeHandler.HANDLE_404,exchange);
+  }
+}

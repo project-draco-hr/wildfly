@@ -1,0 +1,32 @@
+{
+  @SuppressWarnings("deprecation") ControlledProcessState.State currentState=controlledProcessStateService.getCurrentState();
+  if (currentState == ControlledProcessState.State.STARTING || currentState == ControlledProcessState.State.STOPPING) {
+    exchange.getResponseHeaders().add(Headers.RETRY_AFTER,"2");
+    HttpHandlers.executeHandler(Common.SERVICE_UNAVAIABLE,exchange);
+    return false;
+  }
+  final HttpString requestMethod=exchange.getRequestMethod();
+  if (!Methods.POST.equals(requestMethod) && !Methods.GET.equals(requestMethod)) {
+    if (Methods.OPTIONS.equals(requestMethod)) {
+      ROOT_LOGGER.debug("Request rejected due to 'OPTIONS' method which is not supported.");
+    }
+ else {
+      ROOT_LOGGER.debug("Request rejected as method not one of (GET,POST).");
+    }
+    HttpHandlers.executeHandler(Common.METHOD_NOT_ALLOWED_HANDLER,exchange);
+    return false;
+  }
+  final HeaderMap headers=exchange.getRequestHeaders();
+  if (headers.contains(Headers.ORIGIN)) {
+    String origin=headers.getFirst(Headers.ORIGIN);
+    String host=headers.getFirst(Headers.HOST);
+    String protocol=exchange.getRequestScheme();
+    String allowedOrigin=protocol + "://" + host;
+    if (origin.equals(allowedOrigin) == false) {
+      ROOT_LOGGER.debug("Request rejected due to HOST/ORIGIN mis-match.");
+      HttpHandlers.executeHandler(ResponseCodeHandler.HANDLE_403,exchange);
+      return false;
+    }
+  }
+  return true;
+}
