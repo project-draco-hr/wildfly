@@ -1,7 +1,6 @@
 {
   if (candidate == null || candidate.isEmpty())   return null;
   final VirtualFile file=VFS.getChild(candidate);
-  TempFileProvider provider=null;
   for (  final ExclusionFilter exclusionFilter : exclusionFilters) {
     if (exclusionFilter.exclude(file)) {
       if (ROOT_LOGGER.isTraceEnabled()) {
@@ -10,16 +9,15 @@
       return null;
     }
   }
-  Closeable handle;
+  Closeable handle=null;
+  TempFileProvider provider=null;
   try {
     if (file.exists()) {
       if (file.isDirectory()) {
         handle=VFS.mountReal(file.getPhysicalFile(),file);
       }
  else       if (file.getName().endsWith(EXTENSION_JAR)) {
-        if (provider == null) {
-          provider=TempFileProvider.create("jbossejbmodulescanner",ses);
-        }
+        provider=TempFileProvider.create("jbossejbmodulescanner",ses);
         handle=VFS.mountZip(file.getPhysicalFile(),file,provider);
       }
  else {
@@ -31,29 +29,22 @@
       ROOT_LOGGER.fileNotFound(file);
       return null;
     }
-    try {
-      final VirtualFile ejbJarXml=file.getChild(PATH_EJB_JAR_XML);
-      if (ejbJarXml.exists()) {
-        if (ROOT_LOGGER.isTraceEnabled()) {
-          ROOT_LOGGER.tracef("Found descriptor %s in %s",ejbJarXml.getPathNameRelativeTo(file),file);
-        }
-        return getModuleNameFromEjbJar(file,ejbJarXml);
+    final VirtualFile ejbJarXml=file.getChild(PATH_EJB_JAR_XML);
+    if (ejbJarXml.exists()) {
+      if (ROOT_LOGGER.isTraceEnabled()) {
+        ROOT_LOGGER.tracef("Found descriptor %s in %s",ejbJarXml.getPathNameRelativeTo(file),file);
       }
-      if (containsEjbComponentClass(file)) {
-        return getModuleNameFromFileName(file);
-      }
-      return null;
+      return getModuleNameFromEjbJar(file,ejbJarXml);
     }
-  finally {
-      try {
-        handle.close();
-      }
- catch (      final IOException e) {
-        ROOT_LOGGER.cannotCloseFile(e,file);
-      }
+    if (containsEjbComponentClass(file)) {
+      return getModuleNameFromFileName(file);
     }
+    return null;
   }
  catch (  final IOException e) {
     throw MESSAGES.cannotMountFile(e,candidate);
+  }
+ finally {
+    VFSUtils.safeClose(handle,provider);
   }
 }
