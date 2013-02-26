@@ -1,0 +1,33 @@
+{
+  if (securityRealm != null) {
+    Set<AuthMechanism> mechanisms=securityRealm.getSupportedAuthenticationMechanisms();
+    List<AuthenticationMechanism> undertowMechanisms=new ArrayList<AuthenticationMechanism>(mechanisms.size());
+    for (    AuthMechanism current : mechanisms) {
+switch (current) {
+case CLIENT_CERT:
+        undertowMechanisms.add(new ClientCertAuthenticationMechanism());
+      break;
+case DIGEST:
+    Map<String,String> mechConfig=securityRealm.getMechanismConfig(AuthMechanism.DIGEST);
+  boolean plainTextDigest=true;
+if (mechConfig.containsKey(DIGEST_PLAIN_TEXT)) {
+  plainTextDigest=Boolean.parseBoolean(mechConfig.get(DIGEST_PLAIN_TEXT));
+}
+List<DigestAlgorithm> digestAlgorithms=Collections.singletonList(DigestAlgorithm.MD5);
+List<DigestQop> digestQops=Collections.emptyList();
+undertowMechanisms.add(new DigestAuthenticationMechanism(digestAlgorithms,digestQops,securityRealm.getName(),new SimpleNonceManager(),plainTextDigest));
+break;
+case PLAIN:
+undertowMechanisms.add(new BasicAuthenticationMechanism(securityRealm.getName()));
+break;
+}
+}
+if (undertowMechanisms.size() > 0) {
+HttpHandler current=new AuthenticationCallHandler(domainHandler);
+current=new AuthenticationConstraintHandler(current);
+current=new AuthenticationMechanismsHandler(current,undertowMechanisms);
+return new SecurityInitialHandler(AuthenticationMode.PRO_ACTIVE,new RealmIdentityManager(securityRealm),current);
+}
+}
+return domainHandler;
+}
