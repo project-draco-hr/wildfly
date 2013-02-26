@@ -5,9 +5,34 @@
   }
   try {
     if (process != null) {
-      process.destroy();
+      Thread shutdown=new Thread(new Runnable(){
+        @Override public void run(){
+          try {
+            Thread.sleep(getContainerConfiguration().getStopTimeoutInSeconds() * 1000);
+          }
+ catch (          InterruptedException e) {
+            return;
+          }
+          if (process != null) {
+            process.destroy();
+          }
+        }
+      }
+);
+      shutdown.start();
+      ModelNode op=new ModelNode();
+      op.get("operation").set("read-attribute");
+      op.get("name").set("local-host-name");
+      ModelNode result=getManagementClient().getControllerClient().execute(op,null);
+      String hostName=result.get("result").asString();
+      op=new ModelNode();
+      op.get("operation").set("shutdown");
+      ModelNode address=op.get("address");
+      address.add("host",hostName);
+      getManagementClient().getControllerClient().executeAsync(op,null);
       process.waitFor();
       process=null;
+      shutdown.interrupt();
     }
   }
  catch (  Exception e) {
