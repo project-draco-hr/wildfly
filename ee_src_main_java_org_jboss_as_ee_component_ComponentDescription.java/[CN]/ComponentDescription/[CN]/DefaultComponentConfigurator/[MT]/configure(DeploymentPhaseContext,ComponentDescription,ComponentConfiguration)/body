@@ -21,7 +21,8 @@
   final Map<String,List<InterceptorFactory>> userPostActivatesByInterceptorClass;
   final Map<String,List<InterceptorFactory>> userPostConstructByInterceptorClass=new HashMap<String,List<InterceptorFactory>>();
   final Map<String,List<InterceptorFactory>> userPreDestroyByInterceptorClass=new HashMap<String,List<InterceptorFactory>>();
-  if (description.isTimerServiceApplicable()) {
+  final Set<MethodIdentifier> timeoutMethods=description.getTimerMethods();
+  if (description.isTimerServiceRequired()) {
     componentUserAroundTimeout=new ArrayList<InterceptorFactory>();
     userAroundTimeoutsByInterceptorClass=new HashMap<String,List<InterceptorFactory>>();
   }
@@ -105,7 +106,7 @@
         }
         final MethodIdentifier aroundInvokeMethodIdentifier=interceptorConfig.getAroundInvoke();
         handleInterceptorClass(clazz,aroundInvokeMethodIdentifier,userAroundInvokesByInterceptorClass,false,false);
-        if (description.isTimerServiceApplicable()) {
+        if (description.isTimerServiceRequired()) {
           final MethodIdentifier aroundTimeoutMethodIdentifier=interceptorConfig.getAroundTimeout();
           handleInterceptorClass(clazz,aroundTimeoutMethodIdentifier,userAroundTimeoutsByInterceptorClass,false,false);
         }
@@ -156,7 +157,7 @@
       handleClassMethod(clazz,interceptorConfig.getPostConstruct(),userPostConstruct,true,true);
       handleClassMethod(clazz,interceptorConfig.getPreDestroy(),userPreDestroy,true,true);
       handleClassMethod(clazz,interceptorConfig.getAroundInvoke(),componentUserAroundInvoke,false,false);
-      if (description.isTimerServiceApplicable()) {
+      if (description.isTimerServiceRequired()) {
         handleClassMethod(clazz,interceptorConfig.getAroundTimeout(),componentUserAroundTimeout,false,false);
       }
       if (description.isPassivationApplicable()) {
@@ -221,6 +222,7 @@
       final List<InterceptorFactory> userAroundTimeouts=new ArrayList<InterceptorFactory>();
       final List<InterceptorFactory> userComponentAroundInvokes=new ArrayList<InterceptorFactory>();
       final List<InterceptorFactory> userComponentAroundTimeouts=new ArrayList<InterceptorFactory>();
+      final boolean requiresTimerChain=description.isTimerServiceRequired() && timeoutMethods.contains(identifier);
       if (!description.isExcludeDefaultInterceptors() && !description.isExcludeDefaultInterceptors(identifier)) {
         for (        InterceptorDescription interceptorDescription : description.getDefaultInterceptors()) {
           String interceptorClassName=interceptorDescription.getInterceptorClassName();
@@ -228,7 +230,7 @@
           if (aroundInvokes != null) {
             userAroundInvokes.addAll(aroundInvokes);
           }
-          if (description.isTimerServiceApplicable()) {
+          if (requiresTimerChain) {
             List<InterceptorFactory> aroundTimeouts=userAroundTimeoutsByInterceptorClass.get(interceptorClassName);
             if (aroundTimeouts != null) {
               userAroundTimeouts.addAll(aroundTimeouts);
@@ -243,7 +245,7 @@
           if (aroundInvokes != null) {
             userAroundInvokes.addAll(aroundInvokes);
           }
-          if (description.isTimerServiceApplicable()) {
+          if (requiresTimerChain) {
             List<InterceptorFactory> aroundTimeouts=userAroundTimeoutsByInterceptorClass.get(interceptorClassName);
             if (aroundTimeouts != null) {
               userAroundTimeouts.addAll(aroundTimeouts);
@@ -259,7 +261,7 @@
           if (aroundInvokes != null) {
             userAroundInvokes.addAll(aroundInvokes);
           }
-          if (description.isTimerServiceApplicable()) {
+          if (requiresTimerChain) {
             List<InterceptorFactory> aroundTimeouts=userAroundTimeoutsByInterceptorClass.get(interceptorClassName);
             if (aroundTimeouts != null) {
               userAroundTimeouts.addAll(aroundTimeouts);
@@ -268,7 +270,7 @@
         }
       }
       userComponentAroundInvokes.addAll(componentUserAroundInvoke);
-      if (componentUserAroundTimeout != null) {
+      if (componentUserAroundTimeout != null && requiresTimerChain) {
         userComponentAroundTimeouts.addAll(componentUserAroundTimeout);
       }
       configuration.addComponentInterceptor(method,new UserInterceptorFactory(weaved(userAroundInvokes),weaved(userAroundTimeouts)),InterceptorOrder.Component.USER_INTERCEPTORS);
