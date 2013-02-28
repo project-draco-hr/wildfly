@@ -1,5 +1,12 @@
 {
-  previousClassLoader=doPrivileged(contextClassLoader(getApplicationClassLoader()));
+  final Thread thread=Thread.currentThread();
+  if (getSecurityManager() == null) {
+    previousClassLoader=thread.getContextClassLoader();
+    thread.setContextClassLoader(getApplicationClassLoader());
+  }
+ else {
+    previousClassLoader=doPrivileged(new SetContextClassLoaderAction(getApplicationClassLoader()));
+  }
   try {
     final TransactionManager tm=getTransactionManager();
     previousTx=tm.suspend();
@@ -11,7 +18,12 @@
     }
   }
  catch (  Throwable t) {
-    doPrivileged(contextClassLoader(previousClassLoader));
+    if (getSecurityManager() == null) {
+      thread.setContextClassLoader(previousClassLoader);
+    }
+ else {
+      doPrivileged(new SetContextClassLoaderAction(previousClassLoader));
+    }
     throw new ApplicationServerInternalException(t);
   }
 }
