@@ -1,3 +1,35 @@
 {
-  return null;
+  assertMechanism(AuthMechanism.DIGEST);
+  AuthorizingCallbackHandler ach=securityRealm.getAuthorizingCallbackHandler(AuthMechanism.DIGEST);
+  Callback[] callbacks=new Callback[3];
+  callbacks[0]=new RealmCallback("Realm",securityRealm.getName());
+  callbacks[1]=new NameCallback("Username",id);
+  boolean plainText=plainTextDigest();
+  if (plainText) {
+    callbacks[2]=new PasswordCallback("Password",false);
+  }
+ else {
+    callbacks[2]=new DigestHashCallback("Digest");
+  }
+  try {
+    ach.handle(callbacks);
+  }
+ catch (  Exception e) {
+    return null;
+  }
+  Principal user=new SimplePrincipal(id);
+  Collection<Principal> userCol=Collections.singleton(user);
+  SubjectUserInfo supplemental;
+  try {
+    supplemental=ach.createSubjectUserInfo(userCol);
+  }
+ catch (  IOException e) {
+    return null;
+  }
+  if (plainText) {
+    return new PlainDigestAccount(user,((PasswordCallback)callbacks[2]).getPassword());
+  }
+ else {
+    return new HashedDigestAccount(user,((DigestHashCallback)callbacks[2]).getHash());
+  }
 }
