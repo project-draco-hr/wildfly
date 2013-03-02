@@ -4,6 +4,35 @@
   model.get(Constants.ARCHIVE.getName()).set(name);
   setAttribute(model,Constants.BOOTSTRAP_CONTEXT,ironJacamarMetadata.getBootstrapContext());
   if (ironJacamarMetadata.getTransactionSupport() != null)   model.get(Constants.TRANSACTION_SUPPORT.getName()).set(ironJacamarMetadata.getTransactionSupport().name());
+  if (ironJacamarMetadata instanceof org.jboss.jca.common.api.metadata.ironjacamar.v11.IronJacamar) {
+    org.jboss.jca.common.api.metadata.ironjacamar.v11.IronJacamar ij11=(org.jboss.jca.common.api.metadata.ironjacamar.v11.IronJacamar)ironJacamarMetadata;
+    if (ij11.getWorkManager() != null && ij11.getWorkManager().getSecurity() != null) {
+      WorkManagerSecurity security=ij11.getWorkManager().getSecurity();
+      model.get(Constants.WM_SECURITY.getName()).set(true);
+      for (      String group : security.getDefaultGroups()) {
+        model.get(Constants.WM_SECURITY_DEFAULT_GROUPS.getName()).add(group);
+      }
+      model.get(Constants.WM_SECURITY_DEFAULT_PRINCIPAL.getName()).set(security.getDefaultPrincipal());
+      model.get(Constants.WM_SECURITY_MAPPING_REQUIRED.getName()).set(security.isMappingRequired());
+      model.get(Constants.WM_SECURITY_DOMAIN.getName()).set(security.getDomain());
+      for (      Map.Entry<String,String> entry : security.getGroupMappings().entrySet()) {
+        final Resource mapping=new IronJacamarResource.IronJacamarRuntimeResource();
+        final ModelNode subModel=mapping.getModel();
+        subModel.get(Constants.WM_SECURITY_MAPPING_FROM.getName()).set(entry.getKey());
+        subModel.get(Constants.WM_SECURITY_MAPPING_TO.getName()).set(entry.getKey());
+        final PathElement element=PathElement.pathElement(Constants.WM_SECURITY_MAPPING_GROUPS.getName(),WM_SECURITY_MAPPING_GROUP.getName());
+        ijResourceAdapter.registerChild(element,mapping);
+      }
+      for (      Map.Entry<String,String> entry : security.getUserMappings().entrySet()) {
+        final Resource mapping=new IronJacamarResource.IronJacamarRuntimeResource();
+        final ModelNode subModel=mapping.getModel();
+        subModel.get(Constants.WM_SECURITY_MAPPING_FROM.getName()).set(entry.getKey());
+        subModel.get(Constants.WM_SECURITY_MAPPING_TO.getName()).set(entry.getKey());
+        final PathElement element=PathElement.pathElement(Constants.WM_SECURITY_MAPPING_USERS.getName(),WM_SECURITY_MAPPING_USER.getName());
+        ijResourceAdapter.registerChild(element,mapping);
+      }
+    }
+  }
   if (ironJacamarMetadata.getBeanValidationGroups() != null) {
     for (    String bv : ironJacamarMetadata.getBeanValidationGroups()) {
       model.get(Constants.BEANVALIDATION_GROUPS.getName()).add(new ModelNode().set(bv));
@@ -15,7 +44,7 @@
     }
   }
   if (ironJacamarMetadata.getConnectionDefinitions() != null) {
-    for (    CommonConnDef connDef : ironJacamarMetadata.getConnectionDefinitions()) {
+    for (    org.jboss.jca.common.api.metadata.common.CommonConnDef connDef : ironJacamarMetadata.getConnectionDefinitions()) {
       addConnectionDefinition(ijResourceAdapter,connDef);
     }
   }

@@ -1,0 +1,33 @@
+{
+  ROOT_LOGGER.debugf("Starting JCA DistributedWorkManager: ",value.getName());
+  JGroupsTransport transport=new JGroupsTransport();
+  try {
+    transport.setChannel((JChannel)jGroupsChannelFactory.getValue().createChannel(jgroupsChannelName));
+    if (jgroupsChannelName != null)     transport.setClusterName(jgroupsChannelName);
+    if (requestTimeout != null)     transport.setTimeout(requestTimeout);
+    this.value.setTransport(transport);
+  }
+ catch (  Exception e) {
+    ROOT_LOGGER.trace("failed to start JGroups channel",e);
+    throw ROOT_LOGGER.failedToStartJGroupsChannel(jgroupsChannelName,this.value.getName());
+  }
+  BlockingExecutor longRunning=(BlockingExecutor)executorLong.getOptionalValue();
+  if (longRunning != null) {
+    this.value.setLongRunningThreadPool(longRunning);
+    this.value.setShortRunningThreadPool((BlockingExecutor)executorShort.getValue());
+  }
+ else {
+    this.value.setLongRunningThreadPool((BlockingExecutor)executorShort.getValue());
+    this.value.setShortRunningThreadPool((BlockingExecutor)executorShort.getValue());
+  }
+  this.value.setXATerminator(new XATerminatorImpl(xaTerminator.getValue()));
+  WorkManagerCoordinator.getInstance().registerWorkManager(value);
+  try {
+    transport.startup();
+  }
+ catch (  Throwable throwable) {
+    ROOT_LOGGER.trace("failed to start DWM transport:",throwable);
+    throw ROOT_LOGGER.failedToStartDWMTransport(this.value.getName());
+  }
+  ROOT_LOGGER.debugf("Started JCA DistributedWorkManager: ",value.getName());
+}

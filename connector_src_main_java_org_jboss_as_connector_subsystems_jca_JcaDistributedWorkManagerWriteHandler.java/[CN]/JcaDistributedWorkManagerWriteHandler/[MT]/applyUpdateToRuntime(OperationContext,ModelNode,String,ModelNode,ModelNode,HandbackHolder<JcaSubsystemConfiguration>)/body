@@ -1,0 +1,77 @@
+{
+  final ModelNode address=operation.require(OP_ADDR);
+  final String name=PathAddress.pathAddress(address).getLastElement().getValue();
+  Object wm=context.getServiceRegistry(true).getService(ConnectorServices.WORKMANAGER_SERVICE.append(name)).getValue();
+  if (wm == null || !(wm instanceof NamedDistributedWorkManager)) {
+    throw ConnectorLogger.ROOT_LOGGER.failedToFindDistributedWorkManager(name);
+  }
+  NamedDistributedWorkManager namedDistributedWorkManager=(NamedDistributedWorkManager)wm;
+  Injection injector=new Injection();
+  if (attributeName.equals(JcaDistributedWorkManagerDefinition.DWmParameters.POLICY.getAttribute().getName())) {
+switch (JcaDistributedWorkManagerDefinition.PolicyValue.valueOf(resolvedValue.asString())) {
+case NEVER:
+{
+        namedDistributedWorkManager.setPolicy(new Never());
+        break;
+      }
+case ALWAYS:
+{
+      namedDistributedWorkManager.setPolicy(new Always());
+      break;
+    }
+case WATERMARK:
+{
+    namedDistributedWorkManager.setPolicy(new WaterMark());
+    break;
+  }
+default :
+{
+  throw ROOT_LOGGER.unsupportedPolicy(resolvedValue.asString());
+}
+}
+}
+ else if (attributeName.equals(JcaDistributedWorkManagerDefinition.DWmParameters.SELECTOR.getAttribute().getName())) {
+switch (JcaDistributedWorkManagerDefinition.SelectorValue.valueOf(resolvedValue.asString())) {
+case FIRST_AVAILABLE:
+{
+namedDistributedWorkManager.setSelector(new FirstAvailable());
+break;
+}
+case MAX_FREE_THREADS:
+{
+namedDistributedWorkManager.setSelector(new MaxFreeThreads());
+break;
+}
+case PING_TIME:
+{
+namedDistributedWorkManager.setSelector(new PingTime());
+break;
+}
+default :
+{
+throw ROOT_LOGGER.unsupportedSelector(resolvedValue.asString());
+}
+}
+}
+ else if (attributeName.equals(JcaDistributedWorkManagerDefinition.DWmParameters.POLICY_OPTIONS.getAttribute().getName()) && namedDistributedWorkManager.getPolicy() != null) {
+for (Map.Entry<String,String> entry : ((PropertiesAttributeDefinition)JcaDistributedWorkManagerDefinition.DWmParameters.POLICY_OPTIONS.getAttribute()).unwrap(context,operation).entrySet()) {
+try {
+injector.inject(namedDistributedWorkManager.getPolicy(),entry.getKey(),entry.getValue());
+}
+ catch (Exception e) {
+ROOT_LOGGER.unsupportedPolicyOption(entry.getKey());
+}
+}
+}
+ else if (attributeName.equals(JcaDistributedWorkManagerDefinition.DWmParameters.SELECTOR_OPTIONS.getAttribute().getName())) {
+for (Map.Entry<String,String> entry : ((PropertiesAttributeDefinition)JcaDistributedWorkManagerDefinition.DWmParameters.SELECTOR_OPTIONS.getAttribute()).unwrap(context,operation).entrySet()) {
+try {
+injector.inject(namedDistributedWorkManager.getSelector(),entry.getKey(),entry.getValue());
+}
+ catch (Exception e) {
+ROOT_LOGGER.unsupportedSelectorOption(entry.getKey());
+}
+}
+}
+return false;
+}

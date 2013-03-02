@@ -1,10 +1,12 @@
 {
-  String subsystemXml="jca-full.xml";
-  ModelVersion modelVersion=ModelVersion.create(1,1,0);
-  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT).setSubsystemXmlResource(subsystemXml);
-  builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-connector:" + controllerVersion.getMavenGavVersion()).addMavenResourceURL("org.jboss.as:jboss-as-threads:" + controllerVersion.getMavenGavVersion()).setExtensionClassName("org.jboss.as.connector.subsystems.jca.JcaExtension");
+  KernelServicesBuilder builder=createKernelServicesBuilder(createAdditionalInitialization());
+  ModelVersion version_1_1_0=ModelVersion.create(1,1,0);
+  builder.createLegacyKernelServicesBuilder(null,controllerVersion,version_1_1_0).addMavenResourceURL("org.jboss.as:jboss-as-connector:" + controllerVersion.getMavenGavVersion()).addMavenResourceURL("org.jboss.as:jboss-as-threads:" + controllerVersion.getMavenGavVersion()).setExtensionClassName("org.jboss.as.connector.subsystems.jca.JcaExtension").skipReverseControllerCheck();
   KernelServices mainServices=builder.build();
-  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  KernelServices legacyServices=mainServices.getLegacyServices(version_1_1_0);
   Assert.assertNotNull(legacyServices);
-  checkSubsystemModelTransformation(mainServices,modelVersion);
+  Assert.assertTrue("main services did not boot",mainServices.isSuccessfulBoot());
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  List<ModelNode> xmlOps=builder.parseXmlResource("jca-full.xml");
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,version_1_1_0,xmlOps,new FailedOperationTransformationConfig().addFailedAttribute(PathAddress.pathAddress(JcaSubsystemRootDefinition.PATH_SUBSYSTEM,JcaDistributedWorkManagerDefinition.PATH_DISTRIBUTED_WORK_MANAGER),FailedOperationTransformationConfig.REJECTED_RESOURCE).addFailedAttribute(PathAddress.pathAddress(JcaSubsystemRootDefinition.PATH_SUBSYSTEM,JcaDistributedWorkManagerDefinition.PATH_DISTRIBUTED_WORK_MANAGER,PathElement.pathElement(WORKMANAGER_SHORT_RUNNING)),FailedOperationTransformationConfig.REJECTED_RESOURCE));
 }
