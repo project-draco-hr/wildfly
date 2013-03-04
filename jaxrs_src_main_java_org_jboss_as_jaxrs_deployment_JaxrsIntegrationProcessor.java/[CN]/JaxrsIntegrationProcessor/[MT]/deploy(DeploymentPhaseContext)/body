@@ -91,9 +91,26 @@
     setContextParameter(webdata,ResteasyContextParameters.RESTEASY_UNWRAPPED_EXCEPTIONS,"javax.ejb.EJBException");
   }
   if (resteasy.hasBootClasses() || resteasy.isDispatcherCreated())   return;
-  boolean useScannedClass=false;
-  String servletName;
-  if (resteasy.getScannedApplicationClass() == null) {
+  Set<Class> applicationClassSet=new HashSet<>();
+  for (  Class<? extends Application> clazz : resteasy.getScannedApplicationClasses()) {
+    if (clazz.isAnnotationPresent(ApplicationPath.class) || servletMappingsExist(webdata,clazz.getName())) {
+      applicationClassSet.add(clazz);
+    }
+  }
+  Class<? extends Application> applicationClass=null;
+  if (applicationClassSet.size() > 1) {
+    StringBuilder builder=new StringBuilder();
+    for (    Class c : applicationClassSet) {
+      builder.append(" ").append(c.getName());
+    }
+    throw new DeploymentUnitProcessingException(MESSAGES.onlyOneApplicationClassAllowed(builder));
+  }
+ else   if (applicationClassSet.size() == 1) {
+    applicationClass=applicationClassSet.iterator().next();
+  }
+  String servletName=null;
+  boolean mappingSet=false;
+  if (applicationClass == null) {
     JBossServletMetaData servlet=new JBossServletMetaData();
     servlet.setName(JAX_RS_SERVLET_NAME);
     servlet.setServletClass(HttpServlet30Dispatcher.class.getName());
@@ -102,51 +119,28 @@
     servletName=JAX_RS_SERVLET_NAME;
   }
  else {
-    if (servletMappingsExist(webdata,JAX_RS_SERVLET_NAME)) {
-      throw new DeploymentUnitProcessingException(MESSAGES.conflictUrlMapping());
-    }
-    ParamValueMetaData param=findInitParam(webdata,SERVLET_INIT_PARAM);
-    if (param != null) {
-      servletName=param.getParamValue();
-      setContextParameter(webdata,"javax.ws.rs.Application",servletName);
-    }
- else {
-      ParamValueMetaData contextParam=findContextParam(webdata,"javax.ws.rs.Application");
-      if (contextParam == null) {
-        setContextParameter(webdata,"javax.ws.rs.Application",resteasy.getScannedApplicationClass().getName());
-        useScannedClass=true;
-        servletName=resteasy.getScannedApplicationClass().getName();
-      }
- else {
-        servletName=contextParam.getParamValue();
-      }
-    }
-  }
-  boolean mappingSet=false;
-  if (useScannedClass) {
+    servletName=applicationClass.getName();
+    JBossServletMetaData servlet=new JBossServletMetaData();
+    servlet.setName(servletName);
+    servlet.setServletClass(HttpServlet30Dispatcher.class.getName());
+    servlet.setAsyncSupported(true);
+    addServlet(webdata,servlet);
     if (!servletMappingsExist(webdata,servletName)) {
       List<String> patterns=new ArrayList<String>();
-      if (resteasy.getScannedApplicationClass().isAnnotationPresent(ApplicationPath.class)) {
-        ApplicationPath path=resteasy.getScannedApplicationClass().getAnnotation(ApplicationPath.class);
-        String pathValue=path.value().trim();
-        if (!pathValue.startsWith("/")) {
-          pathValue="/" + pathValue;
-        }
-        String prefix=pathValue;
-        if (pathValue.endsWith("/")) {
-          pathValue+="*";
-        }
- else {
-          pathValue+="/*";
-        }
-        patterns.add(pathValue);
-        setContextParameter(webdata,"resteasy.servlet.mapping.prefix",prefix);
-        mappingSet=true;
+      ApplicationPath path=applicationClass.getAnnotation(ApplicationPath.class);
+      String pathValue=path.value().trim();
+      if (!pathValue.startsWith("/")) {
+        pathValue="/" + pathValue;
+      }
+      String prefix=pathValue;
+      if (pathValue.endsWith("/")) {
+        pathValue+="*";
       }
  else {
-        JAXRS_LOGGER.noServletMappingFound(servletName);
-        return;
+        pathValue+="/*";
       }
+      patterns.add(pathValue);
+      setContextParameter(webdata,"resteasy.servlet.mapping.prefix",prefix);
       ServletMappingMetaData mapping=new ServletMappingMetaData();
       mapping.setServletName(servletName);
       mapping.setUrlPatterns(patterns);
@@ -154,12 +148,8 @@
         webdata.setServletMappings(new ArrayList<ServletMappingMetaData>());
       }
       webdata.getServletMappings().add(mapping);
+      mappingSet=true;
     }
-    JBossServletMetaData servlet=new JBossServletMetaData();
-    servlet.setName(servletName);
-    servlet.setServletClass(HttpServlet30Dispatcher.class.getName());
-    servlet.setAsyncSupported(true);
-    addServlet(webdata,servlet);
   }
   if (!mappingSet) {
     final List<ServletMappingMetaData> mappings=webdata.getServletMappings();
