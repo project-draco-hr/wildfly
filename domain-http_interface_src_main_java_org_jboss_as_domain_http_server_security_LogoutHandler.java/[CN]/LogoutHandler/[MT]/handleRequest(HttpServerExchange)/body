@@ -1,0 +1,46 @@
+{
+  final HeaderMap requestHeaders=exchange.getRequestHeaders();
+  final HeaderMap responseHeaders=exchange.getResponseHeaders();
+  String authorization=requestHeaders.getFirst(AUTHORIZATION);
+  String rawQuery=exchange.getQueryString();
+  boolean query=rawQuery != null && rawQuery.contains("logout");
+  String userAgent=requestHeaders.getFirst(USER_AGENT);
+  boolean opera=userAgent != null && userAgent.contains("Opera");
+  boolean win=!opera && userAgent != null && userAgent.contains("MSIE");
+  String referrer=responseHeaders.getFirst(REFERER);
+  String protocol="http";
+  String host=null;
+  if (referrer != null) {
+    try {
+      URI uri=new URI(referrer);
+      protocol=uri.getScheme();
+      host=uri.getHost() + (uri.getPort() == -1 ? "" : ":" + String.valueOf(uri.getPort()));
+    }
+ catch (    URISyntaxException e) {
+    }
+  }
+  if (host == null) {
+    host=requestHeaders.getFirst(HOST);
+    if (host == null) {
+      HttpHandlers.executeHandler(Common.INTERNAL_SERVER_ERROR,exchange);
+      return;
+    }
+  }
+  if (!win && (authorization == null || !authorization.contains("enter-login-here"))) {
+    if (!query) {
+      responseHeaders.add(LOCATION,protocol + "://enter-login-here:blah@" + host+ "/logout?logout");
+      HttpHandlers.executeHandler(Common.TEMPORARY_REDIRECT,exchange);
+      return;
+    }
+    DigestAuthenticationMechanism mech=opera ? fakeRealmdigestMechanism : digestMechanism;
+    mech.sendChallenge(exchange,null);
+    PrintStream print=new PrintStream(exchange.getOutputStream());
+    print.println("<html><script type='text/javascript'>window.location=\"" + protocol + "://"+ host+ "/\";</script></html>");
+    print.flush();
+    print.close();
+    HttpHandlers.executeHandler(Common.UNAUTHORIZED,exchange);
+    return;
+  }
+  responseHeaders.add(LOCATION,protocol + "://" + host+ "/");
+  HttpHandlers.executeHandler(Common.TEMPORARY_REDIRECT,exchange);
+}
