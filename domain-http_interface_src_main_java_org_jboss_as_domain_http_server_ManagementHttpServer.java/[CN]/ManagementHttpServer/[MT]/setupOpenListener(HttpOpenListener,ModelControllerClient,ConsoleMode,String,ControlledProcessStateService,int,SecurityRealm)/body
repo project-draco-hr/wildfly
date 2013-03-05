@@ -6,8 +6,9 @@
   if (securePort > 0) {
     current=new SinglePortConfidentialityHandler(current,securePort);
   }
+  current=new CacheHandler(new DirectBufferCache<CachedHttpRequest>(1024,1024 * 1024,BufferAllocator.BYTE_BUFFER_ALLOCATOR),current);
   canonicalPathHandler.setNext(current);
-  ResourceHandler consoleHandler=null;
+  ResourceHandlerDefinition consoleHandler=null;
   try {
     consoleHandler=consoleMode.createConsoleHandler(consoleSlot);
   }
@@ -15,7 +16,7 @@
     ROOT_LOGGER.consoleModuleNotFound(consoleSlot == null ? "main" : consoleSlot);
   }
   try {
-    pathHandler.addPath(ErrorContextHandler.ERROR_CONTEXT,new BlockingHandler(new ErrorContextHandler(consoleSlot)));
+    pathHandler.addPath(ErrorContextHandler.ERROR_CONTEXT,ErrorContextHandler.createErrorContext(consoleSlot));
   }
  catch (  ModuleLoadException e) {
     ROOT_LOGGER.error(consoleSlot == null ? "main" : consoleSlot);
@@ -24,7 +25,7 @@
   DomainApiCheckHandler domainApiHandler=new DomainApiCheckHandler(modelControllerClient,controlledProcessStateService);
   pathHandler.setDefaultHandler(rootConsoleRedirectHandler);
   if (consoleHandler != null) {
-    HttpHandler readinessHandler=new RedirectReadinessHandler(securityRealm,new BlockingHandler(consoleHandler),ErrorContextHandler.ERROR_CONTEXT);
+    HttpHandler readinessHandler=new RedirectReadinessHandler(securityRealm,consoleHandler.getHandler(),ErrorContextHandler.ERROR_CONTEXT);
     pathHandler.addPath(consoleHandler.getContext(),readinessHandler);
   }
   HttpHandler readinessHandler=new DmrFailureReadinessHandler(securityRealm,secureDomainAccess(domainApiHandler,securityRealm),ErrorContextHandler.ERROR_CONTEXT);
