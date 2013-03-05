@@ -176,7 +176,9 @@
     }
   }
 .run();
-  final InterceptorFactory tcclInterceptor=new ImmediateInterceptorFactory(new TCCLInterceptor(module.getClassLoader()));
+  final ClassLoader classLoader=module.getClassLoader();
+  final InterceptorFactory tcclInterceptor=new ImmediateInterceptorFactory(new ContextClassLoaderInterceptor(classLoader));
+  final InterceptorFactory privilegedInterceptor=PrivilegedInterceptor.getFactory();
   if (!injectors.isEmpty()) {
     configuration.addPostConstructInterceptor(weaved(injectors),InterceptorOrder.ComponentPostConstruct.RESOURCE_INJECTION_INTERCEPTORS);
   }
@@ -188,6 +190,7 @@
   }
   configuration.addPostConstructInterceptor(Interceptors.getTerminalInterceptorFactory(),InterceptorOrder.ComponentPostConstruct.TERMINAL_INTERCEPTOR);
   configuration.addPostConstructInterceptor(tcclInterceptor,InterceptorOrder.ComponentPostConstruct.TCCL_INTERCEPTOR);
+  configuration.addPostConstructInterceptor(privilegedInterceptor,InterceptorOrder.ComponentPostConstruct.PRIVILEGED_INTERCEPTOR);
   if (!uninjectors.isEmpty()) {
     configuration.addPreDestroyInterceptor(weaved(uninjectors),InterceptorOrder.ComponentPreDestroy.UNINJECTION_INTERCEPTORS);
   }
@@ -199,17 +202,20 @@
   }
   configuration.addPreDestroyInterceptor(Interceptors.getTerminalInterceptorFactory(),InterceptorOrder.ComponentPreDestroy.TERMINAL_INTERCEPTOR);
   configuration.addPreDestroyInterceptor(tcclInterceptor,InterceptorOrder.ComponentPreDestroy.TCCL_INTERCEPTOR);
+  configuration.addPreDestroyInterceptor(privilegedInterceptor,InterceptorOrder.ComponentPreDestroy.PRIVILEGED_INTERCEPTOR);
   if (description.isPassivationApplicable()) {
     if (!userPrePassivate.isEmpty()) {
       configuration.addPrePassivateInterceptor(weaved(userPrePassivate),InterceptorOrder.ComponentPassivation.USER_INTERCEPTORS);
     }
     configuration.addPrePassivateInterceptor(Interceptors.getTerminalInterceptorFactory(),InterceptorOrder.ComponentPassivation.TERMINAL_INTERCEPTOR);
     configuration.addPrePassivateInterceptor(tcclInterceptor,InterceptorOrder.ComponentPassivation.TCCL_INTERCEPTOR);
+    configuration.addPrePassivateInterceptor(privilegedInterceptor,InterceptorOrder.ComponentPassivation.PRIVILEGED_INTERCEPTOR);
     if (!userPostActivate.isEmpty()) {
       configuration.addPostActivateInterceptor(weaved(userPostActivate),InterceptorOrder.ComponentPassivation.USER_INTERCEPTORS);
     }
     configuration.addPostActivateInterceptor(Interceptors.getTerminalInterceptorFactory(),InterceptorOrder.ComponentPassivation.TERMINAL_INTERCEPTOR);
     configuration.addPostActivateInterceptor(tcclInterceptor,InterceptorOrder.ComponentPassivation.TCCL_INTERCEPTOR);
+    configuration.addPostActivateInterceptor(privilegedInterceptor,InterceptorOrder.ComponentPassivation.PRIVILEGED_INTERCEPTOR);
   }
   final List<InterceptorDescription> classInterceptors=description.getClassInterceptors();
   final Map<MethodIdentifier,List<InterceptorDescription>> methodInterceptors=description.getMethodInterceptors();
