@@ -4,32 +4,30 @@
   final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
   Resource model=resource;
   final Iterator<PathElement> iterator=pathAddr.iterator();
-  int index=0;
+  PathAddress current=PathAddress.EMPTY_ADDRESS;
   out:   while (iterator.hasNext()) {
     final PathElement next=iterator.next();
-    index++;
-    if (model.hasChild(next)) {
+    current=current.append(next);
+    final ImmutableManagementResourceRegistration registration=context.getResourceRegistration().getSubModel(current);
+    if (registration != null && registration.isRemote()) {
+      if (!iterator.hasNext()) {
+        break out;
+      }
+      final PathAddress newAddress=pathAddr.subAddress(current.size());
+      final ModelNode newOperation=operation.clone();
+      newOperation.get(OP_ADDR).set(current.toModelNode());
+      newOperation.get(VALUE).set(newAddress.toModelNode());
+      final OperationStepHandler proxyHandler=registration.getOperationHandler(PathAddress.EMPTY_ADDRESS,OPERATION_NAME);
+      if (proxyHandler != null) {
+        context.addStep(newOperation,proxyHandler,OperationContext.Stage.MODEL,true);
+        context.stepCompleted();
+        return;
+      }
+    }
+ else     if (model.hasChild(next)) {
       model=model.getChild(next);
     }
  else {
-      final PathAddress subAddress=pathAddr.subAddress(0,index);
-      final ImmutableManagementResourceRegistration registration=context.getResourceRegistration().getSubModel(subAddress);
-      if (registration != null) {
-        boolean remote=registration.isRemote();
-        if (remote && !iterator.hasNext()) {
-          break out;
-        }
-        final PathAddress newAddress=pathAddr.subAddress(index);
-        final ModelNode newOperation=operation.clone();
-        newOperation.get(OP_ADDR).set(subAddress.toModelNode());
-        newOperation.get(VALUE).set(newAddress.toModelNode());
-        final OperationStepHandler proxyHandler=registration.getOperationHandler(PathAddress.EMPTY_ADDRESS,OPERATION_NAME);
-        if (proxyHandler != null) {
-          context.addStep(newOperation,proxyHandler,OperationContext.Stage.MODEL,true);
-          context.stepCompleted();
-          return;
-        }
-      }
       context.getResult().get(VALID).set(false);
       context.getResult().get(PROBLEM).set(ControllerMessages.MESSAGES.childResourceNotFound(next));
       context.stepCompleted();
