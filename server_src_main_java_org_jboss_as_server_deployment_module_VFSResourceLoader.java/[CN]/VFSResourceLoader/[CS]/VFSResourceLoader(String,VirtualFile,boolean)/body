@@ -1,6 +1,28 @@
 {
+  final SecurityManager sm=System.getSecurityManager();
+  if (sm != null) {
+    sm.checkPermission(new VirtualFilePermission(root.getPathName(),"read"));
+  }
   this.root=root;
   this.rootName=rootName;
-  manifest=VFSUtils.getManifest(root);
+  try {
+    manifest=doPrivileged(new PrivilegedExceptionAction<Manifest>(){
+      public Manifest run() throws IOException {
+        return VFSUtils.getManifest(root);
+      }
+    }
+);
+  }
+ catch (  PrivilegedActionException pe) {
+    try {
+      throw pe.getException();
+    }
+ catch (    IOException|RuntimeException e) {
+      throw e;
+    }
+catch (    Exception e) {
+      throw new UndeclaredThrowableException(e);
+    }
+  }
   rootUrl=usePhysicalCodeSource ? VFSUtils.getRootURL(root) : root.asFileURL();
 }

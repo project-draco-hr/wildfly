@@ -1,29 +1,47 @@
 {
-  final VirtualFile file=root.getChild(name);
-  if (!file.exists()) {
-    return null;
-  }
-  final long size=file.getSize();
-  final ClassSpec spec=new ClassSpec();
-  final InputStream is=file.openStream();
   try {
-    if (size <= (long)Integer.MAX_VALUE) {
-      final int castSize=(int)size;
-      byte[] bytes=new byte[castSize];
-      int a=0, res;
-      while ((res=is.read(bytes,a,castSize - a)) > 0) {
-        a+=res;
-      }
-      is.close();
-      spec.setBytes(bytes);
-      spec.setCodeSource(new CodeSource(rootUrl,file.getCodeSigners()));
-      return spec;
-    }
+    return doPrivileged(new PrivilegedExceptionAction<ClassSpec>(){
+      public ClassSpec run() throws Exception {
+        final VirtualFile file=root.getChild(name);
+        if (!file.exists()) {
+          return null;
+        }
+        final long size=file.getSize();
+        final ClassSpec spec=new ClassSpec();
+        final InputStream is=file.openStream();
+        try {
+          if (size <= (long)Integer.MAX_VALUE) {
+            final int castSize=(int)size;
+            byte[] bytes=new byte[castSize];
+            int a=0, res;
+            while ((res=is.read(bytes,a,castSize - a)) > 0) {
+              a+=res;
+            }
+            is.close();
+            spec.setBytes(bytes);
+            spec.setCodeSource(new CodeSource(rootUrl,file.getCodeSigners()));
+            return spec;
+          }
  else {
-      throw ServerMessages.MESSAGES.resourceTooLarge();
-    }
-  }
+            throw ServerMessages.MESSAGES.resourceTooLarge();
+          }
+        }
   finally {
-    VFSUtils.safeClose(is);
+          VFSUtils.safeClose(is);
+        }
+      }
+    }
+);
+  }
+ catch (  PrivilegedActionException pe) {
+    try {
+      throw pe.getException();
+    }
+ catch (    IOException|Error|RuntimeException e) {
+      throw e;
+    }
+catch (    Exception e) {
+      throw new UndeclaredThrowableException(e);
+    }
   }
 }
