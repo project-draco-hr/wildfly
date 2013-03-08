@@ -17,11 +17,32 @@
     ModelNode op=Util.createAddOperation(realmAddr);
     steps.add(op);
     final ServerIdentity serverIdentity=securityRealm.getServerIdentity();
-    if (serverIdentity != null && StringUtils.isNotEmpty(serverIdentity.getSecret())) {
-      final ModelNode secretModuleNode=Util.createAddOperation(realmAddr.append(SERVER_IDENTITY,SECRET));
-      secretModuleNode.get(Constants.VALUE).set(serverIdentity.getSecret());
-      secretModuleNode.get(OPERATION_HEADERS,ALLOW_RESOURCE_SERVICE_RESTART).set(true);
-      steps.add(secretModuleNode);
+    if (serverIdentity != null) {
+      if (StringUtils.isNotEmpty(serverIdentity.getSecret())) {
+        final ModelNode secretModuleNode=Util.createAddOperation(realmAddr.append(SERVER_IDENTITY,SECRET));
+        secretModuleNode.get(Constants.VALUE).set(serverIdentity.getSecret());
+        secretModuleNode.get(OPERATION_HEADERS,ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+        steps.add(secretModuleNode);
+      }
+      final RealmKeystore ssl=serverIdentity.getSsl();
+      if (ssl != null) {
+        final ModelNode sslModuleNode=Util.createAddOperation(realmAddr.append(SERVER_IDENTITY,SSL));
+        sslModuleNode.get(KEYSTORE_PATH).set(ssl.getKeystorePath());
+        sslModuleNode.get(Constants.KEYSTORE_PASSWORD).set(ssl.getKeystorePassword());
+        sslModuleNode.get(OPERATION_HEADERS,ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+        steps.add(sslModuleNode);
+      }
+    }
+    final Authentication authentication=securityRealm.getAuthentication();
+    if (authentication != null) {
+      final RealmKeystore truststore=authentication.getTruststore();
+      if (truststore != null) {
+        final ModelNode sslModuleNode=Util.createAddOperation(realmAddr.append(AUTHENTICATION,TRUSTSTORE));
+        sslModuleNode.get(KEYSTORE_PATH).set(truststore.getKeystorePath());
+        sslModuleNode.get(Constants.KEYSTORE_PASSWORD).set(truststore.getKeystorePassword());
+        sslModuleNode.get(OPERATION_HEADERS,ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+        steps.add(sslModuleNode);
+      }
     }
     updates.add(compositeOp);
   }
