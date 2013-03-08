@@ -1,0 +1,28 @@
+{
+  final ModelNode address=createRootLoggerAddress(profileName).toModelNode();
+  final ModelNode handlers=new ModelNode().setEmptyList().add("CONSOLE");
+  final ModelNode consoleAddress=createConsoleHandlerAddress(profileName,"CONSOLE").toModelNode();
+  executeOperation(kernelServices,SubsystemOperations.createAddOperation(consoleAddress));
+  final ModelNode addOp=OperationBuilder.create(RootLoggerResourceDefinition.ADD_ROOT_LOGGER_DEFINITION,address).addAttribute(CommonAttributes.LEVEL,"WARN").addAttribute(CommonAttributes.FILTER_SPEC,"accept").addAttribute(CommonAttributes.HANDLERS,handlers).build();
+  executeOperation(kernelServices,addOp);
+  testWriteCommonAttributes(kernelServices,address);
+  testUndefineCommonAttributes(kernelServices,address);
+  ModelNode op=OperationBuilder.create(RootLoggerResourceDefinition.CHANGE_LEVEL_OPERATION,address).addAttribute(CommonAttributes.LEVEL,"DEBUG").build();
+  executeOperation(kernelServices,op);
+  ModelNode result=executeOperation(kernelServices,SubsystemOperations.createReadAttributeOperation(address,CommonAttributes.LEVEL));
+  assertEquals("DEBUG",SubsystemOperations.readResultAsString(result));
+  op=SubsystemOperations.createOperation(RootLoggerResourceDefinition.LEGACY_REMOVE_HANDLER_OPERATION.getName(),address);
+  op.get(CommonAttributes.HANDLER_NAME.getName()).set("CONSOLE");
+  executeOperation(kernelServices,op);
+  final ModelNode readOp=SubsystemOperations.createReadAttributeOperation(address,CommonAttributes.HANDLERS.getName());
+  result=executeOperation(kernelServices,readOp);
+  assertTrue("Handler CONSOLE should have been removed: " + result,SubsystemOperations.readResult(result).asList().isEmpty());
+  op=OperationBuilder.create(RootLoggerResourceDefinition.LEGACY_ADD_HANDLER_OPERATION,address).addAttribute(CommonAttributes.HANDLER_NAME,"CONSOLE").build();
+  executeOperation(kernelServices,op);
+  result=executeOperation(kernelServices,readOp);
+  assertEquals(handlers,SubsystemOperations.readResult(result));
+  executeOperation(kernelServices,SubsystemOperations.createRemoveOperation(consoleAddress));
+  verifyRemoved(kernelServices,consoleAddress);
+  executeOperation(kernelServices,SubsystemOperations.createOperation(RootLoggerResourceDefinition.ROOT_LOGGER_REMOVE_OPERATION.getName(),address));
+  verifyRemoved(kernelServices,address);
+}

@@ -9,7 +9,7 @@
     }
   }
  else   if (attribute.getName().equals(ENCODING.getName())) {
-    final String resolvedValue=(resolveValue ? ENCODING.resolvePropertyValue(context,model) : model.asString());
+    final String resolvedValue=(resolveValue ? ENCODING.resolvePropertyValue(context,model) : model.isDefined() ? model.asString() : null);
     configuration.setEncoding(resolvedValue);
   }
  else   if (attribute.getName().equals(FORMATTER.getName())) {
@@ -53,14 +53,23 @@
       propertyConfigurable=pojoConfiguration;
     }
     if (model.hasDefined(PROPERTIES.getName())) {
-      for (      Property property : PROPERTIES.resolveModelAttribute(context,model).asPropertyList()) {
+      final ModelNode resolvedValue=(resolveValue ? PROPERTIES.resolveModelAttribute(context,model) : model);
+      for (      Property property : resolvedValue.asPropertyList()) {
         propertyConfigurable.setPropertyValueString(property.getName(),property.getValue().asString());
       }
     }
   }
  else {
-    if (attribute instanceof ConfigurationProperty<?>) {
-      ((ConfigurationProperty<?>)attribute).setPropertyValue(context,model,configuration);
+    if (attribute instanceof ConfigurationProperty) {
+      @SuppressWarnings("unchecked") final ConfigurationProperty<String> configurationProperty=(ConfigurationProperty<String>)attribute;
+      if (resolveValue) {
+        configurationProperty.setPropertyValue(context,model,configuration);
+      }
+ else {
+        final ModelNodeResolver<String> resolver=configurationProperty.resolver();
+        final String resolvedValue=(resolver == null ? model.asString() : resolver.resolveValue(context,model));
+        configuration.setPropertyValueString(configurationProperty.getPropertyName(),(resolvedValue == null ? null : resolvedValue));
+      }
     }
  else {
       LoggingLogger.ROOT_LOGGER.invalidPropertyAttribute(attribute.getName());

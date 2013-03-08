@@ -1,0 +1,30 @@
+{
+  final ModelNode address=createPeriodicRotatingFileHandlerAddress(profileName,"FILE").toModelNode();
+  final String filename="test-file.log";
+  final String newFilename="new-test-file.log";
+  final ModelNode defaultFile=createFileValue("jboss.server.log.dir",filename);
+  final ModelNode addOp=OperationBuilder.createAddOperation(address).addAttribute(CommonAttributes.FILE,defaultFile).addAttribute(PeriodicHandlerResourceDefinition.SUFFIX,".yyyy-MM-dd").build();
+  executeOperation(kernelServices,addOp);
+  verifyFile(filename);
+  testWriteCommonAttributes(kernelServices,address);
+  testUndefineCommonAttributes(kernelServices,address);
+  testCommonOperations(kernelServices,address);
+  testUpdateCommonHandlerAttributes(kernelServices,address);
+  testUpdateProperties(kernelServices,address,CommonAttributes.APPEND,false);
+  testUpdateProperties(kernelServices,address,CommonAttributes.AUTOFLUSH,false);
+  final ModelNode newFile=createFileValue("jboss.server.log.dir",newFilename);
+  testUpdateProperties(kernelServices,address,CommonAttributes.FILE,newFile);
+  verifyFile(newFilename);
+  testUpdateProperties(kernelServices,address,PeriodicHandlerResourceDefinition.SUFFIX,".yyyy-MM-dd-HH");
+  removeFile(filename);
+  ModelNode op=OperationBuilder.create(AbstractFileHandlerDefinition.CHANGE_FILE,address).addAttribute(CommonAttributes.FILE,defaultFile).build();
+  executeOperation(kernelServices,op);
+  op=SubsystemOperations.createReadAttributeOperation(address,CommonAttributes.FILE);
+  ModelNode result=executeOperation(kernelServices,op);
+  assertEquals(defaultFile,SubsystemOperations.readResult(result));
+  verifyFile(filename);
+  executeOperation(kernelServices,SubsystemOperations.createRemoveOperation(address));
+  verifyRemoved(kernelServices,address);
+  removeFile(filename);
+  removeFile(newFilename);
+}

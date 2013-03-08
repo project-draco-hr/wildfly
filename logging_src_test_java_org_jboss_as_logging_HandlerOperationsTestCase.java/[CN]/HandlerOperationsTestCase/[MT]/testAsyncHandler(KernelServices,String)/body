@@ -1,0 +1,29 @@
+{
+  final ModelNode address=createAsyncHandlerAddress(profileName,"async").toModelNode();
+  final ModelNode subhandlers=new ModelNode().setEmptyList().add("CONSOLE");
+  final ModelNode addOp=OperationBuilder.createAddOperation(address).addAttribute(AsyncHandlerResourceDefinition.QUEUE_LENGTH,10).build();
+  executeOperation(kernelServices,addOp);
+  final ModelNode consoleAddress=createConsoleHandlerAddress(profileName,"CONSOLE").toModelNode();
+  executeOperation(kernelServices,SubsystemOperations.createAddOperation(consoleAddress));
+  testWriteCommonAttributes(kernelServices,address);
+  testWrite(kernelServices,address,AsyncHandlerResourceDefinition.OVERFLOW_ACTION,"BLOCK");
+  testWrite(kernelServices,address,AsyncHandlerResourceDefinition.SUBHANDLERS,subhandlers);
+  testWrite(kernelServices,address,AsyncHandlerResourceDefinition.QUEUE_LENGTH,20);
+  testUndefineCommonAttributes(kernelServices,address);
+  testUndefine(kernelServices,address,AsyncHandlerResourceDefinition.OVERFLOW_ACTION);
+  testUndefine(kernelServices,address,AsyncHandlerResourceDefinition.SUBHANDLERS);
+  ModelNode op=OperationBuilder.create(AsyncHandlerResourceDefinition.ADD_HANDLER,address).addAttribute(CommonAttributes.HANDLER_NAME,"CONSOLE").build();
+  executeOperation(kernelServices,op);
+  final ModelNode readOp=SubsystemOperations.createReadAttributeOperation(address,AsyncHandlerResourceDefinition.SUBHANDLERS);
+  ModelNode result=executeOperation(kernelServices,readOp);
+  assertEquals(subhandlers,SubsystemOperations.readResult(result));
+  op=SubsystemOperations.createOperation(AsyncHandlerResourceDefinition.REMOVE_HANDLER.getName(),address);
+  op.get(CommonAttributes.HANDLER_NAME.getName()).set("CONSOLE");
+  executeOperation(kernelServices,op);
+  result=executeOperation(kernelServices,readOp);
+  assertTrue("Subhandler CONSOLE should have been removed: " + result,SubsystemOperations.readResult(result).asList().isEmpty());
+  executeOperation(kernelServices,SubsystemOperations.createRemoveOperation(consoleAddress));
+  verifyRemoved(kernelServices,consoleAddress);
+  executeOperation(kernelServices,SubsystemOperations.createRemoveOperation(address));
+  verifyRemoved(kernelServices,address);
+}

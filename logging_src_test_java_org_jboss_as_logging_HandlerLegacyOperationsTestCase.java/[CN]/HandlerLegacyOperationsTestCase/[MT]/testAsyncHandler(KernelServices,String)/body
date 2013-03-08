@@ -1,0 +1,27 @@
+{
+  final ModelNode address=createAsyncHandlerAddress(profileName,"async").toModelNode();
+  final ModelNode consoleAddress=createConsoleHandlerAddress(profileName,"CONSOLE").toModelNode();
+  executeOperation(kernelServices,SubsystemOperations.createAddOperation(consoleAddress));
+  final ModelNode subhandlers=new ModelNode().setEmptyList().add("CONSOLE");
+  final ModelNode addOp=OperationBuilder.createAddOperation(address).addAttribute(AsyncHandlerResourceDefinition.QUEUE_LENGTH,10).addAttribute(AsyncHandlerResourceDefinition.OVERFLOW_ACTION,"DISCARD").build();
+  executeOperation(kernelServices,addOp);
+  testWriteCommonAttributes(kernelServices,address);
+  testUndefineCommonAttributes(kernelServices,address);
+  testCommonOperations(kernelServices,address);
+  ModelNode op=OperationBuilder.create(AsyncHandlerResourceDefinition.LEGACY_ADD_HANDLER,address).addAttribute(CommonAttributes.HANDLER_NAME,"CONSOLE").build();
+  executeOperation(kernelServices,op);
+  ModelNode result=executeOperation(kernelServices,SubsystemOperations.createReadAttributeOperation(address,AsyncHandlerResourceDefinition.SUBHANDLERS));
+  assertTrue("Subhandlers should be empty: " + result,SubsystemOperations.readResultAsList(result).contains("CONSOLE"));
+  op=OperationBuilder.create(AsyncHandlerResourceDefinition.LEGACY_REMOVE_HANDLER,address).addAttribute(CommonAttributes.HANDLER_NAME,"CONSOLE").build();
+  executeOperation(kernelServices,op);
+  result=executeOperation(kernelServices,SubsystemOperations.createReadAttributeOperation(address,AsyncHandlerResourceDefinition.SUBHANDLERS));
+  assertTrue("Subhandlers should be empty: " + result,SubsystemOperations.readResultAsList(result).isEmpty());
+  testUpdateCommonHandlerAttributes(kernelServices,address);
+  testUpdateProperties(kernelServices,address,AsyncHandlerResourceDefinition.OVERFLOW_ACTION,"BLOCK");
+  testUpdateProperties(kernelServices,address,AsyncHandlerResourceDefinition.SUBHANDLERS,subhandlers);
+  testUpdateProperties(kernelServices,address,AsyncHandlerResourceDefinition.QUEUE_LENGTH,20);
+  executeOperation(kernelServices,SubsystemOperations.createRemoveOperation(consoleAddress));
+  verifyRemoved(kernelServices,consoleAddress);
+  executeOperation(kernelServices,SubsystemOperations.createRemoveOperation(address));
+  verifyRemoved(kernelServices,address);
+}

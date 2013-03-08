@@ -1,0 +1,24 @@
+{
+  final ModelNode address=createRootLoggerAddress(profileName).toModelNode();
+  final ModelNode handlers=new ModelNode().setEmptyList().add("CONSOLE");
+  final ModelNode addOp=SubsystemOperations.createAddOperation(address);
+  executeOperation(kernelServices,addOp);
+  final ModelNode consoleAddress=createConsoleHandlerAddress(profileName,"CONSOLE").toModelNode();
+  executeOperation(kernelServices,SubsystemOperations.createAddOperation(consoleAddress));
+  testWriteCommonAttributes(kernelServices,address,handlers);
+  testUndefineCommonAttributes(kernelServices,address);
+  ModelNode op=OperationBuilder.create(RootLoggerResourceDefinition.ADD_HANDLER_OPERATION,address).addAttribute(CommonAttributes.HANDLER_NAME,"CONSOLE").build();
+  executeOperation(kernelServices,op);
+  final ModelNode readOp=SubsystemOperations.createReadAttributeOperation(address,CommonAttributes.HANDLERS.getName());
+  ModelNode result=executeOperation(kernelServices,readOp);
+  assertEquals(handlers,SubsystemOperations.readResult(result));
+  op=SubsystemOperations.createOperation(RootLoggerResourceDefinition.REMOVE_HANDLER_OPERATION.getName(),address);
+  op.get(CommonAttributes.HANDLER_NAME.getName()).set("CONSOLE");
+  executeOperation(kernelServices,op);
+  result=executeOperation(kernelServices,readOp);
+  assertTrue("Handler CONSOLE should have been removed: " + result,SubsystemOperations.readResult(result).asList().isEmpty());
+  executeOperation(kernelServices,SubsystemOperations.createRemoveOperation(consoleAddress));
+  verifyRemoved(kernelServices,consoleAddress);
+  executeOperation(kernelServices,SubsystemOperations.createRemoveOperation(address));
+  verifyRemoved(kernelServices,address);
+}
