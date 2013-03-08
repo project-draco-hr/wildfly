@@ -1,0 +1,32 @@
+{
+  final Host host=injectedHost.getValue().getHost();
+  final StandardContext context=new StandardContext();
+  context.setPath(commonWebDeploymentBuilder.getContextRoot());
+  context.addLifecycleListener(new ContextConfig());
+  File docBase=commonWebDeploymentBuilder.getDocumentRoot();
+  if (!docBase.exists()) {
+    docBase.mkdirs();
+  }
+  context.setDocBase(docBase.getPath());
+  final Loader loader=new WebCtxLoader(commonWebDeploymentBuilder.getClassLoader());
+  loader.setContainer(host);
+  context.setLoader(loader);
+  context.setInstanceManager(new LocalInstanceManager());
+  for (  CommonServletBuilder servlet : commonWebDeploymentBuilder.getServlets()) {
+    final String servletName=servlet.getServletName();
+    Map<String,String> params=servlet.getInitParams();
+    List<String> urlPatterns=new ArrayList<>(servlet.getUrlMappings());
+    Wrapper wsfsWrapper=context.createWrapper();
+    wsfsWrapper.setName(servletName);
+    wsfsWrapper.setServlet(servlet.getServlet());
+    wsfsWrapper.setServletClass(servlet.getServletClass().getName());
+    for (    Map.Entry<String,String> param : params.entrySet()) {
+      wsfsWrapper.addInitParameter(param.getKey(),param.getValue());
+    }
+    context.addChild(wsfsWrapper);
+    for (    String urlPattern : urlPatterns) {
+      context.addServletMapping(urlPattern,servletName);
+    }
+  }
+  return new WebDeploymentImpl(context,host);
+}
