@@ -1,0 +1,29 @@
+{
+  ModelVersion version140=ModelVersion.create(1,4);
+  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT);
+  builder.createLegacyKernelServicesBuilder(null,ModelTestControllerVersion.MASTER,version140).addMavenResourceURL("org.jboss.as:jboss-as-clustering-infinispan:7.2.0.Final");
+  KernelServices mainServices=builder.build();
+  KernelServices legacyServices=mainServices.getLegacyServices(version140);
+  Assert.assertNotNull(legacyServices);
+  Assert.assertTrue("main services did not boot",mainServices.isSuccessfulBoot());
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  PathAddress pa=PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,InfinispanExtension.SUBSYSTEM_NAME),PathElement.pathElement(CacheContainerResource.CONTAINER_PATH.getKey(),"container"),PathElement.pathElement(DistributedCacheResource.DISTRIBUTED_CACHE_PATH.getKey(),"cache"));
+  ModelNode addOp=Util.createAddOperation(pa);
+  addOp.get(DistributedCacheResource.VIRTUAL_NODES.getName()).set(1);
+  OperationTransformer.TransformedOperation transformedOperation=mainServices.transformOperation(version140,addOp);
+  Assert.assertFalse(transformedOperation.getTransformedOperation().has(DistributedCacheResource.VIRTUAL_NODES.getName()));
+  Assert.assertEquals(6,transformedOperation.getTransformedOperation().get(DistributedCacheResource.SEGMENTS.getName()).asInt());
+  ModelNode result=new ModelNode();
+  result.get(OUTCOME).set(SUCCESS);
+  result.get(RESULT);
+  Assert.assertFalse(transformedOperation.rejectOperation(result));
+  Assert.assertEquals(result,transformedOperation.transformResult(result));
+  ModelNode writeOp=Util.createEmptyOperation(WRITE_ATTRIBUTE_OPERATION,pa);
+  writeOp.get(NAME).set(DistributedCacheResource.VIRTUAL_NODES.getName());
+  writeOp.get(VALUE).set(1);
+  transformedOperation=mainServices.transformOperation(version140,writeOp);
+  Assert.assertEquals(DistributedCacheResource.SEGMENTS.getName(),transformedOperation.getTransformedOperation().get(NAME).asString());
+  Assert.assertEquals(6,transformedOperation.getTransformedOperation().get(VALUE).asInt());
+  Assert.assertFalse(transformedOperation.rejectOperation(result));
+  Assert.assertEquals(result,transformedOperation.transformResult(result));
+}
