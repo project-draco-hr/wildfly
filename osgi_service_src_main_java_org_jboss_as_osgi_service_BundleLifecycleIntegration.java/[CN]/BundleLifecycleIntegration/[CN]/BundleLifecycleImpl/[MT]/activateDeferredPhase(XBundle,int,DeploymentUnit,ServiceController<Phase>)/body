@@ -1,7 +1,9 @@
 {
+  BundleManager bundleManager=injectedBundleManager.getValue();
+  FrameworkStartLevel frameworkStartLevel=bundleManager.getSystemBundle().adapt(FrameworkStartLevel.class);
   BundleStartLevel bundleStartLevel=bundle.adapt(BundleStartLevel.class);
   int startlevel=bundleStartLevel.getStartLevel();
-  if (startlevel > bundleStartLevel.getStartLevel()) {
+  if (startlevel > frameworkStartLevel.getStartLevel()) {
     LOGGER.debugf("Start level [%d] not valid for: %s",startlevel,bundle);
     return;
   }
@@ -30,7 +32,18 @@
  finally {
     monitor.removeController(phaseService);
   }
-  if (failed.size() > 0) {
+  if (failed.size() == 0) {
+    ServiceName activeName=bundleManager.getServiceName(bundle,Bundle.ACTIVE);
+    ServiceContainer serviceContainer=bundleManager.getServiceContainer();
+    ServiceController<?> activeService=serviceContainer.getRequiredService(activeName);
+    try {
+      FutureServiceValue<?> future=new FutureServiceValue<>(activeService,State.UP);
+      future.get(2,TimeUnit.SECONDS);
+    }
+ catch (    Exception ex) {
+    }
+  }
+ else {
     StartException startex=null;
     for (    ServiceController<?> aux : failed) {
       if (aux.getStartException() != null) {
