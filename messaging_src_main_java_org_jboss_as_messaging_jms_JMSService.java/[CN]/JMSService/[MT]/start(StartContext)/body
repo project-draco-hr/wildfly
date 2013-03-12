@@ -1,32 +1,29 @@
 {
+  ClassLoader oldTccl=SecurityActions.setThreadContextClassLoader(getClass());
   try {
-    final JMSServerManager jmsServer=new JMSServerManagerImpl(hornetQServer.getValue(),new AS7BindingRegistry(context.getController().getServiceContainer()));
-    try {
-      final ClassLoader loader=getClass().getClassLoader();
-      SecurityActions.setContextClassLoader(loader);
-      jmsServer.start();
-      if (!hornetQServer.getValue().getConfiguration().isBackup()) {
+    jmsServer=new JMSServerManagerImpl(hornetQServer.getValue(),new AS7BindingRegistry(context.getController().getServiceContainer()));
+    final ServiceBuilder<Void> hornetqActivationService=context.getChildTarget().addService(HornetQActivationService.getHornetQActivationServiceName(hqServiceName),new HornetQActivationService()).setInitialMode(Mode.ACTIVE);
+    hornetQServer.getValue().registerActivateCallback(new ActivateCallback(){
+      public ServiceController<Void> hornetqActivationController;
+      public void preActivate(){
+      }
+      public void activated(){
         hornetQServer.getValue().getRemotingService().allowInvmSecurityOverride(new HornetQPrincipal(HornetQDefaultCredentials.getUsername(),HornetQDefaultCredentials.getPassword()));
+        hornetqActivationController=hornetqActivationService.install();
       }
- else {
-        hornetQServer.getValue().registerActivateCallback(new ActivateCallback(){
-          public void preActivate(){
-          }
-          public void activated(){
-            hornetQServer.getValue().getRemotingService().allowInvmSecurityOverride(new HornetQPrincipal(HornetQDefaultCredentials.getUsername(),HornetQDefaultCredentials.getPassword()));
-          }
-          public void deActivate(){
-          }
+      public void deActivate(){
+        if (hornetqActivationController != null) {
+          hornetqActivationController.setMode(REMOVE);
         }
-);
       }
     }
-  finally {
-      SecurityActions.setContextClassLoader(null);
-    }
-    this.jmsServer=jmsServer;
+);
+    jmsServer.start();
   }
  catch (  Exception e) {
-    throw new StartException(e);
+    throw MESSAGES.failedToStartService(e);
+  }
+ finally {
+    SecurityActions.setThreadContextClassLoader(oldTccl);
   }
 }

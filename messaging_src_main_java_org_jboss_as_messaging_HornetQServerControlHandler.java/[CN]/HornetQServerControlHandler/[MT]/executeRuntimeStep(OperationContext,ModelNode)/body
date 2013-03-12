@@ -1,11 +1,22 @@
 {
   final String operationName=operation.require(OP).asString();
+  final ServiceName hqServiceName=MessagingServices.getHornetQServiceName(PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)));
+  ServiceController<?> hqService=context.getServiceRegistry(false).getService(hqServiceName);
+  if (hqService == null || hqService.getState() != ServiceController.State.UP) {
+    throw MESSAGES.hornetQServerNotInstalled(hqServiceName.getSimpleName());
+  }
+  HornetQServer hqServer=HornetQServer.class.cast(hqService.getValue());
+  if (READ_ATTRIBUTE_OPERATION.equals(operationName)) {
+    handleReadAttribute(context,operation,hqServer);
+    context.stepCompleted();
+    return;
+  }
+  if (rollbackOperationIfServerNotActive(context,operation)) {
+    return;
+  }
   final HornetQServerControl serverControl=getServerControl(context,operation);
   try {
-    if (READ_ATTRIBUTE_OPERATION.equals(operationName)) {
-      handleReadAttribute(context,operation,serverControl);
-    }
- else     if (GET_CONNECTORS_AS_JSON.equals(operationName)) {
+    if (GET_CONNECTORS_AS_JSON.equals(operationName)) {
       String json=serverControl.getConnectorsAsJSON();
       context.getResult().set(json);
     }
