@@ -1,18 +1,19 @@
 {
-  XResourceBuilder builder=XResourceBuilderFactory.create();
-  builder.addCapability(IDENTITY_NAMESPACE,"somename");
-  builder.addRequirement(PACKAGE_NAMESPACE,SimpleService.class.getPackage().getName());
-  Resource resource=builder.getResource();
-  XResolver resolver=getResolver();
-  XEnvironment env=getEnvironment();
-  ResolveContext context=resolver.createResolveContext(env,Collections.singleton(resource),null);
-  Map<Resource,List<Wire>> wiremap=resolver.resolve(context);
-  assertEquals("One Resource: " + wiremap,1,wiremap.size());
-  List<Wire> wires=wiremap.get(resource);
-  assertEquals(1,wires.size());
-  Wire wire=wires.get(0);
-  assertEquals(resource,wire.getRequirer());
-  XResource provider=(XResource)wire.getProvider();
-  XIdentityCapability icap=provider.getIdentityCapability();
-  assertEquals("deployment.example-module-reg",icap.getSymbolicName());
+  InputStream inputA=deployer.getDeployment(BUNDLE_A);
+  Bundle bundleA=context.installBundle(BUNDLE_A,inputA);
+  try {
+    FrameworkWiring fwkWiring=context.getBundle().adapt(FrameworkWiring.class);
+    assertTrue(fwkWiring.resolveBundles(Collections.singleton(bundleA)));
+    BundleWiring wiringA=bundleA.adapt(BundleWiring.class);
+    List<BundleWire> wires=wiringA.getRequiredWires(PACKAGE_NAMESPACE);
+    assertEquals(1,wires.size());
+    BundleWire wire=wires.get(0);
+    assertEquals(bundleA,wire.getRequirer().getBundle());
+    XBundleRevision provider=(XBundleRevision)wire.getProvider();
+    XIdentityCapability icap=provider.getIdentityCapability();
+    assertEquals("deployment.example-module-reg",icap.getSymbolicName());
+  }
+  finally {
+    bundleA.uninstall();
+  }
 }
