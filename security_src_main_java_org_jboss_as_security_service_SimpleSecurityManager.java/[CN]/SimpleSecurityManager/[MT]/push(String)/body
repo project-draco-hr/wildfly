@@ -1,0 +1,36 @@
+{
+  final SecurityContext previous=SecurityContextAssociation.getSecurityContext();
+  contexts.push(previous);
+  SecurityContext current=establishSecurityContext(securityDomain);
+  if (previous != null) {
+    current.setSubjectInfo(previous.getSubjectInfo());
+    current.setIncomingRunAs(previous.getOutgoingRunAs());
+  }
+  RunAs currentRunAs=current.getIncomingRunAs();
+  boolean trusted=currentRunAs != null && currentRunAs instanceof RunAsIdentity;
+  if (trusted == false) {
+    if (SecurityActions.remotingContextIsSet()) {
+      SecurityContextUtil util=current.getUtil();
+      Connection connection=SecurityActions.remotingContextGetConnection();
+      UserInfo userInfo=connection.getUserInfo();
+      Principal p=null;
+      Object credential=null;
+      if (userInfo instanceof SubjectUserInfo) {
+        SubjectUserInfo sinfo=(SubjectUserInfo)userInfo;
+        Subject subject=sinfo.getSubject();
+        Set<PasswordCredential> pcSet=subject.getPrivateCredentials(PasswordCredential.class);
+        if (pcSet.size() > 0) {
+          PasswordCredential pc=pcSet.iterator().next();
+          p=new SimplePrincipal(pc.getUserName());
+          credential=new String(pc.getCredential());
+        }
+      }
+      if (p == null || credential == null) {
+        p=new RemotingConnectionPrincipal(connection);
+        credential=new RemotingConnectionCredential(connection);
+      }
+      SecurityActions.remotingContextClear();
+      util.createSubjectInfo(p,credential,null);
+    }
+  }
+}
