@@ -20,21 +20,25 @@
     }
   }
   depUnit.getAttachment(Attachments.DEFERRED_ACTIVATION_COUNT).incrementAndGet();
-  phaseService.setMode(Mode.ACTIVE);
-  final StabilityMonitor monitor=new StabilityMonitor();
+  StabilityMonitor monitor=new StabilityMonitor();
   monitor.addController(phaseService);
-  final Set<ServiceController<?>> failed=new HashSet<ServiceController<?>>();
+  Set<ServiceController<?>> failed=new HashSet<ServiceController<?>>();
+  Set<ServiceController<?>> problems=new HashSet<ServiceController<?>>();
   try {
-    monitor.awaitStability(failed,null);
+    phaseService.setMode(Mode.ACTIVE);
+    monitor.awaitStability(failed,problems);
   }
  catch (  final InterruptedException ex) {
   }
  finally {
     monitor.removeController(phaseService);
   }
-  if (failed.size() > 0) {
+  if (failed.size() > 0 || problems.size() > 0) {
+    List<ServiceController<?>> combined=new ArrayList<ServiceController<?>>();
+    combined.addAll(failed);
+    combined.addAll(problems);
     StartException startex=null;
-    for (    ServiceController<?> aux : failed) {
+    for (    ServiceController<?> aux : combined) {
       if (aux.getStartException() != null) {
         startex=aux.getStartException();
         break;
