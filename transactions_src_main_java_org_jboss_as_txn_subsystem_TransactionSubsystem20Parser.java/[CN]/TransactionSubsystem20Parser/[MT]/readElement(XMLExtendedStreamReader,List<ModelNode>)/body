@@ -1,0 +1,36 @@
+{
+  if (reader.getAttributeCount() > 0) {
+    throw unexpectedAttribute(reader,0);
+  }
+  final ModelNode address=new ModelNode();
+  address.add(ModelDescriptionConstants.SUBSYSTEM,TransactionExtension.SUBSYSTEM_NAME);
+  address.protect();
+  final ModelNode subsystem=new ModelNode();
+  subsystem.get(OP).set(ADD);
+  subsystem.get(OP_ADDR).set(address);
+  list.add(subsystem);
+  final ModelNode logStoreAddress=address.clone();
+  final ModelNode logStoreOperation=new ModelNode();
+  logStoreOperation.get(OP).set(ADD);
+  logStoreAddress.add(LogStoreConstants.LOG_STORE,LogStoreConstants.LOG_STORE);
+  logStoreAddress.protect();
+  logStoreOperation.get(OP_ADDR).set(logStoreAddress);
+  list.add(logStoreOperation);
+  final EnumSet<Element> required=EnumSet.of(Element.RECOVERY_ENVIRONMENT,Element.CORE_ENVIRONMENT);
+  final EnumSet<Element> encountered=EnumSet.noneOf(Element.class);
+  choiceObjectStoreEncountered=false;
+  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+    if (Namespace.forUri(reader.getNamespaceURI()) != getExpectedNamespace()) {
+      throw unexpectedElement(reader);
+    }
+    final Element element=Element.forName(reader.getLocalName());
+    required.remove(element);
+    if (!encountered.add(element)) {
+      throw unexpectedElement(reader);
+    }
+    readElement(reader,element,list,subsystem,logStoreOperation);
+  }
+  if (!required.isEmpty()) {
+    throw missingRequiredElement(reader,required);
+  }
+}
