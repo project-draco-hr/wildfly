@@ -31,6 +31,19 @@
     userPrePassivatesByInterceptorClass=null;
     userPostActivatesByInterceptorClass=null;
   }
+  final InterceptorFactory instantiator;
+  final ComponentFactory instanceFactory=configuration.getInstanceFactory();
+  if (instanceFactory != null) {
+    instantiator=new ComponentInstantiatorInterceptorFactory(instanceFactory,BasicComponentInstance.INSTANCE_KEY,true);
+  }
+ else {
+    final ClassReflectionIndex<?> componentClassIndex=deploymentReflectionIndex.getClassIndex(configuration.getComponentClass());
+    final Constructor<Object> constructor=(Constructor<Object>)componentClassIndex.getConstructor(EMPTY_CLASS_ARRAY);
+    if (constructor == null) {
+      throw MESSAGES.defaultConstructorNotFound(configuration.getComponentClass());
+    }
+    instantiator=new ComponentInstantiatorInterceptorFactory(new ConstructorComponentFactory(constructor),BasicComponentInstance.INSTANCE_KEY,true);
+  }
   final List<InterceptorDescription> interceptorWithLifecycleCallbacks=new ArrayList<InterceptorDescription>();
   if (!description.isExcludeDefaultInterceptors()) {
     interceptorWithLifecycleCallbacks.addAll(description.getDefaultInterceptors());
@@ -59,7 +72,7 @@
     if (constructor == null) {
       throw MESSAGES.defaultConstructorNotFoundOnComponent(interceptorClassName,configuration.getComponentClass());
     }
-    instantiators.addFirst(new ManagedReferenceInterceptorFactory(new ValueManagedReferenceFactory(new ConstructedValue(constructor,Collections.<Value<?>>emptyList())),contextKey));
+    instantiators.addFirst(new ComponentInstantiatorInterceptorFactory(new ConstructorComponentFactory(constructor),contextKey,false));
     destructors.addLast(new ManagedReferenceReleaseInterceptorFactory(contextKey));
     final boolean interceptorHasLifecycleCallbacks=interceptorWithLifecycleCallbacks.contains(interceptorDescription);
     new ClassDescriptionTraversal(interceptorClass.getModuleClass(),applicationClasses){
@@ -77,6 +90,8 @@
           handleInterceptorClass(clazz,postConstructMethodIdentifier,userPostConstructByInterceptorClass,true,true);
           final MethodIdentifier preDestroyMethodIdentifier=interceptorConfig.getPreDestroy();
           handleInterceptorClass(clazz,preDestroyMethodIdentifier,userPreDestroyByInterceptorClass,true,true);
+          final MethodIdentifier aroundConstructMethodIdentifier=interceptorConfig.getAroundConstruct();
+          handleInterceptorClass(clazz,aroundConstructMethodIdentifier,userAroundConstructsByInterceptorClass,true,true);
         }
         final MethodIdentifier aroundInvokeMethodIdentifier=interceptorConfig.getAroundInvoke();
         handleInterceptorClass(clazz,aroundInvokeMethodIdentifier,userAroundInvokesByInterceptorClass,false,false);
@@ -105,6 +120,7 @@
     }
 .run();
   }
+  final List<InterceptorFactory> userAroundConstruct=new ArrayList<InterceptorFactory>();
   final List<InterceptorFactory> userPostConstruct=new ArrayList<InterceptorFactory>();
   final List<InterceptorFactory> userPreDestroy=new ArrayList<InterceptorFactory>();
   final List<InterceptorFactory> userPrePassivate=new ArrayList<InterceptorFactory>();
@@ -112,6 +128,9 @@
   for (  final InterceptorDescription interceptorClass : interceptorWithLifecycleCallbacks) {
     if (userPostConstructByInterceptorClass.containsKey(interceptorClass.getInterceptorClassName())) {
       userPostConstruct.addAll(userPostConstructByInterceptorClass.get(interceptorClass.getInterceptorClassName()));
+    }
+    if (userAroundConstructsByInterceptorClass.containsKey(interceptorClass.getInterceptorClassName())) {
+      userAroundConstruct.addAll(userAroundConstructsByInterceptorClass.get(interceptorClass.getInterceptorClassName()));
     }
     if (userPreDestroyByInterceptorClass.containsKey(interceptorClass.getInterceptorClassName())) {
       userPreDestroy.addAll(userPreDestroyByInterceptorClass.get(interceptorClass.getInterceptorClassName()));
@@ -125,16 +144,22 @@
       }
     }
   }
+  final OrderedItemContainer<InterceptorFactory> aroundConstructInterceptors=new OrderedItemContainer<>();
   if (!injectors.isEmpty()) {
     configuration.addPostConstructInterceptor(weaved(injectors),InterceptorOrder.ComponentPostConstruct.INTERCEPTOR_RESOURCE_INJECTION_INTERCEPTORS);
   }
   if (!instantiators.isEmpty()) {
     configuration.addPostConstructInterceptor(weaved(instantiators),InterceptorOrder.ComponentPostConstruct.INTERCEPTOR_INSTANTIATION_INTERCEPTORS);
   }
+  if (!userAroundConstruct.isEmpty()) {
+    aroundConstructInterceptors.add(weaved(userAroundConstruct),InterceptorOrder.AroundConstruct.INTERCEPTOR_AROUND_CONSTRUCT);
+  }
+  aroundConstructInterceptors.add(instantiator,InterceptorOrder.AroundConstruct.CONSTRUCT_COMPONENT);
+  aroundConstructInterceptors.add(new ImmediateInterceptorFactory(Interceptors.getTerminalInterceptor()),InterceptorOrder.AroundConstruct.TERMINAL_INTERCEPTOR);
+  configuration.addPostConstructInterceptor(new AroundConstructInterceptorFactory(weaved(aroundConstructInterceptors.getSortedItems())),InterceptorOrder.ComponentPostConstruct.AROUND_CONSTRUCT_CHAIN);
   if (!userPostConstruct.isEmpty()) {
     configuration.addPostConstructInterceptor(weaved(userPostConstruct),InterceptorOrder.ComponentPostConstruct.INTERCEPTOR_USER_INTERCEPTORS);
   }
-  configuration.addPostConstructInterceptor(Interceptors.getTerminalInterceptorFactory(),InterceptorOrder.ComponentPostConstruct.TERMINAL_INTERCEPTOR);
   if (!uninjectors.isEmpty()) {
     configuration.addPreDestroyInterceptor(weaved(uninjectors),InterceptorOrder.ComponentPreDestroy.INTERCEPTOR_UNINJECTION_INTERCEPTORS);
   }

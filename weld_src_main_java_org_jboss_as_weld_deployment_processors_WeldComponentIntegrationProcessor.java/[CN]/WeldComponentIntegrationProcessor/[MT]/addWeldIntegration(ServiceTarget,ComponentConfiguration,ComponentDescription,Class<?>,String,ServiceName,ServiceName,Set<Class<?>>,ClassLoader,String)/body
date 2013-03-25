@@ -1,8 +1,8 @@
 {
   final ServiceName serviceName=configuration.getComponentDescription().getServiceName().append("WeldInstantiator");
-  final WeldManagedReferenceFactory factory=new WeldManagedReferenceFactory(componentClass,beanName,interceptorClasses,classLoader,beanDeploymentArchiveId,description.isCDIInterceptorEnabled());
-  ServiceBuilder<WeldManagedReferenceFactory> builder=target.addService(serviceName,factory).addDependency(weldServiceName,WeldBootstrapService.class,factory.getWeldContainer()).addDependency(weldStartService);
-  configuration.setInstanceFactory(factory);
+  final WeldComponentService weldComponentService=new WeldComponentService(componentClass,beanName,interceptorClasses,classLoader,beanDeploymentArchiveId,description.isCDIInterceptorEnabled());
+  ServiceBuilder<WeldComponentService> builder=target.addService(serviceName,weldComponentService).addDependency(weldServiceName,WeldBootstrapService.class,weldComponentService.getWeldContainer()).addDependency(weldStartService);
+  configuration.setInstanceFactory(WeldManagedReferenceFactory.INSTANCE);
   configuration.getStartDependencies().add(new DependencyConfigurator<ComponentStartService>(){
     @Override public void configureDependency(    final ServiceBuilder<?> serviceBuilder,    ComponentStartService service) throws DeploymentUnitProcessingException {
       serviceBuilder.addDependency(serviceName);
@@ -33,4 +33,7 @@
     configuration.addPostConstructInterceptor(postConstruct,InterceptorOrder.ComponentPostConstruct.CDI_INTERCEPTORS);
   }
   builder.install();
+  configuration.addPostConstructInterceptor(new ImmediateInterceptorFactory(new WeldInjectionContextInterceptor(weldComponentService)),InterceptorOrder.ComponentPostConstruct.WELD_INJECTION_CONTEXT_INTERCEPTOR);
+  configuration.addPostConstructInterceptor(new WeldInterceptorInjectionInterceptor.Factory(configuration,interceptorClasses),InterceptorOrder.ComponentPostConstruct.INTERCEPTOR_WELD_INJECTION);
+  configuration.addPostConstructInterceptor(new WeldInjectionInterceptor.Factory(configuration),InterceptorOrder.ComponentPostConstruct.COMPONENT_WELD_INJECTION);
 }
