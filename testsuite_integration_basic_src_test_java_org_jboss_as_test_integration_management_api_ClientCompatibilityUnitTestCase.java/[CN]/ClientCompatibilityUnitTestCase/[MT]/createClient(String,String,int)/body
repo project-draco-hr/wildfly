@@ -1,0 +1,23 @@
+{
+  final ChildFirstClassLoaderBuilder classLoaderBuilder=new ChildFirstClassLoaderBuilder();
+  classLoaderBuilder.addRecursiveMavenResourceURL("org.jboss.as:jboss-as-controller-client:" + version,excludes);
+  classLoaderBuilder.addParentFirstClassPattern("org.jboss.as.controller.client.ModelControllerClientConfiguration");
+  classLoaderBuilder.addParentFirstClassPattern("org.jboss.as.controller.client.ModelControllerClient");
+  classLoaderBuilder.addParentFirstClassPattern("org.jboss.as.controller.client.OperationMessageHandler");
+  classLoaderBuilder.addParentFirstClassPattern("org.jboss.as.controller.client.Operation");
+  final ClassLoader classLoader=classLoaderBuilder.build();
+  final Class<?> clazz=classLoader.loadClass("org.jboss.as.controller.client.impl.ClientConfigurationImpl");
+  final Method method=clazz.getMethod("create",String.class,int.class);
+  final Object configuration=method.invoke(null,host,port);
+  final Class<?> clazz2=classLoader.loadClass("org.jboss.as.controller.client.impl.RemotingModelControllerClient");
+  Constructor constructor=clazz2.getConstructor(ModelControllerClientConfiguration.class);
+  final Object client=constructor.newInstance(configuration);
+  final InvocationHandler invocationHandler=new InvocationHandler(){
+    @Override public Object invoke(    Object proxy,    Method method,    Object[] args) throws Throwable {
+      return method.invoke(client,args);
+    }
+  }
+;
+  final Class<?>[] interfaces=new Class<?>[]{ModelControllerClient.class};
+  return (ModelControllerClient)Proxy.newProxyInstance(classLoader,interfaces,invocationHandler);
+}

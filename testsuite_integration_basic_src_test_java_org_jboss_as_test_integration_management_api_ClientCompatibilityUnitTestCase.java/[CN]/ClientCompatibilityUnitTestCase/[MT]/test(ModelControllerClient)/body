@@ -1,0 +1,36 @@
+{
+  try {
+    final ModelNode operation=new ModelNode();
+    operation.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.READ_RESOURCE_OPERATION);
+    operation.get(ModelDescriptionConstants.OP_ADDR).setEmptyList();
+    operation.get(ModelDescriptionConstants.RECURSIVE).set(true);
+    operation.get(ModelDescriptionConstants.INCLUDE_RUNTIME).set(true);
+    operation.get(ModelDescriptionConstants.INCLUDE_DEFAULTS).set(true);
+    final ModelNode result=client.execute(operation);
+    Assert.assertEquals(ModelDescriptionConstants.SUCCESS,result.get(ModelDescriptionConstants.OUTCOME).asString());
+    final ModelNode deploy=new ModelNode();
+    deploy.get(ModelDescriptionConstants.OP).set("add");
+    deploy.get(ModelDescriptionConstants.OP_ADDR).add("deployment","compat-test.war");
+    deploy.get("content").get(0).get("input-stream-index").set(0);
+    deploy.get("auto-start").set(true);
+    final Operation o=OperationBuilder.create(deploy).addInputStream(deployment.as(ZipExporter.class).exportAsInputStream()).build();
+    try {
+      final ModelNode deployResult=client.execute(o);
+      Assert.assertEquals(deployResult.toString(),ModelDescriptionConstants.SUCCESS,deployResult.get(ModelDescriptionConstants.OUTCOME).asString());
+    }
+  finally {
+      final ModelNode undeploy=new ModelNode();
+      undeploy.get(ModelDescriptionConstants.OP).set("remove");
+      undeploy.get(ModelDescriptionConstants.OP_ADDR).add("deployment","compat-test.war");
+      try {
+        client.execute(undeploy);
+      }
+ catch (      IOException ignore) {
+        ignore.printStackTrace();
+      }
+    }
+  }
+  finally {
+    StreamUtils.safeClose(client);
+  }
+}
