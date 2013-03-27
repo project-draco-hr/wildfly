@@ -1,0 +1,38 @@
+{
+  Work work=faults.get(pId);
+  TxSupport txn=new TxSupport();
+  String txId=enlistUrl.substring(enlistUrl.lastIndexOf('/') + 1);
+  boolean isTwoPhaseAware="true".equals(twoPhaseAware);
+  boolean isVolatileParticipant="true".equals(isVolatile);
+  String vRegistration=null;
+  String vParticipantLink=null;
+  if (work == null) {
+    int id=++pid;
+    work=makeWork(txn,info.getAbsolutePath().toString(),String.valueOf(id),txId,enlistUrl,isTwoPhaseAware,isVolatileParticipant,null,fault);
+  }
+ else {
+    Work newWork=makeWork(txn,info.getAbsolutePath().toString(),work.id,txId,enlistUrl,isTwoPhaseAware,isVolatileParticipant,null,fault);
+    newWork.oldState=work.oldState;
+    newWork.newState=work.newState;
+    work=newWork;
+  }
+  if (enlistUrl.indexOf(',') != -1) {
+    String[] urls=enlistUrl.split(",");
+    if (urls.length < 2)     throw new WebApplicationException(HttpURLConnection.HTTP_BAD_REQUEST);
+    enlistUrl=urls[0];
+    vRegistration=urls[1];
+    String vParticipant=new StringBuilder(info.getAbsolutePath().toString()).append('/').append(work.id).append('/').append(txId).append('/').append("vp").toString();
+    vParticipantLink=txn.addLink2(new StringBuilder(),TxLinkNames.VOLATILE_PARTICIPANT,vParticipant,true).toString();
+  }
+  try {
+    work.recoveryUrl=txn.enlistParticipant(enlistUrl,work.pLinks);
+    if (vParticipantLink != null)     txn.enlistVolatileParticipant(vRegistration,vParticipantLink);
+  }
+ catch (  HttpResponseException e) {
+    throw new WebApplicationException(e.getActualResponse());
+  }
+  work.status=TxStatus.TransactionActive.name();
+  work.start();
+  faults.put(work.id,work);
+  return work.id;
+}

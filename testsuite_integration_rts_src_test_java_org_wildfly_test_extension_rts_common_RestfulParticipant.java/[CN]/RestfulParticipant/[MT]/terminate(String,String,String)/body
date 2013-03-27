@@ -1,0 +1,60 @@
+{
+  TxStatus status=TxSupport.toTxStatus(content);
+  Work work=faults.get(pId);
+  if (work == null)   return Response.status(HttpURLConnection.HTTP_NOT_FOUND).build();
+  String fault=work.fault;
+  if (status.isPrepare()) {
+    if ("READONLY".equals(fault)) {
+      work.status=TxStatus.TransactionReadOnly.name();
+    }
+ else     if ("PREPARE_FAIL".equals(fault)) {
+      return Response.status(HttpURLConnection.HTTP_CONFLICT).build();
+    }
+ else {
+      if ("PDELAY".equals(fault)) {
+        try {
+          Thread.sleep(2000);
+        }
+ catch (        InterruptedException e) {
+        }
+      }
+      work.status=TxStatus.TransactionPrepared.name();
+    }
+  }
+ else   if (status.isCommit() || status.isCommitOnePhase()) {
+    if ("H_HAZARD".equals(fault))     work.status=TxStatus.TransactionHeuristicHazard.name();
+ else     if ("H_ROLLBACK".equals(fault))     work.status=TxStatus.TransactionHeuristicRollback.name();
+ else     if ("H_MIXED".equals(fault))     work.status=TxStatus.TransactionHeuristicMixed.name();
+ else {
+      if ("CDELAY".equals(fault)) {
+        try {
+          Thread.sleep(3000);
+        }
+ catch (        InterruptedException e) {
+        }
+      }
+      work.status=status.isCommitOnePhase() ? TxStatus.TransactionCommittedOnePhase.name() : TxStatus.TransactionCommitted.name();
+      work.end(true);
+    }
+  }
+ else   if (status.isAbort()) {
+    if ("H_HAZARD".equals(fault))     work.status=TxStatus.TransactionHeuristicHazard.name();
+ else     if ("H_COMMIT".equals(fault))     work.status=TxStatus.TransactionHeuristicCommit.name();
+ else     if ("H_MIXED".equals(fault))     work.status=TxStatus.TransactionHeuristicMixed.name();
+ else {
+      if ("ADELAY".equals(fault)) {
+        try {
+          Thread.sleep(2000);
+        }
+ catch (        InterruptedException e) {
+        }
+      }
+      work.status=TxStatus.TransactionRolledBack.name();
+      work.end(false);
+    }
+  }
+ else {
+    return Response.status(HttpURLConnection.HTTP_BAD_REQUEST).build();
+  }
+  return Response.ok(TxSupport.toStatusContent(work.status)).build();
+}
