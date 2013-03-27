@@ -1,0 +1,25 @@
+{
+  JavaArchive deployment=ShrinkWrap.create(JavaArchive.class);
+  deployment.addClasses(TestClass.class,TestClassMBean.class);
+  File testMarker=new File("target" + File.separator + "testmarker");
+  if (testMarker.exists()) {
+    testMarker.delete();
+  }
+  String serviceXml="<server xmlns=\"urn:jboss:service:7.0\"" + "   xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"" + "   xsi:schemaLocation=\"urn:jboss:service:7.0 jboss-service_7_0.xsd\">"+ "   <mbean name=\"jboss:name=test,type=testclassfilemarker\" code=\"org.jboss.as.test.integration.autoignore.TestClass\">"+ "       <attribute name=\"path\">" + testMarker.getAbsolutePath() + "</attribute>"+ "    </mbean>"+ "</server>";
+  deployment.addAsManifestResource(new StringAsset(serviceXml),"jboss-service.xml");
+  InputStream in=deployment.as(ZipExporter.class).exportAsInputStream();
+  masterClient.getDeploymentManager().execute(masterClient.getDeploymentManager().newDeploymentPlan().add("sardeployment.sar",in).deploy("sardeployment.sar").toServerGroup(GROUP2).build());
+  ModelNode op=Util.getWriteAttributeOperation(PathAddress.pathAddress(PathElement.pathElement(SERVER_GROUP,GROUP2)).toModelNode(),PROFILE,PROFILE3);
+  validateResponse(masterClient.execute(op));
+  op=Util.getWriteAttributeOperation(getSlaveServerConfigAddress(SERVER1),GROUP,GROUP2);
+  validateResponse(slaveClient.execute(op));
+  checkSlaveProfiles(PROFILE1,PROFILE2,PROFILE3);
+  checkSlaveExtensions(EXTENSION_LOGGING,EXTENSION_MAIL,EXTENSION_POJO,EXTENSION_JMX,EXTENSION_SAR);
+  checkSlaveServerGroups(GROUP1,GROUP2);
+  checkSlaveSocketBindingGroups(SOCKETS1,SOCKETS2);
+  Assert.assertEquals("restart-required",getSlaveServerStatus(SERVER1));
+  Assert.assertFalse(testMarker.exists());
+  restartSlaveServer(SERVER1);
+  Assert.assertEquals("running",getSlaveServerStatus(SERVER1));
+  Assert.assertTrue(testMarker.exists());
+}

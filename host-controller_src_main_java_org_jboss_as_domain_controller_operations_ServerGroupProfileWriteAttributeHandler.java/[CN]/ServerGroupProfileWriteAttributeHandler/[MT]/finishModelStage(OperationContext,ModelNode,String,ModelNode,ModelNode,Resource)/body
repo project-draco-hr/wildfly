@@ -2,11 +2,39 @@
   if (newValue.equals(currentValue)) {
     ServerOperationResolver.addToDontPropagateToServersAttachment(context,operation);
   }
-  String profile=ServerGroupResourceDefinition.PROFILE.resolveModelAttribute(context,resource.getModel()).asString();
+  boolean reloadRequired=false;
+  final String profile=ServerGroupResourceDefinition.PROFILE.resolveModelAttribute(context,resource.getModel()).asString();
   try {
     context.readResourceFromRoot(PathAddress.pathAddress(PathElement.pathElement(ServerGroupResourceDefinition.PROFILE.getName(),profile)));
   }
  catch (  Exception e) {
-    throw DomainControllerMessages.MESSAGES.noProfileCalled(profile);
+    if (master) {
+      throw DomainControllerMessages.MESSAGES.noProfileCalled(profile);
+    }
+ else {
+      context.reloadRequired();
+      reloadRequired=true;
+    }
+  }
+  if (registry != null) {
+    registry.changeServerGroupProfile(context,PathAddress.pathAddress(operation.require(OP_ADDR)),newValue.asString());
+  }
+  if (reloadRequired) {
+    final boolean revertReloadRequiredOnRollback=reloadRequired;
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        context.completeStep(new OperationContext.ResultHandler(){
+          @Override public void handleResult(          ResultAction resultAction,          OperationContext context,          ModelNode operation){
+            if (resultAction == ResultAction.ROLLBACK) {
+              if (revertReloadRequiredOnRollback) {
+                context.revertReloadRequired();
+              }
+            }
+          }
+        }
+);
+      }
+    }
+,Stage.MODEL);
   }
 }

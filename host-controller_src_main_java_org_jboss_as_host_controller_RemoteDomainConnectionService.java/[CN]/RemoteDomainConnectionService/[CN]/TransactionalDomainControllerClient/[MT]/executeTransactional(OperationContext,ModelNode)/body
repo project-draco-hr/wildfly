@@ -1,0 +1,31 @@
+{
+  OperationMessageHandler messageHandler=new DelegatingMessageHandler(context);
+  final AtomicReference<ModelController.OperationTransaction> txRef=new AtomicReference<ModelController.OperationTransaction>();
+  final AtomicReference<ModelNode> preparedResultRef=new AtomicReference<ModelNode>();
+  final AtomicReference<ModelNode> finalResultRef=new AtomicReference<ModelNode>();
+  final ProxyController.ProxyOperationControl proxyControl=new ProxyController.ProxyOperationControl(){
+    @Override public void operationPrepared(    ModelController.OperationTransaction transaction,    ModelNode result){
+      txRef.set(transaction);
+      preparedResultRef.set(result);
+    }
+    @Override public void operationFailed(    ModelNode response){
+      finalResultRef.set(response);
+    }
+    @Override public void operationCompleted(    ModelNode response){
+      finalResultRef.set(response);
+    }
+  }
+;
+  remoteProxy.execute(operation,messageHandler,proxyControl,new DelegatingOperationAttachments(context));
+  ModelNode finalResult=finalResultRef.get();
+  if (finalResult != null) {
+    return finalResult;
+  }
+  context.addStep(new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      completeRemoteTransaction(context,operation,txRef,preparedResultRef,finalResultRef);
+    }
+  }
+,OperationContext.Stage.MODEL);
+  return preparedResultRef.get();
+}

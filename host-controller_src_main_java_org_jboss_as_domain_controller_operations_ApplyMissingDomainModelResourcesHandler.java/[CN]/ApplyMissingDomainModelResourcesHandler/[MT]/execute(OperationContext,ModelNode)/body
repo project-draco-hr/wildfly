@@ -1,0 +1,27 @@
+{
+  final ModelNode domainModel=operation.get(DOMAIN_MODEL);
+  final Resource rootResource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
+  final List<ModelNode> nonExtensions=new ArrayList<>();
+  for (  ModelNode resourceDescription : domainModel.asList()) {
+    PathAddress resourceAddress=PathAddress.pathAddress(resourceDescription.require(ReadMasterDomainModelUtil.DOMAIN_RESOURCE_ADDRESS));
+    if (ignoredResourceRegistry.isResourceExcluded(resourceAddress)) {
+      continue;
+    }
+    if (resourceAddress.size() == 1 && resourceAddress.getElement(0).getKey().equals(EXTENSION)) {
+      PathElement extensionElement=resourceAddress.getElement(0);
+      if (!rootResource.hasChild(extensionElement)) {
+        initializeExtension(extensionElement.getValue());
+        getResource(resourceAddress,rootResource,context).writeModel(resourceDescription.get(DOMAIN_MODEL));
+      }
+    }
+ else {
+      nonExtensions.add(resourceDescription);
+    }
+  }
+  for (  final ModelNode resourceDescription : nonExtensions) {
+    final PathAddress resourceAddress=PathAddress.pathAddress(resourceDescription.require(ReadMasterDomainModelUtil.DOMAIN_RESOURCE_ADDRESS));
+    final Resource resource=getResource(resourceAddress,rootResource,context);
+    resource.writeModel(resourceDescription.get(ReadMasterDomainModelUtil.DOMAIN_RESOURCE_MODEL));
+  }
+  context.stepCompleted();
+}

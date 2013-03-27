@@ -1,0 +1,40 @@
+{
+  if (newValue.equals(currentValue)) {
+    ServerOperationResolver.addToDontPropagateToServersAttachment(context,operation);
+  }
+  boolean reloadRequired=false;
+  final String socketBindingGroup=ServerGroupResourceDefinition.SOCKET_BINDING_GROUP.resolveModelAttribute(context,resource.getModel()).asString();
+  try {
+    context.readResourceFromRoot(PathAddress.pathAddress(PathElement.pathElement(ServerGroupResourceDefinition.SOCKET_BINDING_GROUP.getName(),socketBindingGroup)));
+  }
+ catch (  Exception e) {
+    if (master) {
+      throw DomainControllerMessages.MESSAGES.noSocketBindingGroupCalled(socketBindingGroup);
+    }
+ else {
+      context.reloadRequired();
+      reloadRequired=true;
+    }
+  }
+  if (registry != null) {
+    registry.changeServerGroupSocketBindingGroup(context,PathAddress.pathAddress(operation.require(OP_ADDR)),newValue.asString());
+  }
+  final boolean revertReloadRequiredOnRollback=reloadRequired;
+  if (reloadRequired) {
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        context.completeStep(new OperationContext.ResultHandler(){
+          @Override public void handleResult(          ResultAction resultAction,          OperationContext context,          ModelNode operation){
+            if (resultAction == ResultAction.ROLLBACK) {
+              if (revertReloadRequiredOnRollback) {
+                context.revertReloadRequired();
+              }
+            }
+          }
+        }
+);
+      }
+    }
+,Stage.MODEL);
+  }
+}

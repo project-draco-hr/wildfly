@@ -15,4 +15,30 @@
     }
   }
 ,OperationContext.Stage.MODEL,true);
+  final String group=model.require(GROUP).asString();
+  final String socketBindingGroup=model.hasDefined(SOCKET_BINDING_GROUP) ? model.get(SOCKET_BINDING_GROUP).asString() : null;
+  final Resource root=context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS,false);
+  boolean missingData=false;
+  if (!context.isBooting() && root.getChild(PathElement.pathElement(SERVER_GROUP,group)) == null) {
+    if (hostControllerInfo.isMasterDomainController() || !hostControllerInfo.isRemoteDomainControllerIgnoreUnaffectedConfiguration()) {
+      throw HostControllerMessages.MESSAGES.noServerGroupCalled(group);
+    }
+ else {
+      missingData=true;
+    }
+  }
+  if (socketBindingGroup != null) {
+    if (!context.isBooting() && root.getChild(PathElement.pathElement(SOCKET_BINDING_GROUP,socketBindingGroup)) == null) {
+      if (hostControllerInfo.isMasterDomainController() || !hostControllerInfo.isRemoteDomainControllerIgnoreUnaffectedConfiguration()) {
+        throw HostControllerMessages.MESSAGES.noSocketBindingGroupCalled(socketBindingGroup);
+      }
+ else {
+        missingData=true;
+      }
+    }
+  }
+  if (missingData) {
+    String serverName=PathAddress.pathAddress(operation.require(OP_ADDR)).getLastElement().getValue();
+    pullDownMissingDataFromDc(context,serverName,group,socketBindingGroup);
+  }
 }

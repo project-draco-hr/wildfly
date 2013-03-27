@@ -18,8 +18,14 @@
     registrationContext.failed(failure);
     throw failure;
   }
-  final TransformationTarget target=TransformationTargetImpl.create(transformerRegistry,ModelVersion.create(major,minor,micro),Collections.<PathAddress,ModelVersion>emptyMap(),hostInfo,TransformationTarget.TransformationTargetType.HOST);
+  final TransformationTarget target=TransformationTargetImpl.create(transformerRegistry,ModelVersion.create(major,minor,micro),Collections.<PathAddress,ModelVersion>emptyMap(),hostInfo,TransformationTarget.TransformationTargetType.HOST,registrationContext.runtimeIgnoreTransformation);
   final Transformers transformers=Transformers.Factory.create(target);
+  try {
+    SlaveChannelAttachments.attachSlaveInfo(handler.getChannel(),registrationContext.hostName,transformers);
+  }
+ catch (  IOException e) {
+    throw new OperationFailedException(e.getLocalizedMessage());
+  }
   final ModelNode extensions=new ModelNode();
   final Resource transformed=transformers.transformRootResource(context,root);
   final Collection<Resource.ResourceEntry> resources=transformed.getChildren(EXTENSION);
@@ -30,7 +36,7 @@
     throw new OperationFailedException(extensions);
   }
   registrationContext.processSubsystems(transformers,extensions);
-  final ReadMasterDomainModelHandler handler=new ReadMasterDomainModelHandler(transformers);
+  final ReadMasterDomainModelHandler handler=new ReadMasterDomainModelHandler(hostInfo.getHostName(),transformers,runtimeIgnoreTransformationRegistry);
   context.addStep(READ_DOMAIN_MODEL,handler,OperationContext.Stage.MODEL);
   context.stepCompleted();
 }

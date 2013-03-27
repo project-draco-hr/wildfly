@@ -1,0 +1,46 @@
+{
+  context.acquireControllerLock();
+  final ServerConfigInfo serverInfo=IgnoredNonAffectedServerGroupsUtil.createServerConfigInfo(operation.require(SERVER));
+  final Resource root=context.readResource(PathAddress.EMPTY_ADDRESS);
+  final Set<PathElement> unknownElements=new HashSet<>();
+  final String serverGroupName=serverInfo.getServerGroup();
+  final PathElement serverGroupElement=PathElement.pathElement(SERVER_GROUP,serverGroupName);
+  final Resource serverGroupResource=root.getChild(serverGroupElement);
+  if (serverGroupResource == null) {
+    throw HostControllerMessages.MESSAGES.noResourceFor(PathAddress.pathAddress(serverGroupElement));
+  }
+  String serverGroupSocketBindingGroup=null;
+  if (!runtimeIgnoreTransformationRegistry.isServerGroupKnown(root,host,serverGroupName)) {
+    unknownElements.add(serverGroupElement);
+    final ModelNode serverGroupModel=serverGroupResource.getModel();
+    final String profileName=serverGroupModel.get(PROFILE).asString();
+    final PathElement profileElement=PathElement.pathElement(PROFILE,profileName);
+    final Resource profileResource=root.getChild(profileElement);
+    if (profileResource == null) {
+      throw HostControllerMessages.MESSAGES.noResourceFor(PathAddress.pathAddress(profileElement));
+    }
+    if (!runtimeIgnoreTransformationRegistry.isProfileKnown(root,host,profileName)) {
+      unknownElements.add(profileElement);
+      Set<PathElement> unknownExtensions=runtimeIgnoreTransformationRegistry.getUnknownExtensionsForProfile(root,host,profileName);
+      unknownElements.addAll(unknownExtensions);
+    }
+    if (serverGroupModel.hasDefined(SOCKET_BINDING_GROUP)) {
+      serverGroupSocketBindingGroup=serverGroupModel.get(SOCKET_BINDING_GROUP).asString();
+      addSocketBindingGroup(unknownElements,root,serverGroupSocketBindingGroup);
+    }
+  }
+  if (serverInfo.getSocketBindingGroup() != null && !serverInfo.getSocketBindingGroup().equals(serverGroupSocketBindingGroup)) {
+    addSocketBindingGroup(unknownElements,root,serverInfo.getSocketBindingGroup());
+  }
+  final ReadMasterDomainModelUtil readUtil=ReadMasterDomainModelUtil.readMasterDomainResourcesForSlaveRequest(context,unknownElements,transformers,root,runtimeIgnoreTransformationRegistry);
+  context.getResult().set(readUtil.getDescribedResources());
+  context.completeStep(new OperationContext.ResultHandler(){
+    @Override public void handleResult(    ResultAction resultAction,    OperationContext context,    ModelNode operation){
+      if (resultAction == ResultAction.KEEP) {
+        runtimeIgnoreTransformationRegistry.addKnownDataForSlave(host,readUtil.getNewKnownRootResources());
+        runtimeIgnoreTransformationRegistry.updateSlaveServerConfig(host,serverInfo);
+      }
+    }
+  }
+);
+}

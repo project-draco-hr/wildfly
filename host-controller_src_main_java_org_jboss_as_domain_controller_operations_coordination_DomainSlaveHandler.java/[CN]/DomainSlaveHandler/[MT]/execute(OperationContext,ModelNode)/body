@@ -19,7 +19,9 @@
         op=transformer.transform(context,op);
       }
     }
-    final HostControllerUpdateTask task=new HostControllerUpdateTask(host,op.clone(),context,proxyController);
+    ModelNode clonedOp=runtimeIgnoreTransformationRegistry.piggyBackMissingInformationOnHeader(context,proxyController,entry.getKey(),op.clone());
+    clonedOp.get(DomainControllerLockIdUtils.DOMAIN_CONTROLLER_LOCK_ID).set(CurrentOperationIdHolder.getCurrentOperationID());
+    final HostControllerUpdateTask task=new HostControllerUpdateTask(host,clonedOp,context,proxyController);
     final HostControllerUpdateTask.ExecutedHostRequest finalResult=task.execute(listener);
     domainOperationContext.recordHostRequest(host,finalResult);
     finalResults.put(host,finalResult);
@@ -86,7 +88,7 @@
     final boolean interruptThread=interrupted;
     context.completeStep(new OperationContext.ResultHandler(){
       @Override public void handleResult(      OperationContext.ResultAction resultAction,      OperationContext context,      ModelNode operation){
-        finalizeOp(results,finalResults,interruptThread);
+        finalizeOp(results,finalResults,interruptThread,context);
       }
     }
 );
@@ -94,7 +96,7 @@
   }
   finally {
     if (!completeStepCalled) {
-      finalizeOp(results,finalResults,interrupted);
+      finalizeOp(results,finalResults,interrupted,context);
     }
   }
 }

@@ -1,0 +1,18 @@
+{
+  ModelNode op=new ModelNode();
+  op.get(OP).set(PullDownDataForServerConfigOnSlaveHandler.OPERATION_NAME);
+  op.get(OP_ADDR).setEmptyList();
+  op.get(SERVER).set(IgnoredNonAffectedServerGroupsUtil.createServerConfigInfo(serverName,serverGroupName,socketBindingGroupName).toModelNode());
+  Integer domainControllerLock=context.getAttachment(DomainControllerLockIdUtils.DOMAIN_CONTROLLER_LOCK_ID_ATTACHMENT);
+  if (domainControllerLock != null) {
+    op.get(OPERATION_HEADERS,DomainControllerLockIdUtils.DOMAIN_CONTROLLER_LOCK_ID).set(domainControllerLock);
+  }
+  op.get(OPERATION_HEADERS,DomainControllerLockIdUtils.SLAVE_CONTROLLER_LOCK_ID).set(CurrentOperationIdHolder.getCurrentOperationID());
+  ModelNode result=txMasterProxy.executeTransactional(context,op);
+  if (result.get(FAILURE_DESCRIPTION).isDefined()) {
+    throw new OperationFailedException(result.get(FAILURE_DESCRIPTION).asString());
+  }
+  ApplyMissingDomainModelResourcesHandler applyMissingDomainModelResourcesHandler=new ApplyMissingDomainModelResourcesHandler(domainController,hostControllerEnvironment,localHostInfo,ignoredDomainResourceRegistry);
+  ModelNode applyMissingResourcesOp=ApplyMissingDomainModelResourcesHandler.createPulledMissingDataOperation(result.get(RESULT));
+  context.addStep(applyMissingResourcesOp,applyMissingDomainModelResourcesHandler,OperationContext.Stage.MODEL,true);
+}

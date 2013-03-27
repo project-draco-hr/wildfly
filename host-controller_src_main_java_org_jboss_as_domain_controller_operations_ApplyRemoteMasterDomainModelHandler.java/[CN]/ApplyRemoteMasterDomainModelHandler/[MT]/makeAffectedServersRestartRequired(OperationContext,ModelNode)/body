@@ -1,0 +1,36 @@
+{
+  final Resource domainRootResource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
+  final ModelNode endRoot=Resource.Tools.readModel(domainRootResource);
+  final ModelNode hostModel=endRoot.require(HOST).asPropertyList().iterator().next().getValue();
+  final ModelNode existingHostModel=startRoot.require(HOST).asPropertyList().iterator().next().getValue();
+  final Set<ServerIdentity> affectedServers;
+  affectedServers=new HashSet<ServerIdentity>();
+  for (  String serverName : hostModel.get(SERVER_CONFIG).keys()) {
+    ModelNode startOps=createBootOps(context,serverName,startRoot,existingHostModel);
+    ModelNode endOps=createBootOps(context,serverName,endRoot,hostModel);
+    if (bootOpsChanged(startOps,endOps)) {
+      affectedServers.add(createServerIdentity(hostModel,serverName));
+    }
+    ManagedServerBootConfiguration startConfig=new ManagedServerBootCmdFactory(serverName,startRoot,existingHostModel,hostControllerEnvironment,domainController.getExpressionResolver()).createConfiguration();
+    ManagedServerBootConfiguration endConfig=new ManagedServerBootCmdFactory(serverName,endRoot,hostModel,hostControllerEnvironment,domainController.getExpressionResolver()).createConfiguration();
+    if (!startConfig.getServerLaunchCommand().equals(endConfig.getServerLaunchCommand())) {
+      affectedServers.add(createServerIdentity(hostModel,serverName));
+    }
+  }
+  final Map<String,ProxyController> serverProxies=DomainServerUtils.getServerProxies(localHostInfo.getLocalHostName(),domainRootResource,context.getResourceRegistration());
+  if (!affectedServers.isEmpty()) {
+    ROOT_LOGGER.domainModelChangedOnReConnect(affectedServers);
+    final Set<ServerIdentity> runningServers=DomainServerUtils.getAllRunningServers(hostModel,localHostInfo.getLocalHostName(),serverProxies);
+    for (    ServerIdentity serverIdentity : affectedServers) {
+      if (!runningServers.contains(serverIdentity)) {
+        continue;
+      }
+      final PathAddress serverAddress=PathAddress.pathAddress(PathElement.pathElement(HOST,serverIdentity.getHostName()),PathElement.pathElement(SERVER,serverIdentity.getServerName()));
+      final OperationStepHandler handler=context.getResourceRegistration().getOperationHandler(serverAddress,ServerRestartRequiredHandler.OPERATION_NAME);
+      final ModelNode op=new ModelNode();
+      op.get(OP).set(ServerRestartRequiredHandler.OPERATION_NAME);
+      op.get(OP_ADDR).set(serverAddress.toModelNode());
+      context.addStep(op,handler,OperationContext.Stage.MODEL,true);
+    }
+  }
+}

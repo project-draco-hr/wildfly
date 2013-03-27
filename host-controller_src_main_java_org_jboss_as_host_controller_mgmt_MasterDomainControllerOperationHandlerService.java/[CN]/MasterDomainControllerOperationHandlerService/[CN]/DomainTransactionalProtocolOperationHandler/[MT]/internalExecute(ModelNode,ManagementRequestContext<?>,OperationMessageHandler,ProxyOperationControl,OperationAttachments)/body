@@ -1,0 +1,57 @@
+{
+  final OperationStepHandler handler;
+  final String operationName=operation.require(OP).asString();
+  if (operationName.equals(PullDownDataForServerConfigOnSlaveHandler.OPERATION_NAME)) {
+    handler=new PullDownDataForServerConfigOnSlaveHandler(SlaveChannelAttachments.getHostName(context.getChannel()),SlaveChannelAttachments.getTransformers(context.getChannel()),runtimeIgnoreTransformationRegistry);
+  }
+ else {
+    throw HostControllerMessages.MESSAGES.cannotExecuteTransactionalOperationFromSlave(operationName);
+  }
+  Integer domainControllerLockId;
+  if (operation.get(OPERATION_HEADERS).hasDefined(DomainControllerLockIdUtils.DOMAIN_CONTROLLER_LOCK_ID)) {
+    domainControllerLockId=operation.get(OPERATION_HEADERS,DomainControllerLockIdUtils.DOMAIN_CONTROLLER_LOCK_ID).asInt();
+  }
+ else {
+    domainControllerLockId=null;
+  }
+  final Integer slaveLockId=operation.get(OPERATION_HEADERS,DomainControllerLockIdUtils.SLAVE_CONTROLLER_LOCK_ID).asInt();
+  if (domainControllerLockId == null) {
+synchronized (this) {
+      SlaveRequest slaveRequest=this.activeSlaveRequest;
+      if (slaveRequest != null) {
+        domainControllerLockId=slaveRequest.domainId;
+        slaveRequest.refCount.incrementAndGet();
+      }
+    }
+  }
+  try {
+    if (domainControllerLockId != null) {
+      return executor.joinActiveOperation(operation,messageHandler,control,attachments,handler,domainControllerLockId);
+    }
+ else {
+      ModelNode result=executor.executeAndAttemptLock(operation,messageHandler,control,attachments,new OperationStepHandler(){
+        @Override public void execute(        OperationContext context,        ModelNode operation) throws OperationFailedException {
+          Integer domainControllerLockId=CurrentOperationIdHolder.getCurrentOperationID();
+synchronized (this) {
+            activeSlaveRequest=new SlaveRequest(domainControllerLockId);
+          }
+          context.addStep(operation,handler,OperationContext.Stage.MODEL);
+          context.stepCompleted();
+        }
+      }
+);
+      return result;
+    }
+  }
+  finally {
+synchronized (this) {
+      SlaveRequest slaveRequest=this.activeSlaveRequest;
+      if (slaveRequest != null) {
+        int refcount=slaveRequest.refCount.decrementAndGet();
+        if (refcount == 0) {
+          activeSlaveRequest=null;
+        }
+      }
+    }
+  }
+}

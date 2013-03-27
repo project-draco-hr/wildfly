@@ -1,0 +1,28 @@
+{
+  NewSlaveInformation info=getAttachment(context,false);
+  if (info == null) {
+    return operation;
+  }
+  Set<PathElement> missingResources=info.missingResources.get(hostName);
+  if (missingResources == null) {
+    return operation;
+  }
+  final ReadMasterDomainModelUtil readUtil=ReadMasterDomainModelUtil.readMasterDomainResourcesForPiggyBackFollowingDomainControllerChange(context,missingResources,transformingProxyController.getTransformers(),hostName,this);
+  if (readUtil.getDescribedResources().size() > 0) {
+    operation.get(OPERATION_HEADERS,MISSING_DOMAIN_RESOURCES).set(readUtil.getDescribedResources());
+  }
+  context.addStep(new OperationStepHandler(){
+    public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      context.completeStep(new OperationContext.ResultHandler(){
+        public void handleResult(        ResultAction resultAction,        OperationContext context,        ModelNode operation){
+          if (resultAction == ResultAction.KEEP) {
+            addKnownDataForSlave(hostName,readUtil.getNewKnownRootResources());
+          }
+        }
+      }
+);
+    }
+  }
+,Stage.DOMAIN);
+  return operation;
+}

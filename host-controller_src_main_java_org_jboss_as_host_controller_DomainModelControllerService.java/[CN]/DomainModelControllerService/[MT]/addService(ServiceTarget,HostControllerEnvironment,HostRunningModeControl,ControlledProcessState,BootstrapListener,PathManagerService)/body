@@ -5,9 +5,13 @@
   final AbstractVaultReader vaultReader=service(AbstractVaultReader.class);
   ROOT_LOGGER.debugf("Using VaultReader %s",vaultReader);
   final ContentRepository contentRepository=ContentRepository.Factory.create(environment.getDomainContentDir());
-  IgnoredDomainResourceRegistry ignoredRegistry=new IgnoredDomainResourceRegistry(hostControllerInfo);
-  final PrepareStepHandler prepareStepHandler=new PrepareStepHandler(hostControllerInfo,contentRepository,hostProxies,serverProxies,ignoredRegistry);
+  final IgnoredDomainResourceRegistry ignoredRegistry=new IgnoredDomainResourceRegistry(hostControllerInfo);
+  final ExtensionRegistry extensionRegistry=new ExtensionRegistry(ProcessType.HOST_CONTROLLER,runningModeControl);
+  final DomainControllerRuntimeIgnoreTransformationRegistry runtimeIgnoreTransformationRegistry=new DomainControllerRuntimeIgnoreTransformationRegistry();
+  final PrepareStepHandler prepareStepHandler=new PrepareStepHandler(hostControllerInfo,contentRepository,hostProxies,serverProxies,ignoredRegistry,extensionRegistry,runtimeIgnoreTransformationRegistry);
   final ExpressionResolver expressionResolver=new RuntimeExpressionResolver(vaultReader);
-  DomainModelControllerService service=new DomainModelControllerService(environment,runningModeControl,processState,hostControllerInfo,contentRepository,hostProxies,serverProxies,prepareStepHandler,vaultReader,ignoredRegistry,bootstrapListener,pathManager,expressionResolver,new DelegatingResourceDefinition());
+  DomainModelControllerService service=new DomainModelControllerService(environment,runningModeControl,processState,hostControllerInfo,contentRepository,hostProxies,serverProxies,prepareStepHandler,vaultReader,ignoredRegistry,bootstrapListener,pathManager,expressionResolver,new DelegatingResourceDefinition(),extensionRegistry,runtimeIgnoreTransformationRegistry);
+  ApplyMissingDomainModelResourcesHandler applyMissingDomainModelResourcesHandler=new ApplyMissingDomainModelResourcesHandler(service,environment,hostControllerInfo,ignoredRegistry);
+  prepareStepHandler.initialize(applyMissingDomainModelResourcesHandler);
   return serviceTarget.addService(SERVICE_NAME,service).addDependency(HostControllerService.HC_EXECUTOR_SERVICE_NAME,ExecutorService.class,service.getExecutorServiceInjector()).addDependency(ProcessControllerConnectionService.SERVICE_NAME,ProcessControllerConnectionService.class,service.injectedProcessControllerConnection).addDependency(PathManagerService.SERVICE_NAME).setInitialMode(ServiceController.Mode.ACTIVE).install();
 }

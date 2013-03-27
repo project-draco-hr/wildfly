@@ -46,9 +46,25 @@
     result=Collections.singletonMap(servers,serverOp);
   }
  else   if (ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION.equals(operation.require(OP).asString())) {
-    if (PROFILE.equals(operation.get(NAME).asString())) {
+    final String attr=operation.get(NAME).asString();
+    if (PROFILE.equals(attr)) {
       String groupName=address.getElement(0).getValue();
       Set<ServerIdentity> servers=getServersForGroup(groupName,host,localHostName,serverProxies);
+      return getServerRestartRequiredOperations(servers);
+    }
+ else     if (SOCKET_BINDING_GROUP.equals(attr)) {
+      String groupName=address.getElement(0).getValue();
+      Set<ServerIdentity> servers=getServersForGroup(groupName,host,localHostName,serverProxies);
+      if (servers.size() > 0) {
+        Set<ServerIdentity> affectedServers=new HashSet<>();
+        for (        ServerIdentity server : servers) {
+          ModelNode serverConfig=host.get(SERVER_CONFIG,server.getServerName());
+          if (!serverConfig.hasDefined(SOCKET_BINDING_GROUP)) {
+            affectedServers.add(server);
+          }
+        }
+        servers=affectedServers;
+      }
       return getServerRestartRequiredOperations(servers);
     }
   }

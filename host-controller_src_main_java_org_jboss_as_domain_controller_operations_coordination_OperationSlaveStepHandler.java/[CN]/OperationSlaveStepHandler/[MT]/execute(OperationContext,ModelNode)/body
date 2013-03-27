@@ -1,6 +1,15 @@
 {
   operation.get(OPERATION_HEADERS).remove(PrepareStepHandler.EXECUTE_FOR_COORDINATOR);
+  final ModelNode missingResources=operation.get(OPERATION_HEADERS).remove(DomainControllerRuntimeIgnoreTransformationRegistry.MISSING_DOMAIN_RESOURCES);
+  if (operation.hasDefined(DomainControllerLockIdUtils.DOMAIN_CONTROLLER_LOCK_ID)) {
+    int id=operation.remove(DomainControllerLockIdUtils.DOMAIN_CONTROLLER_LOCK_ID).asInt();
+    context.attach(DomainControllerLockIdUtils.DOMAIN_CONTROLLER_LOCK_ID_ATTACHMENT,id);
+  }
   final HostControllerExecutionSupport hostControllerExecutionSupport=addSteps(context,operation,null,true);
+  if (missingResources != null) {
+    ModelNode applyMissingResourcesOp=ApplyMissingDomainModelResourcesHandler.createPiggyBackedMissingDataOperation(missingResources);
+    context.addStep(applyMissingResourcesOp,applyMissingDomainModelResourcesHandler,OperationContext.Stage.MODEL,true);
+  }
   context.completeStep(new OperationContext.RollbackHandler(){
     @Override public void handleRollback(    OperationContext context,    ModelNode operation){
       if (hostControllerExecutionSupport.getDomainOperation() != null) {
