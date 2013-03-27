@@ -1,0 +1,49 @@
+{
+  final String moduleID=NamingBindingResourceDefinition.MODULE.resolveModelAttribute(context,model).asString();
+  final String className=NamingBindingResourceDefinition.CLASS.resolveModelAttribute(context,model).asString();
+  final ModelNode cacheNode=NamingBindingResourceDefinition.CACHE.resolveModelAttribute(context,model);
+  boolean cache=cacheNode.isDefined() ? cacheNode.asBoolean() : false;
+  final ObjectFactory objectFactoryClassInstance=new ExternalContextObjectFactory();
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(name);
+  final Hashtable<String,String> environment=getObjectFactoryEnvironment(context,model);
+  environment.put(ExternalContextObjectFactory.CACHE_CONTEXT,Boolean.toString(cache));
+  environment.put(ExternalContextObjectFactory.INITIAL_CONTEXT_CLASS,className);
+  environment.put(ExternalContextObjectFactory.INITIAL_CONTEXT_MODULE,moduleID);
+  final BinderService binderService=new BinderService(name,objectFactoryClassInstance);
+  binderService.getManagedObjectInjector().inject(new ContextListAndJndiViewManagedReferenceFactory(){
+    @Override public ManagedReference getReference(){
+      try {
+        final Object value=objectFactoryClassInstance.getObjectInstance(name,null,null,environment);
+        return new ValueManagedReference(new ImmediateValue<Object>(value));
+      }
+ catch (      Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    @Override public String getInstanceClassName(){
+      return className;
+    }
+    @Override public String getJndiViewInstanceValue(){
+      final ClassLoader cl=SecurityActions.getContextClassLoader();
+      try {
+        SecurityActions.setContextClassLoader(objectFactoryClassInstance.getClass().getClassLoader());
+        return String.valueOf(getReference().getInstance());
+      }
+  finally {
+        SecurityActions.setContextClassLoader(cl);
+      }
+    }
+  }
+);
+  ServiceBuilder<ManagedReferenceFactory> builder=serviceTarget.addService(bindInfo.getBinderServiceName(),binderService).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector());
+  if (verificationHandler != null) {
+    builder.addListener(verificationHandler);
+  }
+  if (newControllers != null) {
+    newControllers.add(builder.install());
+  }
+ else {
+    builder.install();
+  }
+}

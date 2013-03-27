@@ -1,0 +1,43 @@
+{
+  String initialContextClassName=(String)environment.get(INITIAL_CONTEXT_CLASS);
+  String initialContextModule=(String)environment.get(INITIAL_CONTEXT_MODULE);
+  final Hashtable<?,?> newEnvironment=new Hashtable<>(environment);
+  newEnvironment.remove(CACHE_CONTEXT);
+  newEnvironment.remove(INITIAL_CONTEXT_CLASS);
+  newEnvironment.remove(INITIAL_CONTEXT_MODULE);
+  ClassLoader loader;
+  if (System.getSecurityManager() == null) {
+    loader=getClass().getClassLoader();
+  }
+ else {
+    loader=AccessController.doPrivileged(new PrivilegedAction<ClassLoader>(){
+      @Override public ClassLoader run(){
+        return getClass().getClassLoader();
+      }
+    }
+);
+  }
+  Class initialContextClass=null;
+  final Context context;
+  if (initialContextModule == null) {
+    initialContextClass=Class.forName(initialContextClassName);
+    Constructor ctor=initialContextClass.getConstructor(Hashtable.class);
+    context=(Context)ctor.newInstance(newEnvironment);
+  }
+ else {
+    Module module=Module.getBootModuleLoader().loadModule(ModuleIdentifier.fromString(initialContextModule));
+    loader=module.getClassLoader();
+    initialContextClass=Class.forName(initialContextClassName,true,module.getClassLoader());
+    Constructor ctor=initialContextClass.getConstructor(Hashtable.class);
+    context=(Context)ctor.newInstance(newEnvironment);
+  }
+  if (!useProxy) {
+    return context;
+  }
+  ProxyConfiguration config=new ProxyConfiguration();
+  config.setClassLoader(loader);
+  config.setSuperClass(initialContextClass);
+  config.setProxyName(initialContextClassName + "$$$$Proxy" + PROXY_ID.incrementAndGet());
+  ProxyFactory<?> factory=new ProxyFactory<Object>(config);
+  return (Context)factory.newInstance(new CachedContext(context));
+}
