@@ -1,0 +1,48 @@
+{
+  int olimit=(limit - pos);
+  int remainder=olimit % 3;
+  olimit=(olimit + (remainder == 0 ? 0 : 3 - remainder)) / 3 * 4;
+  olimit+=(wrap ? (olimit / 76) * 2 + 2 : 0);
+  char[] target=new char[olimit];
+  int opos=0;
+  int last=0;
+  int count=0;
+  int state=0;
+  final byte[] ENCODING_TABLE=FlexBase64.ENCODING_TABLE;
+  while (limit > pos) {
+    int b=source[pos++] & 0xFF;
+    target[opos++]=(char)ENCODING_TABLE[b >>> 2];
+    last=(b & 0x3) << 4;
+    if (pos >= limit) {
+      state=1;
+      break;
+    }
+    b=source[pos++] & 0xFF;
+    target[opos++]=(char)ENCODING_TABLE[last | (b >>> 4)];
+    last=(b & 0x0F) << 2;
+    if (pos >= limit) {
+      state=2;
+      break;
+    }
+    b=source[pos++] & 0xFF;
+    target[opos++]=(char)ENCODING_TABLE[last | (b >>> 6)];
+    target[opos++]=(char)ENCODING_TABLE[b & 0x3F];
+    if (wrap) {
+      count+=4;
+      if (count >= 76) {
+        count=0;
+        target[opos++]=0x0D;
+        target[opos++]=0x0A;
+      }
+    }
+  }
+  complete(target,opos,state,last,wrap);
+  try {
+    if (STRING_CONSTRUCTOR != null) {
+      return STRING_CONSTRUCTOR.newInstance(target,Boolean.TRUE);
+    }
+  }
+ catch (  Exception e) {
+  }
+  return new String(target);
+}

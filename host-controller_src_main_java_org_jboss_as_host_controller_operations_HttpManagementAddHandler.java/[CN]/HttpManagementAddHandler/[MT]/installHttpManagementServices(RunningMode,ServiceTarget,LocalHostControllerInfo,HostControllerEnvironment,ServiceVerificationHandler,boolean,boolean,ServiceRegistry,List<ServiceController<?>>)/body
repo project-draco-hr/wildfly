@@ -1,0 +1,36 @@
+{
+  String interfaceName=hostControllerInfo.getHttpManagementInterface();
+  int port=hostControllerInfo.getHttpManagementPort();
+  int securePort=hostControllerInfo.getHttpManagementSecurePort();
+  String securityRealm=hostControllerInfo.getHttpManagementSecurityRealm();
+  AS_ROOT_LOGGER.creatingHttpManagementService(interfaceName,port,securePort);
+  final ThreadFactory httpMgmtThreads=new JBossThreadFactory(new ThreadGroup("HttpManagementService-threads"),Boolean.FALSE,null,"%G - %t",null,null,doPrivileged(GetAccessControlContextAction.getInstance()));
+  ConsoleMode consoleMode=ConsoleMode.CONSOLE;
+  if (runningMode == RunningMode.ADMIN_ONLY) {
+    consoleMode=ConsoleMode.ADMIN_ONLY;
+  }
+ else   if (!hostControllerInfo.isMasterDomainController()) {
+    consoleMode=ConsoleMode.SLAVE_HC;
+  }
+  final _UndertowHttpManagementService service=new _UndertowHttpManagementService(consoleMode,environment.getProductConfig().getConsoleSlot(),httpUpgrade);
+  ServiceBuilder<?> builder=serviceTarget.addService(_UndertowHttpManagementService.SERVICE_NAME,service).addDependency(NetworkInterfaceService.JBOSS_NETWORK_INTERFACE.append(interfaceName),NetworkInterfaceBinding.class,service.getInterfaceInjector()).addDependency(DomainModelControllerService.SERVICE_NAME,ModelController.class,service.getModelControllerInjector()).addDependency(ControlledProcessStateService.SERVICE_NAME,ControlledProcessStateService.class,service.getControlledProcessStateServiceInjector()).addInjection(service.getPortInjector(),port).addInjection(service.getSecurePortInjector(),securePort).addInjection(service.getExecutorServiceInjector(),Executors.newCachedThreadPool(httpMgmtThreads));
+  ServiceName realmSvcName=null;
+  if (securityRealm != null) {
+    realmSvcName=SecurityRealmService.BASE_SERVICE_NAME.append(securityRealm);
+    builder.addDependency(realmSvcName,SecurityRealmService.class,service.getSecurityRealmInjector());
+  }
+ else {
+    AS_ROOT_LOGGER.noSecurityRealmDefined();
+  }
+  if (verificationHandler != null) {
+    builder.addListener(verificationHandler);
+  }
+  builder.setInitialMode(onDemand ? ServiceController.Mode.ON_DEMAND : ServiceController.Mode.ACTIVE).install();
+  if (httpUpgrade) {
+    ServiceName serverCallbackService=ServiceName.JBOSS.append("host","controller","server-inventory","callback");
+    ServiceName tmpDirPath=ServiceName.JBOSS.append("server","path","jboss.domain.temp.dir");
+    ManagementRemotingServices.installSecurityServices(serviceTarget,ManagementRemotingServices.HTTP_CONNECTOR,realmSvcName,serverCallbackService,tmpDirPath,verificationHandler,newControllers);
+    NativeManagementServices.installRemotingServicesIfNotInstalled(serviceTarget,hostControllerInfo.getLocalHostName(),verificationHandler,null,serviceRegistry,onDemand);
+    RemotingHttpUpgradeService.installServices(serviceTarget,ManagementRemotingServices.HTTP_CONNECTOR,ManagementRemotingServices.MANAGEMENT_ENDPOINT,OptionMap.EMPTY,verificationHandler);
+  }
+}

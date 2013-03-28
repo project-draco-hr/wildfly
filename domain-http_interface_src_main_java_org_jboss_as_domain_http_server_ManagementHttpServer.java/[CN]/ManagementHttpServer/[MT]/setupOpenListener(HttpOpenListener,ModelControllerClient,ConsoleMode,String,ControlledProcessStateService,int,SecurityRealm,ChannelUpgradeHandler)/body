@@ -1,0 +1,41 @@
+{
+  CanonicalPathHandler canonicalPathHandler=new CanonicalPathHandler();
+  listener.setRootHandler(canonicalPathHandler);
+  PathHandler pathHandler=new PathHandler();
+  HttpHandler current=pathHandler;
+  if (securePort > 0) {
+    current=new SinglePortConfidentialityHandler(current,securePort);
+  }
+  current=new CacheHandler(new DirectBufferCache(1024,1024 * 10,1024 * 1000,BufferAllocator.BYTE_BUFFER_ALLOCATOR),current);
+  current=new SimpleErrorPageHandler(current);
+  if (upgradeHandler != null) {
+    upgradeHandler.setNonUpgradeHandler(current);
+    current=upgradeHandler;
+  }
+  canonicalPathHandler.setNext(current);
+  ResourceHandlerDefinition consoleHandler=null;
+  try {
+    consoleHandler=consoleMode.createConsoleHandler(consoleSlot);
+  }
+ catch (  ModuleLoadException e) {
+    ROOT_LOGGER.consoleModuleNotFound(consoleSlot == null ? "main" : consoleSlot);
+  }
+  try {
+    pathHandler.addPath(ErrorContextHandler.ERROR_CONTEXT,ErrorContextHandler.createErrorContext(consoleSlot));
+  }
+ catch (  ModuleLoadException e) {
+    ROOT_LOGGER.error(consoleSlot == null ? "main" : consoleSlot);
+  }
+  ManagementRootConsoleRedirectHandler rootConsoleRedirectHandler=new ManagementRootConsoleRedirectHandler(consoleHandler);
+  DomainApiCheckHandler domainApiHandler=new DomainApiCheckHandler(modelControllerClient,controlledProcessStateService);
+  pathHandler.addPath("/",rootConsoleRedirectHandler);
+  if (consoleHandler != null) {
+    HttpHandler readinessHandler=new RedirectReadinessHandler(securityRealm,consoleHandler.getHandler(),ErrorContextHandler.ERROR_CONTEXT);
+    pathHandler.addPath(consoleHandler.getContext(),readinessHandler);
+  }
+  HttpHandler readinessHandler=new DmrFailureReadinessHandler(securityRealm,secureDomainAccess(domainApiHandler,securityRealm),ErrorContextHandler.ERROR_CONTEXT);
+  pathHandler.addPath(DomainApiCheckHandler.PATH,readinessHandler);
+  if (securityRealm != null) {
+    pathHandler.addPath(LogoutHandler.PATH,new LogoutHandler(securityRealm.getName()));
+  }
+}
