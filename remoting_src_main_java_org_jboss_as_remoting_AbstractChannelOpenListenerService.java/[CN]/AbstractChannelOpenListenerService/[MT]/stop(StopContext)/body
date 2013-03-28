@@ -1,3 +1,42 @@
 {
   closed=true;
+  final Set<ManagementChannelInitialization.ManagementChannelShutdownHandle> handles=new HashSet<>(this.handles);
+  for (  final ManagementChannelInitialization.ManagementChannelShutdownHandle handle : handles) {
+    handle.shutdown();
+  }
+  final Runnable shutdownTask=new Runnable(){
+    @Override public void run(){
+      final long end=System.currentTimeMillis() + CHANNEL_SHUTDOWN_TIMEOUT;
+      boolean interrupted=Thread.currentThread().isInterrupted();
+      try {
+        for (        final ManagementChannelInitialization.ManagementChannelShutdownHandle handle : handles) {
+          final long remaining=end - System.currentTimeMillis();
+          try {
+            if (!interrupted && !handle.awaitCompletion(remaining,TimeUnit.MILLISECONDS)) {
+              ControllerLogger.ROOT_LOGGER.gracefulManagementChannelHandlerShutdownTimedOut(CHANNEL_SHUTDOWN_TIMEOUT);
+            }
+          }
+ catch (          InterruptedException e) {
+            interrupted=true;
+            ControllerLogger.ROOT_LOGGER.gracefulManagementChannelHandlerShutdownFailed(e);
+          }
+catch (          Exception e) {
+            ControllerLogger.ROOT_LOGGER.gracefulManagementChannelHandlerShutdownFailed(e);
+          }
+ finally {
+            handle.shutdownNow();
+          }
+        }
+      }
+  finally {
+        context.complete();
+        if (interrupted) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    }
+  }
+;
+  context.asynchronous();
+  execute(shutdownTask);
 }
