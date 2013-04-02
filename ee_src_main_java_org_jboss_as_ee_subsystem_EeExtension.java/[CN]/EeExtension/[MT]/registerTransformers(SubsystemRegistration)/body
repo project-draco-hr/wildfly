@@ -1,61 +1,6 @@
 {
   ResourceTransformationDescriptionBuilder builder=TransformationDescriptionBuilder.Factory.createSubsystemInstance();
-  builder.getAttributeBuilder().addRejectCheck(new RejectAttributeChecker.DefaultRejectAttributeChecker(){
-    @Override public String getRejectionLogMessage(    Map<String,ModelNode> attributes){
-      return EeMessages.MESSAGES.onlyTrueAllowedForJBossDescriptorPropertyReplacement_AS7_4892();
-    }
-    @Override protected boolean rejectAttribute(    PathAddress address,    String attributeName,    ModelNode attributeValue,    TransformationContext context){
-      if (attributeValue.isDefined()) {
-        ModelVersion version=context.getTarget().getVersion();
-        if (version.getMajor() == 1 && version.getMinor() == 2) {
-          if (attributeValue.getType() == ModelType.BOOLEAN) {
-            return !attributeValue.asBoolean();
-          }
- else {
-            if (!Boolean.parseBoolean(attributeValue.asString())) {
-              return true;
-            }
-          }
-        }
-      }
-      return false;
-    }
-  }
-,EeSubsystemRootResource.JBOSS_DESCRIPTOR_PROPERTY_REPLACEMENT);
-  builder.setCustomResourceTransformer(new ResourceTransformer(){
-    @Override public void transformResource(    final ResourceTransformationContext context,    final PathAddress address,    final Resource resource) throws OperationFailedException {
-      final ModelNode attributeValue=resource.getModel().get(GLOBAL_MODULES);
-      if (attributeValue.isDefined()) {
-        for (        ModelNode node : attributeValue.asList()) {
-          if (node.hasDefined(ANNOTATIONS)) {
-            if (node.get(ANNOTATIONS).asBoolean()) {
-              throw new OperationFailedException(EeMessages.MESSAGES.propertiesNotAllowedOnGlobalModules());
-            }
- else {
-              node.remove(ANNOTATIONS);
-            }
-          }
-          if (node.hasDefined(SERVICES)) {
-            if (!node.get(SERVICES).asBoolean()) {
-              throw new OperationFailedException(EeMessages.MESSAGES.propertiesNotAllowedOnGlobalModules());
-            }
- else {
-              node.remove(SERVICES);
-            }
-          }
-          if (node.hasDefined(META_INF)) {
-            if (node.get(META_INF).asBoolean()) {
-              throw new OperationFailedException(EeMessages.MESSAGES.propertiesNotAllowedOnGlobalModules());
-            }
- else {
-              node.remove(META_INF);
-            }
-          }
-        }
-      }
-      context.addTransformedResource(PathAddress.EMPTY_ADDRESS,resource);
-    }
-  }
-);
+  GlobalModulesRejecterConverter globalModulesRejecterConverter=new GlobalModulesRejecterConverter();
+  builder.getAttributeBuilder().addRejectCheck(new JBossDescriptorPropertyReplacementRejectChecker(),EeSubsystemRootResource.JBOSS_DESCRIPTOR_PROPERTY_REPLACEMENT).addRejectCheck(globalModulesRejecterConverter,GlobalModulesDefinition.INSTANCE).setValueConverter(globalModulesRejecterConverter,GlobalModulesDefinition.INSTANCE);
   TransformationDescription.Tools.register(builder.build(),subsystem,ModelVersion.create(1,0,0));
 }
