@@ -4,16 +4,21 @@
     jmsServer=new JMSServerManagerImpl(hornetQServer.getValue(),new AS7BindingRegistry(context.getController().getServiceContainer()));
     final ServiceBuilder<Void> hornetqActivationService=context.getChildTarget().addService(HornetQActivationService.getHornetQActivationServiceName(hqServiceName),new HornetQActivationService()).setInitialMode(Mode.ACTIVE);
     hornetQServer.getValue().registerActivateCallback(new ActivateCallback(){
-      public ServiceController<Void> hornetqActivationController;
+      private volatile ServiceController<Void> hornetqActivationController;
       public void preActivate(){
       }
       public void activated(){
         hornetQServer.getValue().getRemotingService().allowInvmSecurityOverride(new HornetQPrincipal(HornetQDefaultCredentials.getUsername(),HornetQDefaultCredentials.getPassword()));
-        hornetqActivationController=hornetqActivationService.install();
+        if (hornetqActivationController == null) {
+          hornetqActivationController=hornetqActivationService.install();
+        }
+ else {
+          hornetqActivationController.setMode(ACTIVE);
+        }
       }
       public void deActivate(){
-        if (hornetqActivationController != null) {
-          hornetqActivationController.setMode(REMOVE);
+        if (hornetqActivationController != null && !hornetqActivationController.getServiceContainer().isShutdown()) {
+          hornetqActivationController.setMode(PASSIVE);
         }
       }
     }
