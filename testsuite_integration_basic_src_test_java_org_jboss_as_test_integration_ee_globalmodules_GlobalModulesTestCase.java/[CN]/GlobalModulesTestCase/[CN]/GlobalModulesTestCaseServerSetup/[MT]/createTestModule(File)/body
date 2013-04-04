@@ -1,0 +1,33 @@
+{
+  if (testModuleRoot.exists()) {
+    throw new IllegalArgumentException(testModuleRoot + " already exists");
+  }
+  File file=new File(testModuleRoot,"main");
+  if (!file.mkdirs()) {
+    throw new IllegalArgumentException("Could not create " + file);
+  }
+  URL url=GlobalModulesTestCase.class.getResource("module.xml");
+  if (url == null) {
+    throw new IllegalStateException("Could not find module.xml");
+  }
+  copyFile(new File(file,"module.xml"),url.openStream());
+  JavaArchive jar=ShrinkWrap.create(JavaArchive.class,"globalTest.jar");
+  jar.addClasses(GlobalModuleEjb.class,GlobalModuleInterceptor.class);
+  final ClassLoader cl=GlobalModulesTestCase.class.getClassLoader();
+  Indexer indexer=new Indexer();
+  indexer.index(cl.getResourceAsStream(GlobalModuleEjb.class.getName().replace(".","/") + ".class"));
+  indexer.index(cl.getResourceAsStream(GlobalModuleInterceptor.class.getName().replace(".","/") + ".class"));
+  final Index index=indexer.complete();
+  final ByteArrayOutputStream out=new ByteArrayOutputStream();
+  IndexWriter writer=new IndexWriter(out);
+  writer.write(index);
+  jar.addAsManifestResource(new ByteArrayAsset(out.toByteArray()),"jandex.idx");
+  FileOutputStream jarFile=new FileOutputStream(new File(file,"globalTest.jar"));
+  try {
+    jar.as(ZipExporter.class).exportTo(jarFile);
+  }
+  finally {
+    jarFile.flush();
+    jarFile.close();
+  }
+}
