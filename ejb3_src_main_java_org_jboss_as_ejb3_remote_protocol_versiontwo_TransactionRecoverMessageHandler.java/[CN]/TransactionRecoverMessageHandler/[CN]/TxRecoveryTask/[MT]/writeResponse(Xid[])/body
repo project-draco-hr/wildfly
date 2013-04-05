@@ -1,0 +1,27 @@
+{
+  final DataOutputStream dataOutputStream;
+  final MessageOutputStream messageOutputStream;
+  try {
+    messageOutputStream=channelAssociation.acquireChannelMessageOutputStream();
+  }
+ catch (  Exception e) {
+    throw EjbMessages.MESSAGES.failedToOpenMessageOutputStream(e);
+  }
+  dataOutputStream=new DataOutputStream(messageOutputStream);
+  try {
+    dataOutputStream.writeByte(HEADER_TX_RECOVER_RESPONSE);
+    dataOutputStream.writeShort(invocationId);
+    PackedInteger.writePackedInteger(dataOutputStream,xids.length);
+    if (xids.length > 0) {
+      final Marshaller marshaller=TransactionRecoverMessageHandler.this.prepareForMarshalling(marshallerFactory,dataOutputStream);
+      for (int i=0; i < xids.length; i++) {
+        marshaller.writeObject(new XidTransactionID(xids[i]));
+      }
+      marshaller.finish();
+    }
+  }
+  finally {
+    channelAssociation.releaseChannelMessageOutputStream(messageOutputStream);
+    dataOutputStream.close();
+  }
+}
