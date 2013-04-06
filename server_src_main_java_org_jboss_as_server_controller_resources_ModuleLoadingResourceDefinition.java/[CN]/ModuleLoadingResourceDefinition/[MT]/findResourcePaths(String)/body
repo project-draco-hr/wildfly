@@ -1,0 +1,34 @@
+{
+  List<String> result=new ArrayList<String>();
+  Module module=Module.getModuleFromCallerModuleLoader(ModuleIdentifier.create(moduleName));
+  ModuleClassLoader mcl=module.getClassLoader();
+  Field pathsField=ModuleClassLoader.class.getDeclaredField("paths");
+  Field sourceListField=null;
+  Field resourceLoaderField=null;
+  pathsField.setAccessible(true);
+  try {
+    Object paths=pathsField.get(mcl);
+    sourceListField=paths.getClass().getDeclaredField("sourceList");
+    sourceListField.setAccessible(true);
+    Object[] resourceLoaderSpecs=(Object[])sourceListField.get(paths);
+    resourceLoaderField=ResourceLoaderSpec.class.getDeclaredField("resourceLoader");
+    resourceLoaderField.setAccessible(true);
+    for (    Object resourceLoaderSpec : resourceLoaderSpecs) {
+      ResourceLoader resourceLoader=(ResourceLoader)resourceLoaderField.get(resourceLoaderSpec);
+      String path=getResourceLoaderPath(resourceLoader);
+      if (path != null) {
+        result.add(path);
+      }
+    }
+    return result;
+  }
+  finally {
+    pathsField.setAccessible(false);
+    if (sourceListField != null) {
+      sourceListField.setAccessible(false);
+    }
+    if (resourceLoaderField != null) {
+      resourceLoaderField.setAccessible(false);
+    }
+  }
+}
