@@ -1,0 +1,29 @@
+{
+  Set<Class<? extends Endpoint>> allScannedEndpointImplementations=new HashSet<>(endpoints);
+  Set<Class<?>> allAnnotatedEndpoints=new HashSet<>(annotatedEndpoints);
+  Set<ServerEndpointConfig> serverEndpointConfigurations=new HashSet<>();
+  final Set<ServerApplicationConfig> configInstances=new HashSet<>();
+  for (  Class<? extends ServerApplicationConfig> clazz : serverApplicationConfigClasses) {
+    try {
+      configInstances.add(clazz.newInstance());
+    }
+ catch (    InstantiationException|IllegalAccessException e) {
+      JsrWebSocketLogger.ROOT_LOGGER.couldNotInitializeConfiguration(clazz,e);
+    }
+  }
+  for (  ServerApplicationConfig config : configInstances) {
+    allAnnotatedEndpoints=config.getAnnotatedEndpointClasses(allAnnotatedEndpoints);
+    serverEndpointConfigurations.addAll(config.getEndpointConfigs(allScannedEndpointImplementations));
+  }
+  try {
+    for (    Class<?> endpoint : allAnnotatedEndpoints) {
+      container.addEndpoint(endpoint);
+    }
+    for (    final ServerEndpointConfig endpoint : serverEndpointConfigurations) {
+      container.addEndpoint(endpoint);
+    }
+  }
+ catch (  DeploymentException e) {
+    throw new DeploymentUnitProcessingException(e);
+  }
+}
