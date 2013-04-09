@@ -1,13 +1,20 @@
 {
-  Bundle bundle=context.installBundle(V200_JAR,deployer.getDeployment(V200_JAR));
+  Bundle jar=context.installBundle(V200_JAR,deployer.getDeployment(V200_JAR));
   Bundle webapp=context.installBundle(BUNDLE_V200_WAB,deployer.getDeployment(BUNDLE_V200_WAB));
+  XEnvironment env=context.getBundle().adapt(XEnvironment.class);
+  XBundleRevision brev=(XBundleRevision)jar.adapt(BundleRevision.class);
+  Long resid=brev.getAttachment(XResource.RESOURCE_IDENTIFIER_KEY);
   try {
     webapp.start();
     String result=performCall("bundle-v200","simple",null);
     Assert.assertEquals("Revision deployment.v200.jar:main",result);
     result=performCall("bundle-v200","message.txt",null);
     Assert.assertEquals("Resource V2.0.0",result);
-    bundle.uninstall();
+    jar.uninstall();
+    Assert.assertNull("BundleRevision is null",jar.adapt(BundleRevision.class));
+    Assert.assertTrue("BundleWiring in use",brev.getWiring().isInUse());
+    Assert.assertFalse("BundleWiring not current",brev.getWiring().isCurrent());
+    Assert.assertSame(brev,env.getResourceById(resid));
     result=performCall("bundle-v200","simple",null);
     Assert.assertEquals("Revision deployment.v200.jar:main",result);
     result=performCall("bundle-v200","message.txt",null);
@@ -16,4 +23,6 @@
   finally {
     webapp.uninstall();
   }
+  Assert.assertNull("BundleRevision removed",env.getResourceById(resid));
+  Assert.assertNull("BundleWiring null",brev.getWiring());
 }
