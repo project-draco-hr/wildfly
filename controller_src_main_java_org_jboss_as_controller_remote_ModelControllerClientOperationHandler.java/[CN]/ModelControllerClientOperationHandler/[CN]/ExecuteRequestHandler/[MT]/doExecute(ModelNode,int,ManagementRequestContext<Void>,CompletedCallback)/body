@@ -3,11 +3,21 @@
   final ManagementRequestHeader header=ManagementRequestHeader.class.cast(context.getRequestHeader());
   final int batchId=header.getBatchId();
   final ModelNode result=new ModelNode();
+  final boolean sendPreparedOperation=sendPreparedResponse(operation);
+  final ModelController.OperationTransactionControl transactionControl=sendPreparedOperation ? new ModelController.OperationTransactionControl(){
+    @Override public void operationPrepared(    ModelController.OperationTransaction transaction,    ModelNode result){
+      transaction.commit();
+      result.get(OUTCOME).set(SUCCESS);
+      result.get(RESULT);
+      callback.sendResponse(result);
+    }
+  }
+ : ModelController.OperationTransactionControl.COMMIT;
   final OperationMessageHandlerProxy messageHandlerProxy=new OperationMessageHandlerProxy(channelAssociation,batchId);
   final OperationAttachmentsProxy attachmentsProxy=OperationAttachmentsProxy.create(channelAssociation,batchId,attachmentsLength);
   try {
     ROOT_LOGGER.tracef("Executing client request %d(%d)",batchId,header.getRequestId());
-    result.set(controller.execute(operation,messageHandlerProxy,ModelController.OperationTransactionControl.COMMIT,attachmentsProxy));
+    result.set(controller.execute(operation,messageHandlerProxy,transactionControl,attachmentsProxy));
   }
  catch (  Exception e) {
     final ModelNode failure=new ModelNode();
@@ -19,5 +29,5 @@
  finally {
     ROOT_LOGGER.tracef("Executed client request %d",batchId);
   }
-  return result;
+  callback.sendResponse(result);
 }
