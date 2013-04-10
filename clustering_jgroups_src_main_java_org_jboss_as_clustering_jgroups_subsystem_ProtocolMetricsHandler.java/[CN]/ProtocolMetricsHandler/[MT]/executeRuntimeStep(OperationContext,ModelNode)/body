@@ -1,0 +1,61 @@
+{
+  PathAddress pathAddress=PathAddress.pathAddress(operation.require(OP_ADDR));
+  String channelName=pathAddress.getElement(pathAddress.size() - 2).getValue();
+  String protocolName=pathAddress.getElement(pathAddress.size() - 1).getValue();
+  String attrName=operation.require(NAME).asString();
+  ServiceName channelServiceName=ChannelInstanceCustomResource.CHANNEL_PARENT.append(channelName);
+  ServiceController<?> controller=context.getServiceRegistry(false).getService(channelServiceName);
+  boolean started=controller != null && controller.getValue() != null;
+  ModelNode result=new ModelNode();
+  String className=JGROUPS_PROTOCOL_PKG + "." + protocolName;
+  Class<? extends Protocol> protocolClass=null;
+  boolean loaded=false;
+  try {
+    protocolClass=Protocol.class.getClassLoader().loadClass(className).asSubclass(Protocol.class);
+    loaded=true;
+  }
+ catch (  ClassNotFoundException e) {
+    context.getFailureDescription().set(String.format("Can't load protocol class %s",protocolName));
+  }
+  if (loaded) {
+    Field field=null;
+    boolean fieldFound=false;
+    try {
+      field=getField(protocolClass,attrName);
+      fieldFound=true;
+    }
+ catch (    NoSuchFieldException e) {
+      context.getFailureDescription().set(String.format("Unknown metric %s",attrName));
+    }
+    if (fieldFound && started) {
+      Channel channel=(Channel)controller.getValue();
+      int index=protocolName.lastIndexOf('.');
+      if (index > 0)       protocolName=protocolName.substring(index + 1);
+      Protocol protocol=channel.getProtocolStack().findProtocol(protocolName);
+      if (protocol == null) {
+        System.out.println("protocol is null");
+        context.getFailureDescription().set(String.format("Could not retrieve protocol %s",protocolName));
+      }
+      FieldTypes type=null;
+      if (ChannelInstanceResource.isEquivalentModelTypeAvailable(field.getType())) {
+        type=FieldTypes.getStat(field.getType().toString());
+      }
+ else {
+        type=FieldTypes.NON_PRIMITIVE;
+      }
+      try {
+        result=getProtocolFieldValue(protocol,field,type);
+      }
+ catch (      PrivilegedActionException pae) {
+        context.getFailureDescription().set(String.format("Privileged access exception on attribute %s",attrName));
+        System.out.println(pae.toString());
+      }
+catch (      InstantiationException ie) {
+        context.getFailureDescription().set(String.format("Instantiation exception on converter for attribute %s",attrName));
+        System.out.println(ie.toString());
+      }
+      context.getResult().set(result);
+    }
+  }
+  context.completeStep(OperationContext.ResultHandler.NOOP_RESULT_HANDLER);
+}
