@@ -1,0 +1,39 @@
+{
+  ClassLoader oldTccl=SecurityActions.setThreadContextClassLoader(getClass());
+  try {
+    jmsServer=new JMSServerManagerImpl(hornetQServer.getValue(),new AS7BindingRegistry(context.getController().getServiceContainer()));
+    final ServiceBuilder<Void> hornetqActivationService=context.getChildTarget().addService(HornetQActivationService.getHornetQActivationServiceName(hqServiceName),new HornetQActivationService()).setInitialMode(Mode.ACTIVE);
+    hornetQServer.getValue().registerActivateCallback(new ActivateCallback(){
+      private volatile ServiceController<Void> hornetqActivationController;
+      public void preActivate(){
+      }
+      public void activated(){
+        hornetQServer.getValue().getRemotingService().allowInvmSecurityOverride(new HornetQPrincipal(HornetQDefaultCredentials.getUsername(),HornetQDefaultCredentials.getPassword()));
+        if (hornetqActivationController == null) {
+          hornetqActivationController=hornetqActivationService.install();
+        }
+ else {
+          hornetqActivationController.setMode(ACTIVE);
+        }
+      }
+      public void deActivate(){
+        if (hornetqActivationController != null) {
+          if (!hornetqActivationController.getState().in(STOPPING,REMOVED)) {
+            hornetqActivationController.compareAndSetMode(ACTIVE,PASSIVE);
+          }
+        }
+      }
+    }
+);
+    jmsServer.start();
+  }
+ catch (  StartException e) {
+    throw e;
+  }
+catch (  Exception e) {
+    throw MESSAGES.failedToStartService(e);
+  }
+ finally {
+    SecurityActions.setThreadContextClassLoader(oldTccl);
+  }
+}
