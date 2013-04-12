@@ -1,16 +1,23 @@
 {
+  context.acquireControllerLock();
   context.readResource(PathAddress.EMPTY_ADDRESS,false);
   final String group=getServerGroupName(operation);
+  final boolean blocking=operation.get(BLOCKING).asBoolean(false);
   context.addStep(new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
       if (group != null) {
+        final Set<String> waitForServers=new HashSet<String>();
         final ModelNode model=Resource.Tools.readModel(context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS,true));
         for (        String server : getServersForGroup(model,group)) {
           serverInventory.stopServer(server,TIMEOUT);
+          waitForServers.add(server);
+        }
+        if (blocking) {
+          serverInventory.awaitServersState(waitForServers,false);
         }
       }
  else {
-        serverInventory.stopServers(TIMEOUT);
+        serverInventory.stopServers(TIMEOUT,blocking);
       }
       context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
     }

@@ -1,12 +1,15 @@
 {
+  context.acquireControllerLock();
   context.readResource(PathAddress.EMPTY_ADDRESS,false);
   final ModelNode model=Resource.Tools.readModel(context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS,true));
   final String group=getServerGroupName(operation);
+  final boolean blocking=operation.get(BLOCKING).asBoolean(false);
   context.addStep(new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
       final String hostName=model.get(HOST).keys().iterator().next();
       final ModelNode serverConfig=model.get(HOST,hostName).get(SERVER_CONFIG);
       final Set<String> serversInGroup=getServersForGroup(model,group);
+      final Set<String> waitForServers=new HashSet<String>();
       if (serverConfig.isDefined()) {
         for (        Property config : serverConfig.asPropertyList()) {
           final ServerStatus status=serverInventory.determineServerStatus(config.getName());
@@ -16,8 +19,12 @@
                 serverInventory.stopServer(config.getName(),TIMEOUT);
               }
               serverInventory.startServer(config.getName(),model);
+              waitForServers.add(config.getName());
             }
           }
+        }
+        if (blocking) {
+          serverInventory.awaitServersState(waitForServers,true);
         }
       }
       context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
