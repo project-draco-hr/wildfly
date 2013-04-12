@@ -1,0 +1,33 @@
+{
+  log.infof("[AT SERVICE] web method invoke(%s) with eventLog %s",callName,eventLog);
+  eventLog.foundEventLogName(callName);
+  UserTransaction userTransaction;
+  try {
+    userTransaction=UserTransactionFactory.userTransaction();
+    String transactionId=userTransaction.transactionIdentifier();
+    log.debug("RestaurantServiceAT transaction id =" + transactionId);
+    TransactionManager transactionManager=TransactionManagerFactory.transactionManager();
+    ATDurableParticipant durableParticipant=new ATDurableParticipant(serviceCommands,callName,eventLog,transactionId);
+    log.info("[SERVICE] Enlisting a Durable2PC participant into the AT");
+    transactionManager.enlistForDurableTwoPhase(durableParticipant,"ATServiceDurable:" + new Uid().toString());
+    ATVolatileParticipant volatileParticipant=new ATVolatileParticipant(serviceCommands,callName,eventLog,transactionId);
+    log.info("[SERVICE] Enlisting a VolatilePC participant into the AT");
+    transactionManager.enlistForVolatileTwoPhase(volatileParticipant,"ATServiceVolatile:" + new Uid().toString());
+  }
+ catch (  Exception e) {
+    throw new RuntimeException("Error when enlisting participants",e);
+  }
+  if (ServiceCommand.isPresent(APPLICATION_EXCEPTION,serviceCommands)) {
+    throw new TestApplicationException("Intentionally thrown Application Exception - service command was set to: " + APPLICATION_EXCEPTION);
+  }
+  if (ServiceCommand.isPresent(ROLLBACK_ONLY,serviceCommands)) {
+    log.info("Intentionally the service settings transaction to rollback only - service command was set to: " + ROLLBACK_ONLY);
+    try {
+      userTransaction.rollback();
+    }
+ catch (    Exception e) {
+      throw new RuntimeException("The rollback is not possible",e);
+    }
+  }
+  log.info("|AT SERVICE] I'm working on nothing...");
+}

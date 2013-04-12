@@ -1,0 +1,54 @@
+{
+  log.info("[BA PARTICIPANT COMPL SERVICE] invoked saveData('" + value + "')");
+  eventLog.foundEventLogName(value);
+  BAParticipantManager participantManager;
+  BusinessActivityManager activityManager=BusinessActivityManagerFactory.businessActivityManager();
+  String txid;
+  try {
+    txid=activityManager.currentTransaction().toString();
+  }
+ catch (  SystemException se) {
+    throw new RuntimeException("Error on getting TX id from BussinessActivityManager",se);
+  }
+  if (participantRegistry.keySet().contains(txid) && ServiceCommand.isPresent(REUSE_BA_PARTICIPANT,serviceCommands)) {
+    log.info("[BA PARTICIPANT COMPL SERVICE] Reusing BA participant manager - command: " + REUSE_BA_PARTICIPANT);
+    participantManager=participantRegistry.get(txid);
+  }
+ else {
+    try {
+      BAParticipantCompletionParticipant participant=new BAParticipantCompletionParticipant(serviceCommands,eventLog,value);
+      log.info("[BA PARTICIPANT COMPL SERVICE] Enlisting a participant into the BA");
+      participantManager=activityManager.enlistForBusinessAgreementWithParticipantCompletion(participant,"BAParticipantCompletition:" + new Uid().toString());
+      participantRegistry.put(txid,participantManager);
+    }
+ catch (    Exception e) {
+      log.error("[BA PARTICIPANT COMPL SERVICE]  Participant enlistment failed",e);
+      throw new RuntimeException("Error enlisting participant",e);
+    }
+  }
+  if (ServiceCommand.isPresent(APPLICATION_EXCEPTION,serviceCommands)) {
+    throw new TestApplicationException("Intentionally thrown Application Exception - service command set to: " + APPLICATION_EXCEPTION);
+  }
+  log.info("[BA PARTICIPANT COMPL SERVICE] Prepare the backend resource and if successful notify the coordinator that we have completed our work");
+  if (ServiceCommand.isPresent(DO_COMPLETE,serviceCommands)) {
+    try {
+      log.info("[BA PARTICIPANT COMPL SERVICE] Prepare successful, notifying coordinator of completion");
+      participantManager.completed();
+    }
+ catch (    Exception e) {
+      log.error("[BA PARTICIPANT COMPL SERVICE] 'completed' callback failed");
+      throw new RuntimeException("Error when notifying the coordinator that the work is completed",e);
+    }
+  }
+  if (ServiceCommand.isPresent(CANNOT_COMPLETE,serviceCommands)) {
+    try {
+      log.info("[BA PARTICIPANT COMPL SERVICE] Prepared fail, notifying coordinator that we cannot complete");
+      participantManager.cannotComplete();
+      return;
+    }
+ catch (    Exception e) {
+      log.error("[BA PARTICIPANT COMPL SERVICE] 'cannotComplete' callback failed");
+      throw new RuntimeException("Error when notifying the coordinator that the work is cannot be completed",e);
+    }
+  }
+}
