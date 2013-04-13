@@ -1,0 +1,26 @@
+{
+  String keystoreURL=keyStoreFile.getAbsolutePath();
+  String keystorePassword="password";
+  String encryptionDirectory=System.getProperty("java.io.tmpdir") + File.separator;
+  String salt="87654321";
+  int iterationCount=20;
+  VaultSession nonInteractiveSession=new VaultSession(keystoreURL,keystorePassword,encryptionDirectory,salt,iterationCount);
+  String vaultAlias="vault";
+  nonInteractiveSession.startVaultSession(vaultAlias);
+  String attributeName="value";
+  String vaultPasswordString=nonInteractiveSession.addSecuredAttribute(VAULT_BLOCK,attributeName,RIGHT_PASSWORD.toCharArray());
+  ModelNode op=new ModelNode();
+  op.get(OP).set(ADD);
+  op.get(OP_ADDR).add(HOST,"slave").add(CORE_SERVICE,VAULT);
+  ModelNode vaultOption=op.get(VAULT_OPTIONS);
+  vaultOption.get("KEYSTORE_URL").set(keystoreURL);
+  vaultOption.get("KEYSTORE_PASSWORD").set(nonInteractiveSession.getKeystoreMaskedPassword());
+  vaultOption.get("KEYSTORE_ALIAS").set(vaultAlias);
+  vaultOption.get("SALT").set(salt);
+  vaultOption.get("ITERATION_COUNT").set(Integer.toString(iterationCount));
+  vaultOption.get("ENC_FILE_DIR").set(encryptionDirectory);
+  domainSlaveClient.execute(new OperationBuilder(op).build());
+  setSlaveSecret("${" + vaultPasswordString + "}");
+  reloadSlave();
+  readHostControllerStatus(domainMasterClient,0);
+}
