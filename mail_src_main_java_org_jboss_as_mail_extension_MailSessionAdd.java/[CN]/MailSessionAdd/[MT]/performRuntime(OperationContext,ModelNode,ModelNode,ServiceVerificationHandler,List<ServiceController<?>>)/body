@@ -4,7 +4,7 @@
   ModelNode fullTree=Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
   final MailSessionConfig config=from(context,fullTree);
   final MailSessionService service=new MailSessionService(config);
-  final ServiceName serviceName=SERVICE_NAME_BASE.append(jndiName);
+  final ServiceName serviceName=MAIL_SESSION_SERVICE_NAME.append(jndiName);
   final ServiceBuilder<?> mailSessionBuilder=serviceTarget.addService(serviceName,service);
   addOutboundSocketDependency(service,mailSessionBuilder,config.getImapServer());
   addOutboundSocketDependency(service,mailSessionBuilder,config.getPop3Server());
@@ -14,19 +14,7 @@
       addOutboundSocketDependency(service,mailSessionBuilder,server);
     }
   }
-  final ManagedReferenceFactory valueManagedReferenceFactory=new ContextListAndJndiViewManagedReferenceFactory(){
-    @Override public String getJndiViewInstanceValue(){
-      return String.valueOf(getReference().getInstance());
-    }
-    @Override public String getInstanceClassName(){
-      final Object value=getReference().getInstance();
-      return value != null ? value.getClass().getName() : ContextListManagedReferenceFactory.DEFAULT_INSTANCE_CLASS_NAME;
-    }
-    @Override public ManagedReference getReference(){
-      return new ValueManagedReference(new ImmediateValue<Object>(service.getValue()));
-    }
-  }
-;
+  final ManagedReferenceFactory valueManagedReferenceFactory=new MailSessionManagedReferenceFactory(service);
   final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndiName);
   final BinderService binderService=new BinderService(bindInfo.getBindName());
   final ServiceBuilder<?> binderBuilder=serviceTarget.addService(bindInfo.getBinderServiceName(),binderService).addInjection(binderService.getManagedObjectInjector(),valueManagedReferenceFactory).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addListener(new AbstractServiceListener<Object>(){

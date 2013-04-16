@@ -4,7 +4,7 @@
   if (!mainServices.isSuccessfulBoot()) {
     Assert.fail(mainServices.getBootError().toString());
   }
-  ServiceController javaMailService=mainServices.getContainer().getService(MailSessionAdd.SERVICE_NAME_BASE.append("java:/Mail"));
+  ServiceController javaMailService=mainServices.getContainer().getService(MailSessionAdd.MAIL_SESSION_SERVICE_NAME.append("java:/Mail"));
   javaMailService.setMode(ServiceController.Mode.ACTIVE);
   Session session=(Session)javaMailService.getValue();
   Assert.assertNotNull("session should not be null",session);
@@ -12,15 +12,19 @@
   Assert.assertNotNull("smtp host should be set",properties.getProperty("mail.smtp.host"));
   Assert.assertNotNull("pop3 host should be set",properties.getProperty("mail.pop3.host"));
   Assert.assertNotNull("imap host should be set",properties.getProperty("mail.imap.host"));
-  ServiceController defaultMailService=mainServices.getContainer().getService(MailSessionAdd.SERVICE_NAME_BASE.append("java:jboss/mail/Default"));
+  ServiceController defaultMailService=mainServices.getContainer().getService(MailSessionAdd.MAIL_SESSION_SERVICE_NAME.append("java:jboss/mail/Default"));
   session=(Session)defaultMailService.getValue();
   Assert.assertEquals("Debug should be true",true,session.getDebug());
-  ServiceController customMailService=mainServices.getContainer().getService(MailSessionAdd.SERVICE_NAME_BASE.append("java:jboss/mail/Custom"));
-  session=(Session)customMailService.getValue();
+  ServiceController<Session> customMailService=(ServiceController<Session>)mainServices.getContainer().getService(MailSessionAdd.MAIL_SESSION_SERVICE_NAME.append("java:jboss/mail/Custom"));
+  session=customMailService.getValue();
   properties=session.getProperties();
   String host=properties.getProperty("mail.smtp.host");
   Assert.assertNotNull("smtp host should be set",host);
   Assert.assertEquals("mail.example.com",host);
   Assert.assertEquals("localhost",properties.get("mail.pop3.host"));
   Assert.assertEquals("some-custom-prop-value",properties.get("mail.pop3.custom_prop"));
+  MailSessionService service=(MailSessionService)customMailService.getService();
+  Credentials credentials=service.getConfig().getCustomServers()[0].getCredentials();
+  Assert.assertEquals(credentials.getUsername(),"username");
+  Assert.assertEquals(credentials.getPassword(),"password");
 }
