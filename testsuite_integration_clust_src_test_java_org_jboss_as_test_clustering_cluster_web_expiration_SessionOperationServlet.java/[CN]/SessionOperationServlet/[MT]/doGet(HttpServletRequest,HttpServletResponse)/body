@@ -1,0 +1,52 @@
+{
+  String operation=this.getRequiredParameter(req,OPERATION);
+  HttpSession session=req.getSession(true);
+  resp.addHeader(SESSION_ID,session.getId());
+  System.out.println(String.format("%s?%s;jsessionid=%s",req.getRequestURL(),req.getQueryString(),session.getId()));
+  if (operation.equals(SET)) {
+    String name=this.getRequiredParameter(req,NAME);
+    String[] values=req.getParameterValues(VALUE);
+    if (values != null) {
+      SessionAttributeValue value=(values != null) ? new SessionAttributeValue(values[0]) : null;
+      session.setAttribute(name,value);
+      for (int i=1; i < values.length; ++i) {
+        value.setValue(values[i]);
+      }
+    }
+ else {
+      session.setAttribute(name,null);
+    }
+  }
+ else   if (operation.equals(REMOVE)) {
+    String name=this.getRequiredParameter(req,NAME);
+    session.removeAttribute(name);
+  }
+ else   if (operation.equals(INVALIDATE)) {
+    session.invalidate();
+  }
+ else   if (operation.equals(GET)) {
+    String name=this.getRequiredParameter(req,NAME);
+    SessionAttributeValue value=(SessionAttributeValue)session.getAttribute(name);
+    if (value != null) {
+      resp.setHeader(RESULT,value.getValue());
+      String newValue=req.getParameter(VALUE);
+      if (newValue != null) {
+        value.setValue(newValue);
+      }
+    }
+  }
+ else   if (operation.equals(TIMEOUT)) {
+    String timeout=this.getRequiredParameter(req,TIMEOUT);
+    session.setMaxInactiveInterval(Integer.parseInt(timeout));
+  }
+ else {
+    throw new ServletException("Unrecognized operation: " + operation);
+  }
+  this.setHeader(resp,CREATED_SESSIONS,RecordingWebListener.createdSessions);
+  this.setHeader(resp,DESTROYED_SESSIONS,RecordingWebListener.destroyedSessions);
+  this.setHeader(resp,ADDED_ATTRIBUTES,RecordingWebListener.addedAttributes.get(session.getId()));
+  this.setHeader(resp,REPLACED_ATTRIBUTES,RecordingWebListener.replacedAttributes.get(session.getId()));
+  this.setHeader(resp,REMOVED_ATTRIBUTES,RecordingWebListener.removedAttributes.get(session.getId()));
+  this.setHeader(resp,BOUND_ATTRIBUTES,SessionAttributeValue.boundAttributes);
+  this.setHeader(resp,UNBOUND_ATTRIBUTES,SessionAttributeValue.unboundAttributes);
+}

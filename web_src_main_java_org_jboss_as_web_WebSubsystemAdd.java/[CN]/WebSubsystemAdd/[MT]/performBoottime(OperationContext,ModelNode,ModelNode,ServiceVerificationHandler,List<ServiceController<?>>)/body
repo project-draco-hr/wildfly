@@ -32,10 +32,15 @@
   final ServiceTarget target=context.getServiceTarget();
   newControllers.add(target.addService(WebSubsystemServices.JBOSS_WEB,service).addDependency(PathManagerService.SERVICE_NAME,PathManager.class,service.getPathManagerInjector()).addDependency(DependencyType.OPTIONAL,ServiceName.JBOSS.append("mbean","server"),MBeanServer.class,service.getMbeanServer()).setInitialMode(Mode.ON_DEMAND).install());
   newControllers.add(target.addService(CommonWebServer.SERVICE_NAME,commonWebServer).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,commonWebServer.getWebServer()).setInitialMode(Mode.PASSIVE).install());
-  final DistributedCacheManagerFactory factory=new DistributedCacheManagerFactoryService().getValue();
-  if (factory != null) {
+  SessionManagerFactoryBuilder factoryBuilder=new SessionManagerFactoryBuilderService().getValue();
+  if (factoryBuilder != null) {
     final InjectedValue<WebServer> server=new InjectedValue<WebServer>();
-    newControllers.add(target.addService(DistributedCacheManagerFactoryService.JVM_ROUTE_REGISTRY_ENTRY_PROVIDER_SERVICE_NAME,new JvmRouteRegistryEntryProviderService(server)).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,server).setInitialMode(Mode.ON_DEMAND).install());
-    newControllers.addAll(factory.installServices(target));
+    Value<String> instanceIdValue=new Value<String>(){
+      @Override public String getValue(){
+        return ((Engine)server.getValue().getService().getContainer()).getJvmRoute();
+      }
+    }
+;
+    newControllers.add(factoryBuilder.buildServerDependency(target,instanceIdValue).addDependency(WebSubsystemServices.JBOSS_WEB,WebServer.class,server).setInitialMode(Mode.ON_DEMAND).install());
   }
 }

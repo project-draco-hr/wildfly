@@ -1,0 +1,31 @@
+{
+  ServletContext context=mock(ServletContext.class);
+  HttpSessionListener listener1=mock(HttpSessionListener.class);
+  HttpSessionListener listener2=mock(HttpSessionListener.class);
+  List<ManagedListener> list=Arrays.asList(new ManagedListener(new ListenerInfo(HttpSessionListener.class,new ImmediateInstanceFactory<>(listener1))),new ManagedListener(new ListenerInfo(HttpSessionListener.class,new ImmediateInstanceFactory<>(listener2))));
+  ApplicationListeners listeners=new ApplicationListeners(list,context);
+  when(this.deployment.getApplicationListeners()).thenReturn(listeners);
+  Iterable<HttpSessionListener> result=this.context.getSessionListeners();
+  HttpSession createdSession=mock(HttpSession.class);
+  HttpSession destroyedSession=mock(HttpSession.class);
+  HttpSessionEvent createdEvent=new HttpSessionEvent(createdSession);
+  for (  HttpSessionListener listener : result) {
+    listener.sessionCreated(createdEvent);
+  }
+  HttpSessionEvent destroyedEvent=new HttpSessionEvent(destroyedSession);
+  for (  HttpSessionListener listener : result) {
+    listener.sessionDestroyed(destroyedEvent);
+  }
+  ArgumentCaptor<HttpSessionEvent> capturedCreatedEvent1=ArgumentCaptor.forClass(HttpSessionEvent.class);
+  verify(listener1).sessionCreated(capturedCreatedEvent1.capture());
+  assertSame(createdSession,capturedCreatedEvent1.getValue().getSession());
+  ArgumentCaptor<HttpSessionEvent> capturedCreatedEvent2=ArgumentCaptor.forClass(HttpSessionEvent.class);
+  verify(listener2).sessionCreated(capturedCreatedEvent2.capture());
+  assertSame(createdSession,capturedCreatedEvent2.getValue().getSession());
+  ArgumentCaptor<HttpSessionEvent> capturedDestroyedEvent1=ArgumentCaptor.forClass(HttpSessionEvent.class);
+  verify(listener1).sessionDestroyed(capturedDestroyedEvent1.capture());
+  assertSame(destroyedSession,capturedDestroyedEvent1.getValue().getSession());
+  ArgumentCaptor<HttpSessionEvent> capturedDestroyedEvent2=ArgumentCaptor.forClass(HttpSessionEvent.class);
+  verify(listener2).sessionDestroyed(capturedDestroyedEvent2.capture());
+  assertSame(destroyedSession,capturedDestroyedEvent2.getValue().getSession());
+}

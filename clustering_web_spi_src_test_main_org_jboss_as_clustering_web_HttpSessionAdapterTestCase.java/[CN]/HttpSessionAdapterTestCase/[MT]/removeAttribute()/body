@@ -1,0 +1,35 @@
+{
+  SessionAttributes attributes=mock(SessionAttributes.class);
+  SessionContext context=mock(SessionContext.class);
+  HttpSessionAttributeListener listener=mock(HttpSessionAttributeListener.class);
+  String removedName="removed";
+  HttpSessionBindingListener removedValue=mock(HttpSessionBindingListener.class);
+  when(this.session.getAttributes()).thenReturn(attributes);
+  when(this.session.getContext()).thenReturn(context);
+  when(context.getSessionAttributeListeners()).thenReturn(Collections.singleton(listener));
+  when(attributes.setAttribute(removedName,null)).thenReturn(removedValue);
+  this.httpSession.setAttribute(removedName,null);
+  ArgumentCaptor<HttpSessionBindingEvent> capturedEvent=ArgumentCaptor.forClass(HttpSessionBindingEvent.class);
+  verify(listener).attributeRemoved(capturedEvent.capture());
+  HttpSessionBindingEvent event=capturedEvent.getValue();
+  assertSame(event.getSession(),this.httpSession);
+  assertSame(event.getName(),removedName);
+  assertSame(event.getValue(),removedValue);
+  capturedEvent=ArgumentCaptor.forClass(HttpSessionBindingEvent.class);
+  verify(removedValue).valueUnbound(capturedEvent.capture());
+  event=capturedEvent.getValue();
+  assertSame(event.getSession(),this.httpSession);
+  assertSame(event.getName(),removedName);
+  assertNull(event.getValue());
+  verify(listener,never()).attributeAdded(any(HttpSessionBindingEvent.class));
+  verify(listener,never()).attributeReplaced(any(HttpSessionBindingEvent.class));
+  verify(removedValue,never()).valueBound(any(HttpSessionBindingEvent.class));
+  reset(listener);
+  String nullName="null";
+  when(attributes.setAttribute(nullName,null)).thenReturn(null);
+  this.httpSession.setAttribute(nullName,null);
+  verify(listener,never()).attributeAdded(any(HttpSessionBindingEvent.class));
+  verify(listener,never()).attributeReplaced(any(HttpSessionBindingEvent.class));
+  verify(listener,never()).attributeRemoved(any(HttpSessionBindingEvent.class));
+  reset(listener);
+}

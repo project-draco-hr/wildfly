@@ -40,14 +40,15 @@
   final ServiceName deploymentInfoServiceName=deploymentServiceName.append(UndertowDeploymentInfoService.SERVICE_NAME);
   ServiceBuilder<DeploymentInfo> infoBuilder=serviceTarget.addService(deploymentInfoServiceName,undertowDeploymentInfoService).addDependency(UndertowService.SERVLET_CONTAINER.append(defaultContainer),ServletContainerService.class,undertowDeploymentInfoService.getContainer()).addDependency(SecurityDomainService.SERVICE_NAME.append(securityDomain),SecurityDomainContext.class,undertowDeploymentInfoService.getSecurityDomainContextValue()).addDependency(UndertowService.UNDERTOW,UndertowService.class,undertowDeploymentInfoService.getUndertowService()).addDependency(ServiceBuilder.DependencyType.OPTIONAL,BufferCacheService.SERVICE_NAME.append("default"),DirectBufferCache.class,undertowDeploymentInfoService.getBufferCacheInjectedValue()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES));
   if (metaData.getDistributable() != null) {
-    DistributedCacheManagerFactoryService factoryService=new DistributedCacheManagerFactoryService();
-    DistributedCacheManagerFactory factory=factoryService.getValue();
-    if (factory != null) {
-      ServiceName factoryServiceName=deploymentServiceName.append("session");
-      infoBuilder.addDependency(ServiceBuilder.DependencyType.OPTIONAL,factoryServiceName,DistributedCacheManagerFactory.class,undertowDeploymentInfoService.getDistributedCacheManagerFactoryInjectedValue());
-      ServiceBuilder<DistributedCacheManagerFactory> factoryBuilder=serviceTarget.addService(factoryServiceName,factoryService);
-      boolean enabled=factory.addDeploymentDependencies(deploymentServiceName,deploymentUnit.getServiceRegistry(),serviceTarget,factoryBuilder,metaData);
-      factoryBuilder.setInitialMode(enabled ? Mode.ON_DEMAND : Mode.NEVER).install();
+    SessionManagerFactoryBuilderService factoryBuilderService=new SessionManagerFactoryBuilderService();
+    SessionManagerFactoryBuilder factoryBuilder=factoryBuilderService.getValue();
+    if (factoryBuilder != null) {
+      ServiceName factoryName=deploymentServiceName.append("session");
+      factoryBuilder.build(serviceTarget,factoryName,deploymentServiceName,module,metaData).setInitialMode(Mode.ON_DEMAND).install();
+      infoBuilder.addDependency(factoryName,SessionManagerFactory.class,undertowDeploymentInfoService.getSessionManagerFactoryInjector());
+    }
+ else {
+      UndertowLogger.ROOT_LOGGER.clusteringNotSupported();
     }
   }
   infoBuilder.install();

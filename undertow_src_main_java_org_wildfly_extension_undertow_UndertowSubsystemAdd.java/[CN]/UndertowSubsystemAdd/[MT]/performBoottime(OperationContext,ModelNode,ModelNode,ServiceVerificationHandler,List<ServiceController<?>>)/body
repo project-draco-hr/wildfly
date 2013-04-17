@@ -4,8 +4,9 @@
   final String defaultServer=UndertowRootDefinition.DEFAULT_SERVER.resolveModelAttribute(context,model).asString();
   final ModelNode instanceIdModel=UndertowRootDefinition.INSTANCE_ID.resolveModelAttribute(context,model);
   final String instanceId=instanceIdModel.isDefined() ? instanceIdModel.asString() : null;
-  newControllers.add(context.getServiceTarget().addService(UndertowService.UNDERTOW,new UndertowService(defaultContainer,defaultServer,defaultVirtualHost,instanceId)).setInitialMode(ServiceController.Mode.ACTIVE).install());
-  newControllers.add(context.getServiceTarget().addService(CommonWebServer.SERVICE_NAME,new WebServerService()).install());
+  ServiceTarget target=context.getServiceTarget();
+  newControllers.add(target.addService(UndertowService.UNDERTOW,new UndertowService(defaultContainer,defaultServer,defaultVirtualHost,instanceId)).setInitialMode(ServiceController.Mode.ACTIVE).install());
+  newControllers.add(target.addService(CommonWebServer.SERVICE_NAME,new WebServerService()).install());
   context.addStep(new AbstractDeploymentChainStep(){
     @Override protected void execute(    DeploymentProcessorTarget processorTarget){
       final SharedWebMetaDataBuilder sharedWebBuilder=new SharedWebMetaDataBuilder(model.clone());
@@ -30,9 +31,8 @@
   }
 ,OperationContext.Stage.RUNTIME);
   UndertowLogger.ROOT_LOGGER.serverStarting(Version.getVersionString());
-  final DistributedCacheManagerFactory factory=new DistributedCacheManagerFactoryService().getValue();
-  if (factory != null) {
-    newControllers.add(context.getServiceTarget().addService(DistributedCacheManagerFactoryService.JVM_ROUTE_REGISTRY_ENTRY_PROVIDER_SERVICE_NAME,new JvmRouteRegistryEntryProviderService(instanceId)).setInitialMode(ServiceController.Mode.ON_DEMAND).install());
-    newControllers.addAll(factory.installServices(context.getServiceTarget()));
+  SessionManagerFactoryBuilder builder=new SessionManagerFactoryBuilderService().getValue();
+  if (builder != null) {
+    newControllers.add(builder.buildServerDependency(target,new ImmediateValue<String>(instanceId)).setInitialMode(ServiceController.Mode.ON_DEMAND).install());
   }
 }

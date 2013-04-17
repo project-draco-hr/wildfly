@@ -1,0 +1,18 @@
+{
+  V value=this.factory.findValue(id);
+  if (value == null) {
+    InfinispanWebLogger.ROOT_LOGGER.tracef("Session %s not found",id);
+    return null;
+  }
+  Session<L> session=this.factory.createSession(id,value);
+  if (session.getMetaData().isExpired()) {
+    InfinispanWebLogger.ROOT_LOGGER.tracef("Session %s was found, but has expired",id);
+    session.invalidate();
+    return null;
+  }
+  for (  Scheduler<Session<L>> scheduler : this.schedulers) {
+    scheduler.cancel(session);
+  }
+  this.activeSessions.add(id);
+  return new SchedulableSession<>(session,this.schedulers);
+}

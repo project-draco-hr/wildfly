@@ -27,17 +27,17 @@
     ModelNode sso=resolveExpressions(context,fullModel.get(SSO_PATH.getKey(),SSO_PATH.getValue()).clone(),WebSSODefinition.SSO_ATTRIBUTES);
     service.setSso(sso);
     if (sso.hasDefined(Constants.CACHE_CONTAINER)) {
-      ServiceName ssoName=WebSubsystemServices.JBOSS_WEB_HOST.append(name,Constants.SSO);
-      serviceBuilder.addDependency(ssoName,SSOClusterManager.class,service.getSSOClusterManager());
-      SSOClusterManagerService ssoService=new SSOClusterManagerService();
-      SSOClusterManager ssoManager=ssoService.getValue();
-      ssoManager.setCacheContainerName(sso.get(Constants.CACHE_CONTAINER).asString());
-      if (sso.hasDefined(Constants.CACHE_NAME)) {
-        ssoManager.setCacheName(sso.get(Constants.CACHE_NAME).asString());
+      SSOManagerFactoryBuilder ssoManagerFactoryBuilder=new SSOManagerFactoryBuilderService().getValue();
+      if (ssoManagerFactoryBuilder != null) {
+        ServiceName ssoName=WebSubsystemServices.JBOSS_WEB_HOST.append(name,Constants.SSO);
+        serviceBuilder.addDependency(ssoName,SSOManagerFactory.class,service.getSSOManagerFactory());
+        SSOManagerConfiguration ssoManagerConfig=new SSOManagerConfiguration();
+        ssoManagerConfig.setContainer(sso.get(Constants.CACHE_CONTAINER).asString());
+        if (sso.hasDefined(Constants.CACHE_NAME)) {
+          ssoManagerConfig.setCache(sso.get(Constants.CACHE_NAME).asString());
+        }
+        newControllers.add(ssoManagerFactoryBuilder.build(serviceTarget,ssoName,ssoManagerConfig).setInitialMode(Mode.ON_DEMAND).install());
       }
-      ServiceBuilder<SSOClusterManager> builder=serviceTarget.addService(ssoName,ssoService);
-      ssoService.getValue().addDependencies(serviceTarget,builder);
-      newControllers.add(builder.setInitialMode(ServiceController.Mode.ON_DEMAND).install());
     }
   }
   if (fullModel.hasDefined(WebVirtualHostDefinition.DEFAULT_WEB_MODULE.getName())) {

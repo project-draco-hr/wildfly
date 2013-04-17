@@ -1,0 +1,34 @@
+{
+  ServiceName templateCacheServiceName=this.getCacheServiceName(metaData.getReplicationConfig());
+  String templateCacheName=templateCacheServiceName.getSimpleName();
+  ServiceName containerServiceName=templateCacheServiceName.getParent();
+  String containerName=containerServiceName.getSimpleName();
+  ServiceName templateCacheConfigurationServiceName=AbstractCacheConfigurationService.getServiceName(containerName,templateCacheName);
+  String host=deploymentServiceName.getParent().getSimpleName();
+  String contextPath=deploymentServiceName.getSimpleName();
+  StringBuilder cacheNameBuilder=new StringBuilder(host).append(contextPath);
+  if (contextPath.isEmpty() || contextPath.equals("/")) {
+    cacheNameBuilder.append("ROOT");
+  }
+  String cacheName=cacheNameBuilder.toString();
+  ServiceName cacheConfigurationServiceName=AbstractCacheConfigurationService.getServiceName(containerName,cacheName);
+  ServiceName cacheServiceName=CacheService.getServiceName(containerName,cacheName);
+  InjectedValue<EmbeddedCacheManager> container=new InjectedValue<>();
+  InjectedValue<Configuration> config=new InjectedValue<>();
+  target.addService(cacheConfigurationServiceName,new SessionCacheConfigurationService(cacheName,container,config,metaData)).addDependency(containerServiceName,EmbeddedCacheManager.class,container).addDependency(templateCacheConfigurationServiceName,Configuration.class,config).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  final InjectedValue<EmbeddedCacheManager> cacheContainer=new InjectedValue<>();
+  CacheService.Dependencies dependencies=new CacheService.Dependencies(){
+    @Override public EmbeddedCacheManager getCacheContainer(){
+      return cacheContainer.getValue();
+    }
+    @Override public XAResourceRecoveryRegistry getRecoveryRegistry(){
+      return null;
+    }
+  }
+;
+  AsynchronousService.addService(target,cacheServiceName,new CacheService<>(cacheName,dependencies)).addDependency(cacheConfigurationServiceName).addDependency(containerServiceName,EmbeddedCacheManager.class,cacheContainer).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  @SuppressWarnings("rawtypes") InjectedValue<Cache> cache=new InjectedValue<>();
+  InjectedValue<KeyAffinityServiceFactory> affinityFactory=new InjectedValue<>();
+  @SuppressWarnings("rawtypes") InjectedValue<Registry> routingRegistry=new InjectedValue<>();
+  return target.addService(name,new InfinispanSessionManagerFactory(module,metaData,cache,affinityFactory,routingRegistry)).addDependency(cacheServiceName,Cache.class,cache).addDependency(KeyAffinityServiceFactoryService.getServiceName(containerName),KeyAffinityServiceFactory.class,affinityFactory).addDependency(ROUTING_REGISTRY_SERVICE_NAME,Registry.class,routingRegistry);
+}
