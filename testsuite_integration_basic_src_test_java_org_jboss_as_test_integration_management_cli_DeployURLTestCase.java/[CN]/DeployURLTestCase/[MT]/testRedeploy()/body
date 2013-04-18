@@ -1,0 +1,27 @@
+{
+  String response=HttpRequest.get(getBaseURL(url) + "SimpleServlet/page.html",10,TimeUnit.SECONDS);
+  assertTrue("Invalid response: " + response,response.indexOf("Version1") >= 0);
+  war=ShrinkWrap.create(WebArchive.class,"SimpleServlet.war");
+  war.addClass(SimpleServlet.class);
+  war.addAsWebResource(new StringAsset("Version2"),"page.html");
+  new ZipExporterImpl(war).exportTo(warFile,true);
+  Assert.assertFalse(cli.sendLine("deploy --url=" + warFile.toURI().toURL().toExternalForm() + " --name="+ warFile.getName(),true));
+  cli.sendLine("deploy --url=" + warFile.toURI().toURL().toExternalForm() + " --name="+ warFile.getName()+ " --force");
+  final long firstTry=System.currentTimeMillis();
+  response=HttpRequest.get(getBaseURL(url) + "SimpleServlet/page.html",1000,10,TimeUnit.SECONDS);
+  while (response.indexOf("Version2") < 0) {
+    if (System.currentTimeMillis() - firstTry >= 1000) {
+      break;
+    }
+    try {
+      Thread.sleep(500);
+    }
+ catch (    InterruptedException e) {
+      break;
+    }
+ finally {
+      response=HttpRequest.get(getBaseURL(url) + "SimpleServlet/page.html",1000,10,TimeUnit.SECONDS);
+    }
+  }
+  assertTrue("Invalid response: " + response,response.indexOf("Version2") >= 0);
+}
