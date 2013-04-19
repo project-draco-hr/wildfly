@@ -1,16 +1,21 @@
 {
-  ServerDeploymentActionResult actionResult;
+  ServerDeploymentPlanResult planResult;
+  List<DeploymentAction> actions=new ArrayList<DeploymentAction>();
   try {
     DeploymentPlanBuilder builder=deploymentManager.newDeploymentPlan();
-    builder=builder.undeploy(runtimeName).andRemoveUndeployed();
+    UndeployDeploymentPlanBuilder undeployBuilder=builder.undeploy(runtimeName);
+    actions.add(undeployBuilder.getLastAction());
+    builder=undeployBuilder.andRemoveUndeployed();
+    actions.add(builder.getLastAction());
     DeploymentPlan plan=builder.build();
-    DeploymentAction action=builder.getLastAction();
     Future<ServerDeploymentPlanResult> future=deploymentManager.execute(plan);
-    ServerDeploymentPlanResult planResult=future.get();
-    actionResult=planResult.getDeploymentActionResult(action.getId());
+    planResult=future.get();
   }
  catch (  Exception ex) {
     throw new ServerDeploymentException(ex);
   }
-  if (actionResult.getDeploymentException() != null)   throw new ServerDeploymentException(actionResult);
+  for (  DeploymentAction action : actions) {
+    ServerDeploymentActionResult actionResult=planResult.getDeploymentActionResult(action.getId());
+    if (actionResult.getDeploymentException() != null)     throw new ServerDeploymentException(actionResult);
+  }
 }
