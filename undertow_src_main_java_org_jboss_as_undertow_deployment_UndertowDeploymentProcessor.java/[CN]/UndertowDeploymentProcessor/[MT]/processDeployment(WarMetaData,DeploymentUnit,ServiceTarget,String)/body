@@ -21,9 +21,11 @@
     componentRegistry=new ComponentRegistry(null);
   }
   final WebInjectionContainer injectionContainer=new WebInjectionContainer(module.getClassLoader(),componentRegistry);
-  DeploymentInfo deploymentInfo=createServletConfig(metaData,deploymentUnit,module,deploymentClassIndex,injectionContainer,componentRegistry,scisMetaData,deploymentRoot);
+  String securityContextId=deploymentUnit.getName();
+  if (deploymentUnit.getParent() != null) {
+    securityContextId=deploymentUnit.getParent().getName() + "!" + securityContextId;
+  }
   final String pathName=pathNameOfDeployment(deploymentUnit,metaData);
-  deploymentInfo.setContextPath(pathName);
   String metaDataSecurityDomain=metaData.getSecurityDomain();
   if (metaDataSecurityDomain == null) {
     metaDataSecurityDomain=getJBossAppSecurityDomain(deploymentUnit);
@@ -32,37 +34,26 @@
     metaDataSecurityDomain=metaDataSecurityDomain.trim();
   }
   String securityDomain=metaDataSecurityDomain == null ? SecurityConstants.DEFAULT_APPLICATION_POLICY : SecurityUtil.unprefixSecurityDomain(metaDataSecurityDomain);
-  final ServiceName deploymentServiceName=UndertowService.deploymentServiceName(hostName,deploymentInfo.getContextPath());
-  final ServiceName hostServiceName=UndertowService.virtualHostName(defaultServer,hostName);
-  final UndertowDeploymentService service=new UndertowDeploymentService(deploymentInfo,injectionContainer,module,warMetaData.getMergedJBossWebMetaData());
-  final ServiceBuilder<UndertowDeploymentService> builder=serviceTarget.addService(deploymentServiceName,service).addDependencies(dependentComponents).addDependency(UndertowService.SERVLET_CONTAINER.append(defaultContainer),ServletContainerService.class,service.getContainer()).addDependency(hostServiceName,Host.class,service.getHost()).addDependency(SecurityDomainService.SERVICE_NAME.append(securityDomain),SecurityDomainContext.class,service.getSecurityDomainContextValue()).addDependency(UndertowService.UNDERTOW,UndertowService.class,service.getUndertowService()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES));
-  deploymentUnit.addToAttachmentList(Attachments.DEPLOYMENT_COMPLETE_SERVICES,deploymentServiceName);
-  for (  final SetupAction action : setupActions) {
-    builder.addDependencies(action.dependencies());
-    deploymentInfo.addThreadSetupAction(new ThreadSetupAction(){
-      @Override public Handle setup(      final HttpServerExchange exchange){
-        action.setup(Collections.<String,Object>emptyMap());
-        return new Handle(){
-          @Override public void tearDown(){
-            action.teardown(Collections.<String,Object>emptyMap());
-          }
-        }
-;
-      }
-    }
-);
-  }
+  final ServiceName deploymentServiceName=UndertowService.deploymentServiceName(hostName,pathName);
+  UndertowDeploymentInfoService undertowDeploymentInfoService=UndertowDeploymentInfoService.builder().setAttributes(deploymentUnit.getAttachment(ServletContextAttribute.ATTACHMENT_KEY)).setClassReflectionIndex(deploymentClassIndex).setComponentRegistry(componentRegistry).setContextPath(pathName).setDeploymentName(deploymentUnit.getName()).setDeploymentRoot(deploymentRoot).setInjectionContainer(injectionContainer).setMergedMetaData(warMetaData.getMergedJBossWebMetaData()).setModule(module).setScisMetaData(scisMetaData).setSecurityContextId(securityContextId).setSharedTlds(deploymentUnit.getAttachment(SharedTldsMetaDataBuilder.ATTACHMENT_KEY)).setTldsMetaData(deploymentUnit.getAttachment(TldsMetaData.ATTACHMENT_KEY)).setSetupActions(setupActions).createUndertowDeploymentInfoService();
+  final ServiceName deploymentInfoServiceName=deploymentServiceName.append(UndertowDeploymentInfoService.SERVICE_NAME);
+  ServiceBuilder<DeploymentInfo> infoBuilder=serviceTarget.addService(deploymentInfoServiceName,undertowDeploymentInfoService).addDependency(UndertowService.SERVLET_CONTAINER.append(defaultContainer),ServletContainerService.class,undertowDeploymentInfoService.getContainer()).addDependency(SecurityDomainService.SERVICE_NAME.append(securityDomain),SecurityDomainContext.class,undertowDeploymentInfoService.getSecurityDomainContextValue()).addDependency(UndertowService.UNDERTOW,UndertowService.class,undertowDeploymentInfoService.getUndertowService()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES));
   if (metaData.getDistributable() != null) {
     DistributedCacheManagerFactoryService factoryService=new DistributedCacheManagerFactoryService();
     DistributedCacheManagerFactory factory=factoryService.getValue();
     if (factory != null) {
       ServiceName factoryServiceName=deploymentServiceName.append("session");
-      builder.addDependency(ServiceBuilder.DependencyType.OPTIONAL,factoryServiceName,DistributedCacheManagerFactory.class,service.getDistributedCacheManagerFactoryInjectedValue());
+      infoBuilder.addDependency(ServiceBuilder.DependencyType.OPTIONAL,factoryServiceName,DistributedCacheManagerFactory.class,undertowDeploymentInfoService.getDistributedCacheManagerFactoryInjectedValue());
       ServiceBuilder<DistributedCacheManagerFactory> factoryBuilder=serviceTarget.addService(factoryServiceName,factoryService);
       boolean enabled=factory.addDeploymentDependencies(deploymentServiceName,deploymentUnit.getServiceRegistry(),serviceTarget,factoryBuilder,metaData);
       factoryBuilder.setInitialMode(enabled ? Mode.ON_DEMAND : Mode.NEVER).install();
     }
   }
+  infoBuilder.install();
+  final ServiceName hostServiceName=UndertowService.virtualHostName(defaultServer,hostName);
+  final UndertowDeploymentService service=new UndertowDeploymentService(injectionContainer);
+  final ServiceBuilder<UndertowDeploymentService> builder=serviceTarget.addService(deploymentServiceName,service).addDependencies(dependentComponents).addDependency(UndertowService.SERVLET_CONTAINER.append(defaultContainer),ServletContainerService.class,service.getContainer()).addDependency(hostServiceName,Host.class,service.getHost()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES)).addDependency(deploymentInfoServiceName,DeploymentInfo.class,service.getDeploymentInfoInjectedValue());
+  deploymentUnit.addToAttachmentList(Attachments.DEPLOYMENT_COMPLETE_SERVICES,deploymentServiceName);
   if (deploymentUnit.hasAttachment(Attachments.OSGI_MANIFEST)) {
     builder.setInitialMode(Mode.NEVER);
     UndertowDeploymentService.ContextActivatorImpl activator=new UndertowDeploymentService.ContextActivatorImpl(builder.install());

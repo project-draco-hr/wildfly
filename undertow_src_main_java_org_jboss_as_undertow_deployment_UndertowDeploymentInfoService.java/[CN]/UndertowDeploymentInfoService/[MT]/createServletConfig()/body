@@ -1,0 +1,264 @@
+{
+  try {
+    mergedMetaData.resolveAnnotations();
+    final DeploymentInfo d=new DeploymentInfo();
+    d.setContextPath(contextPath);
+    if (mergedMetaData.getDescriptionGroup() != null) {
+      d.setDisplayName(mergedMetaData.getDescriptionGroup().getDisplayName());
+    }
+    d.setDeploymentName(deploymentName);
+    try {
+      d.setResourceManager(new FileResourceManager(Paths.get(deploymentRoot.getPhysicalFile().getAbsolutePath())));
+    }
+ catch (    IOException e) {
+      throw new StartException(e);
+    }
+    d.setClassLoader(module.getClassLoader());
+    final String servletVersion=mergedMetaData.getServletVersion();
+    if (servletVersion != null) {
+      d.setMajorVersion(Integer.parseInt(servletVersion.charAt(0) + ""));
+      d.setMinorVersion(Integer.parseInt(servletVersion.charAt(2) + ""));
+    }
+ else {
+      d.setMajorVersion(3);
+      d.setMinorVersion(1);
+    }
+    boolean is22OrOlder;
+    if (d.getMajorVersion() == 1) {
+      is22OrOlder=true;
+    }
+ else     if (d.getMajorVersion() == 2) {
+      is22OrOlder=d.getMinorVersion() < 3;
+    }
+ else {
+      is22OrOlder=false;
+    }
+    HashMap<String,TagLibraryInfo> tldInfo=createTldsInfo(tldsMetaData,sharedTlds,classReflectionIndex,componentRegistry,d);
+    HashMap<String,JspPropertyGroup> propertyGroups=createJspConfig(mergedMetaData);
+    JspServletBuilder.setupDeployment(d,propertyGroups,tldInfo,new UndertowJSPInstanceManager(injectionContainer));
+    d.setJspConfigDescriptor(new JspConfigDescriptorImpl(tldInfo.values(),propertyGroups.values()));
+    d.setDefaultServletConfig(new DefaultServletConfig(true,Collections.<String>emptySet()));
+    final ServletInfo jspServlet=new ServletInfo("Default JSP Servlet",JspServlet.class).addMapping("*.jsp").addMapping("*.jspx").addInitParam("development","false");
+    d.addServlet(jspServlet);
+    final Set<String> jspPropertyGroupMappings=propertyGroups.keySet();
+    for (    final String mapping : jspPropertyGroupMappings) {
+      jspServlet.addMapping(mapping);
+    }
+    d.setClassIntrospecter(new ComponentClassIntrospector(componentRegistry));
+    final Map<String,List<ServletMappingMetaData>> servletMappings=new HashMap<>();
+    if (mergedMetaData.getServletMappings() != null) {
+      for (      final ServletMappingMetaData mapping : mergedMetaData.getServletMappings()) {
+        List<ServletMappingMetaData> list=servletMappings.get(mapping.getServletName());
+        if (list == null) {
+          servletMappings.put(mapping.getServletName(),list=new ArrayList<>());
+        }
+        list.add(mapping);
+      }
+    }
+    final Set<String> seenMappings=new HashSet<>(jspPropertyGroupMappings);
+    if (mergedMetaData.getServlets() != null) {
+      for (      final JBossServletMetaData servlet : mergedMetaData.getServlets()) {
+        final ServletInfo s;
+        if (servlet.getJspFile() != null) {
+          s=new ServletInfo(servlet.getName(),JspServlet.class);
+          s.addHandlerChainWrapper(new JspFileWrapper(servlet.getJspFile()));
+        }
+ else {
+          Class<? extends Servlet> servletClass=(Class<? extends Servlet>)classReflectionIndex.classIndex(servlet.getServletClass()).getModuleClass();
+          ComponentRegistry.ComponentManagedReferenceFactory creator=componentRegistry.getComponentsByClass().get(servletClass);
+          if (creator != null) {
+            InstanceFactory<Servlet> factory=createInstanceFactory(creator);
+            s=new ServletInfo(servlet.getName(),servletClass,factory);
+          }
+ else {
+            s=new ServletInfo(servlet.getName(),servletClass);
+          }
+        }
+        s.setAsyncSupported(servlet.isAsyncSupported()).setJspFile(servlet.getJspFile()).setEnabled(servlet.isEnabled());
+        if (servlet.getRunAs() != null) {
+          s.setRunAs(servlet.getRunAs().getRoleName());
+        }
+        if (servlet.getLoadOnStartupSet()) {
+          s.setLoadOnStartup(servlet.getLoadOnStartupInt());
+        }
+        List<ServletMappingMetaData> mappings=servletMappings.get(servlet.getName());
+        if (mappings != null) {
+          for (          ServletMappingMetaData mapping : mappings) {
+            for (            String pattern : mapping.getUrlPatterns()) {
+              if (is22OrOlder && !pattern.startsWith("*") && !pattern.startsWith("/")) {
+                pattern="/" + pattern;
+              }
+              if (!seenMappings.contains(pattern)) {
+                s.addMapping(pattern);
+                seenMappings.add(pattern);
+              }
+            }
+          }
+        }
+        if (servlet.getInitParam() != null) {
+          for (          ParamValueMetaData initParam : servlet.getInitParam()) {
+            if (!s.getInitParams().containsKey(initParam.getParamName())) {
+              s.addInitParam(initParam.getParamName(),initParam.getParamValue());
+            }
+          }
+        }
+        if (servlet.getServletSecurity() != null) {
+          ServletSecurityInfo securityInfo=new ServletSecurityInfo();
+          s.setServletSecurityInfo(securityInfo);
+          securityInfo.setEmptyRoleSemantic(servlet.getServletSecurity().getEmptyRoleSemantic() == EmptyRoleSemanticType.PERMIT ? PERMIT : DENY).setTransportGuaranteeType(transportGuaranteeType(servlet.getServletSecurity().getTransportGuarantee())).addRolesAllowed(servlet.getServletSecurity().getRolesAllowed());
+          if (servlet.getServletSecurity().getHttpMethodConstraints() != null) {
+            for (            HttpMethodConstraintMetaData method : servlet.getServletSecurity().getHttpMethodConstraints()) {
+              securityInfo.addHttpMethodSecurityInfo(new HttpMethodSecurityInfo().setEmptyRoleSemantic(method.getEmptyRoleSemantic() == EmptyRoleSemanticType.PERMIT ? PERMIT : DENY).setTransportGuaranteeType(transportGuaranteeType(method.getTransportGuarantee())).addRolesAllowed(method.getRolesAllowed()).setMethod(method.getMethod()));
+            }
+          }
+        }
+        if (servlet.getSecurityRoleRefs() != null) {
+          for (          final SecurityRoleRefMetaData ref : servlet.getSecurityRoleRefs()) {
+            s.addSecurityRoleRef(ref.getRoleName(),ref.getRoleLink());
+          }
+        }
+        d.addServlet(s);
+      }
+    }
+    if (mergedMetaData.getFilters() != null) {
+      for (      final FilterMetaData filter : mergedMetaData.getFilters()) {
+        Class<? extends Filter> filterClass=(Class<? extends Filter>)classReflectionIndex.classIndex(filter.getFilterClass()).getModuleClass();
+        ComponentRegistry.ComponentManagedReferenceFactory creator=componentRegistry.getComponentsByClass().get(filterClass);
+        FilterInfo f;
+        if (creator != null) {
+          InstanceFactory<Filter> instanceFactory=createInstanceFactory(creator);
+          f=new FilterInfo(filter.getName(),filterClass,instanceFactory);
+        }
+ else {
+          f=new FilterInfo(filter.getName(),filterClass);
+        }
+        f.setAsyncSupported(filter.isAsyncSupported());
+        d.addFilter(f);
+        if (filter.getInitParam() != null) {
+          for (          ParamValueMetaData initParam : filter.getInitParam()) {
+            f.addInitParam(initParam.getParamName(),initParam.getParamValue());
+          }
+        }
+      }
+    }
+    if (mergedMetaData.getFilterMappings() != null) {
+      for (      final FilterMappingMetaData mapping : mergedMetaData.getFilterMappings()) {
+        if (mapping.getUrlPatterns() != null) {
+          for (          String url : mapping.getUrlPatterns()) {
+            if (is22OrOlder && !url.startsWith("*") && !url.startsWith("/")) {
+              url="/" + url;
+            }
+            if (mapping.getDispatchers() != null && !mapping.getDispatchers().isEmpty()) {
+              for (              DispatcherType dispatcher : mapping.getDispatchers()) {
+                d.addFilterUrlMapping(mapping.getFilterName(),url,javax.servlet.DispatcherType.valueOf(dispatcher.name()));
+              }
+            }
+ else {
+              d.addFilterUrlMapping(mapping.getFilterName(),url,javax.servlet.DispatcherType.REQUEST);
+            }
+          }
+        }
+        if (mapping.getServletNames() != null) {
+          for (          String servletName : mapping.getServletNames()) {
+            if (mapping.getDispatchers() != null && !mapping.getDispatchers().isEmpty()) {
+              for (              DispatcherType dispatcher : mapping.getDispatchers()) {
+                d.addFilterServletNameMapping(mapping.getFilterName(),servletName,javax.servlet.DispatcherType.valueOf(dispatcher.name()));
+              }
+            }
+ else {
+              d.addFilterServletNameMapping(mapping.getFilterName(),servletName,javax.servlet.DispatcherType.REQUEST);
+            }
+          }
+        }
+      }
+    }
+    if (scisMetaData != null && scisMetaData.getHandlesTypes() != null) {
+      for (      final Map.Entry<ServletContainerInitializer,Set<Class<?>>> sci : scisMetaData.getHandlesTypes().entrySet()) {
+        final ImmediateInstanceFactory<ServletContainerInitializer> instanceFactory=new ImmediateInstanceFactory<>(sci.getKey());
+        d.addServletContainerInitalizer(new ServletContainerInitializerInfo(sci.getKey().getClass(),instanceFactory,sci.getValue()));
+      }
+    }
+    if (mergedMetaData.getListeners() != null) {
+      for (      ListenerMetaData listener : mergedMetaData.getListeners()) {
+        addListener(classReflectionIndex,componentRegistry,d,listener);
+      }
+    }
+    if (mergedMetaData.getContextParams() != null) {
+      for (      ParamValueMetaData param : mergedMetaData.getContextParams()) {
+        d.addInitParameter(param.getParamName(),param.getParamValue());
+      }
+    }
+    if (mergedMetaData.getWelcomeFileList() != null && mergedMetaData.getWelcomeFileList().getWelcomeFiles() != null) {
+      d.addWelcomePages(mergedMetaData.getWelcomeFileList().getWelcomeFiles());
+    }
+ else {
+      d.addWelcomePages("index.html","index.htm","index.jsp");
+    }
+    if (mergedMetaData.getErrorPages() != null) {
+      for (      final ErrorPageMetaData page : mergedMetaData.getErrorPages()) {
+        final ErrorPage errorPage;
+        if (page.getExceptionType() == null || page.getExceptionType().isEmpty()) {
+          errorPage=new ErrorPage(page.getLocation(),Integer.parseInt(page.getErrorCode()));
+        }
+ else {
+          errorPage=new ErrorPage(page.getLocation(),(Class<? extends Throwable>)classReflectionIndex.classIndex(page.getExceptionType()).getModuleClass());
+        }
+        d.addErrorPages(errorPage);
+      }
+    }
+    if (mergedMetaData.getMimeMappings() != null) {
+      for (      final MimeMappingMetaData mapping : mergedMetaData.getMimeMappings()) {
+        d.addMimeMapping(new MimeMapping(mapping.getExtension(),mapping.getMimeType()));
+      }
+    }
+    Set<String> securityRoleNames=mergedMetaData.getSecurityRoleNames();
+    if (mergedMetaData.getSecurityConstraints() != null) {
+      for (      SecurityConstraintMetaData constraint : mergedMetaData.getSecurityConstraints()) {
+        SecurityConstraint securityConstraint=new SecurityConstraint().setTransportGuaranteeType(transportGuaranteeType(constraint.getTransportGuarantee()));
+        List<String> roleNames=constraint.getRoleNames();
+        if (constraint.getAuthConstraint() == null) {
+          securityConstraint.setEmptyRoleSemantic(PERMIT);
+        }
+ else         if (roleNames.size() == 1 && roleNames.contains("*") && securityRoleNames.contains("*")) {
+          securityConstraint.setEmptyRoleSemantic(AUTHENTICATE);
+        }
+ else {
+          securityConstraint.addRolesAllowed(roleNames);
+        }
+        if (constraint.getResourceCollections() != null) {
+          for (          final WebResourceCollectionMetaData resourceCollection : constraint.getResourceCollections()) {
+            securityConstraint.addWebResourceCollection(new WebResourceCollection().addHttpMethods(resourceCollection.getHttpMethods()).addHttpMethodOmissions(resourceCollection.getHttpMethodOmissions()).addUrlPatterns(resourceCollection.getUrlPatterns()));
+          }
+        }
+        d.addSecurityConstraint(securityConstraint);
+      }
+    }
+    final LoginConfigMetaData loginConfig=mergedMetaData.getLoginConfig();
+    if (loginConfig != null) {
+      String authMethod=authMethod(loginConfig.getAuthMethod());
+      if (loginConfig.getFormLoginConfig() != null) {
+        d.setLoginConfig(new LoginConfig(authMethod,loginConfig.getRealmName(),loginConfig.getFormLoginConfig().getLoginPage(),loginConfig.getFormLoginConfig().getErrorPage()));
+      }
+ else {
+        d.setLoginConfig(new LoginConfig(authMethod,loginConfig.getRealmName()));
+      }
+    }
+    d.addSecurityRoles(mergedMetaData.getSecurityRoleNames());
+    if (mergedMetaData.getSecurityDomain() != null) {
+      d.addOuterHandlerChainWrapper(SecurityContextCreationHandler.wrapper(mergedMetaData.getSecurityDomain()));
+      d.addDispatchedHandlerChainWrapper(SecurityContextAssociationHandler.wrapper(mergedMetaData.getPrincipalVersusRolesMap(),securityContextId));
+    }
+    for (    ServletContextAttribute attribute : attributes) {
+      d.addServletContextAttribute(attribute.getName(),attribute.getValue());
+    }
+    if (mergedMetaData.getLocalEncodings() != null && mergedMetaData.getLocalEncodings().getMappings() != null) {
+      for (      LocaleEncodingMetaData locale : mergedMetaData.getLocalEncodings().getMappings()) {
+        d.addLocaleCharsetMapping(locale.getLocale(),locale.getEncoding());
+      }
+    }
+    return d;
+  }
+ catch (  ClassNotFoundException e) {
+    throw new StartException(e);
+  }
+}
