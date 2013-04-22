@@ -1,7 +1,5 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
-  final WeldDeploymentMetadata cdiDeploymentMetadata=deploymentUnit.getAttachment(WeldDeploymentMetadata.ATTACHMENT_KEY);
-  final DeploymentReflectionIndex reflectionIndex=deploymentUnit.getAttachment(Attachments.REFLECTION_INDEX);
   if (!WeldDeploymentMarker.isPartOfWeldDeployment(deploymentUnit)) {
     return;
   }
@@ -12,7 +10,7 @@
   final List<DeploymentUnit> deploymentUnits=new ArrayList<DeploymentUnit>();
   deploymentUnits.add(deploymentUnit);
   deploymentUnits.addAll(deploymentUnit.getAttachmentList(Attachments.SUB_DEPLOYMENTS));
-  BeansXmlParser parser=new BeansXmlParser();
+  PropertyReplacingBeansXmlParser parser=new PropertyReplacingBeansXmlParser(deploymentUnit);
   final Map<URL,List<DeploymentUnit>> deploymentUnitMap=new HashMap<URL,List<DeploymentUnit>>();
   final HashSet<URL> existing=new HashSet<URL>();
   for (  DeploymentUnit deployment : deploymentUnits) {
@@ -20,23 +18,9 @@
       final WeldDeploymentMetadata weldDeploymentMetadata=deployment.getAttachment(WeldDeploymentMetadata.ATTACHMENT_KEY);
       if (weldDeploymentMetadata != null) {
         for (        BeanArchiveMetadata md : weldDeploymentMetadata.getBeanArchiveMetadata()) {
-          URL file=md.getBeansXmlFile().toURL();
-          existing.add(file);
-        }
-        if (deployment.getName().endsWith(".war")) {
-          ResourceRoot deploymentRoot=deployment.getAttachment(Attachments.DEPLOYMENT_ROOT);
-          VirtualFile beans=deploymentRoot.getRoot().getChild(META_INF_BEANS_XML);
-          if (beans.exists()) {
-            existing.add(beans.toURL());
-          }
-          for (          ResourceRoot root : deploymentUnit.getAttachmentList(Attachments.RESOURCE_ROOTS)) {
-            if (root.getRootName().equals("classes")) {
-              VirtualFile classesBeans=root.getRoot().getChild(META_INF_BEANS_XML);
-              if (classesBeans.exists()) {
-                existing.add(classesBeans.toURL());
-              }
-              break;
-            }
+          existing.add(md.getBeansXmlFile().toURL());
+          if (md.getAdditionalBeansXmlFile() != null) {
+            existing.add(md.getAdditionalBeansXmlFile().toURL());
           }
         }
       }

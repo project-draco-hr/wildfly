@@ -2,9 +2,9 @@
   final ClassLoader cl=SecurityActions.getContextClassLoader();
   try {
     SecurityActions.setContextClassLoader(classLoader);
-    beanManager=(BeanManagerImpl)weldContainer.getValue().getBeanManager(beanDeploymentArchiveId);
+    beanManager=weldContainer.getValue().getBeanManager(beanDeploymentArchiveId);
     for (    final Class<?> interceptor : interceptorClasses) {
-      interceptorInjections.put(interceptor,WeldEEInjection.createWeldEEInjection(interceptor,null,beanManager));
+      interceptorInjections.put(interceptor,new NonContextualComponentInjectionTarget(interceptor,null,beanManager));
     }
     if (ejbName != null) {
       EjbDescriptor<Object> descriptor=beanManager.getEjbDescriptor(ejbName);
@@ -12,27 +12,26 @@
         bean=beanManager.getBean(descriptor);
       }
     }
- else     if (delegateProduce) {
-      final Set<Annotation> qualifiers=new HashSet<Annotation>();
-      for (      Annotation annotation : componentClass.getAnnotations()) {
-        if (beanManager.isQualifier(annotation.annotationType())) {
-          qualifiers.add(annotation);
-        }
-      }
-      Set<Bean<?>> beans=beanManager.getBeans(componentClass,qualifiers);
-      boolean found=false;
-      for (      Bean<?> bean : beans) {
-        if (bean instanceof ManagedBean) {
-          found=true;
-          this.bean=bean;
-          break;
-        }
-      }
-      if (!found) {
-        WeldLogger.DEPLOYMENT_LOGGER.debugf("Could not find bean for %s, interception and decoration will be unavailable",componentClass);
+    if (bean instanceof SessionBean<?>) {
+      SessionBean<?> sessionBean=(SessionBean<?>)bean;
+      this.injectionTarget=sessionBean.getInjectionTarget();
+      return;
+    }
+    if (componentDescription instanceof WSComponentDescription) {
+      ManagedBean<?> bean=findManagedBeanForWSComponent(componentClass);
+      if (bean != null) {
+        injectionTarget=bean.getInjectionTarget();
+        return;
       }
     }
-    injectionTarget=WeldEEInjection.createWeldEEInjection(componentClass,bean,beanManager);
+    NonContextualComponentInjectionTarget injectionTarget=new NonContextualComponentInjectionTarget(componentClass,bean,beanManager);
+    if (componentDescription instanceof MessageDrivenComponentDescription || componentDescription instanceof WebComponentDescription) {
+      this.injectionTarget=beanManager.fireProcessInjectionTarget(injectionTarget.getAnnotated(),injectionTarget);
+    }
+ else {
+      this.injectionTarget=injectionTarget;
+    }
+    beanManager.getServices().get(InjectionTargetService.class).validateProducer(injectionTarget);
   }
   finally {
     SecurityActions.setContextClassLoader(cl);

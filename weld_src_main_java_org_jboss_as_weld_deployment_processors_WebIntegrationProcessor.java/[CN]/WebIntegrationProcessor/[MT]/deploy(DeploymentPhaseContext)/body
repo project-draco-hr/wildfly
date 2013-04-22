@@ -5,7 +5,7 @@
   if (!DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit)) {
     return;
   }
-  if (!WeldDeploymentMarker.isPartOfWeldDeployment(deploymentUnit)) {
+  if (!WeldDeploymentMarker.isWeldDeployment(deploymentUnit)) {
     return;
   }
   WarMetaData warMetaData=deploymentUnit.getAttachment(WarMetaData.ATTACHMENT_KEY);
@@ -35,5 +35,36 @@
     }
   }
   listeners.add(0,WBL);
+  registerAsComponent(WELD_LISTENER,module,deploymentUnit,applicationClasses);
   deploymentUnit.addToAttachmentList(ExpressionFactoryWrapper.ATTACHMENT_KEY,JspInitializationListener.INSTANCE);
+  if (webMetaData.getFilterMappings() != null) {
+    boolean filterMappingFound=false;
+    for (    FilterMappingMetaData mapping : webMetaData.getFilterMappings()) {
+      if (CONVERSATION_FILTER_NAME.equals(mapping.getFilterName())) {
+        filterMappingFound=true;
+        break;
+      }
+    }
+    if (filterMappingFound) {
+      boolean filterFound=false;
+      for (      FilterMetaData filter : webMetaData.getFilters()) {
+        if (CONVERSATION_FILTER_CLASS.equals(filter.getFilterClass())) {
+          filterFound=true;
+          break;
+        }
+      }
+      if (!filterFound) {
+        if (webMetaData.getFilters() == null) {
+          webMetaData.setFilters(new FiltersMetaData());
+        }
+        webMetaData.getFilters().add(conversationFilterMetadata);
+        registerAsComponent(CONVERSATION_FILTER_CLASS,module,deploymentUnit,applicationClasses);
+        List<ParamValueMetaData> contextParams=webMetaData.getContextParams();
+        if (contextParams == null) {
+          webMetaData.setContextParams(new ArrayList<ParamValueMetaData>());
+        }
+        webMetaData.getContextParams().add(CONVERSATION_FILTER_INITIALIZED);
+      }
+    }
+  }
 }
