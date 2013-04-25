@@ -3,13 +3,13 @@
     throw unexpectedAttribute(reader,0);
   }
   final PathAddress address=PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,LoggingExtension.SUBSYSTEM_NAME));
-  list.add(Util.createAddOperation(address));
+  operations.add(Util.createAddOperation(address));
   final List<ModelNode> loggerOperations=new ArrayList<ModelNode>();
   final List<ModelNode> asyncHandlerOperations=new ArrayList<ModelNode>();
   final List<ModelNode> otherOperations=new ArrayList<ModelNode>();
   final Set<String> loggerNames=new HashSet<String>();
   final Set<String> handlerNames=new HashSet<String>();
-  boolean gotRoot=false;
+  boolean rootDefined=false;
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
     final Namespace namespace=Namespace.forUri(reader.getNamespaceURI());
 switch (namespace) {
@@ -26,10 +26,10 @@ case LOGGER:
           }
 case ROOT_LOGGER:
 {
-          if (gotRoot) {
+          if (rootDefined) {
             throw unexpectedElement(reader);
           }
-          gotRoot=true;
+          rootDefined=true;
           parseRootLoggerElement(reader,address,loggerOperations);
           break;
         }
@@ -66,16 +66,17 @@ break;
 }
 case SYSLOG_HANDLER:
 {
+if (namespace == Namespace.LOGGING_1_0 || namespace == Namespace.LOGGING_1_1) throw unexpectedElement(reader);
 parseSyslogHandler(reader,address,otherOperations,handlerNames);
 break;
 }
 case LOGGING_PROFILES:
 if (namespace == Namespace.LOGGING_1_0 || namespace == Namespace.LOGGING_1_1) throw unexpectedElement(reader);
-parseLoggingProfilesElement(reader,address,list);
+parseLoggingProfilesElement(reader,address,operations);
 break;
 default :
 {
-reader.handleAny(list);
+reader.handleAny(operations);
 break;
 }
 }
@@ -87,7 +88,7 @@ throw unexpectedElement(reader);
 }
 }
 }
-list.addAll(otherOperations);
-list.addAll(asyncHandlerOperations);
-list.addAll(loggerOperations);
+operations.addAll(otherOperations);
+operations.addAll(asyncHandlerOperations);
+operations.addAll(loggerOperations);
 }
