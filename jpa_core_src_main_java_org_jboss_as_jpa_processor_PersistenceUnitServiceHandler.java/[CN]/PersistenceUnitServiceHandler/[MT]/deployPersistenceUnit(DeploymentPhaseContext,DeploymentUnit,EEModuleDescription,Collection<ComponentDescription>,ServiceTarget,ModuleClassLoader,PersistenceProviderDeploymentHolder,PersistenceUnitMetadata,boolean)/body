@@ -64,7 +64,16 @@
         JPA_LOGGER.tracef("%s is using the default data source '%s'",puServiceName,defaultJtaDataSource);
       }
     }
-    adaptor.addProviderDependencies(phaseContext.getServiceRegistry(),serviceTarget,builder,pu);
+    if (WeldDeploymentMarker.isPartOfWeldDeployment(deploymentUnit)) {
+      builder.addDependency(beanManagerServiceName(deploymentUnit),new CastingInjector<BeanManager>(service.getBeanManagerInjector(),BeanManager.class));
+    }
+    try {
+      CacheDeploymentListener.setInternalDeploymentServiceBuilder(builder);
+      adaptor.addProviderDependencies(pu);
+    }
+  finally {
+      CacheDeploymentListener.clearInternalDeploymentServiceBuilder();
+    }
     if (pu.getProperties().containsKey(ENTITYMANAGER_JNDI_PROPERTY)) {
       String jndiName=pu.getProperties().get(ENTITYMANAGER_JNDI_PROPERTY).toString();
       final ContextNames.BindInfo bindingInfo;
@@ -78,7 +87,7 @@
       final BinderService binderService=new BinderService(bindingInfo.getBindName());
       serviceTarget.addService(bindingInfo.getBinderServiceName(),binderService).addDependency(bindingInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addDependency(puServiceName,PersistenceUnitServiceImpl.class,new Injector<PersistenceUnitServiceImpl>(){
         @Override public void inject(        final PersistenceUnitServiceImpl value) throws InjectionException {
-          binderService.getManagedObjectInjector().inject(new ValueManagedReferenceFactory(new ImmediateValue<Object>(new TransactionScopedEntityManager(pu.getScopedPersistenceUnitName(),new HashMap(),value.getEntityManagerFactory()))));
+          binderService.getManagedObjectInjector().inject(new ValueManagedReferenceFactory(new ImmediateValue<Object>(new TransactionScopedEntityManager(pu.getScopedPersistenceUnitName(),new HashMap(),value.getEntityManagerFactory(),SynchronizationType.SYNCHRONIZED))));
         }
         @Override public void uninject(){
           binderService.getNamingStoreInjector().uninject();
@@ -114,6 +123,6 @@
     addManagementConsole(deploymentUnit,pu,adaptor);
   }
  catch (  ServiceRegistryException e) {
-    throw MESSAGES.failedToAddPersistenceUnit(e,pu.getPersistenceUnitName());
+    throw JpaMessages.MESSAGES.failedToAddPersistenceUnit(e,pu.getPersistenceUnitName());
   }
 }

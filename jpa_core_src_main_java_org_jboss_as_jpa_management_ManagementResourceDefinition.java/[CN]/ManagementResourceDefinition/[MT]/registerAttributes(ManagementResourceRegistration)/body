@@ -1,0 +1,52 @@
+{
+  super.registerAttributes(resourceRegistration);
+  for (  final String statisticName : statistics.getNames()) {
+    final ModelType modelType=getModelType(statistics.getType(statisticName));
+    AttributeDefinition attributeDefinition=new SimpleAttributeDefinitionBuilder(statisticName,modelType,true).setXmlName(statisticName).setAllowExpression(true).setFlags(AttributeAccess.Flag.STORAGE_RUNTIME).build();
+    if (statistics.isAttribute(statisticName)) {
+      OperationStepHandler readHandler=new AbstractMetricsHandler(){
+        @Override void handle(        final ModelNode response,        OperationContext context,        final ModelNode operation){
+          Object result=statistics.getValue(statisticName,entityManagerFactoryLookup,StatisticNameLookup.statisticNameLookup(statisticName),Path.path(PathAddress.pathAddress(operation.get(ADDRESS))));
+          if (result != null) {
+            setResponse(response,result,modelType);
+          }
+        }
+      }
+;
+      if (statistics.isWriteable(statisticName)) {
+        OperationStepHandler writeHandler=new AbstractMetricsHandler(){
+          @Override void handle(          final ModelNode response,          OperationContext context,          final ModelNode operation){
+            Object oldSetting=statistics.getValue(statisticName,entityManagerFactoryLookup,StatisticNameLookup.statisticNameLookup(statisticName),Path.path(PathAddress.pathAddress(operation.get(ADDRESS))));
+{
+              final ModelNode value=operation.get(ModelDescriptionConstants.VALUE).resolve();
+              if (Boolean.class.equals(statistics.getType(statisticName))) {
+                statistics.setValue(statisticName,value.asBoolean(),entityManagerFactoryLookup,StatisticNameLookup.statisticNameLookup(statisticName),Path.path(PathAddress.pathAddress(operation.get(ADDRESS))));
+              }
+ else               if (Integer.class.equals(statistics.getType(statisticName))) {
+                statistics.setValue(statisticName,value.asInt(),entityManagerFactoryLookup,StatisticNameLookup.statisticNameLookup(statisticName),Path.path(PathAddress.pathAddress(operation.get(ADDRESS))));
+              }
+ else               if (Long.class.equals(statistics.getType(statisticName))) {
+                statistics.setValue(statisticName,value.asLong(),entityManagerFactoryLookup,StatisticNameLookup.statisticNameLookup(statisticName),Path.path(PathAddress.pathAddress(operation.get(ADDRESS))));
+              }
+ else {
+                statistics.setValue(statisticName,value.asString(),entityManagerFactoryLookup,StatisticNameLookup.statisticNameLookup(statisticName),Path.path(PathAddress.pathAddress(operation.get(ADDRESS))));
+              }
+            }
+            final Object rollBackValue=oldSetting;
+            context.completeStep(new OperationContext.RollbackHandler(){
+              @Override public void handleRollback(              OperationContext context,              ModelNode operation){
+                statistics.setValue(statisticName,rollBackValue,entityManagerFactoryLookup,StatisticNameLookup.statisticNameLookup(statisticName),Path.path(PathAddress.pathAddress(operation.get(ADDRESS))));
+              }
+            }
+);
+          }
+        }
+;
+        resourceRegistration.registerReadWriteAttribute(attributeDefinition,readHandler,writeHandler);
+      }
+ else {
+        resourceRegistration.registerMetric(attributeDefinition,readHandler);
+      }
+    }
+  }
+}
