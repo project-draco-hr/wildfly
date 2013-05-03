@@ -1,10 +1,8 @@
 {
-  ServiceController<?> serviceController=context.getController();
-  LOGGER.tracef("Starting: %s in mode %s",serviceController.getName(),serviceController.getMode());
   final ServerEnvironment serverenv=injectedServerEnvironment.getValue();
-  final File storageDir=new File(serverenv.getServerDataDir().getPath() + File.separator + "repository");
   RepositoryStorageFactory factory=new RepositoryStorageFactory(){
     @Override public RepositoryStorage create(    XRepository repository){
+      File storageDir=new File(serverenv.getServerDataDir().getPath() + File.separator + "repository");
       return new FileBasedRepositoryStorage(repository,storageDir){
         @Override public XResource addResource(        XResource res) throws RepositoryStorageException {
           if (res.getCapabilities(MODULE_IDENTITY_NAMESPACE).isEmpty()) {
@@ -19,9 +17,19 @@
     }
   }
 ;
-  BundleContext syscontext=injectedSystemContext.getValue();
-  XRepositoryBuilder builder=XRepositoryBuilder.create(syscontext);
-  builder.addRepository(new ModuleIdentityRepository(serverenv));
-  builder.addRepositoryStorage(factory);
-  repository=builder.addDefaultRepositories();
+  final BundleContext syscontext=injectedSystemContext.getValue();
+  ConfigurationPropertyProvider propProvider=new ConfigurationPropertyProvider(){
+    @Override public String getProperty(    String key,    String defaultValue){
+      String value=syscontext.getProperty(key);
+      return value != null ? value : defaultValue;
+    }
+  }
+;
+  AggregatingRepository aggregator=new AggregatingRepository();
+  aggregator.addRepository(new ModuleIdentityRepository(serverenv));
+  aggregator.addRepository(new MavenRepository(propProvider));
+  repository=new AbstractPersistentRepository(factory,aggregator);
+  Dictionary<String,Object> props=new Hashtable<String,Object>();
+  props.put(Constants.SERVICE_DESCRIPTION,repository.getName());
+  registration=syscontext.registerService(SERVICE_NAMES,repository,props);
 }
