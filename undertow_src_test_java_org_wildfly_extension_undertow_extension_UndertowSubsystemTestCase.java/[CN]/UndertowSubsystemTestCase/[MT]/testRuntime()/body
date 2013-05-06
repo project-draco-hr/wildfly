@@ -1,0 +1,21 @@
+{
+  KernelServicesBuilder builder=createKernelServicesBuilder(new AdditionalInitialization(){
+  }
+).setSubsystemXml(getSubsystemXml());
+  KernelServices mainServices=builder.build();
+  if (!mainServices.isSuccessfulBoot()) {
+    Assert.fail(mainServices.getBootError().toString());
+  }
+  ServiceController<FilterService> filter=(ServiceController<FilterService>)mainServices.getContainer().getService(UndertowService.FILTER.append("limit-connections"));
+  filter.setMode(ServiceController.Mode.ACTIVE);
+  FilterService filterService=filter.getService().getValue();
+  HttpHandler result=filterService.createHttpHandler(new CookieHandler());
+  Assert.assertNotNull("handler should have been created",result);
+  final ServiceName locationServiceName=UndertowService.locationServiceName("default-server","default-host","/");
+  ServiceController<LocationService> locationSC=(ServiceController<LocationService>)mainServices.getContainer().getService(locationServiceName);
+  Assert.assertNotNull(locationSC);
+  locationSC.setMode(ServiceController.Mode.ACTIVE);
+  LocationService locationService=locationSC.getValue();
+  Assert.assertNotNull(locationService);
+  filter.setMode(ServiceController.Mode.REMOVE);
+}
