@@ -1,8 +1,8 @@
 {
   this.pushAction=new PrivilegedAction<Void>(){
     @Override public Void run(){
+      holder.securityManager.push(holder.securityDomain);
       try {
-        holder.securityManager.push(holder.securityDomain);
         if (holder.skipAuthentication == false) {
           holder.securityManager.authenticate(holder.runAs,holder.runAsPrincipal,holder.extraRoles);
         }
@@ -10,8 +10,15 @@
           SecurityRolesAssociation.setSecurityRoles(holder.principalVsRolesMap);
         }
       }
- catch (      SecurityException e) {
-        throw new EJBAccessException(e.getMessage());
+ catch (      Throwable t) {
+        if (holder.principalVsRolesMap != null) {
+          SecurityRolesAssociation.setSecurityRoles(null);
+        }
+        holder.securityManager.pop();
+        if (t instanceof SecurityException) {
+          throw new EJBAccessException(t.getMessage());
+        }
+        throw t;
       }
       return null;
     }
@@ -19,10 +26,10 @@
 ;
   this.popAction=new PrivilegedAction<Void>(){
     @Override public Void run(){
-      holder.securityManager.pop();
       if (holder.principalVsRolesMap != null) {
         SecurityRolesAssociation.setSecurityRoles(null);
       }
+      holder.securityManager.pop();
       return null;
     }
   }
