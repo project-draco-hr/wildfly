@@ -37,22 +37,27 @@
  else {
       is22OrOlder=false;
     }
+    JSPService jspService=container.getValue().getJspService().getOptionalValue();
+    final Set<String> seenMappings=new HashSet<>();
     HashMap<String,TagLibraryInfo> tldInfo=createTldsInfo(tldsMetaData,sharedTlds);
-    HashMap<String,JspPropertyGroup> propertyGroups=createJspConfig(mergedMetaData);
-    JspServletBuilder.setupDeployment(d,propertyGroups,tldInfo,new UndertowJSPInstanceManager(injectionContainer));
-    if (mergedMetaData.getJspConfig() != null) {
-      d.setJspConfigDescriptor(new JspConfigDescriptorImpl(tldInfo.values(),propertyGroups.values()));
-    }
     d.setDefaultServletConfig(new DefaultServletConfig(true,Collections.<String>emptySet()));
-    final ServletInfo jspServlet=new ServletInfo("Default JSP Servlet",JspServlet.class).addMapping("*.jsp").addMapping("*.jspx").addInitParam("development","false");
-    d.addServlet(jspServlet);
-    final Set<String> jspPropertyGroupMappings=propertyGroups.keySet();
-    for (    final String mapping : jspPropertyGroupMappings) {
-      jspServlet.addMapping(mapping);
-    }
-    if (!expressionFactoryWrappers.isEmpty()) {
-      d.addListener(new ListenerInfo(JspInitializationListener.class));
-      d.addServletContextAttribute(JspInitializationListener.CONTEXT_KEY,expressionFactoryWrappers);
+    final ServletInfo jspServlet=jspService != null ? jspService.getJSPServletInfo() : null;
+    if (jspServlet != null) {
+      HashMap<String,JspPropertyGroup> propertyGroups=createJspConfig(mergedMetaData);
+      JspServletBuilder.setupDeployment(d,propertyGroups,tldInfo,new UndertowJSPInstanceManager(injectionContainer));
+      if (mergedMetaData.getJspConfig() != null) {
+        d.setJspConfigDescriptor(new JspConfigDescriptorImpl(tldInfo.values(),propertyGroups.values()));
+      }
+      d.addServlet(jspServlet);
+      final Set<String> jspPropertyGroupMappings=propertyGroups.keySet();
+      for (      final String mapping : jspPropertyGroupMappings) {
+        jspServlet.addMapping(mapping);
+      }
+      seenMappings.addAll(jspPropertyGroupMappings);
+      if (!expressionFactoryWrappers.isEmpty()) {
+        d.addListener(new ListenerInfo(JspInitializationListener.class));
+        d.addServletContextAttribute(JspInitializationListener.CONTEXT_KEY,expressionFactoryWrappers);
+      }
     }
     d.setClassIntrospecter(new ComponentClassIntrospector(componentRegistry));
     final Map<String,List<ServletMappingMetaData>> servletMappings=new HashMap<>();
@@ -65,7 +70,6 @@
         list.add(mapping);
       }
     }
-    final Set<String> seenMappings=new HashSet<>(jspPropertyGroupMappings);
     if (mergedMetaData.getServlets() != null) {
       for (      final JBossServletMetaData servlet : mergedMetaData.getServlets()) {
         final ServletInfo s;
