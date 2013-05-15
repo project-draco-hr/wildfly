@@ -1,0 +1,40 @@
+{
+  final SecurityManager sm=System.getSecurityManager();
+  final Thread thread=currentThread();
+  if (sm == null)   try {
+    return thread.getContextClassLoader();
+  }
+  finally {
+    thread.setContextClassLoader(clazz.getClassLoader());
+  }
+  if (sm instanceof WildFlySecurityManager) {
+    final ThreadLocal<Boolean> checking=WildFlySecurityManager.CHECKING;
+    if (checking.get() != TRUE)     try {
+      return thread.getContextClassLoader();
+    }
+  finally {
+      thread.setContextClassLoader(clazz.getClassLoader());
+    }
+    checking.set(FALSE);
+    try {
+      final ProtectionDomain protectionDomain=getCallerClass(2).getProtectionDomain();
+      checkPDPermission(protectionDomain,SET_CLASS_LOADER_PERMISSION);
+      checkPDPermission(protectionDomain,GET_CLASS_LOADER_PERMISSION);
+      try {
+        return thread.getContextClassLoader();
+      }
+  finally {
+        thread.setContextClassLoader(clazz.getClassLoader());
+      }
+    }
+  finally {
+      checking.set(TRUE);
+    }
+  }
+ else {
+    final ProtectionDomain protectionDomain=doPrivileged(new GetProtectionDomainAction(getCallerClass(2)));
+    checkPDPermission(protectionDomain,SET_CLASS_LOADER_PERMISSION);
+    checkPDPermission(protectionDomain,GET_CLASS_LOADER_PERMISSION);
+    return doPrivileged(new SetContextClassLoaderAction(clazz.getClassLoader()));
+  }
+}

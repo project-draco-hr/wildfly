@@ -1,0 +1,24 @@
+{
+  final SecurityManager sm=getSecurityManager();
+  if (sm == null) {
+    return clearProperty(name);
+  }
+  if (sm instanceof WildFlySecurityManager) {
+    final ThreadLocal<Boolean> checking=WildFlySecurityManager.CHECKING;
+    if (checking.get() != TRUE) {
+      return clearProperty(name);
+    }
+    checkPropertyWritePermission(getCallerClass(2).getProtectionDomain(),name);
+    checking.set(FALSE);
+    try {
+      return clearProperty(name);
+    }
+  finally {
+      checking.set(TRUE);
+    }
+  }
+ else {
+    checkPropertyWritePermission(doPrivileged(new GetProtectionDomainAction(getCallerClass(2))),name);
+    return doPrivileged(new ClearPropertyAction(name));
+  }
+}
