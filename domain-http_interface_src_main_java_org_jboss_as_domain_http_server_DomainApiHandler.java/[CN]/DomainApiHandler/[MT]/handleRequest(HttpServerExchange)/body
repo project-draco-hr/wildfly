@@ -1,5 +1,5 @@
 {
-  ModelNode dmr;
+  final ModelNode dmr;
   ModelNode response;
   HeaderMap requestHeaders=exchange.getRequestHeaders();
   final boolean encode=Common.APPLICATION_DMR_ENCODED.equals(requestHeaders.getFirst(Headers.ACCEPT)) || Common.APPLICATION_DMR_ENCODED.equals(requestHeaders.getFirst(Headers.CONTENT_TYPE));
@@ -12,18 +12,34 @@
     Common.sendError(exchange,get,false,e.getLocalizedMessage());
     return;
   }
+  final ResponseCallback callback=new ResponseCallback(){
+    @Override void doSendResponse(    final ModelNode response){
+      if (response.hasDefined(OUTCOME) && FAILED.equals(response.get(OUTCOME).asString())) {
+        Common.sendError(exchange,get,encode,response.get(FAILURE_DESCRIPTION).asString());
+        return;
+      }
+      final boolean pretty=dmr.hasDefined("json.pretty") && dmr.get("json.pretty").asBoolean();
+      writeResponse(exchange,get,pretty,response,200,encode);
+    }
+  }
+;
+  final boolean sendPreparedResponse=sendPreparedResponse(dmr);
+  final ModelController.OperationTransactionControl control=sendPreparedResponse ? new ModelController.OperationTransactionControl(){
+    @Override public void operationPrepared(    final ModelController.OperationTransaction transaction,    final ModelNode result){
+      transaction.commit();
+      result.get(OUTCOME).set(SUCCESS);
+      result.get(RESULT);
+      callback.sendResponse(result);
+    }
+  }
+ : ModelController.OperationTransactionControl.COMMIT;
   try {
-    response=modelController.execute(new OperationBuilder(dmr).build());
+    response=modelController.execute(dmr,OperationMessageHandler.logging,control,new OperationBuilder(dmr).build());
   }
  catch (  Throwable t) {
     ROOT_LOGGER.modelRequestError(t);
     Common.sendError(exchange,get,encode,t.getLocalizedMessage());
     return;
   }
-  if (response.hasDefined(OUTCOME) && FAILED.equals(response.get(OUTCOME).asString())) {
-    Common.sendError(exchange,get,encode,response.get(FAILURE_DESCRIPTION).asString());
-    return;
-  }
-  boolean pretty=dmr.hasDefined("json.pretty") && dmr.get("json.pretty").asBoolean();
-  writeResponse(exchange,get,pretty,response,200,encode);
+  callback.sendResponse(response);
 }
