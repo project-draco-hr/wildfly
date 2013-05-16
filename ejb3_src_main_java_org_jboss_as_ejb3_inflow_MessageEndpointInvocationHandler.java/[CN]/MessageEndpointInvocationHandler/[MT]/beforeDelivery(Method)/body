@@ -1,12 +1,5 @@
 {
-  final Thread thread=Thread.currentThread();
-  if (!WildFlySecurityManager.isChecking()) {
-    previousClassLoader=thread.getContextClassLoader();
-    thread.setContextClassLoader(getApplicationClassLoader());
-  }
- else {
-    previousClassLoader=doPrivileged(new SetContextClassLoaderAction(getApplicationClassLoader()));
-  }
+  previousClassLoader=WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(getApplicationClassLoader());
   try {
     final TransactionManager tm=getTransactionManager();
     previousTx=tm.suspend();
@@ -18,12 +11,9 @@
     }
   }
  catch (  Throwable t) {
-    if (!WildFlySecurityManager.isChecking()) {
-      thread.setContextClassLoader(previousClassLoader);
-    }
- else {
-      doPrivileged(new SetContextClassLoaderAction(previousClassLoader));
-    }
     throw new ApplicationServerInternalException(t);
+  }
+ finally {
+    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(previousClassLoader);
   }
 }
