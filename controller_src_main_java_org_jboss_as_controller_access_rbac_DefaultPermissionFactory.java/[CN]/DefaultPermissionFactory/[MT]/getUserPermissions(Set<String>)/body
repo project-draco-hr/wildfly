@@ -1,0 +1,54 @@
+{
+  ManagementPermissionCollection simple=null;
+  Map<Action.ActionEffect,CombinationManagementPermission> combined=null;
+  for (  String roleName : user) {
+    if (combinationPolicy == CombinationPolicy.REJECTING && simple != null) {
+      throw new SecurityException("Users with multiple roles are not allowed");
+    }
+    ManagementPermissionCollection role=null;
+synchronized (this) {
+      role=permissionsByRole.get(roleName);
+    }
+    if (role == null) {
+      throw new IllegalArgumentException("unknown role " + role);
+    }
+    if (simple == null) {
+      simple=role;
+    }
+ else {
+      if (combined == null) {
+        combined=new HashMap<Action.ActionEffect,CombinationManagementPermission>();
+        Enumeration<Permission> permissionEnumeration=simple.elements();
+        while (permissionEnumeration.hasMoreElements()) {
+          ManagementPermission mperm=(ManagementPermission)permissionEnumeration.nextElement();
+          Action.ActionEffect actionEffect=mperm.getActionEffect();
+          CombinationManagementPermission cmp=new CombinationManagementPermission(combinationPolicy,actionEffect);
+          cmp.addUnderlyingPermission(mperm);
+          combined.put(actionEffect,cmp);
+        }
+      }
+      Enumeration<Permission> permissionEnumeration=role.elements();
+      while (permissionEnumeration.hasMoreElements()) {
+        ManagementPermission mperm=(ManagementPermission)permissionEnumeration.nextElement();
+        Action.ActionEffect actionEffect=mperm.getActionEffect();
+        CombinationManagementPermission cmp=combined.get(actionEffect);
+        if (cmp == null) {
+          cmp=new CombinationManagementPermission(combinationPolicy,actionEffect);
+          combined.put(actionEffect,cmp);
+        }
+        cmp.addUnderlyingPermission(mperm);
+      }
+    }
+  }
+  PermissionCollection result;
+  if (combined == null) {
+    result=simple;
+  }
+ else {
+    result=new ManagementPermissionCollection(CombinationManagementPermission.class);
+    for (    CombinationManagementPermission cmp : combined.values()) {
+      result.add(cmp);
+    }
+  }
+  return result;
+}
