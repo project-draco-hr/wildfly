@@ -1,15 +1,30 @@
 {
-  setRemotingConnectorRealm(managementClient,PREVIOUS_SECURITY_REALM_NAME);
-  controller.stop(SSLEJBRemoteClientTestCase.DEFAULT_JBOSSAS);
-  controller.start(SSLEJBRemoteClientTestCase.DEFAULT_JBOSSAS);
-  ModelNode secRealmAddress=getSecurityRealmsAddress();
-  secRealmAddress.protect();
   ModelNode operation=new ModelNode();
-  operation.get(OP_ADDR).set(secRealmAddress);
+  operation.get(OP_ADDR).set(SSLRealmSetupTool.getRemotingConnectorAddress());
   operation.get(OP).set(REMOVE);
   operation.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
   ModelNode result=managementClient.getControllerClient().execute(operation);
-  log.infof("Removing security realm %s with result %s",SECURITY_REALM_NAME,result);
+  log.infof("remove HTTPS connector",result);
   Assert.assertEquals(SUCCESS,result.get(OUTCOME).asString());
+  controller.stop(SSLEJBRemoteClientTestCase.DEFAULT_JBOSSAS);
+  controller.start(SSLEJBRemoteClientTestCase.DEFAULT_JBOSSAS);
+  operation=new ModelNode();
+  operation.get(OP).set(REMOVE);
+  operation.get(OP_ADDR).add(SUBSYSTEM,"undertow");
+  operation.get(OP_ADDR).add("server","default-server");
+  operation.get(OP_ADDR).add("https-listener","testConnector");
+  operation.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  result=managementClient.getControllerClient().execute(operation);
+  log.info("removing connector result " + result);
+  Assert.assertEquals(SUCCESS,result.get(OUTCOME).asString());
+  ModelNode secRealmAddress=getSecurityRealmsAddress();
+  secRealmAddress.protect();
+  operation=new ModelNode();
+  operation.get(OP_ADDR).set(secRealmAddress);
+  operation.get(OP).set(REMOVE);
+  operation.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  result=managementClient.getControllerClient().execute(operation);
+  log.infof("Removing security realm %s with result %s",SECURITY_REALM_NAME,result);
+  Assert.assertEquals(result.toString(),SUCCESS,result.get(OUTCOME).asString());
   controller.stop(SSLEJBRemoteClientTestCase.DEFAULT_JBOSSAS);
 }
