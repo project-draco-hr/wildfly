@@ -3,11 +3,24 @@
     if (tx != tm.getTransaction()) {
       throw EjbMessages.MESSAGES.wrongTxOnThread(tx,tm.getTransaction());
     }
-    if (tx.getStatus() == Status.STATUS_MARKED_ROLLBACK) {
+    final int txStatus=tx.getStatus();
+    if (txStatus == Status.STATUS_ACTIVE) {
+      tm.commit();
+    }
+ else     if (txStatus == Status.STATUS_MARKED_ROLLBACK) {
       tm.rollback();
     }
+ else     if (txStatus == Status.STATUS_ROLLEDBACK) {
+      tm.suspend();
+      throw EjbMessages.MESSAGES.transactionAlreadyRolledBack(tx);
+    }
+ else     if (txStatus == Status.STATUS_UNKNOWN) {
+      tm.rollback();
+      throw EjbMessages.MESSAGES.transactionInUnexpectedState(tx,statusAsString(txStatus));
+    }
  else {
-      tm.commit();
+      tm.suspend();
+      throw EjbMessages.MESSAGES.transactionInUnexpectedState(tx,statusAsString(txStatus));
     }
   }
  catch (  RollbackException e) {
