@@ -12,25 +12,24 @@
  catch (  ServiceNotFoundException e) {
     throw MESSAGES.cannotResolveService(serviceName);
   }
-  ServiceReferenceListener listener=new ServiceReferenceListener();
-  controller.addListener(listener);
-synchronized (listener) {
-    while (!listener.finished) {
-      try {
-        listener.wait();
-      }
- catch (      InterruptedException e) {
-        throw MESSAGES.threadInterrupt(serviceName);
-      }
-    }
+  final StabilityMonitor monitor=new StabilityMonitor();
+  monitor.addController(controller);
+  try {
+    monitor.awaitStability();
   }
-switch (listener.getState()) {
+ catch (  InterruptedException e) {
+    throw MESSAGES.threadInterrupt(serviceName);
+  }
+ finally {
+    monitor.removeController(controller);
+  }
+switch (controller.getState()) {
 case UP:
-    return getObjectInstance(listener.getValue(),obj,name,nameCtx,environment);
+    return getObjectInstance(controller.getValue(),obj,name,nameCtx,environment);
 case START_FAILED:
   throw MESSAGES.cannotResolveService(serviceName,getClass().getName(),"START_FAILED");
 case REMOVED:
 throw MESSAGES.cannotResolveService(serviceName,getClass().getName(),"REMOVED");
 }
-throw MESSAGES.cannotResolveServiceBug(serviceName,getClass().getName(),listener.getState().toString());
+throw MESSAGES.cannotResolveServiceBug(serviceName,getClass().getName(),controller.getState().toString());
 }
