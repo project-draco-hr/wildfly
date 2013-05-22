@@ -1,0 +1,41 @@
+{
+  try {
+    Enumeration<URL> resources=module.getClassLoader().getResources("META-INF/services/" + Extension.class.getName());
+    final List<String> services=new ArrayList<>();
+    while (resources.hasMoreElements()) {
+      URL resource=resources.nextElement();
+      final InputStream stream=resource.openStream();
+      try {
+        final BufferedReader reader=new BufferedReader(new InputStreamReader(stream,"UTF-8"));
+        String line;
+        while ((line=reader.readLine()) != null) {
+          final int commentIdx=line.indexOf('#');
+          final String className;
+          if (commentIdx == -1) {
+            className=line.trim();
+          }
+ else {
+            className=line.substring(0,commentIdx).trim();
+          }
+          if (className.length() == 0) {
+            continue;
+          }
+          services.add(className);
+        }
+      }
+  finally {
+        VFSUtils.safeClose(stream);
+      }
+    }
+    for (    String service : services) {
+      final Class<Extension> extensionClass=loadExtension(service,module.getClassLoader());
+      if (extensionClass == null) {
+        continue;
+      }
+      extensions.tryRegisterExtension(extensionClass,deploymentUnit);
+    }
+  }
+ catch (  IOException e) {
+    throw new DeploymentUnitProcessingException(e);
+  }
+}
