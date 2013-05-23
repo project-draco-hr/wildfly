@@ -1,0 +1,54 @@
+{
+  final int index=modification.getPatchIDs().indexOf(patchId);
+  if (index == -1) {
+    if (!modification.getCumulativeID().equals(patchId)) {
+      throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
+    }
+  }
+  final List<String> patches=new ArrayList<String>();
+  final List<String> oneOffs=modification.getPatchIDs();
+  if (index == -1) {
+    patches.addAll(oneOffs);
+    patches.add(patchId);
+  }
+ else   if (index == 0) {
+    patches.add(patchId);
+  }
+ else {
+    if (rollbackTo) {
+      for (int i=0; i <= index; i++) {
+        patches.add(oneOffs.get(i));
+      }
+    }
+ else {
+      throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
+    }
+  }
+  final File historyDir=installedImage.getPatchHistoryDir(patchId);
+  if (!historyDir.exists()) {
+    throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
+  }
+  final File patchXml=new File(historyDir,Constants.ROLLBACK_XML);
+  if (!patchXml.exists()) {
+    throw PatchMessages.MESSAGES.cannotRollbackPatch(patchId);
+  }
+  final File workDir=createTempDir();
+  final PatchContentProvider provider=null;
+  final IdentityPatchContext context=new IdentityPatchContext(workDir,provider,contentPolicy,modification,installedImage);
+  try {
+    for (    final String rollback : patches) {
+      rollback(rollback,context);
+    }
+    final IdentityPatchContext.PatchEntry identity=context.getIdentityEntry();
+    final IdentityRollbackCallback callback=new IdentityRollbackCallback(patchId,patches,restoreConfiguration,identity.getDirectoryStructure());
+    try {
+      return executeTasks(context,callback);
+    }
+ catch (    Exception e) {
+      throw rethrowException(e);
+    }
+  }
+  finally {
+    context.cleanup();
+  }
+}
