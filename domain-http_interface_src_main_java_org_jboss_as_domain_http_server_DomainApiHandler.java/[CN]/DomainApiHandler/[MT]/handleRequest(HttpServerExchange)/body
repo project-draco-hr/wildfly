@@ -1,18 +1,17 @@
 {
-  final int maxAge;
   final ModelNode dmr;
   ModelNode response;
   HeaderMap requestHeaders=exchange.getRequestHeaders();
-  final boolean encode=Common.APPLICATION_DMR_ENCODED.equals(requestHeaders.getFirst(Headers.ACCEPT)) || Common.APPLICATION_DMR_ENCODED.equals(requestHeaders.getFirst(Headers.CONTENT_TYPE));
   final boolean get=exchange.getRequestMethod().equals(Methods.GET);
+  final boolean encode=Common.APPLICATION_DMR_ENCODED.equals(requestHeaders.getFirst(Headers.ACCEPT)) || Common.APPLICATION_DMR_ENCODED.equals(requestHeaders.getFirst(Headers.CONTENT_TYPE));
+  OperationParameter.Builder builder=new OperationParameter.Builder(get).lastModified(lastModified).encode(encode);
   try {
     if (get) {
       GetOperation operation=getOperation(exchange);
-      maxAge=operation.getMaxAge();
+      builder.maxAge(operation.getMaxAge());
       dmr=convertGetRequest(exchange,operation);
     }
  else {
-      maxAge=0;
       dmr=convertPostRequest(exchange,encode);
     }
   }
@@ -21,17 +20,24 @@
     Common.sendError(exchange,get,false,e.getLocalizedMessage());
     return;
   }
+  final OperationParameter operationParameter=builder.build();
   final ResponseCallback callback=new ResponseCallback(){
     @Override void doSendResponse(    final ModelNode response){
       if (response.hasDefined(OUTCOME) && FAILED.equals(response.get(OUTCOME).asString())) {
         Common.sendError(exchange,get,encode,response.get(FAILURE_DESCRIPTION).asString());
         return;
       }
-      OperationResult operationResult=new OperationResult.Builder(response,200).maxAge(maxAge).lastModified(lastModified).encode(encode).pretty(dmr.hasDefined("json.pretty") && dmr.get("json.pretty").asBoolean()).build();
-      writeResponse(exchange,operationResult);
+      writeResponse(exchange,200,response,operationParameter);
     }
   }
 ;
+  if (get && operationParameter.getMaxAge() > 0) {
+    if (!DateUtils.handleIfModifiedSince(exchange,operationParameter.getLastModified())) {
+      exchange.setResponseCode(304);
+      exchange.endExchange();
+      return;
+    }
+  }
   final boolean sendPreparedResponse=sendPreparedResponse(dmr);
   final ModelController.OperationTransactionControl control=sendPreparedResponse ? new ModelController.OperationTransactionControl(){
     @Override public void operationPrepared(    final ModelController.OperationTransaction transaction,    final ModelNode result){
