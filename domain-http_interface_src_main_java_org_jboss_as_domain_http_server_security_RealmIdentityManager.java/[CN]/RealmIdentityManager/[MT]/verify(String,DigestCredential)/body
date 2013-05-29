@@ -1,0 +1,56 @@
+{
+  assertMechanism(AuthMechanism.DIGEST);
+  AuthorizingCallbackHandler ach=securityRealm.getAuthorizingCallbackHandler(AuthMechanism.DIGEST);
+  Callback[] callbacks=new Callback[3];
+  callbacks[0]=new RealmCallback("Realm",credential.getRealm());
+  callbacks[1]=new NameCallback("Username",id);
+  boolean plainText=plainTextDigest();
+  if (plainText) {
+    callbacks[2]=new PasswordCallback("Password",false);
+  }
+ else {
+    callbacks[2]=new DigestHashCallback("Digest");
+  }
+  try {
+    ach.handle(callbacks);
+  }
+ catch (  Exception e) {
+    ROOT_LOGGER.debug("Failure handling Callback(s) for BASIC authentication.",e);
+    return null;
+  }
+  byte[] ha1;
+  if (plainText) {
+    MessageDigest digest=null;
+    try {
+      digest=credential.getAlgorithm().getMessageDigest();
+      digest.update(id.getBytes(UTF_8));
+      digest.update((byte)':');
+      digest.update(credential.getRealm().getBytes(UTF_8));
+      digest.update((byte)':');
+      digest.update(new String(((PasswordCallback)callbacks[2]).getPassword()).getBytes(UTF_8));
+      ha1=HexConverter.convertToHexBytes(digest.digest());
+    }
+ catch (    NoSuchAlgorithmException e) {
+      ROOT_LOGGER.debug("Unexpected authentication failure",e);
+      return null;
+    }
+ finally {
+      digest.reset();
+    }
+  }
+ else {
+    ha1=((DigestHashCallback)callbacks[2]).getHexHash().getBytes(UTF_8);
+  }
+  try {
+    if (credential.verifyHA1(ha1)) {
+      Principal user=new SimplePrincipal(id);
+      Collection<Principal> userCol=Collections.singleton(user);
+      SubjectUserInfo supplemental=ach.createSubjectUserInfo(userCol);
+      return new RealmIdentityAccount(supplemental.getSubject(),user);
+    }
+  }
+ catch (  IOException e) {
+    ROOT_LOGGER.debug("Unexpected authentication failure",e);
+  }
+  return null;
+}
