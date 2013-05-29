@@ -14,6 +14,9 @@
   final ComponentStartService startService=new ComponentStartService();
   final ServiceBuilder<Component> startBuilder=serviceTarget.addService(startServiceName,startService);
   deploymentUnit.addToAttachmentList(org.jboss.as.server.deployment.Attachments.DEPLOYMENT_COMPLETE_SERVICES,startServiceName);
+  ServiceName jndiDepServiceName=configuration.getComponentDescription().getServiceName().append(JNDI_BINDINGS_SERVICE);
+  final ServiceBuilder<Void> jndiDepServiceBuilder=serviceTarget.addService(jndiDepServiceName,Service.NULL);
+  jndiDependencies.add(jndiDepServiceName);
   for (  DependencyConfigurator configurator : configuration.getCreateDependencies()) {
     configurator.configureDependency(createBuilder,createService);
   }
@@ -28,9 +31,6 @@
     final NamingStoreService contextService=new NamingStoreService();
     contextServiceName=configuration.getComponentDescription().getContextServiceName();
     serviceTarget.addService(contextServiceName,contextService).install();
-  }
- else {
-    contextServiceName=configuration.getComponentDescription().getContextServiceName();
   }
   final InjectionSource.ResolutionContext resolutionContext=new InjectionSource.ResolutionContext(configuration.getComponentDescription().getNamingMode() == ComponentNamingMode.USE_MODULE,configuration.getComponentName(),configuration.getModuleName(),configuration.getApplicationName());
   for (  ViewConfiguration viewConfiguration : configuration.getViews()) {
@@ -47,7 +47,7 @@
       final String bindingName=bindingConfiguration.getName();
       final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(applicationName,moduleName,componentName,bindingName);
       final BinderService service=new BinderService(bindInfo.getBindName(),bindingConfiguration.getSource());
-      dependencies.add(bindInfo.getBinderServiceName());
+      jndiDepServiceBuilder.addDependency(bindInfo.getBinderServiceName());
       ServiceBuilder<ManagedReferenceFactory> serviceBuilder=serviceTarget.addService(bindInfo.getBinderServiceName(),service);
       bindingConfiguration.getSource().getResourceValue(resolutionContext,serviceBuilder,phaseContext,service.getManagedObjectInjector());
       serviceBuilder.addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,service.getNamingStoreInjector());
@@ -56,12 +56,12 @@
   }
   if (configuration.getComponentDescription().getNamingMode() == ComponentNamingMode.CREATE) {
     final Set<ServiceName> bound=new HashSet<ServiceName>();
-    processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,configuration.getComponentDescription().getBindingConfigurations(),dependencies,bound);
+    processBindings(phaseContext,configuration,serviceTarget,resolutionContext,configuration.getComponentDescription().getBindingConfigurations(),jndiDepServiceBuilder,bound);
     if (!MetadataCompleteMarker.isMetadataComplete(phaseContext.getDeploymentUnit())) {
       new ClassDescriptionTraversal(configuration.getComponentClass(),applicationClasses){
         @Override protected void handle(        final Class<?> clazz,        final EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
           if (classDescription != null) {
-            processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,classDescription.getBindingConfigurations(),dependencies,bound);
+            processBindings(phaseContext,configuration,serviceTarget,resolutionContext,classDescription.getBindingConfigurations(),jndiDepServiceBuilder,bound);
           }
         }
       }
@@ -78,7 +78,7 @@
           new ClassDescriptionTraversal(interceptorClass,applicationClasses){
             @Override protected void handle(            final Class<?> clazz,            final EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
               if (classDescription != null) {
-                processBindings(phaseContext,configuration,serviceTarget,contextServiceName,resolutionContext,classDescription.getBindingConfigurations(),dependencies,bound);
+                processBindings(phaseContext,configuration,serviceTarget,resolutionContext,classDescription.getBindingConfigurations(),jndiDepServiceBuilder,bound);
               }
             }
           }
@@ -89,4 +89,5 @@
   }
   createBuilder.install();
   startBuilder.install();
+  jndiDepServiceBuilder.install();
 }
