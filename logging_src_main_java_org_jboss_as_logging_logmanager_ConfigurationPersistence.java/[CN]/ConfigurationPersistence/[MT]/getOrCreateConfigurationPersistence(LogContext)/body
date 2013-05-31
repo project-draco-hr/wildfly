@@ -1,11 +1,26 @@
 {
   final Logger root=logContext.getLogger(CommonAttributes.ROOT_LOGGER_NAME);
-  ConfigurationPersistence result=(ConfigurationPersistence)root.getAttachment(Configurator.ATTACHMENT_KEY);
-  if (result == null) {
-    result=new ConfigurationPersistence(logContext);
-    ConfigurationPersistence existing=(ConfigurationPersistence)root.attachIfAbsent(Configurator.ATTACHMENT_KEY,result);
-    if (existing != null) {
-      result=existing;
+  final ConfigurationPersistence result;
+synchronized (LOCK) {
+    Configurator configurator=root.getAttachment(Configurator.ATTACHMENT_KEY);
+    if (configurator == null) {
+      configurator=new ConfigurationPersistence(logContext);
+      Configurator existing=root.attachIfAbsent(Configurator.ATTACHMENT_KEY,configurator);
+      if (existing != null) {
+        configurator=existing;
+      }
+    }
+    if (configurator instanceof ConfigurationPersistence) {
+      result=(ConfigurationPersistence)configurator;
+    }
+ else     if (configurator instanceof PropertyConfigurator) {
+      result=new ConfigurationPersistence((PropertyConfigurator)configurator);
+      root.attach(Configurator.ATTACHMENT_KEY,result);
+    }
+ else {
+      LoggingLogger.ROOT_LOGGER.replacingConfigurator(configurator);
+      result=new ConfigurationPersistence(logContext);
+      root.attach(Configurator.ATTACHMENT_KEY,result);
     }
   }
   return result;
