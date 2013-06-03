@@ -1,0 +1,50 @@
+{
+  if (xmlWrapperElement != null) {
+    if (reader.getLocalName().equals(xmlWrapperElement)) {
+      if (reader.hasNext()) {
+        if (reader.nextTag() == END_ELEMENT) {
+          return;
+        }
+      }
+    }
+ else {
+      throw ParseUtils.unexpectedElement(reader);
+    }
+  }
+  boolean wildcard=resourceDefinition.getPathElement().isWildcard();
+  String name=null;
+  ModelNode op=Util.createAddOperation();
+  for (int i=0; i < reader.getAttributeCount(); i++) {
+    String attributeName=reader.getAttributeLocalName(i);
+    String value=reader.getAttributeValue(i);
+    if (wildcard && NAME.equals(attributeName)) {
+      name=value;
+    }
+ else     if (attributes.containsKey(attributeName)) {
+      AttributeDefinition def=attributes.get(attributeName);
+      if (def instanceof SimpleAttributeDefinition) {
+        ((SimpleAttributeDefinition)def).parseAndSetParameter(value,op,reader);
+      }
+ else       if (def instanceof StringListAttributeDefinition) {
+        ((StringListAttributeDefinition)def).parseAndSetParameter(value,op,reader);
+      }
+ else {
+        throw new IllegalArgumentException("we should know how to handle " + def);
+      }
+    }
+ else {
+      throw ParseUtils.unexpectedAttribute(reader,i);
+    }
+  }
+  if (wildcard && name == null) {
+    throw MESSAGES.missingRequiredAttributes(new StringBuilder(NAME),reader.getLocation());
+  }
+  PathElement path=wildcard ? PathElement.pathElement(resourceDefinition.getPathElement().getKey(),name) : resourceDefinition.getPathElement();
+  PathAddress address=parentAddress.append(path);
+  op.get(ADDRESS).set(address.toModelNode());
+  list.add(op);
+  parseChildren(reader,address,list);
+  if (xmlWrapperElement != null) {
+    ParseUtils.requireNoContent(reader);
+  }
+}
