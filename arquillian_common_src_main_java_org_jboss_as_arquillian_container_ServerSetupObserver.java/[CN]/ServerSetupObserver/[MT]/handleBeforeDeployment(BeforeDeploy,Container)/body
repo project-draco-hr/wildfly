@@ -1,7 +1,8 @@
 {
   if (deployed == null) {
     deployed=new HashMap<String,Integer>();
-    current.clear();
+    setupTasksAll.clear();
+    setupTasksInForce.clear();
     afterClassRun=false;
   }
   if (deployed.containsKey(container.getName())) {
@@ -24,29 +25,31 @@
     return;
   }
   final Class<? extends ServerSetupTask>[] classes=setup.value();
-  if (current.isEmpty()) {
+  if (setupTasksAll.isEmpty()) {
     for (    Class<? extends ServerSetupTask> clazz : classes) {
       Constructor<? extends ServerSetupTask> ctor=clazz.getDeclaredConstructor();
       ctor.setAccessible(true);
-      current.add(ctor.newInstance());
+      setupTasksAll.add(ctor.newInstance());
     }
   }
  else {
-    for (int i=0; i < current.size(); ++i) {
-      if (classes[i] != current.get(i).getClass()) {
-        throw new RuntimeException("Mismatched ServerSetupTask current is " + current + " but "+ currentClass+ " is expecting "+ Arrays.asList(classes));
+    for (int i=0; i < setupTasksAll.size(); ++i) {
+      if (classes[i] != setupTasksAll.get(i).getClass()) {
+        throw new RuntimeException("Mismatched ServerSetupTask current is " + setupTasksAll + " but "+ currentClass+ " is expecting "+ Arrays.asList(classes));
       }
     }
   }
   final ManagementClient client=managementClient.get();
+  int index=0;
   try {
-    for (    ServerSetupTask instance : current) {
+    for (; index < setupTasksAll.size(); index++) {
+      final ServerSetupTask instance=setupTasksAll.get(index);
+      setupTasksInForce.add(instance);
       instance.setup(client,container.getName());
     }
   }
  catch (  Throwable e) {
-    current.clear();
-    throw e;
+    log.error("Setup task failed during setup. Offending class '" + setupTasksAll.get(index) + "'",e);
   }
   active.put(container.getName(),client);
 }
