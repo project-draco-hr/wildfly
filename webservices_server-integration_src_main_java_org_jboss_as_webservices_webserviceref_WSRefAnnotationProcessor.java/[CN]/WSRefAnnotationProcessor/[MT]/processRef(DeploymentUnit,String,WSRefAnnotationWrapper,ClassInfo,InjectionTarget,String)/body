@@ -1,34 +1,13 @@
 {
-  boolean isEJB=false;
   final EEModuleDescription moduleDescription=unit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
-  final String componentClassName=classInfo.name().toString();
-  final Module module=unit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
-  for (  final ComponentDescription componentDescription : moduleDescription.getComponentsByClassName(componentClassName)) {
-    if (componentDescription instanceof SessionBeanComponentDescription) {
-      isEJB=true;
-      final UnifiedServiceRefMetaData serviceRefUMDM=getServiceRef(unit,componentDescription,bindingName);
-      initServiceRef(unit,serviceRefUMDM,type,annotation);
-      processWSFeatures(unit,serviceRefUMDM,injectionTarget,classInfo);
-      final InjectionSource serviceRefSource=new WSRefValueSource(serviceRefUMDM,module.getClassLoader());
-      final BindingConfiguration bindingConfiguration=new BindingConfiguration(bindingName,serviceRefSource);
-      componentDescription.getBindingConfigurations().add(bindingConfiguration);
-      final ResourceInjectionConfiguration injectionConfiguration=injectionTarget != null ? new ResourceInjectionConfiguration(injectionTarget,new LookupInjectionSource(bindingName)) : null;
-      if (injectionConfiguration != null) {
-        componentDescription.addResourceInjection(injectionConfiguration);
-      }
-    }
-  }
-  if (!isEJB) {
-    final UnifiedServiceRefMetaData serviceRefUMDM=getServiceRef(unit,null,bindingName);
-    initServiceRef(unit,serviceRefUMDM,type,annotation);
-    processWSFeatures(unit,serviceRefUMDM,injectionTarget,classInfo);
-    final EEModuleClassDescription classDescription=moduleDescription.addOrGetLocalClassDescription(classInfo.name().toString());
-    final InjectionSource serviceRefSource=new WSRefValueSource(serviceRefUMDM,module.getClassLoader());
-    final BindingConfiguration bindingConfiguration=new BindingConfiguration(bindingName,serviceRefSource);
-    classDescription.getBindingConfigurations().add(bindingConfiguration);
-    final ResourceInjectionConfiguration injectionConfiguration=injectionTarget != null ? new ResourceInjectionConfiguration(injectionTarget,new LookupInjectionSource(bindingName)) : null;
-    if (injectionConfiguration != null) {
-      classDescription.addResourceInjection(injectionConfiguration);
-    }
+  final AnnotatedElement target=createAnnotatedElement(unit,classInfo,injectionTarget);
+  ManagedReferenceFactory factory=WebServiceReferences.createWebServiceFactory(unit,type,annotation,target,bindingName);
+  final EEModuleClassDescription classDescription=moduleDescription.addOrGetLocalClassDescription(classInfo.name().toString());
+  final InjectionSource serviceRefSource=new FixedInjectionSource(factory,factory);
+  final BindingConfiguration bindingConfiguration=new BindingConfiguration(bindingName,serviceRefSource);
+  classDescription.getBindingConfigurations().add(bindingConfiguration);
+  final ResourceInjectionConfiguration injectionConfiguration=injectionTarget != null ? new ResourceInjectionConfiguration(injectionTarget,new LookupInjectionSource(bindingName)) : null;
+  if (injectionConfiguration != null) {
+    classDescription.addResourceInjection(injectionConfiguration);
   }
 }
