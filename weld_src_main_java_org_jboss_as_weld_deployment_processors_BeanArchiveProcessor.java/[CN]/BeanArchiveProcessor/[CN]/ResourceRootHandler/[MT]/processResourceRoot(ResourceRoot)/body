@@ -1,0 +1,47 @@
+{
+  ExplicitBeanArchiveMetadata metadata=null;
+  if (explicitBeanArchives != null) {
+    metadata=explicitBeanArchives.getBeanArchiveMetadata().get(resourceRoot);
+  }
+  BeanDeploymentArchiveImpl bda=null;
+  if (metadata == null || metadata.getBeansXml().getBeanDiscoveryMode().equals(BeanDiscoveryMode.ANNOTATED)) {
+    Index index=null;
+    if (resourceRoot == deploymentResourceRoot && classesResourceRoot != null) {
+      index=indexes.get(classesResourceRoot);
+    }
+ else {
+      index=indexes.get(resourceRoot);
+    }
+    if (index == null) {
+      return null;
+    }
+    if (metadata == null && !index.getAllKnownImplementors(EXTENSION_NAME).isEmpty()) {
+      return null;
+    }
+    Set<String> beans=getImplicitBeanClasses(index);
+    if (beans.isEmpty() && components.ejbComponentDescriptions.get(resourceRoot).isEmpty()) {
+      return null;
+    }
+    BeansXml beansXml=null;
+    if (metadata != null) {
+      beansXml=metadata.getBeansXml();
+    }
+    final boolean isRootBda=resourceRoot.equals(deploymentResourceRoot);
+    bda=new BeanDeploymentArchiveImpl(beans,beansXml,module,resourceRoot.getRoot().getPathName(),BeanArchiveType.IMPLICIT,isRootBda);
+    WeldLogger.DEPLOYMENT_LOGGER.beanArchiveDiscovered(bda);
+  }
+ else   if (metadata.getBeansXml().getBeanDiscoveryMode().equals(BeanDiscoveryMode.NONE)) {
+    return null;
+  }
+ else {
+    boolean isRootBda=metadata.isDeploymentRoot();
+    bda=createExplicitBeanDeploymentArchive(indexes.get(metadata.getResourceRoot()),metadata,isRootBda);
+    WeldLogger.DEPLOYMENT_LOGGER.beanArchiveDiscovered(bda);
+  }
+  Collection<EJBComponentDescription> ejbComponents=components.ejbComponentDescriptions.get(resourceRoot);
+  for (  EJBComponentDescription ejb : ejbComponents) {
+    bda.addEjbDescriptor(new EjbDescriptorImpl<Object>(ejb,bda,reflectionIndex));
+    bda.addBeanClass(ejb.getComponentClassName());
+  }
+  return bda;
+}
