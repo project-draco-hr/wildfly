@@ -1,0 +1,34 @@
+{
+  ProductConfig productConfig=new ProductConfig("product","version","consoleSlot");
+  String layerName=randomString();
+  installLayer(env.getModuleRoot(),env.getInstalledImage().getLayersConf(),layerName);
+  InstalledIdentity installedIdentity=InstalledIdentity.load(env.getInstalledImage().getJbossHome(),productConfig,env.getInstalledImage().getModulesDir());
+  System.out.println("installation =>>");
+  tree(env.getInstalledImage().getJbossHome());
+  String patchID=randomString();
+  File patchDir=mkdir(tempDir,patchID);
+  String layerPatchId=randomString();
+  String moduleName=randomString();
+  File patchedLayerModuleRoot=newFile(patchDir,layerPatchId,Layer.getDirName(),layerName);
+  File moduleDir=createModule(patchedLayerModuleRoot,moduleName);
+  byte[] newHash=hashFile(moduleDir);
+  ContentModification moduleAdded=new ContentModification(new ModuleItem(moduleName,ModuleItem.MAIN_SLOT,newHash),NO_CONTENT,ADD);
+  PatchElementImpl layerPatch=new PatchElementImpl(layerPatchId);
+  layerPatch.addContentModification(moduleAdded);
+  layerPatch.setProvider(new PatchElementProviderImpl(layerName,"1.0.1",false));
+  layerPatch.setNoUpgrade();
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setOneOffType(productConfig.getProductVersion()).setIdentity(new IdentityImpl(installedIdentity.getIdentity().getName(),installedIdentity.getIdentity().getVersion())).addElement(layerPatch).build();
+  createPatchXMLFile(patchDir,patch);
+  System.out.println("patch =>>");
+  File zippedPatch=createZippedPatchFile(patchDir,patchID);
+  PatchingResult result=executePatch(zippedPatch,installedIdentity,env.getInstalledImage());
+  assertPatchHasBeenApplied(result,patch);
+  InstalledIdentity patchedInstalledIdentity=InstalledIdentity.load(env.getInstalledImage().getJbossHome(),productConfig,env.getInstalledImage().getModulesDir());
+  PatchingAssert.assertInstallationIsPatched(patch,patchedInstalledIdentity.getIdentity().loadTargetInfo());
+  System.out.println("installation =>>");
+  tree(env.getInstalledImage().getJbossHome());
+  DirectoryStructure layerDirStructure=installedIdentity.getLayers().get(0).loadTargetInfo().getDirectoryStructure();
+  File modulesPatchDir=layerDirStructure.getModulePatchDirectory(layerPatchId);
+  assertDirExists(modulesPatchDir);
+  assertDefinedModule(modulesPatchDir,moduleName,newHash);
+}
