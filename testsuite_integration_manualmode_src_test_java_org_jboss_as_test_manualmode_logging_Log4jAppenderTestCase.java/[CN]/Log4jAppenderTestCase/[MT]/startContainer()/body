@@ -1,0 +1,26 @@
+{
+  container.start(CONTAINER);
+  final ModelControllerClient client=TestSuiteEnvironment.getModelControllerClient();
+  final ManagementClient managementClient=new ManagementClient(client,TestSuiteEnvironment.getServerAddress(),TestSuiteEnvironment.getServerPort(),"http-remoting");
+  try {
+    logFile=getAbsoluteLogFilePath(client);
+    ModelNode op=Operations.createAddOperation(CUSTOM_HANDLER_ADDRESS);
+    op.get("class").set("org.apache.log4j.FileAppender");
+    op.get("module").set("org.apache.log4j");
+    ModelNode opProperties=op.get("properties").setEmptyObject();
+    opProperties.get("file").set(logFile.getAbsolutePath());
+    opProperties.get("immediateFlush").set(true);
+    client.execute(op);
+    op=Operations.createOperation("add-handler",ROOT_LOGGER_ADDRESS);
+    op.get(ModelDescriptionConstants.NAME).set(CUSTOM_HANDLER_NAME);
+    client.execute(op);
+    container.stop(CONTAINER);
+    container.start(CONTAINER);
+    Assert.assertTrue("Container is not started",managementClient.isServerInRunningState());
+    deployer.deploy(DEPLOYMENT);
+  }
+  finally {
+    safeClose(managementClient);
+    safeClose(client);
+  }
+}
