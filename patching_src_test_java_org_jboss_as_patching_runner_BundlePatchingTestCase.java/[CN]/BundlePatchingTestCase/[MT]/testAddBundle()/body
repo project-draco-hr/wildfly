@@ -1,18 +1,16 @@
 {
-  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
-  String patchID=randomString();
+  String patchID="patchID";
   File patchDir=mkdir(tempDir,patchID);
-  String bundleName=randomString();
-  File bundleDir=createBundle(patchDir,bundleName,true);
-  byte[] newHash=hashFile(bundleDir);
-  ContentModification bundleAdd=new ContentModification(new BundleItem(bundleName,null,newHash),NO_CONTENT,ADD);
-  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setOneOffType(info.getVersion()).addContentModification(bundleAdd).build();
+  String baseLayerPatchID="baseLayerPatchID";
+  String bundleName="bundleName";
+  ContentModification bundleAdded=ContentModificationUtils.addBundle(patchDir,baseLayerPatchID,bundleName);
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setOneOffType(productConfig.getProductVersion()).addElement(new PatchElementImpl(baseLayerPatchID).setProvider(new PatchElementProviderImpl(BASE,"1.0.1",false)).setNoUpgrade().addContentModification(bundleAdded)).build();
   createPatchXMLFile(patchDir,patch);
   File zippedPatch=createZippedPatchFile(patchDir,patchID);
-  PatchingResult result=executePatch(info,zippedPatch);
+  PatchingResult result=executePatch(zippedPatch);
   assertPatchHasBeenApplied(result,patch);
-  File bundlesPatchingDirectory=env.getBundlesPatchDirectory(patchID);
+  InstalledIdentity updatedInstalledIdentity=loadInstalledIdentity();
+  File bundlesPatchingDirectory=updatedInstalledIdentity.getLayers().get(0).loadTargetInfo().getDirectoryStructure().getBundlesPatchDirectory(baseLayerPatchID);
   assertDirExists(bundlesPatchingDirectory);
-  assertContains(bundlesPatchingDirectory,getBundlePath(env,result.getPatchInfo()));
-  assertDefinedBundle(getBundlePath(env,result.getPatchInfo()),bundleName,newHash);
+  assertDefinedBundle(bundlesPatchingDirectory,bundleName,bundleAdded.getItem().getContentHash());
 }

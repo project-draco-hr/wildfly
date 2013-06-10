@@ -1,17 +1,16 @@
 {
   String moduleName=randomString();
-  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
-  createModule(env.getInstalledImage().getJbossHome(),moduleName);
-  byte[] existingHash=hashFile(new File(env.getInstalledImage().getModulesDir(),moduleName));
-  ContentModification moduleRemoved=new ContentModification(new ModuleItem(moduleName,ModuleItem.MAIN_SLOT,NO_CONTENT),existingHash,REMOVE);
-  Patch patch=PatchBuilder.create().setPatchId(randomString()).setDescription(randomString()).setOneOffType(info.getVersion()).addContentModification(moduleRemoved).build();
+  File baseModuleDir=newFile(env.getInstalledImage().getModulesDir(),SYSTEM,LAYERS,BASE);
+  File moduleDir=createModule0(baseModuleDir,moduleName);
+  String baseLayerPatchID=randomString();
+  Patch patch=PatchBuilder.create().setPatchId(randomString()).setDescription(randomString()).setOneOffType(productConfig.getProductVersion()).addElement(new PatchElementImpl(baseLayerPatchID).setProvider(new PatchElementProviderImpl(BASE,"1.0.1",false)).setNoUpgrade().addContentModification(ContentModificationUtils.removeModule(moduleDir))).build();
   File patchDir=mkdir(tempDir,patch.getPatchId());
   createPatchXMLFile(patchDir,patch);
   File zippedPatch=createZippedPatchFile(patchDir,patch.getPatchId());
-  PatchingResult result=executePatch(info,zippedPatch);
+  PatchingResult result=executePatch(zippedPatch);
   assertPatchHasBeenApplied(result,patch);
-  File modulesPatchDir=env.getModulePatchDirectory(patch.getPatchId());
+  InstalledIdentity installedIdentity=loadInstalledIdentity();
+  File modulesPatchDir=installedIdentity.getLayers().get(0).loadTargetInfo().getDirectoryStructure().getModulePatchDirectory(baseLayerPatchID);
   assertDirExists(modulesPatchDir);
-  assertContains(modulesPatchDir,getModulePath(env,result.getPatchInfo()));
-  assertDefinedAbsentModule(getModulePath(env,result.getPatchInfo()),moduleName);
+  assertDefinedAbsentModule(modulesPatchDir,moduleName);
 }

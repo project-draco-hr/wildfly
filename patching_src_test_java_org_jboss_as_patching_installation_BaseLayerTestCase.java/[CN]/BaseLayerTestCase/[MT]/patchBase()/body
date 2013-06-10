@@ -1,0 +1,24 @@
+{
+  InstalledIdentity installedIdentity=loadInstalledIdentity();
+  String patchID=randomString();
+  File patchDir=mkdir(tempDir,patchID);
+  String layerPatchId="mylayerPatchID";
+  String moduleName=randomString();
+  ContentModification moduleAdded=ContentModificationUtils.addModule(patchDir,layerPatchId,moduleName);
+  ContentModification fileAdded=ContentModificationUtils.addMisc(patchDir,"new file resource","bin","my-new-standalone.sh");
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setOneOffType(productConfig.getProductVersion()).setIdentity(new IdentityImpl(installedIdentity.getIdentity().getName(),installedIdentity.getIdentity().getVersion())).addElement(new PatchElementImpl(layerPatchId).setProvider(new PatchElementProviderImpl(BASE,"1.0.1",false)).setNoUpgrade().addContentModification(moduleAdded)).addContentModification(fileAdded).build();
+  createPatchXMLFile(patchDir,patch);
+  System.out.println("patch =>>");
+  File zippedPatch=createZippedPatchFile(patchDir,patchID);
+  PatchingResult result=executePatch(zippedPatch);
+  assertPatchHasBeenApplied(result,patch);
+  InstalledIdentity patchedInstalledIdentity=InstalledIdentity.load(env.getInstalledImage().getJbossHome(),productConfig,env.getInstalledImage().getModulesDir());
+  assertInstallationIsPatched(patch,patchedInstalledIdentity.getIdentity().loadTargetInfo());
+  assertFileExists(env.getInstalledImage().getJbossHome(),"bin",fileAdded.getItem().getName());
+  System.out.println("installation =>>");
+  tree(env.getInstalledImage().getJbossHome());
+  DirectoryStructure layerDirStructure=installedIdentity.getLayers().get(0).loadTargetInfo().getDirectoryStructure();
+  File modulesPatchDir=layerDirStructure.getModulePatchDirectory(layerPatchId);
+  assertDirExists(modulesPatchDir);
+  assertDefinedModule(modulesPatchDir,moduleName,moduleAdded.getItem().getContentHash());
+}

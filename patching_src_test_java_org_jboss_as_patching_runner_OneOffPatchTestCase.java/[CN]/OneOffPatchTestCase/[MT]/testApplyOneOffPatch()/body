@@ -1,16 +1,16 @@
 {
-  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
-  String patchID=randomString();
-  File patchDir=mkdir(tempDir,patchID);
+  String oneOffPatchID=randomString();
+  String oneOffLayerPatchID=randomString();
+  File oneOffPatchDir=mkdir(tempDir,oneOffPatchID);
   String moduleName=randomString();
-  File moduleDir=createModule(patchDir,moduleName);
-  byte[] newHash=hashFile(moduleDir);
-  ContentModification moduleAdded=new ContentModification(new ModuleItem(moduleName,null,newHash),NO_CONTENT,ADD);
-  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setOneOffType(info.getVersion()).addContentModification(moduleAdded).build();
-  createPatchXMLFile(patchDir,patch);
-  File zippedPatch=createZippedPatchFile(patchDir,patchID);
-  PatchingResult result=executePatch(info,zippedPatch);
-  assertPatchHasBeenApplied(result,patch);
-  tree(env.getInstalledImage().getJbossHome());
-  assertDefinedModule(getModulePath(env,result.getPatchInfo()),moduleName,newHash);
+  ContentModification moduleAdded=ContentModificationUtils.addModule(oneOffPatchDir,oneOffLayerPatchID,moduleName);
+  Patch oneOffPatch=PatchBuilder.create().setPatchId(oneOffPatchID).setDescription(randomString()).setOneOffType(productConfig.getProductVersion()).addElement(new PatchElementImpl(oneOffLayerPatchID).setProvider(new PatchElementProviderImpl(BASE,"1.0.1",false)).addContentModification(moduleAdded)).build();
+  createPatchXMLFile(oneOffPatchDir,oneOffPatch);
+  File zippedPatch=createZippedPatchFile(oneOffPatchDir,oneOffPatchID);
+  PatchingResult result=executePatch(zippedPatch);
+  assertPatchHasBeenApplied(result,oneOffPatch);
+  InstalledIdentity updatedInstalledIdentity=loadInstalledIdentity();
+  File modulePatchDirectory=updatedInstalledIdentity.getLayers().get(0).loadTargetInfo().getDirectoryStructure().getModulePatchDirectory(oneOffLayerPatchID);
+  assertDirExists(modulePatchDirectory);
+  assertDefinedModule(modulePatchDirectory,moduleName,moduleAdded.getItem().getContentHash());
 }

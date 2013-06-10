@@ -1,21 +1,19 @@
 {
   String moduleName=randomString();
-  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
-  createModule(env.getInstalledImage().getJbossHome(),moduleName);
-  tree(env.getInstalledImage().getJbossHome());
-  byte[] existingHash=hashFile(new File(env.getInstalledImage().getModulesDir(),moduleName));
+  File baseModuleDir=newFile(env.getInstalledImage().getModulesDir(),SYSTEM,LAYERS,BASE);
+  File moduleDir=createModule0(baseModuleDir,moduleName);
   String patchID=randomString();
+  String baseLayerPatchID=randomString();
   File patchDir=mkdir(tempDir,patchID);
-  File moduleDir=createModule(patchDir,moduleName,"new resource in the module");
-  byte[] updatedHash=hashFile(moduleDir);
-  ContentModification moduleUpdated=new ContentModification(new ModuleItem(moduleName,ModuleItem.MAIN_SLOT,updatedHash),existingHash,MODIFY);
-  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setOneOffType(info.getVersion()).addContentModification(moduleUpdated).build();
+  ContentModification moduleModified=ContentModificationUtils.modifyModule(patchDir,baseLayerPatchID,moduleDir,"new resource in the module");
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setOneOffType(productConfig.getProductVersion()).addElement(new PatchElementImpl(baseLayerPatchID).setProvider(new PatchElementProviderImpl(BASE,"1.0.1",false)).setNoUpgrade().addContentModification(moduleModified)).build();
   createPatchXMLFile(patchDir,patch);
   File zippedPatch=createZippedPatchFile(patchDir,patch.getPatchId());
-  PatchingResult result=executePatch(info,zippedPatch);
+  PatchingResult result=executePatch(zippedPatch);
   assertPatchHasBeenApplied(result,patch);
-  File modulesPatchDir=env.getModulePatchDirectory(patch.getPatchId());
+  tree(env.getInstalledImage().getJbossHome());
+  InstalledIdentity installedIdentity=loadInstalledIdentity();
+  File modulesPatchDir=installedIdentity.getLayers().get(0).loadTargetInfo().getDirectoryStructure().getModulePatchDirectory(baseLayerPatchID);
   assertDirExists(modulesPatchDir);
-  assertContains(modulesPatchDir,getModulePath(env,result.getPatchInfo()));
-  assertDefinedModule(getModulePath(env,result.getPatchInfo()),moduleName,updatedHash);
+  assertDefinedModule(modulesPatchDir,moduleName,moduleModified.getItem().getContentHash());
 }

@@ -1,0 +1,19 @@
+{
+  String bundleName=randomString();
+  File baseBundleDir=newFile(env.getInstalledImage().getBundlesDir(),SYSTEM,LAYERS,BASE);
+  File bundleDir=createBundle0(baseBundleDir,bundleName,"bundle content");
+  byte[] existingHash=hashFile(bundleDir);
+  String patchID=randomString();
+  String baseLayerPatchID=randomString();
+  File patchDir=mkdir(tempDir,patchID);
+  ContentModification bundleUpdated=ContentModificationUtils.modifyBundle(patchDir,baseLayerPatchID,bundleDir,"updated bundle content");
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setOneOffType(productConfig.getProductVersion()).addElement(new PatchElementImpl(baseLayerPatchID).setProvider(new PatchElementProviderImpl(BASE,"1.0.1",false)).setNoUpgrade().addContentModification(bundleUpdated)).build();
+  createPatchXMLFile(patchDir,patch);
+  File zippedPatch=createZippedPatchFile(patchDir,patchID);
+  PatchingResult result=executePatch(zippedPatch);
+  assertPatchHasBeenApplied(result,patch);
+  InstalledIdentity updatedInstalledIdentity=loadInstalledIdentity();
+  File bundlesPatchingDirectory=updatedInstalledIdentity.getLayers().get(0).loadTargetInfo().getDirectoryStructure().getBundlesPatchDirectory(baseLayerPatchID);
+  assertDirExists(bundlesPatchingDirectory);
+  assertDefinedBundle(bundlesPatchingDirectory,bundleName,bundleUpdated.getItem().getContentHash());
+}

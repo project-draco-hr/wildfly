@@ -1,23 +1,18 @@
 {
-  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
   File binDir=mkdir(env.getInstalledImage().getJbossHome(),"bin");
   String fileName="standalone.sh";
   File standaloneShellFile=touch(binDir,fileName);
   dump(standaloneShellFile,"original script to run standalone AS7");
-  byte[] existingHash=hashFile(standaloneShellFile);
   String patchID=randomString();
   File patchDir=mkdir(tempDir,patchID);
-  File updatedFile=touch(patchDir,"misc","bin",fileName);
-  dump(updatedFile,"updated script");
-  byte[] updatedHash=hashFile(updatedFile);
-  ContentModification fileUpdated=new ContentModification(new MiscContentItem(fileName,new String[]{"bin"},updatedHash),existingHash,MODIFY);
-  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setOneOffType(info.getVersion()).addContentModification(fileUpdated).build();
+  ContentModification fileModified=ContentModificationUtils.modifyMisc(patchDir,"updated script",standaloneShellFile,"bin","standalone.sh");
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setOneOffType(productConfig.getProductVersion()).addContentModification(fileModified).build();
   createPatchXMLFile(patchDir,patch);
   File zippedPatch=createZippedPatchFile(patchDir,patch.getPatchId());
-  PatchingResult result=executePatch(info,zippedPatch);
+  PatchingResult result=executePatch(zippedPatch);
   assertPatchHasBeenApplied(result,patch);
   assertFileExists(standaloneShellFile);
-  assertArrayEquals(updatedHash,hashFile(standaloneShellFile));
+  assertFileContent(fileModified.getItem().getContentHash(),standaloneShellFile);
   File backupFile=assertFileExists(env.getInstalledImage().getPatchHistoryDir(patchID),"misc","bin",fileName);
-  assertArrayEquals(existingHash,hashFile(backupFile));
+  assertFileContent(fileModified.getTargetHash(),backupFile);
 }

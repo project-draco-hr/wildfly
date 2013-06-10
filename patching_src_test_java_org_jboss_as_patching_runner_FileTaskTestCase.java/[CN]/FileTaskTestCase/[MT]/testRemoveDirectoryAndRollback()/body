@@ -1,5 +1,4 @@
 {
-  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
   File test=mkdir(env.getInstalledImage().getJbossHome(),"test");
   String one="one";
   String two="two";
@@ -17,14 +16,24 @@
   touch(subTwo);
   dump(subTwo,randomString());
   byte[] existingHash=hashFile(test);
-  ContentModification fileRemoved=new ContentModification(new MiscContentItem("test",new String[0],NO_CONTENT),existingHash,REMOVE);
-  Patch patch=PatchBuilder.create().setPatchId(randomString()).setDescription(randomString()).setOneOffType(info.getVersion()).addContentModification(fileRemoved).build();
+  String patchID="patchID";
+  ContentModification dirRemoved=ContentModificationUtils.removeMisc(test);
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setOneOffType(productConfig.getProductVersion()).addContentModification(dirRemoved).build();
   File patchDir=mkdir(tempDir,patch.getPatchId());
   createPatchXMLFile(patchDir,patch);
   File zippedPatch=createZippedPatchFile(patchDir,patch.getPatchId());
-  PatchingResult result=executePatch(info,zippedPatch);
+  Identity identityBeforePatch=loadInstalledIdentity().getIdentity();
+  System.out.println("before patch");
+  tree(env.getInstalledImage().getJbossHome());
+  PatchingResult result=executePatch(zippedPatch);
+  assertPatchHasBeenApplied(result,patch);
   assertFalse(test.exists());
-  result=rollback(result.getPatchInfo(),patch.getPatchId());
+  System.out.println("after patch");
+  tree(env.getInstalledImage().getJbossHome());
+  result=rollback(patch.getPatchId());
+  assertPatchHasBeenRolledBack(result,identityBeforePatch);
+  System.out.println("after rollback");
+  tree(env.getInstalledImage().getJbossHome());
   assertTrue(test.exists());
   assertTrue(fileOne.isFile());
   assertTrue(fileTwo.isFile());
