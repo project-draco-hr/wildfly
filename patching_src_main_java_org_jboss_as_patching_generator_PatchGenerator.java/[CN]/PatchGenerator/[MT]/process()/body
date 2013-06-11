@@ -18,7 +18,7 @@
     }
     if (patchFile == null) {
       if (newRoot != null) {
-        patchFile=new File(newRoot,patchConfig.getPatchId() + ".par");
+        patchFile=new File(newRoot,"patch-" + System.currentTimeMillis() + ".par");
       }
  else {
         required.add("--output-file");
@@ -27,21 +27,23 @@
     if (!required.isEmpty()) {
       System.err.printf(PatchMessages.MESSAGES.missingRequiredArgs(required));
       usage();
+      return;
     }
-    createTempStructure(patchConfig);
-    if (patchConfig.isGenerateByDiff()) {
-      analyzeDifferences(patchConfig);
+    createTempStructure("test");
+    final Distribution base=Distribution.create(oldRoot);
+    final Distribution updated=Distribution.create(newRoot);
+    final PatchBuilderWrapper wrapper=new PatchBuilderWrapper(){
+      @Override PatchElementBuilder modifyLayer(      String name,      boolean addOn){
+        return addElement(randomUUID().toString(),name,addOn);
+      }
     }
- else {
-      prepareDifferences(patchConfig);
-    }
-    try {
-      preparePatchXml(patchConfig);
-    }
- catch (    IOException e) {
-      throw new RuntimeException("Failed creating patch.xml file",e);
-    }
-    copyContent();
+;
+    wrapper.setPatchId(randomUUID().toString());
+    wrapper.setDescription("Test patch");
+    wrapper.setIdentity(Version.AS_RELEASE_CODENAME,Version.AS_VERSION);
+    wrapper.setNoUpgrade();
+    final Patch patch=wrapper.compare(base,updated);
+    PatchContentWriter.process(tmp,newRoot,patch);
     ZipUtils.zip(tmp,patchFile);
   }
   finally {
