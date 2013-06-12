@@ -1,5 +1,5 @@
 {
-  PatchInfo info=new LocalPatchInfo(randomString(),PatchInfo.BASE,Collections.<String>emptyList(),env);
+  final InstalledIdentity identity=loadInstalledIdentity();
   File binDir=mkdir(env.getInstalledImage().getJbossHome(),"bin");
   String fileName="standalone.sh";
   modifiedFile=touch(binDir,fileName);
@@ -8,14 +8,15 @@
   byte[] unmodifiedHash=randomString().getBytes();
   String patchID=randomString();
   File patchDir=mkdir(tempDir,patchID);
-  File updatedFile=touch(patchDir,"misc","bin",fileName);
+  File updatedFile=touch(patchDir,patchID,"misc","bin",fileName);
   dump(updatedFile,"updated script");
   updatedHash=hashFile(updatedFile);
   fileUpdated=new ContentModification(new MiscContentItem(fileName,new String[]{"bin"},updatedHash),unmodifiedHash,MODIFY);
-  PatchBuilder builder=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setIdentity(new IdentityImpl("eap",info.getVersion())).setNoUpgrade();
+  PatchBuilder builder=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).setIdentity(new IdentityImpl("eap",identity.getIdentity().getVersion())).setNoUpgrade();
   builder.addContentModification(fileUpdated);
   patch=builder.build();
   createPatchXMLFile(patchDir,patch);
   zippedPatch=createZippedPatchFile(patchDir,patch.getPatchId());
-  runner=PatchingRunnerWrapper.Factory.create(info,env);
+  final InstallationManager manager=new InstallationManagerImpl(identity);
+  runner=PatchTool.Factory.create(manager);
 }
