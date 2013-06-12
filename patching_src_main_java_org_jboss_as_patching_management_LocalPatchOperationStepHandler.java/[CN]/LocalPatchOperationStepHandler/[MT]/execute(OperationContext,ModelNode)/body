@@ -1,19 +1,12 @@
 {
   context.acquireControllerLock();
-  final PatchInfoService service=(PatchInfoService)context.getServiceRegistry(false).getRequiredService(PatchInfoService.NAME).getValue();
   final InstallationManager installationManager=(InstallationManager)context.getServiceRegistry(false).getRequiredService(InstallationManagerService.NAME).getValue();
-  if (service.requiresRestart()) {
-    throw MESSAGES.serverRequiresRestart();
-  }
   try {
-    InstalledImage installedImage=installationManager.getIdentity().loadTargetInfo().getDirectoryStructure().getInstalledImage();
-    InstalledIdentity installedIdentity=installationManager.getInstalledIdentity();
-    LegacyPatchRunner runner=new LegacyPatchRunner(installedImage,installedIdentity);
+    final PatchTool runner=PatchTool.Factory.create(installationManager);
     final ContentVerificationPolicy policy=PatchTool.Factory.create(operation);
     final int index=operation.get(ModelDescriptionConstants.INPUT_STREAM_INDEX).asInt(0);
     final InputStream is=context.getAttachmentStream(index);
-    final PatchingResult result=runner.executeDirect(is,policy);
-    service.restartRequired();
+    final PatchingResult result=runner.applyPatch(is,policy);
     context.restartRequired();
     context.completeStep(new OperationContext.ResultHandler(){
       @Override public void handleResult(      OperationContext.ResultAction resultAction,      OperationContext context,      ModelNode operation){
@@ -21,7 +14,6 @@
           result.commit();
         }
  else {
-          service.clearRestartRequired();
           context.revertRestartRequired();
           result.rollback();
         }
@@ -51,8 +43,5 @@ context.stepCompleted();
  else {
 throw new OperationFailedException(e.getMessage(),e);
 }
-}
-catch (IOException e) {
-throw new OperationFailedException(e.getMessage(),e);
 }
 }

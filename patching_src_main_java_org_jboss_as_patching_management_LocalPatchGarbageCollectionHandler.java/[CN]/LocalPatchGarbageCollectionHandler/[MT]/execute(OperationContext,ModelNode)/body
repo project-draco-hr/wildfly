@@ -1,15 +1,22 @@
 {
   final String patchId=operation.require(PATCH_ID).asString();
   context.acquireControllerLock();
-  final PatchInfoService service=(PatchInfoService)context.getServiceRegistry(false).getRequiredService(PatchInfoService.NAME).getValue();
-  final PatchInfo info=service.getPatchInfo();
+  final ServiceController<?> mgrService=context.getServiceRegistry(false).getRequiredService(InstallationManagerService.NAME);
+  final InstallationManager mgr=(InstallationManager)mgrService.getValue();
+  final PatchableTarget.TargetInfo info;
+  try {
+    info=mgr.getIdentity().loadTargetInfo();
+  }
+ catch (  IOException e) {
+    throw new OperationFailedException("failed to load identity info",e);
+  }
   if (info.getCumulativeID().equals(patchId)) {
     throw PatchManagementMessages.MESSAGES.patchActive(patchId);
   }
   if (info.getPatchIDs().contains(patchId)) {
     throw PatchManagementMessages.MESSAGES.patchActive(patchId);
   }
-  final InstalledImage installedImage=service.getStructure().getInstalledImage();
+  final InstalledImage installedImage=info.getDirectoryStructure().getInstalledImage();
   final File history=installedImage.getPatchHistoryDir(patchId);
   if (history.exists()) {
     recursiveDelete(history);
