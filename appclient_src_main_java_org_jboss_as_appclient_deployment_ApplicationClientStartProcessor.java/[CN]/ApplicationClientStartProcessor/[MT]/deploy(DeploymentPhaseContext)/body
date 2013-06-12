@@ -30,9 +30,17 @@ catch (    Exception e) {
     throw MESSAGES.cannotStartAppClient(deploymentUnit.getName());
   }
   final ApplicationClientComponentDescription component=deploymentUnit.getAttachment(AppClientAttachments.APPLICATION_CLIENT_COMPONENT);
-  ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(mainClass);
-  Method method=index.getMethod(void.class,"main",String[].class);
-  if (method == null) {
+  Method mainMethod=null;
+  Class<?> klass=mainClass;
+  while (klass != Object.class) {
+    final ClassReflectionIndex<?> index=deploymentReflectionIndex.getClassIndex(klass);
+    mainMethod=index.getMethod(void.class,"main",String[].class);
+    if (mainMethod != null) {
+      break;
+    }
+    klass=klass.getSuperclass();
+  }
+  if (mainMethod == null) {
     throw MESSAGES.cannotStartAppClient(deploymentUnit.getName(),mainClass);
   }
   final ApplicationClientStartService startService;
@@ -75,7 +83,7 @@ catch (    Exception e) {
           }
 ;
         }
-        startService=new ApplicationClientStartService(method,parameters,moduleDescription.getNamespaceContextSelector(),module.getClassLoader(),setupActions,configuration);
+        startService=new ApplicationClientStartService(mainMethod,parameters,moduleDescription.getNamespaceContextSelector(),module.getClassLoader(),setupActions,configuration);
       }
   finally {
         WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(oldTccl);
@@ -86,7 +94,7 @@ catch (    Exception e) {
     }
   }
  else {
-    startService=new ApplicationClientStartService(method,parameters,moduleDescription.getNamespaceContextSelector(),module.getClassLoader(),setupActions,hostUrl,callbackHandler);
+    startService=new ApplicationClientStartService(mainMethod,parameters,moduleDescription.getNamespaceContextSelector(),module.getClassLoader(),setupActions,hostUrl,callbackHandler);
   }
   phaseContext.getServiceTarget().addService(deploymentUnit.getServiceName().append(ApplicationClientStartService.SERVICE_NAME),startService).addDependency(ApplicationClientDeploymentService.SERVICE_NAME,ApplicationClientDeploymentService.class,startService.getApplicationClientDeploymentServiceInjectedValue()).addDependency(component.getCreateServiceName(),Component.class,startService.getApplicationClientComponent()).install();
 }
