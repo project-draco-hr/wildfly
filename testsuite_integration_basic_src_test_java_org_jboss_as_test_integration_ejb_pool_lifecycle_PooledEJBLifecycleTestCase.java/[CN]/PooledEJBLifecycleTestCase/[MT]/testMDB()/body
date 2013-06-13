@@ -1,20 +1,26 @@
 {
+  boolean requiresUndeploy=false;
   try {
-    log.info("-->About to deploy MDB archive");
+    log.info("About to deploy MDB archive " + MDB_DEPLOYMENT_NAME);
     deployer.deploy(MDB_DEPLOYMENT_NAME);
-    log.info("-->deployed");
-    assertEquals("Wrong postCreate calls count",0,cycleCounter.getPostCreateCount());
-    assertEquals("Wrong preDestroy calls count",0,cycleCounter.getPreDestroyCount());
-    log.info("-->Performing JMS call to spawn bean");
-    triggerMDB();
-    assertEquals("Wrong postCreate calls count, after EJB has been triggered",1,cycleCounter.getPostCreateCount());
-    assertEquals("Wrong preDestroy calls count, after EJB has been triggered",0,cycleCounter.getPreDestroyCount());
-    log.info("-->About to undeploy MDB archive");
+    requiresUndeploy=true;
+    log.info("deployed " + MDB_DEPLOYMENT_NAME);
+    log.info("Sending a message to the queue on which the MDB " + " is listening");
+    triggerRequestResponseCycleOnQueue();
+    assertTrue("@PostConstruct wasn't invoked on MDB",lifecycleTracker.wasPostConstructInvokedOn(this.getClass().getPackage().getName() + ".LifecycleCounterMDB"));
+    log.info("About to undeploy MDB archive " + MDB_DEPLOYMENT_NAME);
     deployer.undeploy(MDB_DEPLOYMENT_NAME);
-    assertEquals("Wrong postCreate calls count, after EJB has been undeployed",1,cycleCounter.getPostCreateCount());
-    assertEquals("Wrong preDestroy calls count, after EJB has been undeployed",1,cycleCounter.getPreDestroyCount());
+    requiresUndeploy=false;
+    assertTrue("@PreDestroy wasn't invoked on MDB",lifecycleTracker.wasPreDestroyInvokedOn(this.getClass().getPackage().getName() + ".LifecycleCounterMDB"));
   }
   finally {
-    cycleCounter.reset();
+    if (requiresUndeploy) {
+      try {
+        deployer.undeploy(MDB_DEPLOYMENT_NAME);
+      }
+ catch (      Throwable t) {
+        log.info("Ignoring the undeployment failure of " + MDB_DEPLOYMENT_NAME,t);
+      }
+    }
   }
 }
