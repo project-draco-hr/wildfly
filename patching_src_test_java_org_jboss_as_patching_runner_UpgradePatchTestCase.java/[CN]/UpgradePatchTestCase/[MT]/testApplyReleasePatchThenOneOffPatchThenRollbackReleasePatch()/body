@@ -1,0 +1,37 @@
+{
+  String releasePatchID=randomString();
+  String releaseLayerPatchID=randomString();
+  File releasePatchDir=mkdir(tempDir,releasePatchID);
+  String moduleName=randomString();
+  ContentModification moduleAdded=ContentModificationUtils.addModule(releasePatchDir,releaseLayerPatchID,moduleName);
+  InstalledIdentity identityBeforePatch=loadInstalledIdentity();
+  Patch releasePatch=PatchBuilder.create().setPatchId(releasePatchID).setDescription(randomString()).setIdentity(new IdentityImpl(identityBeforePatch.getIdentity().getName(),identityBeforePatch.getIdentity().getVersion())).setUpgrade(identityBeforePatch.getIdentity().getVersion() + "-Release1").addElement(new PatchElementImpl(releaseLayerPatchID).setProvider(new PatchElementProviderImpl(BASE,"1.0.1",false)).setNoUpgrade().addContentModification(moduleAdded)).build();
+  createPatchXMLFile(releasePatchDir,releasePatch);
+  File zippedReleasePatch=createZippedPatchFile(releasePatchDir,releasePatchID);
+  PatchingResult resultOfReleasePatch=executePatch(zippedReleasePatch);
+  assertPatchHasBeenApplied(resultOfReleasePatch,releasePatch);
+  productConfig=new ProductConfig(productConfig.getProductName(),productConfig.getProductVersion() + "-Release1",productConfig.getConsoleSlot());
+  InstalledIdentity updatedInstalledIdentity=loadInstalledIdentity();
+  File modulePatchDirectory=updatedInstalledIdentity.getLayers().get(0).loadTargetInfo().getDirectoryStructure().getModulePatchDirectory(releaseLayerPatchID);
+  assertDirExists(modulePatchDirectory);
+  assertDefinedModule(modulePatchDirectory,moduleName,moduleAdded.getItem().getContentHash());
+  String oneOffPatchID=randomString();
+  String oneOffLayerPatchID=randomString();
+  File oneOffPatchDir=mkdir(tempDir,oneOffPatchID);
+  ContentModification moduleModified=ContentModificationUtils.modifyModule(oneOffPatchDir,oneOffLayerPatchID,newFile(modulePatchDirectory,moduleName),"new resource in the module");
+  Patch oneOffPatch=PatchBuilder.create().setPatchId(oneOffPatchID).setDescription(randomString()).setOneOffType(releasePatch.getResultingVersion()).addElement(new PatchElementImpl(oneOffLayerPatchID).setProvider(new PatchElementProviderImpl(BASE,"1.0.1",false)).addContentModification(moduleModified)).build();
+  createPatchXMLFile(oneOffPatchDir,oneOffPatch);
+  File zippedOneOffPatch=createZippedPatchFile(oneOffPatchDir,oneOffPatchID);
+  PatchingResult resultOfOneOffPatch=executePatch(zippedOneOffPatch);
+  assertPatchHasBeenApplied(resultOfOneOffPatch,oneOffPatch);
+  InstalledIdentity installedIdentityAfterOneOffPatch=loadInstalledIdentity();
+  modulePatchDirectory=installedIdentityAfterOneOffPatch.getLayers().get(0).loadTargetInfo().getDirectoryStructure().getModulePatchDirectory(oneOffLayerPatchID);
+  assertDirExists(modulePatchDirectory);
+  assertDefinedModule(modulePatchDirectory,moduleName,moduleModified.getItem().getContentHash());
+  PatchingResult resultOfReleasePatchRollback=rollback(releasePatchID);
+  tree(env.getInstalledImage().getJbossHome());
+  assertPatchHasBeenRolledBack(resultOfReleasePatchRollback,identityBeforePatch.getIdentity());
+  updatedInstalledIdentity=loadInstalledIdentity();
+  File layerModuleRoot=updatedInstalledIdentity.getLayers().get(0).loadTargetInfo().getDirectoryStructure().getModuleRoot();
+  assertDirDoesNotExist(newFile(layerModuleRoot,moduleName));
+}
