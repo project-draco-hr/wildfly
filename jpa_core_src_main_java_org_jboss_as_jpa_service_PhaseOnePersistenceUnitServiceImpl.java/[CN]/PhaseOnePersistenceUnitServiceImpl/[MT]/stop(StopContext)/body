@@ -2,25 +2,22 @@
   final ExecutorService executor=executorInjector.getValue();
   final Runnable task=new Runnable(){
     @Override public void run(){
-      if (phaseOnePersistenceUnitServiceInjectedValue.getOptionalValue() != null) {
-        JPA_LOGGER.stoppingPersistenceUnitService(2,pu.getScopedPersistenceUnitName());
-      }
- else {
-        JPA_LOGGER.stoppingService("Persistence Unit",pu.getScopedPersistenceUnitName());
-      }
-      if (entityManagerFactory != null) {
+      JPA_LOGGER.stoppingPersistenceUnitService(1,pu.getScopedPersistenceUnitName());
+      if (entityManagerFactoryBuilder != null) {
         WritableServiceBasedNamingStore.pushOwner(deploymentUnitServiceName);
         try {
-          entityManagerFactory.close();
+          if (secondPhaseStarted == false) {
+            ROOT_LOGGER.tracef("PhaseOnePersistenceUnitServiceImpl cancelling %s " + "which didn't start (phase 2 not reached)",pu.getScopedPersistenceUnitName());
+            entityManagerFactoryBuilder.cancel();
+          }
         }
  catch (        Throwable t) {
           JPA_LOGGER.failedToStopPUService(t,pu.getScopedPersistenceUnitName());
         }
  finally {
-          entityManagerFactory=null;
+          entityManagerFactoryBuilder=null;
           pu.setTempClassLoaderFactory(null);
           WritableServiceBasedNamingStore.popOwner();
-          persistenceUnitRegistry.remove(getScopedPersistenceUnitName());
         }
       }
       context.complete();

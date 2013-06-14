@@ -3,15 +3,26 @@
   final Runnable task=new Runnable(){
     @Override public void run(){
       try {
-        JPA_LOGGER.startingService("Persistence Unit",pu.getScopedPersistenceUnitName());
-        pu.setTempClassLoaderFactory(new TempClassLoaderFactoryImpl(classLoader));
-        pu.setJtaDataSource(jtaDataSource.getOptionalValue());
-        pu.setNonJtaDataSource(nonJtaDataSource.getOptionalValue());
-        if (beanManagerInjector.getOptionalValue() != null) {
-          properties.getValue().put("javax.persistence.bean.manager",beanManagerInjector.getOptionalValue());
-        }
+        PhaseOnePersistenceUnitServiceImpl phaseOnePersistenceUnitService=phaseOnePersistenceUnitServiceInjectedValue.getOptionalValue();
         WritableServiceBasedNamingStore.pushOwner(deploymentUnitServiceName);
-        entityManagerFactory=createContainerEntityManagerFactory();
+        if (phaseOnePersistenceUnitService != null) {
+          JPA_LOGGER.startingPersistenceUnitService(2,pu.getScopedPersistenceUnitName());
+          phaseOnePersistenceUnitService.setSecondPhaseStarted(true);
+          if (beanManagerInjector.getOptionalValue() != null) {
+            phaseOnePersistenceUnitService.getBeanManager().setDelegate(beanManagerInjector.getOptionalValue());
+          }
+          entityManagerFactory=phaseOnePersistenceUnitService.getEntityManagerFactoryBuilder().build();
+        }
+ else {
+          JPA_LOGGER.startingService("Persistence Unit",pu.getScopedPersistenceUnitName());
+          pu.setTempClassLoaderFactory(new TempClassLoaderFactoryImpl(classLoader));
+          pu.setJtaDataSource(jtaDataSource.getOptionalValue());
+          pu.setNonJtaDataSource(nonJtaDataSource.getOptionalValue());
+          if (beanManagerInjector.getOptionalValue() != null) {
+            properties.getValue().put(CDI_BEAN_MANAGER,beanManagerInjector.getOptionalValue());
+          }
+          entityManagerFactory=createContainerEntityManagerFactory();
+        }
         persistenceUnitRegistry.add(getScopedPersistenceUnitName(),getValue());
         context.complete();
       }

@@ -16,24 +16,30 @@
       for (      PersistenceUnitMetadata pu : holder.getPersistenceUnits()) {
         String jpaContainerManaged=pu.getProperties().getProperty(Configuration.JPA_CONTAINER_MANAGED);
         boolean deployPU=(jpaContainerManaged == null ? true : Boolean.parseBoolean(jpaContainerManaged));
-        boolean needClassTransformer=Configuration.needClassFileTransformer(pu);
-        boolean startThisPu=false;
         if (deployPU) {
+          final PersistenceProvider provider=lookupProvider(pu,persistenceProviderDeploymentHolder,deploymentUnit);
+          final PersistenceProviderAdaptor adaptor=getPersistenceProviderAdaptor(pu,persistenceProviderDeploymentHolder,deploymentUnit,provider);
+          final boolean twoPhaseBootStrapCapable=(adaptor instanceof TwoPhaseBootstrapCapable) && Configuration.allowTwoPhaseBootstrap(pu);
           if (startEarly) {
-            if (false == needClassTransformer) {
+            if (twoPhaseBootStrapCapable) {
+              deployPersistenceUnitPhaseOne(phaseContext,deploymentUnit,eeModuleDescription,components,serviceTarget,classLoader,pu,adaptor);
+            }
+ else             if (false == Configuration.needClassFileTransformer(pu)) {
               JPA_LOGGER.tracef("persistence unit %s in deployment %s is configured to not need class transformer to be set, no class rewriting will be allowed",pu.getPersistenceUnitName(),deploymentUnit.getName());
             }
  else {
-              startThisPu=true;
+              final boolean allowCdiBeanManagerAccess=false;
+              deployPersistenceUnit(phaseContext,deploymentUnit,eeModuleDescription,components,serviceTarget,classLoader,pu,startEarly,provider,adaptor,allowCdiBeanManagerAccess);
             }
           }
  else {
-            if (false == needClassTransformer) {
-              startThisPu=true;
+            if (twoPhaseBootStrapCapable) {
+              deployPersistenceUnitPhaseTwo(phaseContext,deploymentUnit,eeModuleDescription,components,serviceTarget,classLoader,pu,provider,adaptor);
             }
-          }
-          if (startThisPu) {
-            deployPersistenceUnit(phaseContext,deploymentUnit,eeModuleDescription,components,serviceTarget,classLoader,persistenceProviderDeploymentHolder,pu,startEarly);
+ else             if (false == Configuration.needClassFileTransformer(pu)) {
+              final boolean allowCdiBeanManagerAccess=true;
+              deployPersistenceUnit(phaseContext,deploymentUnit,eeModuleDescription,components,serviceTarget,classLoader,pu,startEarly,provider,adaptor,allowCdiBeanManagerAccess);
+            }
           }
         }
  else {

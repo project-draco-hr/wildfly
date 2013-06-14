@@ -1,0 +1,68 @@
+{
+  pu.setClassLoader(classLoader);
+  try {
+    SerializableValidatorFactory validatorFactory=null;
+    final HashMap<String,ValidatorFactory> properties=new HashMap<String,ValidatorFactory>();
+    if (!ValidationMode.NONE.equals(pu.getValidationMode())) {
+      validatorFactory=SerializableValidatorFactory.validatorFactory();
+      properties.put("javax.persistence.validation.factory",validatorFactory);
+    }
+    ProxyBeanManager proxyBeanManager=null;
+    if (WeldDeploymentMarker.isPartOfWeldDeployment(deploymentUnit)) {
+      proxyBeanManager=new ProxyBeanManager();
+    }
+    final PhaseOnePersistenceUnitServiceImpl service=new PhaseOnePersistenceUnitServiceImpl(classLoader,pu,adaptor,deploymentUnit.getServiceName(),proxyBeanManager);
+    deploymentUnit.addToAttachmentList(REMOVAL_KEY,new PersistenceAdaptorRemoval(validatorFactory,pu,adaptor));
+    adaptor.addProviderProperties(properties,pu);
+    final ServiceName puServiceName=PersistenceUnitServiceImpl.getPUServiceName(pu).append(FIRST_PHASE);
+    deploymentUnit.putAttachment(JpaAttachments.PERSISTENCE_UNIT_SERVICE_KEY,puServiceName);
+    deploymentUnit.addToAttachmentList(Attachments.DEPLOYMENT_COMPLETE_SERVICES,puServiceName);
+    deploymentUnit.addToAttachmentList(Attachments.WEB_DEPENDENCIES,puServiceName);
+    ServiceBuilder<PhaseOnePersistenceUnitServiceImpl> builder=serviceTarget.addService(puServiceName,service);
+    boolean useDefaultDataSource=true;
+    final String jtaDataSource=adjustJndi(pu.getJtaDataSourceName());
+    final String nonJtaDataSource=adjustJndi(pu.getNonJtaDataSourceName());
+    if (jtaDataSource != null && jtaDataSource.length() > 0) {
+      if (jtaDataSource.startsWith("java:")) {
+        builder.addDependency(ContextNames.bindInfoForEnvEntry(eeModuleDescription.getApplicationName(),eeModuleDescription.getModuleName(),eeModuleDescription.getModuleName(),false,jtaDataSource).getBinderServiceName(),ManagedReferenceFactory.class,new ManagedReferenceFactoryInjector(service.getJtaDataSourceInjector()));
+        useDefaultDataSource=false;
+      }
+ else {
+        builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(jtaDataSource),new CastingInjector<DataSource>(service.getJtaDataSourceInjector(),DataSource.class));
+        useDefaultDataSource=false;
+      }
+    }
+    if (nonJtaDataSource != null && nonJtaDataSource.length() > 0) {
+      if (nonJtaDataSource.startsWith("java:")) {
+        builder.addDependency(ContextNames.bindInfoForEnvEntry(eeModuleDescription.getApplicationName(),eeModuleDescription.getModuleName(),eeModuleDescription.getModuleName(),false,nonJtaDataSource).getBinderServiceName(),ManagedReferenceFactory.class,new ManagedReferenceFactoryInjector(service.getNonJtaDataSourceInjector()));
+        useDefaultDataSource=false;
+      }
+ else {
+        builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(nonJtaDataSource),new CastingInjector<DataSource>(service.getNonJtaDataSourceInjector(),DataSource.class));
+        useDefaultDataSource=false;
+      }
+    }
+    if (useDefaultDataSource) {
+      final String defaultJtaDataSource=adjustJndi(JPAService.getDefaultDataSourceName());
+      if (defaultJtaDataSource != null && defaultJtaDataSource.length() > 0) {
+        builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(defaultJtaDataSource),new CastingInjector<DataSource>(service.getJtaDataSourceInjector(),DataSource.class));
+        JPA_LOGGER.tracef("%s is using the default data source '%s'",puServiceName,defaultJtaDataSource);
+      }
+    }
+    try {
+      CacheDeploymentListener.setInternalDeploymentServiceBuilder(builder);
+      adaptor.addProviderDependencies(pu);
+    }
+  finally {
+      CacheDeploymentListener.clearInternalDeploymentServiceBuilder();
+    }
+    phaseContext.addToAttachmentList(Attachments.NEXT_PHASE_DEPS,puServiceName);
+    builder.setInitialMode(ServiceController.Mode.ACTIVE).addInjection(service.getPropertiesInjector(),properties);
+    addServerExecutorDependency(builder,service.getExecutorInjector(),false);
+    builder.install();
+    JPA_LOGGER.tracef("added PersistenceUnitService (phase 1 of 2) for '%s'.  PU is ready for injector action.",puServiceName);
+  }
+ catch (  ServiceRegistryException e) {
+    throw JpaMessages.MESSAGES.failedToAddPersistenceUnit(e,pu.getPersistenceUnitName());
+  }
+}

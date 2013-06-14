@@ -1,0 +1,37 @@
+{
+  PersistenceProvider provider=null;
+  if (persistenceProviderDeploymentHolder != null && persistenceProviderDeploymentHolder.getProvider() != null) {
+    List<PersistenceProvider> providerList=persistenceProviderDeploymentHolder.getProvider();
+    for (    PersistenceProvider persistenceProvider : providerList) {
+      if (persistenceProvider.getClass().getName().equals(pu.getPersistenceProviderClassName())) {
+        provider=persistenceProvider;
+        JPA_LOGGER.tracef("deployment %s is using its own copy of %s",deploymentUnit.getName(),pu.getPersistenceProviderClassName());
+        break;
+      }
+    }
+  }
+  if (provider == null) {
+    String persistenceProviderModule=pu.getProperties().getProperty(Configuration.PROVIDER_MODULE);
+    String persistenceProviderClassName=pu.getPersistenceProviderClassName();
+    if (persistenceProviderClassName == null) {
+      persistenceProviderClassName=Configuration.PROVIDER_CLASS_DEFAULT;
+    }
+    if (persistenceProviderModule == null) {
+      persistenceProviderModule=Configuration.getProviderModuleNameFromProviderClassName(persistenceProviderClassName);
+    }
+    provider=getProviderByName(pu,persistenceProviderModule);
+    if (provider == null) {
+      if (persistenceProviderModule != null) {
+        try {
+          PersistenceProviderLoader.loadProviderModuleByName(persistenceProviderModule);
+          provider=getProviderByName(pu,persistenceProviderModule);
+        }
+ catch (        ModuleLoadException e) {
+          throw JpaMessages.MESSAGES.cannotLoadPersistenceProviderModule(e,persistenceProviderModule,persistenceProviderClassName);
+        }
+      }
+    }
+    if (provider == null)     throw JpaMessages.MESSAGES.persistenceProviderNotFound(persistenceProviderClassName);
+  }
+  return provider;
+}

@@ -1,0 +1,29 @@
+{
+  final ExecutorService executor=executorInjector.getValue();
+  final Runnable task=new Runnable(){
+    @Override public void run(){
+      try {
+        JPA_LOGGER.startingPersistenceUnitService(1,pu.getScopedPersistenceUnitName());
+        pu.setTempClassLoaderFactory(new TempClassLoaderFactoryImpl(classLoader));
+        pu.setJtaDataSource(jtaDataSource.getOptionalValue());
+        pu.setNonJtaDataSource(nonJtaDataSource.getOptionalValue());
+        if (proxyBeanManager != null) {
+          properties.getValue().put(CDI_BEAN_MANAGER,proxyBeanManager);
+        }
+        WritableServiceBasedNamingStore.pushOwner(deploymentUnitServiceName);
+        entityManagerFactoryBuilder=createContainerEntityManagerFactoryBuilder();
+        context.complete();
+      }
+ catch (      Throwable t) {
+        context.failed(new StartException(t));
+      }
+ finally {
+        pu.setTempClassLoaderFactory(null);
+        WritableServiceBasedNamingStore.popOwner();
+      }
+    }
+  }
+;
+  context.asynchronous();
+  executor.execute(task);
+}
