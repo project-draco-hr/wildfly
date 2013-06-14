@@ -1,13 +1,28 @@
 {
   final EEModuleDescription moduleDescription=unit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
   final AnnotatedElement target=createAnnotatedElement(unit,classInfo,injectionTarget);
-  ManagedReferenceFactory factory=WebServiceReferences.createWebServiceFactory(unit,type,annotation,target,bindingName);
-  final EEModuleClassDescription classDescription=moduleDescription.addOrGetLocalClassDescription(classInfo.name().toString());
-  final InjectionSource serviceRefSource=new FixedInjectionSource(factory,factory);
-  final BindingConfiguration bindingConfiguration=new BindingConfiguration(bindingName,serviceRefSource);
-  classDescription.getBindingConfigurations().add(bindingConfiguration);
-  final ResourceInjectionConfiguration injectionConfiguration=injectionTarget != null ? new ResourceInjectionConfiguration(injectionTarget,new LookupInjectionSource(bindingName)) : null;
-  if (injectionConfiguration != null) {
-    classDescription.addResourceInjection(injectionConfiguration);
+  final String componentClassName=classInfo.name().toString();
+  final Map<String,String> bindingMap=new HashMap<String,String>();
+  boolean isEJB=false;
+  for (  final ComponentDescription componentDescription : moduleDescription.getComponentsByClassName(componentClassName)) {
+    if (componentDescription instanceof SessionBeanComponentDescription) {
+      isEJB=true;
+      bindingMap.put(componentDescription.getComponentName() + "/" + bindingName,bindingName);
+    }
+  }
+  if (!isEJB) {
+    bindingMap.put(bindingName,bindingName);
+  }
+  for (  String refKey : bindingMap.keySet()) {
+    String refName=bindingMap.get(refKey);
+    ManagedReferenceFactory factory=WebServiceReferences.createWebServiceFactory(unit,type,annotation,target,refName,refKey);
+    final EEModuleClassDescription classDescription=moduleDescription.addOrGetLocalClassDescription(classInfo.name().toString());
+    final InjectionSource serviceRefSource=new FixedInjectionSource(factory,factory);
+    final BindingConfiguration bindingConfiguration=new BindingConfiguration(refName,serviceRefSource);
+    classDescription.getBindingConfigurations().add(bindingConfiguration);
+    final ResourceInjectionConfiguration injectionConfiguration=injectionTarget != null ? new ResourceInjectionConfiguration(injectionTarget,new LookupInjectionSource(refName)) : null;
+    if (injectionConfiguration != null) {
+      classDescription.addResourceInjection(injectionConfiguration);
+    }
   }
 }
