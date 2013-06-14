@@ -4,10 +4,14 @@
   final boolean restoreConfiguration=PatchResourceDefinition.RESTORE_CONFIGURATION.resolveModelAttribute(context,operation).asBoolean();
   context.acquireControllerLock();
   final InstallationManager installationManager=(InstallationManager)context.getServiceRegistry(false).getRequiredService(InstallationManagerService.NAME).getValue();
+  if (installationManager.requiresRestart()) {
+    throw MESSAGES.serverRequiresRestart();
+  }
   final PatchTool runner=PatchTool.Factory.create(installationManager);
   final ContentVerificationPolicy policy=PatchTool.Factory.create(operation);
   try {
     final PatchingResult result=runner.rollback(patchId,policy,rollbackTo,restoreConfiguration);
+    installationManager.restartRequired();
     context.restartRequired();
     context.completeStep(new OperationContext.ResultHandler(){
       @Override public void handleResult(      OperationContext.ResultAction resultAction,      OperationContext context,      ModelNode operation){
@@ -15,6 +19,7 @@
           result.commit();
         }
  else {
+          installationManager.clearRestartRequired();
           context.revertRestartRequired();
           result.rollback();
         }
