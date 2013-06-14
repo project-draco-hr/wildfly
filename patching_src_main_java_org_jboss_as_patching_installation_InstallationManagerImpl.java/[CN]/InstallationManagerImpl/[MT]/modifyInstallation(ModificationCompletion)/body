@@ -1,2 +1,41 @@
 {
+  if (!writable.compareAndSet(true,false)) {
+    throw new IllegalStateException();
+  }
+  try {
+    final InstalledIdentity installedIdentity=this.installedIdentity;
+    final Identity identity=installedIdentity.getIdentity();
+    final PatchableTarget.TargetInfo identityInfo=identity.loadTargetInfo();
+    final InstallationModificationImpl.InstallationState state=load(installedIdentity);
+    return new InstallationModificationImpl(identityInfo,identity.getVersion(),state){
+      @Override public void complete(){
+        try {
+          InstallationManagerImpl.this.installedIdentity=updateState(identity.getName(),this,internalComplete());
+          writable.set(true);
+        }
+ catch (        Exception e) {
+          cancel();
+          throw new RuntimeException(e);
+        }
+        if (callback != null) {
+          callback.completed();
+        }
+      }
+      @Override public void cancel(){
+        try {
+          if (callback != null) {
+            callback.canceled();
+          }
+        }
+  finally {
+          writable.set(true);
+        }
+      }
+    }
+;
+  }
+ catch (  Exception e) {
+    writable.set(true);
+    throw new RuntimeException(e);
+  }
 }

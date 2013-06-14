@@ -1,21 +1,44 @@
 {
-  final List<String> rollbacks;
+  final List<String> invalidation;
   final Patch.PatchType patchType=patch.getPatchType();
-  if (patchType == Patch.PatchType.UPGRADE) {
-    rollbacks=context.getModification().getPatchIDs();
+  final InstallationManager.InstallationModification modification=context.getModification();
+  if (patchType == Patch.PatchType.ONE_OFF) {
+    invalidation=Collections.emptyList();
+    if (patch.getAppliesTo().contains(modification.getCumulativeID())) {
+      throw PatchMessages.MESSAGES.doesNotApply(patch.getAppliesTo(),modification.getCumulativeID());
+    }
   }
  else {
-    rollbacks=Collections.emptyList();
+    invalidation=new ArrayList<String>(modification.getPatchIDs());
+    if (!Constants.BASE.equals(modification.getCumulativeID())) {
+      invalidation.add(modification.getCumulativeID());
+    }
   }
-  for (  final String rollback : rollbacks) {
+  for (  final String rollback : invalidation) {
     rollback(rollback,context);
   }
   for (  final PatchElement element : patch.getElements()) {
     final IdentityPatchContext.PatchEntry target=context.resolveForElement(element);
+    final Patch.PatchType elementPatchType=element.getPatchType();
     final String elementPatchId=element.getId();
-    checkApplied(elementPatchId,target);
+    if (target.isApplied(elementPatchId)) {
+      throw PatchMessages.MESSAGES.alreadyApplied(elementPatchId);
+    }
+    final PatchElementProvider provider=element.getProvider();
+    for (    final String required : provider.getRequires()) {
+      if (!target.isApplied(required)) {
+        throw PatchMessages.MESSAGES.requiresPatch(required);
+      }
+    }
+    for (    final String incompatible : element.getIncompatibleWith()) {
+      if (target.isApplied(incompatible)) {
+        throw PatchMessages.MESSAGES.incompatibePatch(incompatible);
+      }
+    }
+    if (elementPatchType == Patch.PatchType.ONE_OFF) {
+    }
     apply(elementPatchId,element.getModifications(),target.getModifications());
-    target.apply(elementPatchId,patchType);
+    target.apply(elementPatchId,elementPatchType);
   }
   final IdentityPatchContext.PatchEntry identity=context.getIdentityEntry();
   apply(patchId,patch.getModifications(),identity.getModifications());
@@ -28,7 +51,6 @@
     return executeTasks(context,callback);
   }
  catch (  Exception e) {
-    e.printStackTrace();
     callback.rollback();
     throw rethrowException(e);
   }

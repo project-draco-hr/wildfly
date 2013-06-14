@@ -1,15 +1,22 @@
 {
   try {
     final String patchId=patch.getPatchId();
-    final List<String> appliesTo=patch.getAppliesTo();
+    final Collection<String> appliesTo=patch.getAppliesTo();
     if (!appliesTo.contains(modification.getVersion())) {
       throw PatchMessages.MESSAGES.doesNotApply(appliesTo,modification.getVersion());
     }
-    if (modification.getReleasePatchID().equals(patchId)) {
+    if (modification.isApplied(patchId)) {
       throw PatchMessages.MESSAGES.alreadyApplied(patchId);
     }
-    if (modification.getPatchIDs().contains(patchId)) {
-      throw PatchMessages.MESSAGES.alreadyApplied(patchId);
+    for (    final String required : patch.getIdentity().getRequires()) {
+      if (!modification.isApplied(required)) {
+        throw PatchMessages.MESSAGES.requiresPatch(required);
+      }
+    }
+    for (    final String incompatible : patch.getIncompatibleWith()) {
+      if (modification.isApplied(incompatible)) {
+        throw PatchMessages.MESSAGES.incompatibePatch(incompatible);
+      }
     }
     final File backup=installedImage.getPatchHistoryDir(patchId);
     final IdentityPatchContext context=new IdentityPatchContext(backup,contentProvider,contentPolicy,modification,installedImage);
