@@ -1,22 +1,31 @@
 {
-  URL manifestURL=module.getExportedResource(JarFile.MANIFEST_NAME);
-  if (manifestURL != null) {
-    InputStream input=manifestURL.openStream();
-    try {
-      Manifest manifest=new Manifest(input);
-      if (OSGiManifestBuilder.isValidBundleManifest(manifest)) {
-        return OSGiMetaDataBuilder.load(manifest);
+  Manifest manifest=null;
+  ModuleIdentifier identifier=module.getIdentifier();
+  ModuleClassLoader moduleClassLoader=module.getClassLoader();
+  Iterator<Resource> itres=moduleClassLoader.iterateResources("/META-INF",false);
+  while (itres.hasNext()) {
+    Resource res=itres.next();
+    if (res.getName().equals(JarFile.MANIFEST_NAME)) {
+      if (manifest != null) {
+        LOGGER.debugf("Cannot process multiple manifest entries for: %s",identifier);
+        manifest=null;
+        break;
+      }
+      InputStream input=res.openStream();
+      try {
+        manifest=new Manifest(input);
+      }
+  finally {
+        input.close();
       }
     }
-  finally {
-      input.close();
-    }
   }
+  if (OSGiManifestBuilder.isValidBundleManifest(manifest))   return OSGiMetaDataBuilder.load(manifest);
+  FileSystem fileSystem=FileSystems.getDefault();
   File homeDir=injectedServerEnvironment.getValue().getHomeDir();
-  final File modulesDir=new File(homeDir + File.separator + "modules");
-  final ModuleIdentifier identifier=module.getIdentifier();
+  Path modulesPath=fileSystem.getPath(homeDir.getAbsolutePath(),"modules","system","layers","base");
   String identifierPath=identifier.getName().replace('.',File.separatorChar) + File.separator + identifier.getSlot();
-  File entryFile=new File(modulesDir + File.separator + identifierPath+ File.separator+ "jbosgi-xservice.properties");
+  File entryFile=fileSystem.getPath(modulesPath.toString(),identifierPath,"jbosgi-xservice.properties").toFile();
   if (entryFile.exists()) {
     FileInputStream input=new FileInputStream(entryFile);
     try {
