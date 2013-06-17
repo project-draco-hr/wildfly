@@ -1,0 +1,75 @@
+{
+  writer.writeAttribute(Attribute.ID.name,patch.getPatchId());
+  String description=patch.getDescription();
+  if (description != null) {
+    writer.writeStartElement(Element.DESCRIPTION.name);
+    writer.writeCharacters(description);
+    writer.writeEndElement();
+  }
+  final Identity identity=patch.getIdentity();
+  writer.writeStartElement(Element.IDENTITY.name);
+  writer.writeAttribute(Attribute.NAME.name,identity.getName());
+  writer.writeAttribute(Attribute.VERSION.name,identity.getVersion());
+  if (!identity.getRequires().isEmpty()) {
+    writer.writeStartElement(Element.REQUIRES.name);
+    for (    String patchId : identity.getRequires()) {
+      writer.writeStartElement(Element.PATCH.name);
+      writer.writeAttribute(Attribute.ID.name,patchId);
+      writer.writeEndElement();
+    }
+    writer.writeEndElement();
+  }
+  writer.writeEndElement();
+  final Patch.PatchType type=patch.getPatchType();
+  if (type == Patch.PatchType.ONE_OFF) {
+    writer.writeEmptyElement(Element.NO_UPGRADE.name);
+  }
+ else {
+    writer.writeStartElement(Element.UPGRADE.name);
+    writer.writeAttribute(Attribute.TO_VERSION.name,patch.getResultingVersion());
+    writer.writeEndElement();
+  }
+  final List<PatchElement> elements=patch.getElements();
+  for (  PatchElement element : elements) {
+    writer.writeStartElement(Element.ELEMENT.name);
+    writer.writeAttribute(Attribute.ID.name,element.getId());
+    if (element.getDescription() != null) {
+      writer.writeStartElement(Element.DESCRIPTION.name);
+      writer.writeCharacters(element.getDescription());
+      writer.writeEndElement();
+    }
+    final PatchElementProvider provider=element.getProvider();
+    if (provider == null) {
+      throw new XMLStreamException("Provider is missing for patch element " + element.getId());
+    }
+    if (provider.isAddOn()) {
+      writer.writeStartElement(Element.ADD_ON.name);
+    }
+ else {
+      writer.writeStartElement(Element.LAYER.name);
+    }
+    writer.writeAttribute(Attribute.NAME.name,provider.getName());
+    writer.writeAttribute(Attribute.VERSION.name,provider.getVersion());
+    if (!provider.getRequires().isEmpty()) {
+      writer.writeStartElement(Element.REQUIRES.name);
+      for (      String elementId : provider.getRequires()) {
+        writer.writeStartElement(Element.ELEMENT.name);
+        writer.writeAttribute(Attribute.ID.name,elementId);
+        writer.writeEndElement();
+      }
+      writer.writeEndElement();
+    }
+    writer.writeEndElement();
+    final Patch.PatchType upgrade=element.getPatchType();
+    if (upgrade == Patch.PatchType.ONE_OFF) {
+      writer.writeEmptyElement(Element.NO_UPGRADE.name);
+    }
+ else {
+      writer.writeEmptyElement(Element.UPGRADE.name);
+      writer.writeAttribute(Attribute.TO_VERSION.name,element.getResultingVersion());
+    }
+    writeContentModifications(writer,element.getModifications());
+    writer.writeEndElement();
+  }
+  writeContentModifications(writer,patch.getModifications());
+}

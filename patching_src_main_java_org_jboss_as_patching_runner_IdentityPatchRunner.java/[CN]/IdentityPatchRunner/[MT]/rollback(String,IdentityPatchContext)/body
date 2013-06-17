@@ -1,2 +1,82 @@
 {
+  try {
+    final Patch originalPatch=loadPatchInformation(patchID,installedImage);
+    final RollbackPatch rollbackPatch=loadRollbackInformation(patchID,installedImage);
+    final InstalledIdentity history=rollbackPatch.getIdentityState();
+    final Patch.PatchType patchType=rollbackPatch.getPatchType();
+    final LinkedHashMap<String,PatchElement> originalLayers=new LinkedHashMap<String,PatchElement>();
+    final LinkedHashMap<String,PatchElement> originalAddOns=new LinkedHashMap<String,PatchElement>();
+    for (    final PatchElement patchElement : originalPatch.getElements()) {
+      final PatchElementProvider provider=patchElement.getProvider();
+      final String layerName=provider.getName();
+      final LayerType layerType=provider.getLayerType();
+      final Map<String,PatchElement> originals;
+switch (layerType) {
+case Layer:
+        originals=originalLayers;
+      break;
+case AddOn:
+    originals=originalAddOns;
+  break;
+default :
+throw new IllegalStateException();
+}
+if (!originals.containsKey(layerName)) {
+originals.put(layerName,patchElement);
+}
+ else {
+throw new PatchingException("duplicate layer " + layerName);
+}
+}
+for (final PatchElement patchElement : rollbackPatch.getElements()) {
+final String elementPatchId=patchElement.getId();
+final PatchElementProvider provider=patchElement.getProvider();
+final String layerName=provider.getName();
+final LayerType layerType=provider.getLayerType();
+final LinkedHashMap<String,PatchElement> originals;
+switch (layerType) {
+case Layer:
+originals=originalLayers;
+break;
+case AddOn:
+originals=originalAddOns;
+break;
+default :
+throw new IllegalStateException();
+}
+final PatchElement original=originals.remove(layerName);
+if (original == null) {
+throw new PatchingException("did not exist in original " + layerName);
+}
+final IdentityPatchContext.PatchEntry entry=context.resolveForElement(patchElement);
+final Map<Location,ContentTaskDefinition> modifications=entry.getModifications();
+PatchingTasks.rollback(elementPatchId,original.getModifications(),patchElement.getModifications(),modifications,ContentItemFilter.MISC_ONLY);
+entry.rollback(elementPatchId);
+final Patch.PatchType elementPatchType=patchElement.getPatchType();
+if (elementPatchType != Patch.PatchType.ONE_OFF) {
+final PatchableTarget.TargetInfo info;
+if (layerType == LayerType.AddOn) {
+info=history.getAddOn(layerName).loadTargetInfo();
+}
+ else {
+info=history.getLayer(layerName).loadTargetInfo();
+}
+restoreFromHistory(entry,elementPatchId,elementPatchType,info);
+}
+}
+if (!originalLayers.isEmpty() || !originalAddOns.isEmpty()) {
+throw new PatchingException("rollback did not contain all layers");
+}
+final IdentityPatchContext.PatchEntry identity=context.getIdentityEntry();
+PatchingTasks.rollback(patchID,originalPatch.getModifications(),rollbackPatch.getModifications(),identity.getModifications(),ContentItemFilter.MISC_ONLY);
+identity.rollback(patchID);
+final PatchableTarget.TargetInfo identityHistory=history.getIdentity().loadTargetInfo();
+restoreFromHistory(identity,rollbackPatch.getPatchId(),patchType,identityHistory);
+if (patchType == Patch.PatchType.UPGRADE) {
+identity.setResultingVersion(rollbackPatch.getResultingVersion());
+}
+}
+ catch (Exception e) {
+throw rethrowException(e);
+}
 }
