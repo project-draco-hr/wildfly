@@ -1,0 +1,67 @@
+{
+  ModelNode op=Util.createOperation(READ_RESOURCE_DESCRIPTION_OPERATION,PathAddress.EMPTY_ADDRESS);
+  op.get(RECURSIVE).set(true);
+  op.get(OPERATIONS).set(true);
+  op.get(INHERITED).set(false);
+  ModelNode result=executeForResult(op);
+  List<Property> rootOps=result.get(OPERATIONS).asPropertyList();
+  Assert.assertTrue(rootOps.size() > 0);
+  for (  Property rootOp : rootOps) {
+    Assert.assertFalse(rootOp.getValue().get(ACCESS_CONSTRAINTS).isDefined());
+  }
+  result.get(OPERATIONS).set("-TRIMMED-");
+  System.out.println(result);
+  ModelNode nonConstrained=result.get(CHILDREN,"nonconstrained-resource",MODEL_DESCRIPTION,"*");
+  Assert.assertFalse(nonConstrained.get(ACCESS_CONSTRAINTS).isDefined());
+  checkAttributesLength(nonConstrained,1);
+  ModelNode attr=getAndCheckDefinedAttribute(nonConstrained,STANDARD_ATTR.getName());
+  Assert.assertFalse(attr.get(ACCESS_CONSTRAINTS).isDefined());
+  List<Property> ops=checkOperationsSize(nonConstrained,2);
+  for (  Property currentOp : ops) {
+    Assert.assertFalse(currentOp.getValue().get(ACCESS_CONSTRAINTS).isDefined());
+  }
+  ModelNode constrained=result.get(CHILDREN,"constrained-resource",MODEL_DESCRIPTION,"*");
+  ModelNode accessConstraints=constrained.get(ACCESS_CONSTRAINTS);
+  Assert.assertFalse(accessConstraints.hasDefined(APPLICATION));
+  Assert.assertTrue(accessConstraints.hasDefined(SENSITIVE));
+  Assert.assertEquals(1,accessConstraints.get(SENSITIVE).keys().size());
+  checkSensitiveAccessConstraint(accessConstraints.get(SENSITIVE,SOCKET_CONFIG_NAME));
+  checkAttributesLength(constrained,2);
+  attr=getAndCheckDefinedAttribute(constrained,STANDARD_ATTR.getName());
+  Assert.assertFalse(attr.get(ACCESS_CONSTRAINTS).isDefined());
+  attr=getAndCheckDefinedAttribute(constrained,SENSITIVE_ATTR.getName());
+  Assert.assertFalse(attr.get(ACCESS_CONSTRAINTS,APPLICATION).isDefined());
+  Assert.assertEquals(2,attr.get(ACCESS_CONSTRAINTS,SENSITIVE).keys().size());
+  checkSensitiveAccessConstraint(attr.get(ACCESS_CONSTRAINTS,SENSITIVE,SOCKET_CONFIG_NAME));
+  checkSocketConfigSensitiveConstraint(attr.get(ACCESS_CONSTRAINTS,SENSITIVE,SENSITIVE_CONSTRAINT.getName()));
+  ops=checkOperationsSize(constrained,3);
+  for (  Property currentOp : ops) {
+    if (currentOp.getName().equals(REMOVE) || currentOp.getName().equals(ADD)) {
+      Assert.assertFalse(currentOp.getValue().get(ACCESS_CONSTRAINTS).isDefined());
+    }
+ else {
+      accessConstraints=currentOp.getValue().get(ACCESS_CONSTRAINTS);
+      Assert.assertFalse(accessConstraints.hasDefined(APPLICATION));
+      Assert.assertTrue(accessConstraints.hasDefined(SENSITIVE));
+      Assert.assertEquals(1,accessConstraints.get(SENSITIVE).keys().size());
+      checkSensitiveAccessConstraint(accessConstraints.get(SENSITIVE,SOCKET_CONFIG_NAME));
+    }
+  }
+  ModelNode application=result.get(CHILDREN,"application-resource",MODEL_DESCRIPTION,"*");
+  accessConstraints=application.get(ACCESS_CONSTRAINTS);
+  Assert.assertFalse(accessConstraints.hasDefined(SENSITIVE));
+  Assert.assertEquals(1,accessConstraints.get(APPLICATION).keys().size());
+  checkDeploymentApplicationConstraint(accessConstraints.get(APPLICATION,DEPLOYMENT_NAME));
+  checkAttributesLength(constrained,2);
+  attr=getAndCheckDefinedAttribute(application,STANDARD_ATTR.getName());
+  Assert.assertFalse(attr.get(ACCESS_CONSTRAINTS).isDefined());
+  attr=getAndCheckDefinedAttribute(application,APPLICATION_ATTR.getName());
+  Assert.assertFalse(attr.get(ACCESS_CONSTRAINTS,SENSITIVE).isDefined());
+  Assert.assertEquals(2,attr.get(ACCESS_CONSTRAINTS,APPLICATION).keys().size());
+  checkDeploymentApplicationConstraint(attr.get(ACCESS_CONSTRAINTS,APPLICATION,DEPLOYMENT_NAME));
+  checkApplicationConstraint(attr.get(ACCESS_CONSTRAINTS,APPLICATION,APPLICATION_CONSTRAINT.getName()));
+  ops=checkOperationsSize(application,2);
+  for (  Property currentOp : ops) {
+    Assert.assertFalse(currentOp.getValue().get(ACCESS_CONSTRAINTS).isDefined());
+  }
+}
