@@ -59,17 +59,17 @@
     }
   }
   infoBuilder.install();
+  final boolean isWebappBundle=deploymentUnit.hasAttachment(Attachments.OSGI_MANIFEST);
   final ServiceName hostServiceName=UndertowService.virtualHostName(defaultServer,hostName);
-  final UndertowDeploymentService service=new UndertowDeploymentService(injectionContainer);
+  final UndertowDeploymentService service=new UndertowDeploymentService(injectionContainer,!isWebappBundle);
   final ServiceBuilder<UndertowDeploymentService> builder=serviceTarget.addService(deploymentServiceName,service).addDependencies(dependentComponents).addDependency(UndertowService.SERVLET_CONTAINER.append(defaultContainer),ServletContainerService.class,service.getContainer()).addDependency(hostServiceName,Host.class,service.getHost()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES)).addDependency(deploymentInfoServiceName,DeploymentInfo.class,service.getDeploymentInfoInjectedValue());
   deploymentUnit.addToAttachmentList(Attachments.DEPLOYMENT_COMPLETE_SERVICES,deploymentServiceName);
-  if (deploymentUnit.hasAttachment(Attachments.OSGI_MANIFEST)) {
-    builder.setInitialMode(Mode.NEVER);
+  if (isWebappBundle) {
     UndertowDeploymentService.ContextActivatorImpl activator=new UndertowDeploymentService.ContextActivatorImpl(builder.install());
     deploymentUnit.putAttachment(ContextActivator.ATTACHMENT_KEY,activator);
+    deploymentUnit.addToAttachmentList(Attachments.BUNDLE_ACTIVE_DEPENDENCIES,deploymentServiceName);
   }
  else {
-    builder.setInitialMode(Mode.ACTIVE);
     builder.install();
   }
   final ModelNode node=deploymentUnit.getDeploymentSubsystemModel(UndertowExtension.SUBSYSTEM_NAME);
