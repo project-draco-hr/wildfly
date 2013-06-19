@@ -1,0 +1,19 @@
+{
+  String subsystemXml=readResource("subsystem-transform-reject.xml");
+  ModelVersion modelVersion=ModelVersion.create(1,2,0);
+  KernelServicesBuilder builder=createKernelServicesBuilder(createAdditionalInitialization());
+  builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-modcluster:" + controllerVersion.getMavenGavVersion()).setExtensionClassName("org.jboss.as.modcluster.ModClusterExtension");
+  KernelServices mainServices=builder.build();
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  Assert.assertNotNull(legacyServices);
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  PathAddress rootAddr=PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,ModClusterExtension.SUBSYSTEM_NAME));
+  PathAddress confAddr=rootAddr.append(PathElement.pathElement(MOD_CLUSTER_CONFIG,CONFIGURATION));
+  PathAddress simpAddr=confAddr.append(PathElement.pathElement(CommonAttributes.SIMPLE_LOAD_PROVIDER_FACTOR,CONFIGURATION));
+  PathAddress dynaAddr=confAddr.append(PathElement.pathElement(CommonAttributes.DYNAMIC_LOAD_PROVIDER,CONFIGURATION));
+  PathAddress metrAddr=dynaAddr.append(PathElement.pathElement(CommonAttributes.LOAD_METRIC,"*"));
+  PathAddress custAddr=dynaAddr.append(PathElement.pathElement(CommonAttributes.CUSTOM_LOAD_METRIC,"*"));
+  PathAddress sslAddr=confAddr.append(PathElement.pathElement(CommonAttributes.SSL,CONFIGURATION));
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,modelVersion,parse(subsystemXml),new FailedOperationTransformationConfig().addFailedAttribute(metrAddr,ChainedConfig.createBuilder(CommonAttributes.CAPACITY,CommonAttributes.WEIGHT,CommonAttributes.PROPERTY).addConfig(CapacityConfig.INSTANCE).addConfig(new FailedOperationTransformationConfig.RejectExpressionsConfig(CommonAttributes.WEIGHT)).addConfig(new FailedOperationTransformationConfig.RejectExpressionsConfig(CommonAttributes.PROPERTY)).addConfig(new OnlyOnePropertyConfig(CommonAttributes.PROPERTY)).build()).addFailedAttribute(custAddr,ChainedConfig.createBuilder(CommonAttributes.CAPACITY,CommonAttributes.WEIGHT,CommonAttributes.CLASS).addConfig(new FailedOperationTransformationConfig.RejectExpressionsConfig(CommonAttributes.WEIGHT,CommonAttributes.CLASS)).addConfig(CapacityConfig.INSTANCE).build()).addFailedAttribute(dynaAddr,new FailedOperationTransformationConfig.RejectExpressionsConfig(CommonAttributes.DECAY,CommonAttributes.HISTORY)).addFailedAttribute(simpAddr,new FailedOperationTransformationConfig.RejectExpressionsConfig(CommonAttributes.FACTOR)).addFailedAttribute(sslAddr,new FailedOperationTransformationConfig.RejectExpressionsConfig(CommonAttributes.CIPHER_SUITE,CommonAttributes.KEY_ALIAS,CommonAttributes.PROTOCOL)).addFailedAttribute(confAddr,new FailedOperationTransformationConfig.RejectExpressionsConfig(CommonAttributes.ADVERTISE,CommonAttributes.ADVERTISE_SOCKET,CommonAttributes.ADVERTISE_SOCKET,CommonAttributes.AUTO_ENABLE_CONTEXTS,CommonAttributes.FLUSH_PACKETS,CommonAttributes.PING,CommonAttributes.STICKY_SESSION,CommonAttributes.STICKY_SESSION_FORCE,CommonAttributes.STICKY_SESSION_REMOVE)));
+}

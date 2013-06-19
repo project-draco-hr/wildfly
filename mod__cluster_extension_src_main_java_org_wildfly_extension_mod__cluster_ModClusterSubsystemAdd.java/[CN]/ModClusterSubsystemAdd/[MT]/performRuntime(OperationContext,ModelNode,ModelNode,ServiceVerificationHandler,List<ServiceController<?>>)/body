@@ -1,0 +1,21 @@
+{
+  ServiceTarget target=context.getServiceTarget();
+  final ModelNode fullModel=Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
+  final ModelNode modelConfig=fullModel.get(ModClusterExtension.CONFIGURATION_PATH.getKeyValuePair());
+  final ModClusterConfig config=getModClusterConfig(context,modelConfig);
+  newControllers.add(target.addService(ContainerEventHandlerService.CONFIG_SERVICE_NAME,new ValueService<>(new ImmediateValue<>(config))).setInitialMode(Mode.ACTIVE).install());
+  final LoadBalanceFactorProvider loadProvider=getModClusterLoadProvider(context,modelConfig);
+  final String connector=CONNECTOR.resolveModelAttribute(context,modelConfig).asString();
+  InjectedValue<SocketBindingManager> socketBindingManager=new InjectedValue<SocketBindingManager>();
+  ContainerEventHandlerService service=new ContainerEventHandlerService(config,loadProvider,socketBindingManager);
+  final ServiceBuilder<?> builder=AsynchronousService.addService(target,ContainerEventHandlerService.SERVICE_NAME,service,true,true).addDependency(SocketBindingManager.SOCKET_BINDING_MANAGER,SocketBindingManager.class,socketBindingManager).addListener(verificationHandler).setInitialMode(Mode.ACTIVE);
+  final ModelNode bindingRefNode=ADVERTISE_SOCKET.resolveModelAttribute(context,modelConfig);
+  final String bindingRef=bindingRefNode.isDefined() ? bindingRefNode.asString() : null;
+  if (bindingRef != null) {
+    builder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(bindingRef),SocketBinding.class,service.getSocketBindingInjector());
+  }
+  newControllers.add(builder.install());
+  for (  ContainerEventHandlerAdapterBuilder adapterBuilder : ServiceLoader.load(ContainerEventHandlerAdapterBuilder.class,ContainerEventHandlerAdapterBuilder.class.getClassLoader())) {
+    newControllers.add(adapterBuilder.build(target,connector).addListener(verificationHandler).setInitialMode(Mode.PASSIVE).install());
+  }
+}

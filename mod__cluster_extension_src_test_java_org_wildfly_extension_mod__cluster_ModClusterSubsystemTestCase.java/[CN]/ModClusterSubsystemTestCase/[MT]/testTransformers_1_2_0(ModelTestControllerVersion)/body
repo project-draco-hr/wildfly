@@ -1,0 +1,33 @@
+{
+  String subsystemXml=readResource("subsystem-transform-no-reject.xml");
+  ModelVersion modelVersion=ModelVersion.create(1,2,0);
+  KernelServicesBuilder builder=createKernelServicesBuilder(createAdditionalInitialization()).setSubsystemXml(subsystemXml);
+  builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-modcluster:" + controllerVersion.getMavenGavVersion()).configureReverseControllerCheck(null,new Undo71TransformModelFixer()).setExtensionClassName("org.jboss.as.modcluster.ModClusterExtension");
+  KernelServices mainServices=builder.build();
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  Assert.assertNotNull(legacyServices);
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  ModelNode legacySubsystem=checkSubsystemModelTransformation(mainServices,modelVersion,new ModelFixer(){
+    @Override public ModelNode fixModel(    ModelNode modelNode){
+      fixDefaultCapacity(modelNode.get(MOD_CLUSTER_CONFIG,CONFIGURATION,CommonAttributes.DYNAMIC_LOAD_PROVIDER,CONFIGURATION,CommonAttributes.LOAD_METRIC));
+      fixDefaultCapacity(modelNode.get(MOD_CLUSTER_CONFIG,CONFIGURATION,CommonAttributes.DYNAMIC_LOAD_PROVIDER,CONFIGURATION,CommonAttributes.CUSTOM_LOAD_METRIC));
+      return modelNode;
+    }
+    private void fixDefaultCapacity(    ModelNode metrics){
+      for (      String key : metrics.keys()) {
+        ModelNode capacity=metrics.get(key,CommonAttributes.CAPACITY);
+        if (capacity.getType() == ModelType.DOUBLE && capacity.asString().equals("1.0")) {
+          capacity.set(1);
+        }
+      }
+    }
+  }
+);
+  ModelNode mainSessionCapacity=mainServices.readWholeModel().get(SUBSYSTEM,ModClusterExtension.SUBSYSTEM_NAME,MOD_CLUSTER_CONFIG,CONFIGURATION,CommonAttributes.DYNAMIC_LOAD_PROVIDER,CONFIGURATION,CommonAttributes.LOAD_METRIC,"sessions",CommonAttributes.CAPACITY);
+  ModelNode legacySessionCapacity=legacySubsystem.get(SUBSYSTEM,ModClusterExtension.SUBSYSTEM_NAME,MOD_CLUSTER_CONFIG,CONFIGURATION,CommonAttributes.DYNAMIC_LOAD_PROVIDER,CONFIGURATION,CommonAttributes.LOAD_METRIC,"sessions",CommonAttributes.CAPACITY);
+  Assert.assertEquals(ModelType.DOUBLE,mainSessionCapacity.getType());
+  Assert.assertEquals(ModelType.INT,legacySessionCapacity.getType());
+  Assert.assertFalse(mainSessionCapacity.asString().equals(legacySessionCapacity.asString()));
+  Assert.assertEquals(mainSessionCapacity.asInt(),legacySessionCapacity.asInt());
+}
