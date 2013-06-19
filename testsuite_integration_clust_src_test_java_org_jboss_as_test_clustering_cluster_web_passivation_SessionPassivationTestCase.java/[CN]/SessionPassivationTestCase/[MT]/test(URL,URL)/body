@@ -13,51 +13,85 @@
   finally {
       HttpClientUtils.closeQuietly(response);
     }
-    response=client2.execute(new HttpGet(SessionOperationServlet.createSetURI(baseURL1,"a","2")));
-    try {
-      Assert.assertTrue(response.containsHeader(SessionOperationServlet.SESSION_ID));
-      Assert.assertFalse(response.containsHeader(SessionOperationServlet.ACTIVATED_SESSIONS));
-      Assert.assertFalse(response.containsHeader(SessionOperationServlet.PASSIVATED_SESSIONS));
-      session2=response.getFirstHeader(SessionOperationServlet.SESSION_ID).getValue();
-    }
+    long now=System.currentTimeMillis();
+    long start=now;
+    boolean passivated=false;
+    while (!passivated && ((now - start) < MAX_PASSIVATION_WAIT)) {
+      response=client2.execute(new HttpGet(SessionOperationServlet.createSetURI(baseURL1,"a","2")));
+      try {
+        Assert.assertTrue(response.containsHeader(SessionOperationServlet.SESSION_ID));
+        Assert.assertFalse(response.containsHeader(SessionOperationServlet.ACTIVATED_SESSIONS));
+        passivated=response.containsHeader(SessionOperationServlet.PASSIVATED_SESSIONS);
+        session2=response.getFirstHeader(SessionOperationServlet.SESSION_ID).getValue();
+      }
   finally {
-      HttpClientUtils.closeQuietly(response);
+        HttpClientUtils.closeQuietly(response);
+      }
+      Thread.yield();
+      now=System.currentTimeMillis();
     }
-    Thread.sleep(500);
-    response=client2.execute(new HttpGet(SessionOperationServlet.createGetURI(baseURL1,"a")));
-    try {
-      Assert.assertTrue(response.containsHeader(SessionOperationServlet.RESULT));
-      Assert.assertEquals("2",response.getFirstHeader(SessionOperationServlet.RESULT).getValue());
-      Assert.assertFalse(response.containsHeader(SessionOperationServlet.ACTIVATED_SESSIONS));
-      Assert.assertTrue(response.containsHeader(SessionOperationServlet.PASSIVATED_SESSIONS));
-      Assert.assertEquals(session1,response.getFirstHeader(SessionOperationServlet.PASSIVATED_SESSIONS).getValue());
-    }
-  finally {
-      HttpClientUtils.closeQuietly(response);
-    }
+    Assert.assertTrue(passivated);
+    Assert.assertEquals(session1,response.getFirstHeader(SessionOperationServlet.PASSIVATED_SESSIONS).getValue());
+    now=System.currentTimeMillis();
+    start=now;
+    passivated=false;
     response=client1.execute(new HttpGet(SessionOperationServlet.createGetURI(baseURL1,"a")));
     try {
       Assert.assertTrue(response.containsHeader(SessionOperationServlet.RESULT));
       Assert.assertEquals("1",response.getFirstHeader(SessionOperationServlet.RESULT).getValue());
       Assert.assertTrue(response.containsHeader(SessionOperationServlet.ACTIVATED_SESSIONS));
-      Assert.assertFalse(response.containsHeader(SessionOperationServlet.PASSIVATED_SESSIONS));
+      passivated=response.containsHeader(SessionOperationServlet.PASSIVATED_SESSIONS);
       Assert.assertEquals(session1,response.getFirstHeader(SessionOperationServlet.ACTIVATED_SESSIONS).getValue());
     }
   finally {
       HttpClientUtils.closeQuietly(response);
     }
-    Thread.sleep(500);
-    response=client1.execute(new HttpGet(SessionOperationServlet.createGetURI(baseURL1,"a")));
+    while (!passivated && ((now - start) < MAX_PASSIVATION_WAIT)) {
+      response=client1.execute(new HttpGet(SessionOperationServlet.createGetURI(baseURL1,"a")));
+      try {
+        Assert.assertTrue(response.containsHeader(SessionOperationServlet.RESULT));
+        Assert.assertEquals("1",response.getFirstHeader(SessionOperationServlet.RESULT).getValue());
+        Assert.assertFalse(response.containsHeader(SessionOperationServlet.ACTIVATED_SESSIONS));
+        passivated=response.containsHeader(SessionOperationServlet.PASSIVATED_SESSIONS);
+      }
+  finally {
+        HttpClientUtils.closeQuietly(response);
+      }
+      Thread.yield();
+      now=System.currentTimeMillis();
+    }
+    Assert.assertTrue(passivated);
+    Assert.assertEquals(session2,response.getFirstHeader(SessionOperationServlet.PASSIVATED_SESSIONS).getValue());
+    now=System.currentTimeMillis();
+    start=now;
+    passivated=false;
+    response=client2.execute(new HttpGet(SessionOperationServlet.createGetURI(baseURL1,"a")));
     try {
       Assert.assertTrue(response.containsHeader(SessionOperationServlet.RESULT));
-      Assert.assertEquals("1",response.getFirstHeader(SessionOperationServlet.RESULT).getValue());
-      Assert.assertFalse(response.containsHeader(SessionOperationServlet.ACTIVATED_SESSIONS));
-      Assert.assertTrue(response.containsHeader(SessionOperationServlet.PASSIVATED_SESSIONS));
-      Assert.assertEquals(session2,response.getFirstHeader(SessionOperationServlet.PASSIVATED_SESSIONS).getValue());
+      Assert.assertEquals("2",response.getFirstHeader(SessionOperationServlet.RESULT).getValue());
+      Assert.assertTrue(response.containsHeader(SessionOperationServlet.ACTIVATED_SESSIONS));
+      passivated=response.containsHeader(SessionOperationServlet.PASSIVATED_SESSIONS);
+      Assert.assertEquals(session2,response.getFirstHeader(SessionOperationServlet.ACTIVATED_SESSIONS).getValue());
     }
   finally {
       HttpClientUtils.closeQuietly(response);
     }
+    while (!passivated && ((now - start) < MAX_PASSIVATION_WAIT)) {
+      response=client2.execute(new HttpGet(SessionOperationServlet.createGetURI(baseURL1,"a")));
+      try {
+        Assert.assertTrue(response.containsHeader(SessionOperationServlet.RESULT));
+        Assert.assertEquals("2",response.getFirstHeader(SessionOperationServlet.RESULT).getValue());
+        Assert.assertFalse(response.containsHeader(SessionOperationServlet.ACTIVATED_SESSIONS));
+        passivated=response.containsHeader(SessionOperationServlet.PASSIVATED_SESSIONS);
+      }
+  finally {
+        HttpClientUtils.closeQuietly(response);
+      }
+      Thread.yield();
+      now=System.currentTimeMillis();
+    }
+    Assert.assertTrue(passivated);
+    Assert.assertEquals(session1,response.getFirstHeader(SessionOperationServlet.PASSIVATED_SESSIONS).getValue());
   }
   finally {
     HttpClientUtils.closeQuietly(client1);
