@@ -7,9 +7,26 @@
     writer.writeEndElement();
   }
   final Identity identity=patch.getIdentity();
-  writer.writeStartElement(Element.IDENTITY.name);
+  final Patch.PatchType type=identity.getPatchType();
+  if (type == Patch.PatchType.UPGRADE) {
+    writer.writeStartElement(Element.UPGRADE.name);
+  }
+ else   if (type == Patch.PatchType.CUMULATIVE) {
+    writer.writeStartElement(Element.NO_UPGRADE.name);
+  }
+ else {
+    writer.writeStartElement(Element.ONE_OFF.name);
+  }
   writer.writeAttribute(Attribute.NAME.name,identity.getName());
   writer.writeAttribute(Attribute.VERSION.name,identity.getVersion());
+  if (type == Patch.PatchType.UPGRADE) {
+    final Identity.IdentityUpgrade upgrade=identity.forType(Patch.PatchType.UPGRADE,Identity.IdentityUpgrade.class);
+    writer.writeAttribute(Attribute.TO_VERSION.name,upgrade.getResultingVersion());
+  }
+ else   if (type == Patch.PatchType.ONE_OFF) {
+    final Identity.IdentityOneOffPatch oneOffPatch=identity.forType(Patch.PatchType.ONE_OFF,Identity.IdentityOneOffPatch.class);
+    writer.writeAttribute(Attribute.CUMULATIVE_PATCH_ID.name,oneOffPatch.getCumulativePatchId());
+  }
   if (!identity.getRequires().isEmpty()) {
     writer.writeStartElement(Element.REQUIRES.name);
     for (    String patchId : identity.getRequires()) {
@@ -20,18 +37,10 @@
     writer.writeEndElement();
   }
   writer.writeEndElement();
-  final Patch.PatchType type=patch.getPatchType();
-  if (type == Patch.PatchType.ONE_OFF) {
-    writer.writeEmptyElement(Element.NO_UPGRADE.name);
-  }
- else {
-    writer.writeStartElement(Element.UPGRADE.name);
-    writer.writeAttribute(Attribute.TO_VERSION.name,patch.getResultingVersion());
-    writer.writeEndElement();
-  }
   final List<PatchElement> elements=patch.getElements();
   for (  PatchElement element : elements) {
-    writer.writeStartElement(Element.ELEMENT.name);
+    final Element startElement=element.getProvider().isAddOn() ? Element.ADD_ON : Element.LAYER;
+    writer.writeStartElement(startElement.name);
     writer.writeAttribute(Attribute.ID.name,element.getId());
     if (element.getDescription() != null) {
       writer.writeStartElement(Element.DESCRIPTION.name);
@@ -42,32 +51,31 @@
     if (provider == null) {
       throw new XMLStreamException("Provider is missing for patch element " + element.getId());
     }
-    if (provider.isAddOn()) {
-      writer.writeStartElement(Element.ADD_ON.name);
+    final Patch.PatchType elementPatchType=provider.getPatchType();
+    if (elementPatchType == Patch.PatchType.UPGRADE) {
+      writer.writeStartElement(Element.UPGRADE.name);
+    }
+ else     if (elementPatchType == Patch.PatchType.CUMULATIVE) {
+      writer.writeStartElement(Element.NO_UPGRADE.name);
     }
  else {
-      writer.writeStartElement(Element.LAYER.name);
+      writer.writeStartElement(Element.ONE_OFF.name);
     }
     writer.writeAttribute(Attribute.NAME.name,provider.getName());
-    writer.writeAttribute(Attribute.VERSION.name,provider.getVersion());
+    if (type == Patch.PatchType.ONE_OFF) {
+      final PatchElementProvider.OneOffPatchTarget oneOffPatch=provider.forType(Patch.PatchType.ONE_OFF,PatchElementProvider.OneOffPatchTarget.class);
+      writer.writeAttribute(Attribute.CUMULATIVE_PATCH_ID.name,oneOffPatch.getCumulativePatchId());
+    }
     if (!provider.getRequires().isEmpty()) {
       writer.writeStartElement(Element.REQUIRES.name);
       for (      String elementId : provider.getRequires()) {
-        writer.writeStartElement(Element.ELEMENT.name);
+        writer.writeStartElement(Element.PATCH.name);
         writer.writeAttribute(Attribute.ID.name,elementId);
         writer.writeEndElement();
       }
       writer.writeEndElement();
     }
     writer.writeEndElement();
-    final Patch.PatchType upgrade=element.getPatchType();
-    if (upgrade == Patch.PatchType.ONE_OFF) {
-      writer.writeEmptyElement(Element.NO_UPGRADE.name);
-    }
- else {
-      writer.writeEmptyElement(Element.UPGRADE.name);
-      writer.writeAttribute(Attribute.TO_VERSION.name,element.getResultingVersion());
-    }
     writeContentModifications(writer,element.getModifications());
     writer.writeEndElement();
   }

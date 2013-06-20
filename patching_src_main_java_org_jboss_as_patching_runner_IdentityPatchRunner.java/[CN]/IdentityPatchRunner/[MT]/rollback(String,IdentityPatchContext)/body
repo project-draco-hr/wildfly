@@ -2,8 +2,8 @@
   try {
     final Patch originalPatch=loadPatchInformation(patchID,installedImage);
     final RollbackPatch rollbackPatch=loadRollbackInformation(patchID,installedImage);
+    final Patch.PatchType patchType=rollbackPatch.getIdentity().getPatchType();
     final InstalledIdentity history=rollbackPatch.getIdentityState();
-    final Patch.PatchType patchType=rollbackPatch.getPatchType();
     final LinkedHashMap<String,PatchElement> originalLayers=new LinkedHashMap<String,PatchElement>();
     final LinkedHashMap<String,PatchElement> originalAddOns=new LinkedHashMap<String,PatchElement>();
     for (    final PatchElement patchElement : originalPatch.getElements()) {
@@ -52,8 +52,7 @@ final IdentityPatchContext.PatchEntry entry=context.resolveForElement(patchEleme
 final Map<Location,ContentTaskDefinition> modifications=entry.getDefinitions();
 PatchingTasks.rollback(elementPatchId,original.getModifications(),patchElement.getModifications(),modifications,ContentItemFilter.MISC_ONLY);
 entry.rollback(elementPatchId);
-final Patch.PatchType elementPatchType=patchElement.getPatchType();
-if (elementPatchType != Patch.PatchType.ONE_OFF) {
+final Patch.PatchType elementPatchType=provider.getPatchType();
 final PatchableTarget.TargetInfo info;
 if (layerType == LayerType.AddOn) {
 info=history.getAddOn(layerName).loadTargetInfo();
@@ -62,7 +61,6 @@ info=history.getAddOn(layerName).loadTargetInfo();
 info=history.getLayer(layerName).loadTargetInfo();
 }
 restoreFromHistory(entry,elementPatchId,elementPatchType,info);
-}
 }
 if (!originalLayers.isEmpty() || !originalAddOns.isEmpty()) {
 throw new PatchingException("rollback did not contain all layers");
@@ -73,7 +71,8 @@ identity.rollback(patchID);
 final PatchableTarget.TargetInfo identityHistory=history.getIdentity().loadTargetInfo();
 restoreFromHistory(identity,rollbackPatch.getPatchId(),patchType,identityHistory);
 if (patchType == Patch.PatchType.UPGRADE) {
-identity.setResultingVersion(rollbackPatch.getResultingVersion());
+final Identity.IdentityUpgrade upgrade=rollbackPatch.getIdentity().forType(Patch.PatchType.UPGRADE,Identity.IdentityUpgrade.class);
+identity.setResultingVersion(upgrade.getResultingVersion());
 }
 }
  catch (Exception e) {

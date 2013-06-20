@@ -1,0 +1,62 @@
+{
+  String name=null;
+  String version=null;
+  String resultingVersion=null;
+  String cumulativePatchId=null;
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+    if (Attribute.VERSION == attribute) {
+      version=value;
+    }
+ else     if (Attribute.CUMULATIVE_PATCH_ID == attribute) {
+      cumulativePatchId=value;
+    }
+ else     if (Attribute.TO_VERSION == attribute) {
+      resultingVersion=value;
+    }
+ else     if (Attribute.NAME == attribute) {
+      name=value;
+    }
+ else {
+      throw unexpectedAttribute(reader,i);
+    }
+  }
+  final PatchIdentityBuilder identityBuilder;
+switch (patchType) {
+case UPGRADE:
+    identityBuilder=builder.upgradeIdentity(name,version,resultingVersion);
+  break;
+case CUMULATIVE:
+identityBuilder=builder.cumulativePatchIdentity(name,version);
+break;
+case ONE_OFF:
+identityBuilder=builder.oneOffPatchIdentity(name,version,cumulativePatchId);
+break;
+default :
+throw new IllegalStateException();
+}
+int level=0;
+while (reader.hasNext()) {
+if (reader.nextTag() == END_ELEMENT) {
+if (level == 0) {
+break;
+}
+ else {
+--level;
+}
+}
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case REQUIRES:
+break;
+case PATCH:
+level=1;
+parseIncluded(reader,identityBuilder);
+break;
+default :
+throw unexpectedElement(reader);
+}
+}
+}
