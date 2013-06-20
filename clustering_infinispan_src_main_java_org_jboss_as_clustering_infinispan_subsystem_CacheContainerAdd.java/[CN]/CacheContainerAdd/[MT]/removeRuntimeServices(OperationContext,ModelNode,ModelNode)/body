@@ -4,17 +4,19 @@
   context.removeService(KeyAffinityServiceFactoryService.getServiceName(containerName));
   ModelNode resolvedValue=null;
   final String jndiName=(resolvedValue=CacheContainerResourceDefinition.JNDI_NAME.resolveModelAttribute(context,model)).isDefined() ? resolvedValue.asString() : null;
-  final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(InfinispanJndiName.createCacheContainerJndiName(jndiName,containerName));
-  context.removeService(bindInfo.getBinderServiceName());
+  context.removeService(this.createCacheContainerBinding(jndiName,containerName).getBinderServiceName());
   context.removeService(EmbeddedCacheManagerService.getServiceName(containerName));
   context.removeService(EmbeddedCacheManagerConfigurationService.getServiceName(containerName));
   final ServiceName channelServiceName=ChannelService.getServiceName(containerName);
   final ServiceController<?> channelServiceController=context.getServiceRegistry(false).getService(channelServiceName);
   if (channelServiceController != null) {
     for (    ChannelDependentServiceProvider provider : ServiceLoader.load(ChannelDependentServiceProvider.class,ChannelDependentServiceProvider.class.getClassLoader())) {
-      context.removeService(provider.getServiceName(containerName));
+      for (      ServiceName name : provider.getServiceNames(containerName)) {
+        context.removeService(name);
+      }
     }
     ChannelInstanceResourceDefinition.addChannelProtocolMetricsDeregistrationStep(context,containerName);
+    context.removeService(this.createChannelBinding(containerName).getBinderServiceName());
     context.removeService(channelServiceName);
   }
 }

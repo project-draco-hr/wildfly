@@ -1,0 +1,21 @@
+{
+  if (this.listeners.putIfAbsent(service,listener) != null) {
+    throw new IllegalArgumentException(service.getCanonicalName());
+  }
+  final Node node=this.dispatcherFactory.getValue().getLocalNode();
+  Operation<Set<Node>> operation=new Operation<Set<Node>>(){
+    @Override public Set<Node> invoke(    Cache<ServiceName,Set<Node>> cache){
+      Set<Node> nodes=new HashSet<>(Collections.singleton(node));
+      Set<Node> existing=cache.putIfAbsent(service,nodes);
+      if (existing != null) {
+        if (existing.add(node)) {
+          cache.getAdvancedCache().withFlags(Flag.IGNORE_RETURN_VALUES).replace(service,existing);
+        }
+      }
+      return (existing != null) ? existing : nodes;
+    }
+  }
+;
+  this.invoker.invoke(this.cache,operation);
+  return new ServiceProviderRegistrationImpl(service);
+}

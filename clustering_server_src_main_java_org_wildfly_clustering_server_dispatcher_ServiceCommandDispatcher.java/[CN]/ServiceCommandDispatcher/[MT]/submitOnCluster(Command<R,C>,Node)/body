@@ -1,0 +1,36 @@
+{
+  try {
+    final Future<? extends Map<Address,Rsp<R>>> responses=this.dispatcher.castMessageWithFuture(null,this.createMessage(command),this.createRequestOptions(excludedNodes));
+    if (responses == null)     return Collections.emptyMap();
+    Map<Node,Future<R>> results=new HashMap<>();
+    Set<Node> excluded=(excludedNodes != null) ? new HashSet<>(Arrays.asList(excludedNodes)) : Collections.<Node>emptySet();
+    for (    Address address : this.dispatcher.getChannel().getView().getMembers()) {
+      final Node node=this.registry.getNode(address);
+      if (!excluded.contains(node)) {
+        Future<R> future=new Future<R>(){
+          @Override public boolean cancel(          boolean mayInterruptIfRunning){
+            return responses.cancel(mayInterruptIfRunning);
+          }
+          @Override public R get() throws InterruptedException, ExecutionException {
+            return createCommandResponse(responses.get().get(node)).get();
+          }
+          @Override public R get(          long timeout,          TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+            return createCommandResponse(responses.get(timeout,unit).get(node)).get();
+          }
+          @Override public boolean isCancelled(){
+            return responses.isCancelled();
+          }
+          @Override public boolean isDone(){
+            return responses.isDone();
+          }
+        }
+;
+        results.put(node,future);
+      }
+    }
+    return results;
+  }
+ catch (  Exception e) {
+    return Collections.emptyMap();
+  }
+}

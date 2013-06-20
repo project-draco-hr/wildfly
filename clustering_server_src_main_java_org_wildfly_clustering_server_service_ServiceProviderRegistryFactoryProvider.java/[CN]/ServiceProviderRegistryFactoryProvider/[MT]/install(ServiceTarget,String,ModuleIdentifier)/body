@@ -1,0 +1,12 @@
+{
+  ServiceName name=this.getServiceName(cluster);
+  ContextNames.BindInfo bindInfo=this.createBinding(cluster);
+  logger.debugf("Installing %s service, bound to ",name.getCanonicalName(),bindInfo.getAbsoluteJndiName());
+  BinderService binder=new BinderService(bindInfo.getBindName());
+  ServiceController<?> binderController=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(bindInfo.getBindName())).addDependency(name,ServiceProviderRegistry.class,new ManagedReferenceInjector<ServiceProviderRegistry>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(ServiceController.Mode.PASSIVE).install();
+  @SuppressWarnings("rawtypes") InjectedValue<Cache> cache=new InjectedValue<>();
+  InjectedValue<CommandDispatcherFactory> dispatcherFactory=new InjectedValue<>();
+  CacheInvoker invoker=new BatchCacheInvoker();
+  ServiceController<?> controller=target.addService(name,new ServiceProviderRegistryFactoryService(name,cache,dispatcherFactory,invoker)).addDependency(CacheService.getServiceName(cluster,null),Cache.class,cache).addDependency(CommandDispatcherFactory.SERVICE_NAME.append(cluster),CommandDispatcherFactory.class,dispatcherFactory).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  return Arrays.asList(controller,binderController);
+}

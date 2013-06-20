@@ -1,0 +1,43 @@
+{
+  String cluster="ejb";
+  String nodeNameFormat="%s/%s";
+  String nodeName1=String.format(nodeNameFormat,NODE_1,cluster);
+  String nodeName2=String.format(nodeNameFormat,NODE_2,cluster);
+  ContextSelector<EJBClientContext> selector=EJBClientContextSelector.setup(CLIENT_PROPERTIES);
+  try {
+    ViewChangeListener view=context.lookupStateless(ViewChangeListenerBean.class,ViewChangeListener.class);
+    view.establishView(cluster,NODE_1,NODE_2);
+    ServiceProviderRetriever bean=context.lookupStateless(ServiceProviderRetrieverBean.class,ServiceProviderRetriever.class);
+    Collection<String> names=bean.getProviders();
+    assertEquals(2,names.size());
+    assertTrue(names.toString(),names.contains(nodeName1));
+    assertTrue(names.toString(),names.contains(nodeName2));
+    undeploy(DEPLOYMENT_1);
+    view.establishView(cluster,NODE_2);
+    names=bean.getProviders();
+    assertEquals(1,names.size());
+    assertTrue(names.contains(nodeName2));
+    deploy(DEPLOYMENT_1);
+    view.establishView(cluster,NODE_1,NODE_2);
+    names=bean.getProviders();
+    assertEquals(2,names.size());
+    assertTrue(names.contains(nodeName1));
+    assertTrue(names.contains(nodeName2));
+    stop(CONTAINER_2);
+    view.establishView(cluster,NODE_1);
+    names=bean.getProviders();
+    assertEquals(1,names.size());
+    assertTrue(names.contains(nodeName1));
+    start(CONTAINER_2);
+    view.establishView(cluster,NODE_1,NODE_2);
+    names=bean.getProviders();
+    assertEquals(2,names.size());
+    assertTrue(names.contains(nodeName1));
+    assertTrue(names.contains(nodeName2));
+  }
+  finally {
+    if (selector != null) {
+      EJBClientContext.setSelector(selector);
+    }
+  }
+}
