@@ -1,0 +1,36 @@
+{
+  if (isBooting()) {
+    return AuthorizationResult.PERMITTED;
+  }
+ else {
+    AuthorizationResponse authResp=authorizations.get(opId);
+    if (authResp == null) {
+      authResp=getBasicAuthorizationResponse(opId,operation);
+    }
+    if (authResp == null) {
+      return AuthorizationResult.PERMITTED;
+    }
+    for (    Action.ActionEffect requiredEffect : actionEffects) {
+      AuthorizationResult effectResult=authResp.getResourceResult(requiredEffect);
+      if (effectResult == null) {
+        Action action=authResp.standardAction.limitAction(requiredEffect);
+        effectResult=modelController.getAuthorizer().authorize(getCaller(),callEnvironment,action,authResp.targetResource);
+        authResp.addResourceResult(requiredEffect,effectResult);
+      }
+      if (effectResult.getDecision() == AuthorizationResult.Decision.DENY) {
+        return effectResult;
+      }
+    }
+    if (allAttributes) {
+      ImmutableManagementResourceRegistration mrr=authResp.targetResource.getResourceRegistration();
+      for (      String attr : mrr.getAttributeNames(PathAddress.EMPTY_ADDRESS)) {
+        AuthorizationResult attrResult=authorize(opId,attr,actionEffects);
+        if (attrResult.getDecision() == AuthorizationResult.Decision.DENY) {
+          return attrResult;
+        }
+      }
+      authResp.attributesComplete=true;
+    }
+    return AuthorizationResult.PERMITTED;
+  }
+}

@@ -7,7 +7,7 @@
     if (!value.has(FAILURE_DESCRIPTION)) {
       sortedAttributes.put(entry.getKey(),value.get(RESULT));
     }
- else     if (!failed && value.hasDefined(FAILURE_DESCRIPTION)) {
+ else     if (value.hasDefined(FAILURE_DESCRIPTION)) {
       context.getFailureDescription().set(value.get(FAILURE_DESCRIPTION));
       failed=true;
       break;
@@ -32,11 +32,11 @@
     }
   }
   if (!failed) {
-    for (    Map.Entry<String,ModelNode> simpleAttribute : directAttributes.entrySet()) {
-      sortedAttributes.put(simpleAttribute.getKey(),simpleAttribute.getValue());
-    }
     for (    Map.Entry<String,ModelNode> directChild : directChildren.entrySet()) {
       sortedChildren.put(directChild.getKey(),directChild.getValue());
+    }
+    for (    String nonExistentChildType : nonExistentChildTypes) {
+      sortedChildren.put(nonExistentChildType,new ModelNode());
     }
     for (    Map.Entry<String,ModelNode> metric : metrics.entrySet()) {
       ModelNode value=metric.getValue();
@@ -50,7 +50,22 @@
       result.get(entry.getKey()).set(entry.getValue());
     }
     for (    Map.Entry<String,ModelNode> entry : sortedChildren.entrySet()) {
-      result.get(entry.getKey()).set(entry.getValue());
+      if (!entry.getValue().isDefined()) {
+        result.get(entry.getKey()).set(entry.getValue());
+      }
+ else {
+        ModelNode childTypeNode=new ModelNode();
+        for (        Property property : entry.getValue().asPropertyList()) {
+          PathElement pe=PathElement.pathElement(entry.getKey(),property.getName());
+          if (!filteredData.isFilteredResource(address,pe)) {
+            childTypeNode.get(property.getName()).set(property.getValue());
+          }
+        }
+        result.get(entry.getKey()).set(childTypeNode);
+      }
+    }
+    if (filteredData.hasFilteredData()) {
+      context.getResponseHeaders().get("access-control").set(filteredData.toModelNode());
     }
   }
   context.stepCompleted();

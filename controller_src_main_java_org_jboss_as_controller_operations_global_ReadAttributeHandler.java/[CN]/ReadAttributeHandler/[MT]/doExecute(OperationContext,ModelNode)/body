@@ -1,64 +1,21 @@
 {
-  validator.validate(operation);
-  final String attributeName=operation.require(GlobalOperationHandlers.NAME.getName()).asString();
-  final boolean defaults=operation.get(GlobalOperationHandlers.INCLUDE_DEFAULTS.getName()).asBoolean(true);
-  final ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
-  final AttributeAccess attributeAccess=registry.getAttributeAccess(PathAddress.EMPTY_ADDRESS,attributeName);
-  if (attributeAccess == null) {
-    final Set<String> children=context.getResourceRegistration().getChildNames(PathAddress.EMPTY_ADDRESS);
-    if (children.contains(attributeName)) {
-      throw new OperationFailedException(new ModelNode().set(MESSAGES.attributeRegisteredOnResource(attributeName,operation.get(OP_ADDR))));
-    }
- else {
-      final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS,false);
-      final ModelNode subModel=resource.getModel();
-      if (subModel.hasDefined(attributeName)) {
-        final ModelNode result=subModel.get(attributeName);
-        context.getResult().set(result);
-      }
- else {
-        final ModelNode nodeDescription=getNodeDescription(registry,context,operation);
-        if (defaults && nodeDescription.get(ATTRIBUTES).hasDefined(attributeName) && nodeDescription.get(ATTRIBUTES,attributeName).hasDefined(DEFAULT)) {
-          final ModelNode result=nodeDescription.get(ATTRIBUTES,attributeName,DEFAULT);
-          context.getResult().set(result);
-        }
- else         if (subModel.has(attributeName) || nodeDescription.get(ATTRIBUTES).has(attributeName)) {
-          context.getResult();
-        }
- else {
-          throw new OperationFailedException(new ModelNode().set(MESSAGES.unknownAttribute(attributeName)));
-        }
-      }
-    }
-    context.stepCompleted();
-  }
- else   if (attributeAccess.getReadHandler() == null) {
-    final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS,false);
-    final ModelNode subModel=resource.getModel();
-    if (subModel.hasDefined(attributeName) || !defaults) {
-      final ModelNode result=subModel.get(attributeName);
-      context.getResult().set(result);
-    }
- else {
-      final ModelNode nodeDescription=getNodeDescription(registry,context,operation);
-      if (nodeDescription.get(ATTRIBUTES).hasDefined(attributeName) && nodeDescription.get(ATTRIBUTES,attributeName).hasDefined(DEFAULT)) {
-        final ModelNode result=nodeDescription.get(ATTRIBUTES,attributeName,DEFAULT);
-        context.getResult().set(result);
-      }
- else {
-        context.getResult();
-      }
-    }
-    context.stepCompleted();
+  if (filteredData == null) {
+    doExecuteInternal(context,operation);
   }
  else {
-    OperationStepHandler handler=attributeAccess.getReadHandler();
-    ClassLoader oldTccl=WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(handler.getClass());
     try {
-      handler.execute(context,operation);
+      if (overrideHandler == null) {
+        doExecuteInternal(context,operation);
+      }
+ else {
+        overrideHandler.execute(context,operation);
+      }
     }
-  finally {
-      WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(oldTccl);
+ catch (    UnauthorizedException ue) {
+      PathAddress pa=PathAddress.pathAddress(operation.get(OP_ADDR));
+      filteredData.addReadRestrictedAttribute(pa,operation.get(NAME).asString());
+      context.getResult().set(new ModelNode());
+      context.stepCompleted();
     }
   }
 }

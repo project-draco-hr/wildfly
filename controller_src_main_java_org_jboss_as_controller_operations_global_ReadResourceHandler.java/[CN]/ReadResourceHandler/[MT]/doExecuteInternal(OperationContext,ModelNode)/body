@@ -1,0 +1,111 @@
+{
+  validator.validate(operation);
+  final String opName=operation.require(OP).asString();
+  final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+  final int recursiveDepth=operation.get(ModelDescriptionConstants.RECURSIVE_DEPTH).asInt(0);
+  final boolean recursive=recursiveDepth > 0 || operation.get(ModelDescriptionConstants.RECURSIVE).asBoolean(false);
+  final boolean queryRuntime=operation.get(ModelDescriptionConstants.INCLUDE_RUNTIME).asBoolean(false);
+  final boolean proxies=operation.get(ModelDescriptionConstants.PROXIES).asBoolean(false);
+  final boolean aliases=operation.get(ModelDescriptionConstants.INCLUDE_ALIASES).asBoolean(false);
+  final boolean defaults=operation.get(ModelDescriptionConstants.INCLUDE_DEFAULTS).asBoolean(true);
+  final boolean attributesOnly=operation.get(ModelDescriptionConstants.ATTRIBUTES_ONLY).asBoolean(false);
+  final Set<String> nonExistentChildTypes=new HashSet<String>();
+  final Map<String,ModelNode> directChildren=new HashMap<String,ModelNode>();
+  final Map<String,ModelNode> metrics=queryRuntime ? new HashMap<String,ModelNode>() : Collections.<String,ModelNode>emptyMap();
+  final Map<String,ModelNode> otherAttributes=new HashMap<String,ModelNode>();
+  final Map<PathElement,ModelNode> childResources=recursive ? new LinkedHashMap<PathElement,ModelNode>() : Collections.<PathElement,ModelNode>emptyMap();
+  final FilteredData localFilteredData=filteredData == null ? new FilteredData(address) : filteredData;
+  final ReadResourceAssemblyHandler assemblyHandler=new ReadResourceAssemblyHandler(address,metrics,otherAttributes,directChildren,childResources,nonExistentChildTypes,localFilteredData);
+  context.addStep(assemblyHandler,queryRuntime ? OperationContext.Stage.VERIFY : OperationContext.Stage.MODEL,true);
+  final ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
+  final Resource resource=nullSafeReadResource(context,registry);
+  final Map<String,Set<String>> childrenByType=registry != null ? GlobalOperationHandlers.getChildAddresses(context,address,registry,resource,null) : Collections.<String,Set<String>>emptyMap();
+  if (!attributesOnly) {
+    for (    Map.Entry<String,Set<String>> entry : childrenByType.entrySet()) {
+      String childType=entry.getKey();
+      nonExistentChildTypes.add(childType);
+      for (      String child : entry.getValue()) {
+        PathElement childPE=PathElement.pathElement(childType,child);
+        PathAddress absoluteChildAddr=address.append(childPE);
+        ModelNode rrOp=Util.createEmptyOperation(READ_RESOURCE_OPERATION,absoluteChildAddr);
+        PathAddress relativeAddr=PathAddress.pathAddress(childPE);
+        if (recursive) {
+          ImmutableManagementResourceRegistration childReg=registry.getSubModel(relativeAddr);
+          if (childReg == null) {
+            throw new OperationFailedException(new ModelNode().set(MESSAGES.noChildRegistry(childType,child)));
+          }
+          boolean proxy=childReg.isRemote();
+          boolean runtimeResource=childReg.isRuntimeOnly();
+          boolean getChild=!runtimeResource || (queryRuntime && !proxy) || (proxies && proxy);
+          if (!aliases && childReg.isAlias()) {
+            nonExistentChildTypes.remove(childType);
+            getChild=false;
+          }
+          if (getChild) {
+            nonExistentChildTypes.remove(childType);
+            final int newDepth=recursiveDepth > 0 ? recursiveDepth - 1 : 0;
+            rrOp.get(ModelDescriptionConstants.RECURSIVE).set(operation.get(ModelDescriptionConstants.RECURSIVE));
+            rrOp.get(ModelDescriptionConstants.RECURSIVE_DEPTH).set(newDepth);
+            rrOp.get(ModelDescriptionConstants.PROXIES).set(proxies);
+            rrOp.get(ModelDescriptionConstants.INCLUDE_RUNTIME).set(queryRuntime);
+            rrOp.get(ModelDescriptionConstants.INCLUDE_ALIASES).set(aliases);
+            rrOp.get(ModelDescriptionConstants.INCLUDE_DEFAULTS).set(defaults);
+            ModelNode rrRsp=new ModelNode();
+            childResources.put(childPE,rrRsp);
+            OperationStepHandler overrideHandler=childReg.getOperationHandler(PathAddress.EMPTY_ADDRESS,opName);
+            if (overrideHandler != null && overrideHandler.getClass() == getClass()) {
+              overrideHandler=null;
+            }
+            OperationStepHandler rrHandler=new ReadResourceHandler(localFilteredData,overrideHandler);
+            context.addStep(rrRsp,rrOp,rrHandler,OperationContext.Stage.MODEL,true);
+          }
+        }
+ else {
+          AuthorizationResult ar=context.authorize(rrOp,EnumSet.of(Action.ActionEffect.ACCESS));
+          if (ar.getDecision() == AuthorizationResult.Decision.DENY) {
+            filteredData.addAccessRestrictedResource(absoluteChildAddr);
+          }
+ else {
+            ModelNode childMap=directChildren.get(childType);
+            if (childMap == null) {
+              nonExistentChildTypes.remove(childType);
+              childMap=new ModelNode();
+              childMap.setEmptyObject();
+              directChildren.put(childType,childMap);
+            }
+            childMap.get(child);
+          }
+        }
+      }
+    }
+  }
+  final Set<String> attributeNames=registry != null ? registry.getAttributeNames(PathAddress.EMPTY_ADDRESS) : Collections.<String>emptySet();
+  for (  final String attributeName : attributeNames) {
+    final AttributeAccess access=registry.getAttributeAccess(PathAddress.EMPTY_ADDRESS,attributeName);
+    if ((aliases || !access.getFlags().contains(AttributeAccess.Flag.ALIAS)) && (queryRuntime || access.getStorageType() == AttributeAccess.Storage.CONFIGURATION)) {
+      Map<String,ModelNode> responseMap=access.getAccessType() == AttributeAccess.AccessType.METRIC ? metrics : otherAttributes;
+      addReadAttributeStep(context,address,defaults,localFilteredData,registry,attributeName,responseMap);
+    }
+  }
+  final ModelNode model=resource.getModel();
+  if (model.isDefined()) {
+    for (    String key : model.keys()) {
+      if (!otherAttributes.containsKey(key) && !childrenByType.containsKey(key) && !metrics.containsKey(key)) {
+        addReadAttributeStep(context,address,defaults,localFilteredData,registry,key,otherAttributes);
+      }
+    }
+  }
+  if (defaults) {
+    final DescriptionProvider descriptionProvider=registry.getModelDescription(PathAddress.EMPTY_ADDRESS);
+    final Locale locale=GlobalOperationHandlers.getLocale(context,operation);
+    final ModelNode nodeDescription=descriptionProvider.getModelDescription(locale);
+    if (nodeDescription.isDefined() && nodeDescription.hasDefined(ATTRIBUTES)) {
+      for (      String key : nodeDescription.get(ATTRIBUTES).keys()) {
+        if ((!childrenByType.containsKey(key)) && !otherAttributes.containsKey(key) && !metrics.containsKey(key)&& nodeDescription.get(ATTRIBUTES).hasDefined(key)&& nodeDescription.get(ATTRIBUTES,key).hasDefined(DEFAULT)) {
+          addReadAttributeStep(context,address,defaults,localFilteredData,registry,key,otherAttributes);
+        }
+      }
+    }
+  }
+  context.stepCompleted();
+}
