@@ -20,7 +20,7 @@
         if (element.isWildcard()) {
           for (          final String child : children) {
             if (resource.hasChild(PathElement.pathElement(key,child))) {
-              execute(address,base.append(PathElement.pathElement(key,child)),context);
+              safeExecute(address,base.append(PathElement.pathElement(key,child)),context);
             }
           }
         }
@@ -28,7 +28,7 @@
           for (          final String segment : element.getSegments()) {
             if (children.contains(segment)) {
               if (resource.hasChild(PathElement.pathElement(key,segment))) {
-                execute(address,base.append(PathElement.pathElement(key,segment)),context);
+                safeExecute(address,base.append(PathElement.pathElement(key,segment)),context);
               }
             }
           }
@@ -37,15 +37,27 @@
     }
  else {
       if (resource.hasChild(element)) {
-        execute(address,base.append(element),context);
+        safeExecute(address,base.append(element),context);
       }
     }
   }
  else {
     final ModelNode newOp=operation.clone();
     newOp.get(OP_ADDR).set(base.toModelNode());
-    final ModelNode result=this.result.add();
-    result.get(OP_ADDR).set(base.toModelNode());
-    context.addStep(result,newOp,handler,OperationContext.Stage.MODEL,true);
+    final ModelNode resultItem=this.result.add();
+    final ModelNode resultAddress=resultItem.get(OP_ADDR);
+    final OperationStepHandler wrapper=new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        try {
+          handler.execute(context,operation);
+          resultAddress.set(base.toModelNode());
+        }
+ catch (        NoSuchResourceException e) {
+          context.stepCompleted();
+        }
+      }
+    }
+;
+    context.addStep(resultItem,newOp,wrapper,OperationContext.Stage.MODEL,true);
   }
 }
