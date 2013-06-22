@@ -52,28 +52,46 @@
         config.setMaxAge(cookieConfig.getMaxAge());
         config.setHttpOnly(cookieConfig.getHttpOnly());
       }
-    }
-    if (config != null) {
-      deploymentInfo.setServletSessionConfig(config);
-    }
-    for (    final SetupAction action : setupActions) {
-      deploymentInfo.addThreadSetupAction(new ThreadSetupAction(){
-        private final Handle handle=new Handle(){
-          @Override public void tearDown(){
-            action.teardown(Collections.<String,Object>emptyMap());
-          }
-        }
+      List<SessionTrackingModeType> modes=sessionConfig.getSessionTrackingModes();
+      if (modes != null && !modes.isEmpty()) {
+        final Set<SessionTrackingMode> trackingModes=new HashSet<>();
+        for (        SessionTrackingModeType mode : modes) {
+switch (mode) {
+case COOKIE:
+            trackingModes.add(SessionTrackingMode.COOKIE);
+          break;
+case SSL:
+        trackingModes.add(SessionTrackingMode.SSL);
+      break;
+case URL:
+    trackingModes.add(SessionTrackingMode.URL);
+  break;
+}
+}
+config.setSessionTrackingModes(trackingModes);
+}
+}
+if (config != null) {
+deploymentInfo.setServletSessionConfig(config);
+}
+for (final SetupAction action : setupActions) {
+deploymentInfo.addThreadSetupAction(new ThreadSetupAction(){
+private final Handle handle=new Handle(){
+@Override public void tearDown(){
+action.teardown(Collections.<String,Object>emptyMap());
+}
+}
 ;
-        @Override public Handle setup(        final HttpServerExchange exchange){
-          action.setup(Collections.<String,Object>emptyMap());
-          return handle;
-        }
-      }
+@Override public Handle setup(final HttpServerExchange exchange){
+action.setup(Collections.<String,Object>emptyMap());
+return handle;
+}
+}
 );
-    }
-    this.deploymentInfo=deploymentInfo;
-  }
+}
+this.deploymentInfo=deploymentInfo;
+}
   finally {
-    Thread.currentThread().setContextClassLoader(oldTccl);
-  }
+Thread.currentThread().setContextClassLoader(oldTccl);
+}
 }
