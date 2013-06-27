@@ -1,0 +1,52 @@
+{
+  String name=null;
+  boolean isAddOn=false;
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+    if (Attribute.NAME == attribute) {
+      name=value;
+    }
+ else     if (Attribute.ADD_ON == attribute) {
+      isAddOn=Boolean.valueOf(value);
+    }
+ else {
+      throw unexpectedAttribute(reader,i);
+    }
+  }
+  final PatchElementProviderImpl provider=new PatchElementProviderImpl(name,isAddOn);
+  patchElement.setProvider(provider);
+switch (patchType) {
+case CUMULATIVE:
+    provider.upgrade();
+  break;
+case ONE_OFF:
+provider.oneOffPatch();
+break;
+default :
+throw new IllegalStateException();
+}
+int level=0;
+while (reader.hasNext()) {
+if (reader.nextTag() == END_ELEMENT) {
+if (level == 0) {
+break;
+}
+ else {
+--level;
+}
+}
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case REQUIRES:
+break;
+case PATCH:
+level=1;
+parseIncluded(reader,provider);
+break;
+default :
+throw unexpectedElement(reader);
+}
+}
+}

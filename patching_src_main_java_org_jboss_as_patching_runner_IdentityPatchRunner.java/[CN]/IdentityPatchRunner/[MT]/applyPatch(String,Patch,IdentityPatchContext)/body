@@ -5,25 +5,12 @@
   final InstallationManager.InstallationModification modification=context.getModification();
   if (patchType == Patch.PatchType.ONE_OFF) {
     invalidation=Collections.emptyList();
-    final Identity.IdentityOneOffPatch oneOffPatch=identity.forType(Patch.PatchType.ONE_OFF,Identity.IdentityOneOffPatch.class);
-    if (!modification.getCumulativeID().equals(oneOffPatch.getCumulativePatchId())) {
-      throw PatchMessages.MESSAGES.doesNotApply(oneOffPatch.getCumulativePatchId(),modification.getCumulativeID());
-    }
   }
  else {
     invalidation=new ArrayList<String>(modification.getPatchIDs());
-    if (!Constants.BASE.equals(modification.getCumulativeID())) {
-      invalidation.add(modification.getCumulativeID());
-    }
   }
   for (  final String rollback : invalidation) {
     rollback(rollback,context,false);
-  }
-  if (patchType == Patch.PatchType.UPGRADE) {
-    final String releasePatchID=modification.getReleasePatchID();
-    if (!Constants.BASE.equals(releasePatchID)) {
-      portForward(modification.getReleasePatchID(),context);
-    }
   }
   for (  final PatchElement element : patch.getElements()) {
     final IdentityPatchContext.PatchEntry target=context.resolveForElement(element);
@@ -34,20 +21,14 @@
       throw PatchMessages.MESSAGES.alreadyApplied(elementPatchId);
     }
     checkUpgradeConditions(provider,target);
-    if (elementPatchType == Patch.PatchType.ONE_OFF) {
-      PatchElementProvider.OneOffPatchTarget oneOffPatch=provider.forType(Patch.PatchType.ONE_OFF,PatchElementProvider.OneOffPatchTarget.class);
-      if (!target.getCumulativeID().equals(oneOffPatch.getCumulativePatchId())) {
-        throw PatchMessages.MESSAGES.doesNotApply(oneOffPatch.getCumulativePatchId(),target.getCumulativeID());
-      }
-    }
     apply(elementPatchId,element.getModifications(),target.getDefinitions());
     target.apply(elementPatchId,elementPatchType);
   }
   final IdentityPatchContext.PatchEntry identityEntry=context.getIdentityEntry();
   apply(patchId,patch.getModifications(),identityEntry.getDefinitions());
   identityEntry.apply(patchId,patchType);
-  if (patchType == Patch.PatchType.UPGRADE) {
-    final Identity.IdentityUpgrade upgrade=identity.forType(Patch.PatchType.UPGRADE,Identity.IdentityUpgrade.class);
+  if (patchType == Patch.PatchType.CUMULATIVE) {
+    final Identity.IdentityUpgrade upgrade=identity.forType(Patch.PatchType.CUMULATIVE,Identity.IdentityUpgrade.class);
     identityEntry.setResultingVersion(upgrade.getResultingVersion());
   }
   final IdentityApplyCallback callback=new IdentityApplyCallback(patch,identityEntry.getDirectoryStructure());

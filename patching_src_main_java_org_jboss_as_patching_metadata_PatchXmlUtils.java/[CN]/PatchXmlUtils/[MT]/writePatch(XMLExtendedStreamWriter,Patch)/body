@@ -8,24 +8,17 @@
   }
   final Identity identity=patch.getIdentity();
   final Patch.PatchType type=identity.getPatchType();
-  if (type == Patch.PatchType.UPGRADE) {
+  if (type == Patch.PatchType.CUMULATIVE) {
     writer.writeStartElement(Element.UPGRADE.name);
   }
- else   if (type == Patch.PatchType.CUMULATIVE) {
-    writer.writeStartElement(Element.NO_UPGRADE.name);
-  }
  else {
-    writer.writeStartElement(Element.ONE_OFF.name);
+    writer.writeStartElement(Element.NO_UPGRADE.name);
   }
   writer.writeAttribute(Attribute.NAME.name,identity.getName());
   writer.writeAttribute(Attribute.VERSION.name,identity.getVersion());
-  if (type == Patch.PatchType.UPGRADE) {
-    final Identity.IdentityUpgrade upgrade=identity.forType(Patch.PatchType.UPGRADE,Identity.IdentityUpgrade.class);
+  if (type == Patch.PatchType.CUMULATIVE) {
+    final Identity.IdentityUpgrade upgrade=identity.forType(Patch.PatchType.CUMULATIVE,Identity.IdentityUpgrade.class);
     writer.writeAttribute(Attribute.TO_VERSION.name,upgrade.getResultingVersion());
-  }
- else   if (type == Patch.PatchType.ONE_OFF) {
-    final Identity.IdentityOneOffPatch oneOffPatch=identity.forType(Patch.PatchType.ONE_OFF,Identity.IdentityOneOffPatch.class);
-    writer.writeAttribute(Attribute.CUMULATIVE_PATCH_ID.name,oneOffPatch.getCumulativePatchId());
   }
   if (!identity.getRequires().isEmpty()) {
     writer.writeStartElement(Element.REQUIRES.name);
@@ -39,8 +32,7 @@
   writer.writeEndElement();
   final List<PatchElement> elements=patch.getElements();
   for (  PatchElement element : elements) {
-    final Element startElement=element.getProvider().isAddOn() ? Element.ADD_ON : Element.LAYER;
-    writer.writeStartElement(startElement.name);
+    writer.writeStartElement(Element.PATCH_ELEMENT.name);
     writer.writeAttribute(Attribute.ID.name,element.getId());
     if (element.getDescription() != null) {
       writer.writeStartElement(Element.DESCRIPTION.name);
@@ -52,19 +44,15 @@
       throw new XMLStreamException("Provider is missing for patch element " + element.getId());
     }
     final Patch.PatchType elementPatchType=provider.getPatchType();
-    if (elementPatchType == Patch.PatchType.UPGRADE) {
+    if (elementPatchType == Patch.PatchType.CUMULATIVE) {
       writer.writeStartElement(Element.UPGRADE.name);
     }
- else     if (elementPatchType == Patch.PatchType.CUMULATIVE) {
+ else {
       writer.writeStartElement(Element.NO_UPGRADE.name);
     }
- else {
-      writer.writeStartElement(Element.ONE_OFF.name);
-    }
     writer.writeAttribute(Attribute.NAME.name,provider.getName());
-    if (elementPatchType == Patch.PatchType.ONE_OFF) {
-      final PatchElementProvider.OneOffPatchTarget oneOffPatch=provider.forType(Patch.PatchType.ONE_OFF,PatchElementProvider.OneOffPatchTarget.class);
-      writer.writeAttribute(Attribute.CUMULATIVE_PATCH_ID.name,oneOffPatch.getCumulativePatchId());
+    if (provider.isAddOn()) {
+      writer.writeAttribute(Attribute.ADD_ON.name,"true");
     }
     if (!provider.getRequires().isEmpty()) {
       writer.writeStartElement(Element.REQUIRES.name);
