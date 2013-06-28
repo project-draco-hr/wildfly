@@ -22,15 +22,39 @@
       return new ErrorState(theConsole,MESSAGES.propertiesFileNotFound(APPLICATION_ROLES_PROPERTIES),null,stateValues);
     }
   }
-  stateValues.setPropertiesFiles(foundFiles);
+  stateValues.setUserFiles(foundFiles);
+  String realmName=null;
   Set<String> foundUsers=new HashSet<String>();
-  for (  File current : stateValues.getPropertiesFiles()) {
+  for (  File current : stateValues.getUserFiles()) {
+    PropertiesFileLoader pfl=null;
     try {
-      foundUsers.addAll(loadUserNames(current));
+      pfl=loadUsersFile(current);
+      foundUsers.addAll(pfl.getProperties().stringPropertyNames());
+      if (realmName == null) {
+        realmName=pfl.getRealmName();
+      }
+ else {
+        String nextRealm=pfl.getRealmName();
+        if (realmName.equals(nextRealm) == false) {
+          return new ErrorState(theConsole,MESSAGES.multipleRealmsDetected(realmName,nextRealm),null,stateValues);
+        }
+      }
+      pfl.stop(null);
+      pfl=null;
     }
  catch (    IOException e) {
       return new ErrorState(theConsole,MESSAGES.unableToLoadUsers(current.getAbsolutePath(),e.getMessage()),null,stateValues);
     }
+ finally {
+      if (pfl != null) {
+        pfl.stop(null);
+        pfl=null;
+      }
+    }
+  }
+  if (realmName != null) {
+    stateValues.setRealm(realmName);
+    stateValues.setRealmAlreadyDefined(true);
   }
   stateValues.setKnownUsers(foundUsers);
   return stateValues.isInteractive() ? new PromptRealmState(theConsole,stateValues) : new PromptNewUserState(theConsole,stateValues);
