@@ -1,0 +1,34 @@
+{
+  assertMDBDeliveryIsActive(mdbName,false);
+  Connection connection=null;
+  try {
+    connection=cf.createConnection();
+    connection.start();
+    Session session=connection.createSession(false,Session.AUTO_ACKNOWLEDGE);
+    TemporaryQueue replyQueue=session.createTemporaryQueue();
+    MessageProducer producer=session.createProducer(destination);
+    Message message=session.createMessage();
+    message.setJMSReplyTo(replyQueue);
+    producer.send(message);
+    MessageConsumer consumer=session.createConsumer(replyQueue);
+    Message reply=consumer.receive(500);
+    assertNull(reply);
+    executeMDBOperation(mdbName,"start-delivery");
+    assertMDBDeliveryIsActive(mdbName,true);
+    reply=consumer.receive(500);
+    assertNotNull(reply);
+    assertEquals(message.getJMSMessageID(),reply.getJMSCorrelationID());
+    executeMDBOperation(mdbName,"stop-delivery");
+    assertMDBDeliveryIsActive(mdbName,false);
+    message=session.createMessage();
+    message.setJMSReplyTo(replyQueue);
+    producer.send(message);
+    reply=consumer.receive(500);
+    assertNull(reply);
+  }
+  finally {
+    if (connection != null) {
+      connection.close();
+    }
+  }
+}
