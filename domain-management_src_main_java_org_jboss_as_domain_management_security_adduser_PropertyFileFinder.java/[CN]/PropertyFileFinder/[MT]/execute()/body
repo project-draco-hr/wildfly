@@ -1,25 +1,27 @@
 {
   stateValues.setKnownRoles(new HashMap<String,String>());
-  String jbossHome=stateValues.getJBossHome();
-  if (jbossHome == null) {
-    return new ErrorState(theConsole,MESSAGES.jbossHomeNotSet(),null,stateValues);
+  if (stateValues.getOptions().getGroupProperties() != null && stateValues.getOptions().getUserProperties() == null) {
+    return new ErrorState(theConsole,MESSAGES.groupPropertiesButNoRoleProperties(stateValues.getOptions().getGroupProperties()),null,stateValues);
   }
   List<File> foundFiles=new ArrayList<File>(2);
-  final String fileName=stateValues.isManagement() ? MGMT_USERS_PROPERTIES : APPLICATION_USERS_PROPERTIES;
-  if (!findFiles(jbossHome,foundFiles,fileName)) {
+  String fileName=stateValues.getOptions().getUserProperties();
+  fileName=fileName == null ? stateValues.getFileMode() == FileMode.MANAGEMENT ? MGMT_USERS_PROPERTIES : APPLICATION_USERS_PROPERTIES : fileName;
+  if (!findFiles(foundFiles,fileName)) {
     return new ErrorState(theConsole,MESSAGES.propertiesFileNotFound(fileName),null,stateValues);
   }
-  if (!stateValues.isManagement()) {
+  fileName=stateValues.getOptions().getGroupProperties();
+  if (fileName != null || stateValues.getFileMode() == FileMode.APPLICATION) {
     List<File> foundRoleFiles=new ArrayList<File>(2);
-    if (!findFiles(jbossHome,foundRoleFiles,APPLICATION_ROLES_PROPERTIES)) {
-      return new ErrorState(theConsole,MESSAGES.propertiesFileNotFound(APPLICATION_ROLES_PROPERTIES),null,stateValues);
+    fileName=fileName == null ? APPLICATION_ROLES_PROPERTIES : fileName;
+    if (!findFiles(foundRoleFiles,fileName)) {
+      return new ErrorState(theConsole,MESSAGES.propertiesFileNotFound(fileName),null,stateValues);
     }
     stateValues.setRoleFiles(foundRoleFiles);
     try {
       stateValues.setKnownRoles(loadAllRoles(foundRoleFiles));
     }
  catch (    Exception e) {
-      return new ErrorState(theConsole,MESSAGES.propertiesFileNotFound(APPLICATION_ROLES_PROPERTIES),null,stateValues);
+      return new ErrorState(theConsole,MESSAGES.propertiesFileNotFound(fileName),null,stateValues);
     }
   }
   stateValues.setUserFiles(foundFiles);
