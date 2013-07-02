@@ -1,18 +1,39 @@
 {
   if (defaultUser.equals(username) && defaultPassword.equals(password))   return true;
   if (securityDomainContext == null)   throw MESSAGES.securityDomainContextNotSet();
-  Subject subject=new Subject();
+  final Subject subject=new Subject();
   boolean authenticated=securityDomainContext.getAuthenticationManager().isValid(new SimplePrincipal(username),password,subject);
   if (authenticated) {
-    SecurityContext securityContext=pushSecurityContext(subject,new SimplePrincipal(username),password);
-    Set<Principal> principals=new HashSet<Principal>();
-    for (    Role role : roles) {
-      if (checkType.hasRole(role)) {
-        principals.add(new SimplePrincipal(role.getName()));
+    authenticated=AccessController.doPrivileged(new PrivilegedAction<Boolean>(){
+      @Override public Boolean run(){
+        final SimplePrincipal principal=new SimplePrincipal(username);
+        final SecurityContext currentSecurityContext=SecurityContextAssociation.getSecurityContext();
+        final SecurityContext securityContext;
+        if (currentSecurityContext == null) {
+          try {
+            securityContext=SecurityContextFactory.createSecurityContext(principal,password,subject,securityDomainContext.getAuthenticationManager().getSecurityDomain());
+          }
+ catch (          Exception e) {
+            throw new RuntimeException(e);
+          }
+        }
+ else {
+          securityContext=currentSecurityContext;
+          securityContext.getUtil().createSubjectInfo(principal,password,subject);
+        }
+        SecurityContextAssociation.setSecurityContext(securityContext);
+        final Set<Principal> principals=new HashSet<Principal>();
+        for (        Role role : roles) {
+          if (checkType.hasRole(role)) {
+            principals.add(new SimplePrincipal(role.getName()));
+          }
+        }
+        final boolean authenticated=securityDomainContext.getAuthorizationManager().doesUserHaveRole(new SimplePrincipal(username),principals);
+        SecurityContextAssociation.setSecurityContext(currentSecurityContext);
+        return authenticated;
       }
     }
-    authenticated=securityDomainContext.getAuthorizationManager().doesUserHaveRole(new SimplePrincipal(username),principals);
-    setSecurityContextOnAssociation(securityContext);
+);
   }
   return authenticated;
 }
