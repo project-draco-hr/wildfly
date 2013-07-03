@@ -1,0 +1,41 @@
+{
+  ModelNode result=new ModelNode();
+  AuthorizationResponse authResp=context.authorizeResource(true);
+  if (authResp.getResourceResult(ActionEffect.ACCESS).getDecision() == Decision.DENY) {
+    accessControlResults.remove(address);
+  }
+ else {
+    addResourceAuthorizationResults(result,authResp);
+    accessControlResults.put(address,result);
+    ModelNode attributes=new ModelNode();
+    attributes.setEmptyObject();
+    if (result.get(ActionEffect.READ_CONFIG.toString()).asBoolean()) {
+      for (      Property attrProp : nodeDescription.require(ATTRIBUTES).asPropertyList()) {
+        if (authResp.getAttributeResult(attrProp.getName(),ActionEffect.ACCESS).getDecision() == Decision.PERMIT) {
+          ModelNode attributeResult=new ModelNode();
+          Storage storage=Storage.valueOf(attrProp.getValue().get(STORAGE).asString().toUpperCase());
+          addAttributeAuthorizationResults(attributeResult,attrProp.getName(),authResp,storage == Storage.RUNTIME);
+          attributes.get(attrProp.getName()).set(attributeResult);
+        }
+      }
+      result.get(ATTRIBUTES).set(attributes);
+      if (operations != null) {
+        ModelNode ops=new ModelNode();
+        ops.setEmptyObject();
+        for (        Map.Entry<String,ModelNode> entry : operations.entrySet()) {
+          ModelNode operationToCheck=Util.createOperation(entry.getKey(),PathAddress.pathAddress(operation.require(OP_ADDR)));
+          AuthorizationResult authorization=context.authorizeOperation(operationToCheck,true);
+          if (authorization.getDecision() != Decision.PERMIT) {
+            continue;
+          }
+          ModelNode operationResult=new ModelNode();
+          addOperationAuthorizationResult(context,operationResult,operationToCheck,entry.getKey());
+          ops.get(entry.getKey()).set(operationResult);
+        }
+        result.get(ModelDescriptionConstants.OPERATIONS).set(ops);
+      }
+    }
+  }
+  context.getResult().set(result);
+  context.stepCompleted();
+}

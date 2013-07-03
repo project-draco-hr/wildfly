@@ -1,0 +1,58 @@
+{
+  ModelNode op=new ModelNode();
+  op.get(OP).set(ReadResourceHandler.DEFINITION.getName());
+  op.get(OP_ADDR).set(activeStep.operation.get(OP_ADDR));
+  if (activeStep.operation.hasDefined(OPERATION_HEADERS)) {
+    op.get(OPERATION_HEADERS).set(activeStep.operation.get(OPERATION_HEADERS));
+  }
+  OperationId opId=new OperationId(op);
+  AuthorizationResponseImpl authResp=authorizations.get(opId);
+  if (authResp == null) {
+    authResp=getBasicAuthorizationResponse(opId,op);
+  }
+  if (authResp == null) {
+    return authResp;
+  }
+  if (authResp.getResourceResult(ActionEffect.ACCESS) == null) {
+    Action action=authResp.standardAction.limitAction(ActionEffect.ACCESS);
+    authResp.addResourceResult(ActionEffect.ACCESS,modelController.getAuthorizer().authorize(getCaller(),callEnvironment,action,authResp.targetResource));
+  }
+  if (authResp.getResourceResult(ActionEffect.ACCESS).getDecision() == Decision.PERMIT) {
+    for (    Action.ActionEffect requiredEffect : ALL) {
+      AuthorizationResult effectResult=authResp.getResourceResult(requiredEffect);
+      if (effectResult == null) {
+        Action action=authResp.standardAction.limitAction(requiredEffect);
+        effectResult=modelController.getAuthorizer().authorize(getCaller(),callEnvironment,action,authResp.targetResource);
+        authResp.addResourceResult(requiredEffect,effectResult);
+      }
+    }
+  }
+  if (attributes) {
+    ImmutableManagementResourceRegistration mrr=authResp.targetResource.getResourceRegistration();
+    if (!authResp.attributesComplete) {
+      for (      String attr : mrr.getAttributeNames(PathAddress.EMPTY_ADDRESS)) {
+        TargetAttribute targetAttribute=null;
+        if (authResp.getAttributeResult(attr,ActionEffect.ACCESS) == null) {
+          if (targetAttribute == null) {
+            targetAttribute=createTargetAttribute(authResp,attr);
+          }
+          Action action=authResp.standardAction.limitAction(ActionEffect.ACCESS);
+          authResp.addAttributeResult(attr,ActionEffect.ACCESS,modelController.getAuthorizer().authorize(getCaller(),callEnvironment,action,targetAttribute));
+        }
+        for (        Action.ActionEffect actionEffect : ALL) {
+          AuthorizationResult authResult=authResp.getAttributeResult(attr,actionEffect);
+          if (authResult == null) {
+            Action action=authResp.standardAction.limitAction(actionEffect);
+            if (targetAttribute == null) {
+              targetAttribute=createTargetAttribute(authResp,attr);
+            }
+            authResult=modelController.getAuthorizer().authorize(getCaller(),callEnvironment,action,targetAttribute);
+            authResp.addAttributeResult(attr,actionEffect,authResult);
+          }
+        }
+      }
+      authResp.attributesComplete=true;
+    }
+  }
+  return authResp;
+}

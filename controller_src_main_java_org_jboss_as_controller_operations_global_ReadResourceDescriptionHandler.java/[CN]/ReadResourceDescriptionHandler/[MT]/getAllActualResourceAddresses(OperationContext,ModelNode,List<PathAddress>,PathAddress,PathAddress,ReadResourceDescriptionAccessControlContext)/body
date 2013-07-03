@@ -1,0 +1,50 @@
+{
+  if (opAddress.size() == 0) {
+    return;
+  }
+  final int length=currentAddress.size();
+  final PathElement currentElement=opAddress.getElement(length);
+  if (currentElement.isWildcard()) {
+    Resource resource;
+    try {
+      resource=context.readResourceFromRoot(currentAddress);
+    }
+ catch (    UnauthorizedException e) {
+      AuthorizationResponse response=context.authorizeResource(false);
+      if (response.getResourceResult(ActionEffect.ACCESS).getDecision() != Decision.PERMIT) {
+        return;
+      }
+      resource=context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS);
+      for (      PathElement element : currentAddress) {
+        resource=resource.getChild(element);
+      }
+    }
+    ImmutableManagementResourceRegistration directRegistration=context.getRootResourceRegistration().getSubModel(currentAddress);
+    Map<String,Set<String>> childAddresses=GlobalOperationHandlers.getChildAddresses(context,currentAddress,directRegistration,resource,currentElement.getKey());
+    Set<String> childNames=childAddresses.get(currentElement.getKey());
+    if (childNames != null) {
+      for (      String name : childNames) {
+        PathAddress address=currentAddress.append(PathElement.pathElement(currentElement.getKey(),name));
+        if (addParentResource(context,addresses,address)) {
+          if (address.size() == opAddress.size()) {
+            addresses.add(address);
+          }
+ else {
+            getAllActualResourceAddresses(context,operation,addresses,address,opAddress,accessControlContext);
+          }
+        }
+      }
+    }
+  }
+ else {
+    PathAddress address=currentAddress.append(currentElement);
+    if (addParentResource(context,addresses,address)) {
+      if (address.size() == opAddress.size()) {
+        addresses.add(address);
+      }
+ else {
+        getAllActualResourceAddresses(context,operation,addresses,address,opAddress,accessControlContext);
+      }
+    }
+  }
+}
