@@ -1,19 +1,12 @@
 {
-  Properties toSave=(Properties)properties.clone();
+  beginPersistence();
   List<String> content=new ArrayList<String>();
   FileReader fileReader=new FileReader(propertiesFile);
   BufferedReader bufferedFileReader=new BufferedReader(fileReader);
-  boolean realmDefinitionFound=false;
   try {
     String line=null;
     int i=0;
     while ((line=bufferedFileReader.readLine()) != null) {
-      if (realmDefinitionFound == false) {
-        String trimmed=line.trim();
-        if (trimmed.startsWith(COMMENT_PREFIX) && trimmed.contains(REALM_COMMENT_PREFIX)) {
-          realmDefinitionFound=true;
-        }
-      }
       content.add(line);
     }
   }
@@ -22,20 +15,11 @@
     safeClose(fileReader);
   }
   BufferedWriter bw=new BufferedWriter(new OutputStreamWriter(new FileOutputStream(propertiesFile),"UTF8"));
-  if (realmDefinitionFound == false) {
-    writeRealm(bw,realmName,true);
-  }
   try {
     for (    String line : content) {
       String trimmed=line.trim();
       if (trimmed.startsWith(COMMENT_PREFIX)) {
-        if (trimmed.contains(REALM_COMMENT_PREFIX)) {
-          writeRealm(bw,realmName,false);
-        }
- else {
-          bw.append(line);
-        }
-        bw.newLine();
+        write(bw,line,true);
       }
  else       if (trimmed.length() == 0) {
         bw.newLine();
@@ -46,18 +30,13 @@
           String userName=trimmed.substring(0,equals);
           if (toSave.containsKey(userName)) {
             String escapedUserName=escapeString(userName,ESCAPE_ARRAY);
-            bw.append(escapedUserName + "=" + toSave.getProperty(userName));
-            bw.newLine();
+            write(bw,escapedUserName + "=" + toSave.getProperty(userName),true);
             toSave.remove(userName);
           }
         }
       }
     }
-    for (    Object currentKey : toSave.keySet()) {
-      String escapedUserName=escapeString((String)currentKey,ESCAPE_ARRAY);
-      bw.append(escapedUserName + "=" + toSave.getProperty((String)currentKey));
-      bw.newLine();
-    }
+    endPersistence(bw);
   }
   finally {
     safeClose(bw);
