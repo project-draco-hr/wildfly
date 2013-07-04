@@ -9,7 +9,31 @@
     throw new CommandLineException("Unable to apply patch",e);
   }
   if (!Util.isSuccess(result)) {
-    throw new CommandFormatException(Util.getFailureDescription(result));
+    final ModelNode fd=result.get(ModelDescriptionConstants.FAILURE_DESCRIPTION);
+    if (!fd.isDefined()) {
+      throw new CommandLineException("Failed to apply patch: " + result.asString());
+    }
+    if (fd.has(Constants.CONFLICTS)) {
+      final StringBuilder buf=new StringBuilder();
+      buf.append(fd.get(Constants.MESSAGE).asString()).append(": ");
+      final ModelNode conflicts=fd.get(Constants.CONFLICTS);
+      String title="";
+      if (conflicts.has(Constants.BUNDLES)) {
+        formatConflictsList(buf,conflicts,"",Constants.BUNDLES);
+        title=", ";
+      }
+      if (conflicts.has(Constants.MODULES)) {
+        formatConflictsList(buf,conflicts,title,Constants.MODULES);
+        title=", ";
+      }
+      if (conflicts.has(Constants.MISC)) {
+        formatConflictsList(buf,conflicts,title,Constants.MISC);
+      }
+      throw new CommandLineException(buf.toString());
+    }
+ else {
+      throw new CommandLineException(Util.getFailureDescription(result));
+    }
   }
   ctx.printLine(result.toJSONString(false));
 }

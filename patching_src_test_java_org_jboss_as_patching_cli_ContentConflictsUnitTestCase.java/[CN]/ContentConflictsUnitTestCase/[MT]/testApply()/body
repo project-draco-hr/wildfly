@@ -1,0 +1,45 @@
+{
+  final File binDir=createInstalledImage(env,"consoleSlot",productConfig.getProductName(),productConfig.getProductVersion());
+  String patchID=randomString();
+  File patchDir=mkdir(tempDir,patchID);
+  File baseModuleDir=newFile(env.getInstalledImage().getModulesDir(),SYSTEM,LAYERS,BASE);
+  String moduleConflictName="module-conflict";
+  File moduleConflictDir=createModule0(baseModuleDir,moduleConflictName);
+  ContentModification moduleConflictModified=ContentModificationUtils.modifyModule(patchDir,patchID,moduleConflictDir,"new resource in the module");
+  String moduleNoConflictName="module-no-conflict";
+  File moduleNoConflictDir=createModule0(baseModuleDir,moduleNoConflictName);
+  ContentModification moduleNoConflictModified=ContentModificationUtils.modifyModule(patchDir,patchID,moduleNoConflictDir,"new resource in the module");
+  String fileConflictName="file-conflict.txt";
+  File conflictFile=touch(binDir,fileConflictName);
+  dump(conflictFile,"original script to run standalone AS7");
+  ContentModification fileConflictModified=ContentModificationUtils.modifyMisc(patchDir,patchID,"updated script",conflictFile,"bin",fileConflictName);
+  String fileNoConflictName="file-no-conflict.txt";
+  File noConflictFile=touch(binDir,fileNoConflictName);
+  dump(noConflictFile,"original script to run standalone AS7");
+  ContentModification fileNoConflictModified=ContentModificationUtils.modifyMisc(patchDir,patchID,"updated script",noConflictFile,"bin",fileNoConflictName);
+  File baseBundleDir=newFile(env.getInstalledImage().getBundlesDir(),SYSTEM,LAYERS,BASE);
+  String bundleConflictName="bundle-conflict";
+  File bundleConflictDir=createBundle0(baseBundleDir,bundleConflictName,"bundle content");
+  ContentModification bundleConflictModified=ContentModificationUtils.modifyBundle(patchDir,patchID,bundleConflictDir,"updated bundle content");
+  String bundleNoConflictName="bundle-no-conflict";
+  File bundleNoConflictDir=createBundle0(baseBundleDir,bundleNoConflictName,"bundle content");
+  ContentModification bundleNoConflictModified=ContentModificationUtils.modifyBundle(patchDir,patchID,bundleNoConflictDir,"updated bundle content");
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).cumulativePatchIdentity(productConfig.getProductName(),productConfig.getProductVersion()).getParent().addContentModification(fileConflictModified).addContentModification(fileNoConflictModified).cumulativePatchElement(patchID,"base",false).addContentModification(moduleConflictModified).addContentModification(moduleNoConflictModified).addContentModification(bundleConflictModified).addContentModification(bundleNoConflictModified).getParent().build();
+  createPatchXMLFile(patchDir,patch,false);
+  File zippedPatch=createZippedPatchFile(patchDir,patch.getPatchId());
+  dump(conflictFile,"conflicting change");
+  createModule0(baseModuleDir,moduleConflictName,"oops");
+  createBundle0(baseBundleDir,bundleConflictName,"oops");
+  CommandContext ctx=CommandContextFactory.getInstance().newCommandContext();
+  try {
+    ctx.handle("patch apply " + zippedPatch.getAbsolutePath() + " --distribution="+ env.getInstalledImage().getJbossHome());
+    fail("Conflicts expected.");
+  }
+ catch (  CommandLineException e) {
+    final int relativeIndex=env.getInstalledImage().getJbossHome().getAbsolutePath().length() + 1;
+    assertConflicts(e,bundleConflictName + ":main",moduleConflictName + ":main",conflictFile.getAbsolutePath().substring(relativeIndex));
+  }
+ finally {
+    ctx.terminateSession();
+  }
+}
