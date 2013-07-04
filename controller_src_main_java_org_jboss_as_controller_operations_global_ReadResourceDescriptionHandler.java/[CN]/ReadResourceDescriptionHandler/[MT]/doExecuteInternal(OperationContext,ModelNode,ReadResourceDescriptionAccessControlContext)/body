@@ -3,7 +3,6 @@
     def.validateOperation(operation);
   }
   final String opName=operation.require(OP).asString();
-  final PathAddress opAddr=PathAddress.pathAddress(operation.get(OP_ADDR));
   final int recursiveDepth=RECURSIVE_DEPTH.resolveModelAttribute(context,operation).asInt();
   final boolean recursive=recursiveDepth > 0 || RECURSIVE.resolveModelAttribute(context,operation).asBoolean();
   final boolean proxies=PROXIES.resolveModelAttribute(context,operation).asBoolean();
@@ -11,19 +10,16 @@
   final boolean aliases=INCLUDE_ALIASES.resolveModelAttribute(context,operation).asBoolean();
   final boolean inheritedOps=INHERITED.resolveModelAttribute(context,operation).asBoolean();
   final boolean includeAccess=ACCESS_CONTROL.resolveModelAttribute(context,operation).asBoolean();
-  final ImmutableManagementResourceRegistration registry=getResourceRegistrationCheckForAlias(context,opAddr,accessControlContext);
+  final ImmutableManagementResourceRegistration registry=getResourceRegistrationCheckForAlias(context,accessControlContext.opAddress,accessControlContext);
   final DescriptionProvider descriptionProvider=registry.getModelDescription(PathAddress.EMPTY_ADDRESS);
   final Locale locale=GlobalOperationHandlers.getLocale(context,operation);
   final ModelNode nodeDescription=descriptionProvider.getModelDescription(locale);
   final Map<String,ModelNode> operations=ops ? new HashMap<String,ModelNode>() : null;
   final Map<PathElement,ModelNode> childResources=recursive ? new HashMap<PathElement,ModelNode>() : Collections.<PathElement,ModelNode>emptyMap();
-  List<PathAddress> localResourceAddresses=null;
-  Map<PathAddress,ModelNode> localResourceAccessControlResults=null;
   if (includeAccess) {
-    localResourceAddresses=getLocalResourceAddresses(context,operation,accessControlContext);
-    localResourceAccessControlResults=new HashMap<PathAddress,ModelNode>();
+    accessControlContext.initLocalResourceAddresses(context,operation);
   }
-  final ReadResourceDescriptionAssemblyHandler assemblyHandler=new ReadResourceDescriptionAssemblyHandler(nodeDescription,operations,childResources,localResourceAccessControlResults);
+  final ReadResourceDescriptionAssemblyHandler assemblyHandler=new ReadResourceDescriptionAssemblyHandler(nodeDescription,operations,childResources,accessControlContext);
   context.addStep(assemblyHandler,OperationContext.Stage.MODEL,true);
   if (ops) {
     for (    final Map.Entry<String,OperationEntry> entry : registry.getOperationDescriptions(PathAddress.EMPTY_ADDRESS,inheritedOps).entrySet()) {
@@ -62,7 +58,7 @@
     }
   }
   if (includeAccess) {
-    checkResourceAccess(localResourceAccessControlResults,context,nodeDescription,localResourceAddresses,operations);
+    accessControlContext.checkResourceAccess(context,nodeDescription,operations);
   }
   if (recursive) {
     for (    final PathElement element : registry.getChildAddresses(PathAddress.EMPTY_ADDRESS)) {
@@ -77,17 +73,19 @@
       }
       if (readChild) {
         final int newDepth=recursiveDepth > 0 ? recursiveDepth - 1 : 0;
-        ModelNode rrOp=operation.clone();
+        final ModelNode rrOp=operation.clone();
+        final PathAddress address;
         try {
-          rrOp.get(OP_ADDR).set(PathAddress.pathAddress(opAddr,element).toModelNode());
+          address=PathAddress.pathAddress(accessControlContext.opAddress,element);
         }
  catch (        Exception e) {
           continue;
         }
+        rrOp.get(OP_ADDR).set(address.toModelNode());
         rrOp.get(RECURSIVE_DEPTH.getName()).set(newDepth);
-        ModelNode rrRsp=new ModelNode();
+        final ModelNode rrRsp=new ModelNode();
         childResources.put(element,rrRsp);
-        final OperationStepHandler handler=childReg.isRemote() ? childReg.getOperationHandler(PathAddress.EMPTY_ADDRESS,opName) : new NestedReadResourceDescriptionHandler(new ReadResourceDescriptionAccessControlContext(localResourceAddresses,accessControlContext)){
+        final OperationStepHandler handler=childReg.isRemote() ? childReg.getOperationHandler(PathAddress.EMPTY_ADDRESS,opName) : new NestedReadResourceDescriptionHandler(new ReadResourceDescriptionAccessControlContext(address,accessControlContext)){
           @Override public void execute(          OperationContext context,          ModelNode operation) throws OperationFailedException {
             doExecute(context,operation,accessControlContext);
           }
