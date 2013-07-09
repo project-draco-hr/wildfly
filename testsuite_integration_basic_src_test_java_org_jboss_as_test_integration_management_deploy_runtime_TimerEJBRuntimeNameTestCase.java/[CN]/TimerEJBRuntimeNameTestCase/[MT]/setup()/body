@@ -1,0 +1,24 @@
+{
+  JavaArchive ejbJar=ShrinkWrap.create(JavaArchive.class,SUB_DEPLOYMENT_NAME);
+  ejbJar.addPackage(BEAN_PACKAGE);
+  EnterpriseArchive earArchive=ShrinkWrap.create(EnterpriseArchive.class,DEPLOYMENT_NAME);
+  earArchive.addAsModule(ejbJar);
+  ModelNode addDeploymentOp=new ModelNode();
+  addDeploymentOp.get(ModelDescriptionConstants.ADDRESS).add(ModelDescriptionConstants.DEPLOYMENT,DEPLOYMENT_NAME);
+  addDeploymentOp.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.ADD);
+  addDeploymentOp.get(ModelDescriptionConstants.CONTENT).get(0).get(ModelDescriptionConstants.INPUT_STREAM_INDEX).set(0);
+  addDeploymentOp.get(ModelDescriptionConstants.RUNTIME_NAME).set(RT_NAME);
+  addDeploymentOp.get(ModelDescriptionConstants.AUTO_START).set(true);
+  ModelNode deployOp=new ModelNode();
+  deployOp.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.DEPLOY);
+  deployOp.get(ModelDescriptionConstants.ADDRESS).add(ModelDescriptionConstants.DEPLOYMENT,DEPLOYMENT_NAME);
+  deployOp.get(ModelDescriptionConstants.ENABLED).set(true);
+  ModelNode[] steps=new ModelNode[2];
+  steps[0]=addDeploymentOp;
+  steps[1]=deployOp;
+  ModelNode compositeOp=ModelUtil.createCompositeNode(steps);
+  OperationBuilder ob=new OperationBuilder(compositeOp,true);
+  ob.addInputStream(earArchive.as(ZipExporter.class).exportAsInputStream());
+  ModelNode result=controllerClient.execute(ob.build());
+  Assert.assertTrue("Failed to deploy: " + result,Operations.isSuccessfulOutcome(result));
+}

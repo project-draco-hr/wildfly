@@ -1,0 +1,26 @@
+{
+  final QueueConnectionFactory factory=(QueueConnectionFactory)context.lookup("java:/jms/RemoteConnectionFactory");
+  final QueueConnection connection=factory.createQueueConnection("guest","guest");
+  try {
+    connection.start();
+    final QueueSession session=connection.createQueueSession(false,Session.AUTO_ACKNOWLEDGE);
+    final Queue replyDestination=session.createTemporaryQueue();
+    final String requestMessage="test";
+    final Message message=session.createTextMessage(requestMessage);
+    message.setJMSReplyTo(replyDestination);
+    final Destination destination=(Destination)context.lookup(Constants.QUEUE_JNDI_NAME);
+    final MessageProducer producer=session.createProducer(destination);
+    producer.send(message);
+    producer.close();
+    final QueueReceiver receiver=session.createReceiver(replyDestination);
+    final Message reply=receiver.receive(TimeoutUtil.adjust(1000));
+    assertNotNull("Did not receive a reply on the reply queue. Perhaps the original (request) message didn't make it to the MDB?",reply);
+    final String result=((TextMessage)reply).getText();
+    assertEquals("Unexpected reply messsage",Constants.REPLY_MESSAGE_PREFIX + requestMessage,result);
+  }
+  finally {
+    if (connection != null) {
+      safeClose(connection);
+    }
+  }
+}
