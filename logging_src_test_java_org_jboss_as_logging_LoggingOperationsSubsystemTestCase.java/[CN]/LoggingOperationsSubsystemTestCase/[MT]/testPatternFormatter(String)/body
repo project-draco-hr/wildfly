@@ -1,0 +1,28 @@
+{
+  final KernelServices kernelServices=boot();
+  final String fileHandlerName="test-file-handler";
+  final File logFile=createLogFile();
+  final ModelNode handlerAddress=addFileHandler(kernelServices,profileName,fileHandlerName,org.jboss.logmanager.Level.INFO,logFile,false);
+  final Logger logger=getLogger(profileName);
+  final ModelNode loggerAddress=createLoggerAddress(profileName,logger.getName()).toModelNode();
+  ModelNode op=SubsystemOperations.createAddOperation(loggerAddress);
+  op.get(LoggerResourceDefinition.USE_PARENT_HANDLERS.getName()).set(false);
+  op.get(CommonAttributes.HANDLERS.getName()).setEmptyList().add(fileHandlerName);
+  executeOperation(kernelServices,op);
+  final ModelNode patternFormatterAddress=createPatternFormatterAddress(profileName,"PATTERN").toModelNode();
+  op=SubsystemOperations.createAddOperation(patternFormatterAddress);
+  op.get(PatternFormatterResourceDefinition.PATTERN.getName()).set("[NAMED-PATTERN] %s%n");
+  executeOperation(kernelServices,op);
+  op=SubsystemOperations.createWriteAttributeOperation(handlerAddress,FileHandlerResourceDefinition.NAMED_FORMATTER,"PATTERN");
+  executeOperation(kernelServices,op);
+  logger.info("Test message 1");
+  logger.info("Test message 2");
+  logger.info("Test message 3");
+  final List<String> lines=FileUtils.readLines(logFile);
+  assertEquals("Additional messages written to handler that should not be there.",3,lines.size());
+  assertEquals("Line patterns don't match.","[NAMED-PATTERN] Test message 1",lines.get(0));
+  assertEquals("Line patterns don't match.","[NAMED-PATTERN] Test message 2",lines.get(1));
+  assertEquals("Line patterns don't match.","[NAMED-PATTERN] Test message 3",lines.get(2));
+  op=SubsystemOperations.CompositeOperationBuilder.create().addStep(SubsystemOperations.createRemoveOperation(loggerAddress)).addStep(SubsystemOperations.createRemoveOperation(handlerAddress)).addStep(SubsystemOperations.createRemoveOperation(patternFormatterAddress)).build().getOperation();
+  executeOperation(kernelServices,op);
+}
