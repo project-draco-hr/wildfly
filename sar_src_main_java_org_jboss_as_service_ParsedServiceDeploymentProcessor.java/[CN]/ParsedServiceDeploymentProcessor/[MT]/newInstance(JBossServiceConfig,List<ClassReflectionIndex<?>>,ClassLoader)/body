@@ -1,17 +1,23 @@
 {
-  final JBossServiceConstructorConfig constructorConfig=serviceConfig.getConstructorConfig();
-  final int paramCount=constructorConfig != null ? constructorConfig.getArguments().length : 0;
-  final Class<?>[] types=new Class<?>[paramCount];
-  final Object[] params=new Object[paramCount];
-  if (constructorConfig != null) {
-    final Argument[] arguments=constructorConfig.getArguments();
-    for (int i=0; i < paramCount; i++) {
-      final Argument argument=arguments[i];
-      types[i]=ReflectionUtils.getClass(argument.getType(),classLoader);
-      params[i]=newValue(ReflectionUtils.getClass(argument.getType(),classLoader),argument.getValue());
+  final ClassLoader oldTCCL=WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(deploymentClassLoader);
+  try {
+    final JBossServiceConstructorConfig constructorConfig=serviceConfig.getConstructorConfig();
+    final int paramCount=constructorConfig != null ? constructorConfig.getArguments().length : 0;
+    final Class<?>[] types=new Class<?>[paramCount];
+    final Object[] params=new Object[paramCount];
+    if (constructorConfig != null) {
+      final Argument[] arguments=constructorConfig.getArguments();
+      for (int i=0; i < paramCount; i++) {
+        final Argument argument=arguments[i];
+        types[i]=ReflectionUtils.getClass(argument.getType(),deploymentClassLoader);
+        params[i]=newValue(ReflectionUtils.getClass(argument.getType(),deploymentClassLoader),argument.getValue());
+      }
     }
+    final Constructor<?> constructor=mBeanClassHierarchy.get(0).getConstructor(types);
+    final Object mBeanInstance=ReflectionUtils.newInstance(constructor,params);
+    return mBeanInstance;
   }
-  final Constructor<?> constructor=mBeanClassHierarchy.get(0).getConstructor(types);
-  final Object mBeanInstance=ReflectionUtils.newInstance(constructor,params);
-  return mBeanInstance;
+  finally {
+    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(oldTCCL);
+  }
 }
