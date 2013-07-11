@@ -1,0 +1,42 @@
+{
+  final File binDir=createInstalledImage(env,"consoleSlot",productConfig.getProductName(),productConfig.getProductVersion());
+  String patchID=randomString();
+  String patchElementId=randomString();
+  File patchDir=mkdir(tempDir,patchID);
+  String fileNoConflictName="file-no-conflict.txt";
+  File noConflictFile=touch(binDir,fileNoConflictName);
+  dump(noConflictFile,"original script to run standalone AS7");
+  ContentModification fileNoConflictModified=ContentModificationUtils.modifyMisc(patchDir,patchID,"updated script",noConflictFile,"bin",fileNoConflictName);
+  Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).upgradeIdentity(productConfig.getProductName(),productConfig.getProductVersion(),productConfig.getProductVersion() + "CP1").getParent().addContentModification(fileNoConflictModified).upgradeElement(patchElementId,"base",false).getParent().build();
+  createPatchXMLFile(patchDir,patch,false);
+  File zippedPatch=createZippedPatchFile(patchDir,patch.getPatchId());
+  CommandContext ctx=CommandContextFactory.getInstance().newCommandContext();
+  try {
+    ctx.handle("patch apply " + zippedPatch.getAbsolutePath() + " --distribution="+ env.getInstalledImage().getJbossHome());
+  }
+ catch (  Exception e) {
+    ctx.terminateSession();
+    throw e;
+  }
+  File backupAppclientXmlFile=assertFileExists(env.getInstalledImage().getPatchHistoryDir(patch.getPatchId()),"configuration","appclient","appclient.xml");
+  assertFileContent(originalAppClientHash,backupAppclientXmlFile);
+  File backupStandaloneXmlFile=assertFileExists(env.getInstalledImage().getPatchHistoryDir(patch.getPatchId()),"configuration","standalone","standalone.xml");
+  assertFileContent(originalStandaloneHash,backupStandaloneXmlFile);
+  File backupDomainXmlFile=assertFileExists(env.getInstalledImage().getPatchHistoryDir(patch.getPatchId()),"configuration","domain","domain.xml");
+  assertFileContent(originalDomainHash,backupDomainXmlFile);
+  dump(standaloneXmlFile,"<updated standalone configuration with changes from the added module>");
+  byte[] updatedStandaloneXmlHash=hashFile(standaloneXmlFile);
+  dump(appClientXmlFile,"<updated app client configuration with changes from the added module>");
+  byte[] updatedAppClientXmlHash=hashFile(appClientXmlFile);
+  dump(domainXmlFile,"<updated domain configuration with changes from the added module>");
+  byte[] updatedDomainXmlHash=hashFile(domainXmlFile);
+  try {
+    ctx.handle("patch rollback --reset-configuration=false --distribution=" + env.getInstalledImage().getJbossHome());
+  }
+  finally {
+    ctx.terminateSession();
+  }
+  assertRestoredConfig(env.getInstalledImage().getStandaloneDir(),"standalone.xml",updatedStandaloneXmlHash,originalStandaloneHash);
+  assertRestoredConfig(env.getInstalledImage().getAppClientDir(),"appclient.xml",updatedAppClientXmlHash,originalAppClientHash);
+  assertRestoredConfig(env.getInstalledImage().getDomainDir(),"domain.xml",updatedDomainXmlHash,originalDomainHash);
+}

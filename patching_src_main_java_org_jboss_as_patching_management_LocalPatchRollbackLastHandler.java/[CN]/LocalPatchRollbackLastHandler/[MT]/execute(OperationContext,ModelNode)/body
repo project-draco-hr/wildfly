@@ -1,0 +1,51 @@
+{
+  final boolean restoreConfiguration=PatchResourceDefinition.RESTORE_CONFIGURATION.resolveModelAttribute(context,operation).asBoolean();
+  context.acquireControllerLock();
+  final InstallationManager installationManager=(InstallationManager)context.getServiceRegistry(false).getRequiredService(InstallationManagerService.NAME).getValue();
+  if (installationManager.requiresRestart()) {
+    throw MESSAGES.serverRequiresRestart();
+  }
+  final PatchTool runner=PatchTool.Factory.create(installationManager);
+  final ContentVerificationPolicy policy=PatchTool.Factory.create(operation);
+  try {
+    final PatchingResult result=runner.rollbackLast(policy,restoreConfiguration);
+    installationManager.restartRequired();
+    context.restartRequired();
+    context.completeStep(new OperationContext.ResultHandler(){
+      @Override public void handleResult(      OperationContext.ResultAction resultAction,      OperationContext context,      ModelNode operation){
+        if (resultAction == OperationContext.ResultAction.KEEP) {
+          result.commit();
+        }
+ else {
+          installationManager.clearRestartRequired();
+          context.revertRestartRequired();
+          result.rollback();
+        }
+      }
+    }
+);
+  }
+ catch (  ContentConflictsException e) {
+    final ModelNode failureDescription=context.getFailureDescription();
+    for (    final ContentItem item : e.getConflicts()) {
+      final ContentType type=item.getContentType();
+switch (type) {
+case BUNDLE:
+        failureDescription.get(Constants.BUNDLES).add(item.getRelativePath());
+      break;
+case MODULE:
+    failureDescription.get(Constants.MODULES).add(item.getRelativePath());
+  break;
+case MISC:
+failureDescription.get(Constants.MISC).add(item.getRelativePath());
+break;
+}
+}
+context.stepCompleted();
+}
+catch (PatchingException e) {
+throw new OperationFailedException(e.getMessage(),e);
+}
+ finally {
+}
+}
