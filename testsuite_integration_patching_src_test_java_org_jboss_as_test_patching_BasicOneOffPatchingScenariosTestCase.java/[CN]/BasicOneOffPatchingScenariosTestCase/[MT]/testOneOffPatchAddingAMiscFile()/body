@@ -1,0 +1,34 @@
+{
+  final String fileContent="Hello World!";
+  File tempDir=mkdir(new File(System.getProperty("java.io.tmpdir")),randomString());
+  String patchID=randomString();
+  File oneOffPatchDir=mkdir(tempDir,patchID);
+  ContentModification miscFileAdded=ContentModificationUtils.addMisc(oneOffPatchDir,patchID,fileContent,"awesomeDirectory","awesomeFile");
+  ProductConfig productConfig=new ProductConfig(PRODUCT,AS_VERSION,"main");
+  Patch oneOffPatch=PatchBuilder.create().setPatchId(patchID).setDescription("A one-off patch adding a misc file.").oneOffPatchIdentity(productConfig.getProductName(),productConfig.getProductVersion()).getParent().addContentModification(miscFileAdded).build();
+  createPatchXMLFile(oneOffPatchDir,oneOffPatch);
+  File zippedPatch=createZippedPatchFile(oneOffPatchDir,patchID);
+  controller.start(CONTAINER);
+  CliUtilsForPatching.applyPatch(zippedPatch.getAbsolutePath());
+  Assert.assertTrue("server should be in restart-required mode",CliUtilsForPatching.doesServerRequireRestart());
+  controller.stop(CONTAINER);
+  controller.start(CONTAINER);
+  String path=AS_DISTRIBUTION + FILE_SEPARATOR + Joiner.on(FILE_SEPARATOR).join(new String[]{"awesomeDirectory","awesomeFile"});
+  Assert.assertTrue("File " + path + " should exist",new File(path).exists());
+  Assert.assertTrue("The patch " + patchID + " should be listed as installed",CliUtilsForPatching.getInstalledPatches().contains(patchID));
+  Assert.assertEquals("Unexpected contents of misc file",fileContent,readFile(path));
+  CliUtilsForPatching.rollbackPatch(patchID);
+  Assert.assertTrue("server should be in restart-required mode",CliUtilsForPatching.doesServerRequireRestart());
+  controller.stop(CONTAINER);
+  controller.start(CONTAINER);
+  Assert.assertFalse("The patch " + patchID + " NOT should be listed as installed",CliUtilsForPatching.getInstalledPatches().contains(patchID));
+  Assert.assertFalse("File + " + path + " should have been deleted",new File(path).exists());
+  CliUtilsForPatching.applyPatch(zippedPatch.getAbsolutePath());
+  Assert.assertTrue("server should be in restart-required mode",CliUtilsForPatching.doesServerRequireRestart());
+  controller.stop(CONTAINER);
+  controller.start(CONTAINER);
+  Assert.assertTrue("File " + path + " should exist",new File(path).exists());
+  Assert.assertTrue("The patch " + patchID + " should be listed as installed",CliUtilsForPatching.getInstalledPatches().contains(patchID));
+  Assert.assertEquals("Unexpected contents of misc file",fileContent,readFile(path));
+  controller.stop(CONTAINER);
+}

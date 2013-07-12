@@ -1,0 +1,36 @@
+{
+  File tempDir=mkdir(new File(System.getProperty("java.io.tmpdir")),randomString());
+  String patchID=randomString();
+  File oneOffPatchDir=mkdir(tempDir,patchID);
+  final String testFilePath=AS_DISTRIBUTION + FILE_SEPARATOR + "README.txt";
+  final String testContent="test content";
+  final String originalContent=readFile(testFilePath);
+  ContentModification miscFileModified=ContentModificationUtils.modifyMisc(oneOffPatchDir,patchID,testContent,new File(testFilePath),"README.txt");
+  ProductConfig productConfig=new ProductConfig(PRODUCT,AS_VERSION,"consoleSlot");
+  Patch oneOffPatch=PatchBuilder.create().setPatchId(patchID).setDescription("A one-off patch modifying a misc file.").oneOffPatchIdentity(productConfig.getProductName(),productConfig.getProductVersion()).getParent().addContentModification(miscFileModified).build();
+  createPatchXMLFile(oneOffPatchDir,oneOffPatch);
+  File zippedPatch=createZippedPatchFile(oneOffPatchDir,patchID);
+  controller.start(CONTAINER);
+  CliUtilsForPatching.applyPatch(zippedPatch.getAbsolutePath());
+  Assert.assertTrue("server should be in restart-required mode",CliUtilsForPatching.doesServerRequireRestart());
+  controller.stop(CONTAINER);
+  controller.start(CONTAINER);
+  Assert.assertTrue("The patch " + patchID + " should be listed as installed",CliUtilsForPatching.getInstalledPatches().contains(patchID));
+  String patchContent=readFile(testFilePath);
+  Assert.assertEquals(testContent,patchContent);
+  CliUtilsForPatching.rollbackPatch(patchID);
+  Assert.assertTrue("server should be in restart-required mode",CliUtilsForPatching.doesServerRequireRestart());
+  controller.stop(CONTAINER);
+  controller.start(CONTAINER);
+  Assert.assertFalse("The patch " + patchID + " NOT should be listed as installed",CliUtilsForPatching.getInstalledPatches().contains(patchID));
+  patchContent=readFile(testFilePath);
+  Assert.assertEquals("check content of file after rollback",originalContent,patchContent);
+  CliUtilsForPatching.applyPatch(zippedPatch.getAbsolutePath());
+  Assert.assertTrue("server should be in restart-required mode",CliUtilsForPatching.doesServerRequireRestart());
+  controller.stop(CONTAINER);
+  controller.start(CONTAINER);
+  Assert.assertTrue("The patch " + patchID + " should be listed as installed",CliUtilsForPatching.getInstalledPatches().contains(patchID));
+  patchContent=readFile(testFilePath);
+  Assert.assertEquals("check content of file after reapplying",testContent,patchContent);
+  controller.stop(CONTAINER);
+}
