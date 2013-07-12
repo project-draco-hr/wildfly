@@ -1,2 +1,32 @@
 {
+  final Endpoint endpoint=injectedEndpoint.getValue();
+  RemotingSecurityProvider rsp=securityProviderValue.getValue();
+  ServerAuthenticationProvider sap=rsp.getServerAuthenticationProvider();
+  OptionMap.Builder builder=OptionMap.builder();
+  builder.addAll(rsp.getOptionMap());
+  if (connectorPropertiesOptionMap != null) {
+    builder.addAll(connectorPropertiesOptionMap);
+  }
+  OptionMap resultingMap=builder.getMap();
+  try {
+    final ExternalConnectionProvider provider=endpoint.getConnectionProviderInterface("http-remoting",ExternalConnectionProvider.class);
+    final ExternalConnectionProvider.ConnectionAdaptor adaptor=provider.createConnectionAdaptor(resultingMap,sap);
+    injectedRegistry.getValue().addProtocol(JBOSS_REMOTING,new ChannelListener<StreamConnection>(){
+      @Override public void handleEvent(      final StreamConnection channel){
+        if (channel instanceof SslConnection) {
+          adaptor.adapt(new AssembledConnectedSslStreamChannel((SslConnection)channel,channel.getSourceChannel(),channel.getSinkChannel()));
+        }
+ else {
+          adaptor.adapt(new AssembledConnectedStreamChannel(channel,channel.getSourceChannel(),channel.getSinkChannel()));
+        }
+      }
+    }
+,new RemotingUpgradeHanshake());
+  }
+ catch (  UnknownURISchemeException e) {
+    throw new StartException(e);
+  }
+catch (  IOException e) {
+    throw new StartException(e);
+  }
 }

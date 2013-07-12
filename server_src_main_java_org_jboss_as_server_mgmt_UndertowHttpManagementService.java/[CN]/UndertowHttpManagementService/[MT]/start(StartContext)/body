@@ -27,26 +27,13 @@
       secureBindAddress=secureBinding.getSocketAddress();
     }
   }
-  List<ListenerRegistry.Listener> listeners=new ArrayList<>();
-  if (bindAddress != null) {
-    ListenerRegistry.Listener http=new ListenerRegistry.Listener("http",HTTP_MANAGEMENT,SERVER_NAME,bindAddress);
-    http.setContextInformation("socket-binding",basicBinding);
-    listeners.add(http);
+  final ChannelUpgradeHandler upgradeHandler;
+  if (httpUpgrade) {
+    upgradeHandler=new ChannelUpgradeHandler();
+    context.getChildTarget().addService(HTTP_UPGRADE_SERVICE_NAME,new ValueService<Object>(new ImmediateValue<Object>(upgradeHandler))).install();
   }
-  if (secureBindAddress != null) {
-    ListenerRegistry.Listener https=new ListenerRegistry.Listener("https",HTTPS_MANAGEMENT,SERVER_NAME,bindAddress);
-    https.setContextInformation("socket-binding",secureBinding);
-    listeners.add(https);
-  }
-  final ChannelUpgradeHandler upgradeHandler=new ChannelUpgradeHandler();
-  context.getChildTarget().addService(HTTP_UPGRADE_SERVICE_NAME,new ValueService<Object>(new ImmediateValue<Object>(upgradeHandler))).addAliases(HTTPS_UPGRADE_SERVICE_NAME).install();
-  for (  ListenerRegistry.Listener listener : listeners) {
-    listener.addHttpUpgradeMetadata(new ListenerRegistry.HttpUpgradeMetadata(JBOSS_REMOTING,MANAGEMENT_ENDPOINT));
-  }
-  if (listenerRegistry.getOptionalValue() != null) {
-    for (    ListenerRegistry.Listener listener : listeners) {
-      listenerRegistry.getOptionalValue().addListener(listener);
-    }
+ else {
+    upgradeHandler=null;
   }
   try {
     serverManagement=ManagementHttpServer.create(bindAddress,secureBindAddress,50,modelController,securityRealmService,controlledProcessStateService,consoleMode,consoleSlot,upgradeHandler);
