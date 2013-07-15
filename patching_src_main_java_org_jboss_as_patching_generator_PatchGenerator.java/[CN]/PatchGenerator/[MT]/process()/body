@@ -1,20 +1,12 @@
 {
   try {
     PatchConfig patchConfig=parsePatchConfig();
-    this.oldStructure=patchConfig.getOriginalDistributionStructure();
-    this.newStructure=patchConfig.getUpdatedDistributionStructure();
     Set<String> required=new TreeSet<String>();
     if (newRoot == null) {
-      newRoot=findDefaultNewRoot();
-      if (newRoot == null) {
-        required.add("--updated-dist");
-      }
+      required.add("--updated-dist");
     }
     if (oldRoot == null) {
-      oldRoot=findDefaultOldRoot(patchConfig);
-      if (oldRoot == null) {
-        required.add("--applies-to-dist");
-      }
+      required.add("--applies-to-dist");
     }
     if (patchFile == null) {
       if (newRoot != null) {
@@ -29,19 +21,28 @@
       usage();
       return;
     }
-    createTempStructure("test");
+    createTempStructure(patchConfig.getPatchId());
     final Distribution base=Distribution.create(oldRoot);
     final Distribution updated=Distribution.create(newRoot);
-    final PatchBuilderWrapper wrapper=new PatchBuilderWrapper(){
-      @Override PatchElementBuilder modifyLayer(      String name,      boolean addOn){
-        return oneOffPatchElement(randomUUID().toString(),name,addOn);
-      }
+    if (!base.getName().equals(updated.getName())) {
+      throw new RuntimeException("distribution names don't match");
     }
-;
-    wrapper.setPatchId(randomUUID().toString());
-    wrapper.setDescription("Test patch");
-    wrapper.oneOffPatchIdentity(Version.AS_RELEASE_CODENAME,Version.AS_VERSION);
-    final Patch patch=wrapper.compare(base,updated);
+    if (patchConfig.getAppliesToProduct() != null && !patchConfig.getAppliesToProduct().equals(base.getName())) {
+      throw new RuntimeException("patch target does not match: " + patchConfig.getAppliesToProduct());
+    }
+    if (patchConfig.getAppliesToVersion() != null && !patchConfig.getAppliesToVersion().equals(base.getVersion())) {
+      throw new RuntimeException("patch target version does not match: " + patchConfig.getAppliesToProduct());
+    }
+    final PatchBuilderWrapper builder=patchConfig.toPatchBuilder();
+    builder.setPatchId(patchConfig.getPatchId());
+    builder.setDescription(patchConfig.getDescription());
+    if (patchConfig.getPatchType() == Patch.PatchType.CUMULATIVE) {
+      builder.upgradeIdentity(base.getName(),base.getVersion(),updated.getVersion());
+    }
+ else {
+      builder.oneOffPatchIdentity(base.getName(),base.getVersion());
+    }
+    final Patch patch=builder.compare(base,updated);
     PatchContentWriter.process(tmp,newRoot,patch);
     ZipUtils.zip(tmp,patchFile);
   }
