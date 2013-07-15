@@ -1,0 +1,21 @@
+{
+  final ModelNode model=Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
+  context.removeResource(PathAddress.EMPTY_ADDRESS);
+  context.addStep(new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      final String roleName=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
+      final String baseRole=ServerGroupScopedRoleResourceDefinition.BASE_ROLE.resolveModelAttribute(context,model).asString();
+      final List<ModelNode> hostNodes=HostScopedRolesResourceDefinition.HOSTS.resolveModelAttribute(context,model).asList();
+      authorizer.removeScopedRole(roleName);
+      constraintMap.remove(roleName);
+      context.completeStep(new OperationContext.RollbackHandler(){
+        @Override public void handleRollback(        OperationContext context,        ModelNode operation){
+          HostScopedRoleAdd.addScopedRole(roleName,baseRole,hostNodes,authorizer,constraintMap);
+        }
+      }
+);
+    }
+  }
+,OperationContext.Stage.RUNTIME);
+  context.stepCompleted();
+}

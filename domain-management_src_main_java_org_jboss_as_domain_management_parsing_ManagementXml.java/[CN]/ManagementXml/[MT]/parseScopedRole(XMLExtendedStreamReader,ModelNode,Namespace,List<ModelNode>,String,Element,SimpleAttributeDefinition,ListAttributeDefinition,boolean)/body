@@ -1,0 +1,65 @@
+{
+  final ModelNode addOp=Util.createAddOperation();
+  ops.add(addOp);
+  final ModelNode ourAddress=addOp.get(OP_ADDR).set(address);
+  final Set<Attribute> required=EnumSet.of(Attribute.NAME,Attribute.BASE_ROLE);
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (!isNoNamespaceAttribute(reader,i)) {
+      throw unexpectedAttribute(reader,i);
+    }
+    final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+    required.remove(attribute);
+switch (attribute) {
+case NAME:
+      ourAddress.add(scopedRoleType,value);
+    break;
+case BASE_ROLE:
+  baseRoleDefinition.parseAndSetParameter(value,addOp,reader);
+break;
+default :
+{
+throw unexpectedAttribute(reader,i);
+}
+}
+}
+if (!required.isEmpty()) {
+throw missingRequired(reader,required);
+}
+boolean missingChildren=requireChildren;
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+boolean named=false;
+requireNamespace(reader,expectedNs);
+final Element element=Element.forName(reader.getLocalName());
+if (element == listElement) {
+missingChildren=false;
+final int groupCount=reader.getAttributeCount();
+for (int i=0; i < groupCount; i++) {
+final String value=reader.getAttributeValue(i);
+if (!isNoNamespaceAttribute(reader,i)) {
+throw unexpectedAttribute(reader,i);
+}
+final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+required.remove(attribute);
+if (attribute == Attribute.NAME) {
+named=true;
+listDefinition.parseAndAddParameterElement(value,addOp,reader);
+}
+ else {
+throw unexpectedAttribute(reader,i);
+}
+}
+}
+ else {
+throw unexpectedElement(reader);
+}
+if (!named) {
+throw missingRequired(reader,EnumSet.of(Attribute.NAME));
+}
+requireNoContent(reader);
+}
+if (missingChildren) {
+throw missingRequired(reader,EnumSet.of(listElement));
+}
+}
