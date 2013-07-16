@@ -1,7 +1,6 @@
 {
-  validator.validate(operation);
   final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
-  final String childType=operation.require(GlobalOperationHandlers.CHILD_TYPE.getName()).asString();
+  final String childType=GlobalOperationHandlers.CHILD_TYPE.resolveModelAttribute(context,operation).asString();
   final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS,false);
   ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
   Map<String,Set<String>> childAddresses=GlobalOperationHandlers.getChildAddresses(context,address,registry,resource,childType);
@@ -12,8 +11,27 @@
   childNames=new TreeSet<String>(childNames);
   ModelNode result=context.getResult();
   result.setEmptyList();
+  PathAddress childAddress=address.append(PathElement.pathElement(childType));
+  ModelNode op=Util.createEmptyOperation(READ_RESOURCE_OPERATION,childAddress);
+  op.get(OPERATION_HEADERS).set(operation.get(OPERATION_HEADERS));
+  ModelNode opAddr=op.get(OP_ADDR);
+  ModelNode childProperty=opAddr.require(address.size());
+  Set<Action.ActionEffect> actionEffects=EnumSet.of(Action.ActionEffect.ADDRESS);
+  FilteredData fd=null;
   for (  String childName : childNames) {
-    result.add(childName);
+    childProperty.set(childType,new ModelNode(childName));
+    if (context.authorize(op,actionEffects).getDecision() == AuthorizationResult.Decision.PERMIT) {
+      result.add(childName);
+    }
+ else {
+      if (fd == null) {
+        fd=new FilteredData(address);
+      }
+      fd.addAccessRestrictedResource(PathAddress.pathAddress(opAddr));
+    }
+  }
+  if (fd != null) {
+    context.getResponseHeaders().get(ACCESS_CONTROL).set(fd.toModelNode());
   }
   context.stepCompleted();
 }
