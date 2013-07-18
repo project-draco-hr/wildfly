@@ -1,0 +1,31 @@
+{
+  ModelNode model=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel();
+  ModelNode currentValue=AccessControlResourceDefinition.PROVIDER.resolveValue(context,model);
+  AccessControlResourceDefinition.PROVIDER.validateAndSet(operation,model);
+  final ModelNode newValue=AccessControlResourceDefinition.PROVIDER.resolveValue(context,model);
+  if (!newValue.equals(currentValue)) {
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        if (context.isBooting()) {
+          String providerName=newValue.asString().toUpperCase(Locale.ENGLISH);
+          AccessControlResourceDefinition.Provider provider=AccessControlResourceDefinition.Provider.valueOf(providerName);
+          ConfigurableAuthorizer delegate;
+          if (provider == AccessControlResourceDefinition.Provider.SIMPLE) {
+            delegate=getSimpleAuthorizer();
+          }
+ else {
+            delegate=getRoleBasedAuthorizer();
+          }
+          configurableAuthorizer.setDelegate(delegate);
+          context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+        }
+ else {
+          context.reloadRequired();
+          context.completeStep(OperationContext.RollbackHandler.REVERT_RELOAD_REQUIRED_ROLLBACK_HANDLER);
+        }
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.stepCompleted();
+}
