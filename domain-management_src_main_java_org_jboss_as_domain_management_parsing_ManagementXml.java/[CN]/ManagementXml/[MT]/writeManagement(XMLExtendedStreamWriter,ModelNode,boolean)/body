@@ -1,0 +1,28 @@
+{
+  boolean hasSecurityRealm=management.hasDefined(SECURITY_REALM);
+  boolean hasConnection=management.hasDefined(LDAP_CONNECTION);
+  boolean hasInterface=allowInterfaces && management.hasDefined(MANAGEMENT_INTERFACE);
+  ModelNode accessAuthorization=management.hasDefined(ACCESS) ? management.get(ACCESS,AUTHORIZATION) : null;
+  boolean accessAuthorizationDefined=accessAuthorization != null && accessAuthorization.isDefined();
+  boolean hasServerGroupRoles=accessAuthorizationDefined && accessAuthorization.hasDefined(SERVER_GROUP_SCOPED_ROLE);
+  boolean hasHostRoles=accessAuthorizationDefined && (accessAuthorization.hasDefined(HOST_SCOPED_ROLE) || accessAuthorization.hasDefined(HOST_SCOPED_ROLES));
+  boolean hasRoleMapping=accessAuthorizationDefined && accessAuthorization.hasDefined(ROLE_MAPPING);
+  Map<String,Map<String,Set<String>>> configuredAccessConstraints=getConfiguredAccessConstraints(accessAuthorization);
+  if (!hasSecurityRealm && !hasConnection && !hasInterface&& !hasServerGroupRoles&& !hasHostRoles&& !hasRoleMapping&& configuredAccessConstraints.size() == 0) {
+    return;
+  }
+  writer.writeStartElement(Element.MANAGEMENT.getLocalName());
+  if (hasSecurityRealm) {
+    writeSecurityRealm(writer,management);
+  }
+  if (hasConnection) {
+    writeOutboundConnections(writer,management);
+  }
+  if (allowInterfaces && hasInterface) {
+    writeManagementInterfaces(writer,management);
+  }
+  if (accessAuthorizationDefined) {
+    delegate.writeAccessControl(writer,accessAuthorization);
+  }
+  writer.writeEndElement();
+}
