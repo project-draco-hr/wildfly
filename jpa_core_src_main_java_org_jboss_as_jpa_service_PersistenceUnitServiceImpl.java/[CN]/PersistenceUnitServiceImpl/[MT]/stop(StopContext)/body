@@ -1,33 +1,41 @@
 {
   final ExecutorService executor=executorInjector.getValue();
+  final AccessControlContext accessControlContext=AccessController.doPrivileged(GetAccessControlContextAction.getInstance());
   final Runnable task=new Runnable(){
     @Override public void run(){
-      if (phaseOnePersistenceUnitServiceInjectedValue.getOptionalValue() != null) {
-        JPA_LOGGER.stoppingPersistenceUnitService(2,pu.getScopedPersistenceUnitName());
-      }
+      PrivilegedAction<Void> privilegedAction=new PrivilegedAction<Void>(){
+        @Override public Void run(){
+          if (phaseOnePersistenceUnitServiceInjectedValue.getOptionalValue() != null) {
+            JPA_LOGGER.stoppingPersistenceUnitService(2,pu.getScopedPersistenceUnitName());
+          }
  else {
-        JPA_LOGGER.stoppingService("Persistence Unit",pu.getScopedPersistenceUnitName());
-      }
-      if (entityManagerFactory != null) {
-        WritableServiceBasedNamingStore.pushOwner(deploymentUnitServiceName);
-        try {
-          entityManagerFactory.close();
-        }
- catch (        Throwable t) {
-          JPA_LOGGER.failedToStopPUService(t,pu.getScopedPersistenceUnitName());
-        }
+            JPA_LOGGER.stoppingService("Persistence Unit",pu.getScopedPersistenceUnitName());
+          }
+          if (entityManagerFactory != null) {
+            WritableServiceBasedNamingStore.pushOwner(deploymentUnitServiceName);
+            try {
+              entityManagerFactory.close();
+            }
+ catch (            Throwable t) {
+              JPA_LOGGER.failedToStopPUService(t,pu.getScopedPersistenceUnitName());
+            }
  finally {
-          entityManagerFactory=null;
-          pu.setTempClassLoaderFactory(null);
-          WritableServiceBasedNamingStore.popOwner();
-          persistenceUnitRegistry.remove(getScopedPersistenceUnitName());
+              entityManagerFactory=null;
+              pu.setTempClassLoaderFactory(null);
+              WritableServiceBasedNamingStore.popOwner();
+              persistenceUnitRegistry.remove(getScopedPersistenceUnitName());
+            }
+          }
+          if (proxyBeanManager != null) {
+            proxyBeanManager.setDelegate(null);
+            proxyBeanManager=null;
+          }
+          context.complete();
+          return null;
         }
       }
-      if (proxyBeanManager != null) {
-        proxyBeanManager.setDelegate(null);
-        proxyBeanManager=null;
-      }
-      context.complete();
+;
+      WildFlySecurityManager.doChecked(privilegedAction,accessControlContext);
     }
   }
 ;

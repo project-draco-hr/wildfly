@@ -1,41 +1,49 @@
 {
   final ExecutorService executor=executorInjector.getValue();
+  final AccessControlContext accessControlContext=AccessController.doPrivileged(GetAccessControlContextAction.getInstance());
   final Runnable task=new Runnable(){
     @Override public void run(){
-      try {
-        PhaseOnePersistenceUnitServiceImpl phaseOnePersistenceUnitService=phaseOnePersistenceUnitServiceInjectedValue.getOptionalValue();
-        WritableServiceBasedNamingStore.pushOwner(deploymentUnitServiceName);
-        if (phaseOnePersistenceUnitService != null) {
-          JPA_LOGGER.startingPersistenceUnitService(2,pu.getScopedPersistenceUnitName());
-          phaseOnePersistenceUnitService.setSecondPhaseStarted(true);
-          if (beanManagerInjector.getOptionalValue() != null) {
-            proxyBeanManager=phaseOnePersistenceUnitService.getBeanManager();
-            proxyBeanManager.setDelegate(beanManagerInjector.getOptionalValue());
-          }
-          entityManagerFactory=phaseOnePersistenceUnitService.getEntityManagerFactoryBuilder().build();
-        }
+      PrivilegedAction<Void> privilegedAction=new PrivilegedAction<Void>(){
+        @Override public Void run(){
+          try {
+            PhaseOnePersistenceUnitServiceImpl phaseOnePersistenceUnitService=phaseOnePersistenceUnitServiceInjectedValue.getOptionalValue();
+            WritableServiceBasedNamingStore.pushOwner(deploymentUnitServiceName);
+            if (phaseOnePersistenceUnitService != null) {
+              JPA_LOGGER.startingPersistenceUnitService(2,pu.getScopedPersistenceUnitName());
+              phaseOnePersistenceUnitService.setSecondPhaseStarted(true);
+              if (beanManagerInjector.getOptionalValue() != null) {
+                proxyBeanManager=phaseOnePersistenceUnitService.getBeanManager();
+                proxyBeanManager.setDelegate(beanManagerInjector.getOptionalValue());
+              }
+              entityManagerFactory=phaseOnePersistenceUnitService.getEntityManagerFactoryBuilder().build();
+            }
  else {
-          JPA_LOGGER.startingService("Persistence Unit",pu.getScopedPersistenceUnitName());
-          pu.setTempClassLoaderFactory(new TempClassLoaderFactoryImpl(classLoader));
-          pu.setJtaDataSource(jtaDataSource.getOptionalValue());
-          pu.setNonJtaDataSource(nonJtaDataSource.getOptionalValue());
-          if (beanManagerInjector.getOptionalValue() != null) {
-            proxyBeanManager=new ProxyBeanManager();
-            proxyBeanManager.setDelegate(beanManagerInjector.getOptionalValue());
-            properties.getValue().put(CDI_BEAN_MANAGER,proxyBeanManager);
+              JPA_LOGGER.startingService("Persistence Unit",pu.getScopedPersistenceUnitName());
+              pu.setTempClassLoaderFactory(new TempClassLoaderFactoryImpl(classLoader));
+              pu.setJtaDataSource(jtaDataSource.getOptionalValue());
+              pu.setNonJtaDataSource(nonJtaDataSource.getOptionalValue());
+              if (beanManagerInjector.getOptionalValue() != null) {
+                proxyBeanManager=new ProxyBeanManager();
+                proxyBeanManager.setDelegate(beanManagerInjector.getOptionalValue());
+                properties.getValue().put(CDI_BEAN_MANAGER,proxyBeanManager);
+              }
+              entityManagerFactory=createContainerEntityManagerFactory();
+            }
+            persistenceUnitRegistry.add(getScopedPersistenceUnitName(),getValue());
+            context.complete();
           }
-          entityManagerFactory=createContainerEntityManagerFactory();
-        }
-        persistenceUnitRegistry.add(getScopedPersistenceUnitName(),getValue());
-        context.complete();
-      }
- catch (      Throwable t) {
-        context.failed(new StartException(t));
-      }
+ catch (          Throwable t) {
+            context.failed(new StartException(t));
+          }
  finally {
-        pu.setTempClassLoaderFactory(null);
-        WritableServiceBasedNamingStore.popOwner();
+            pu.setTempClassLoaderFactory(null);
+            WritableServiceBasedNamingStore.popOwner();
+          }
+          return null;
+        }
       }
+;
+      WildFlySecurityManager.doChecked(privilegedAction,accessControlContext);
     }
   }
 ;

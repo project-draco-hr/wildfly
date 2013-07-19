@@ -1,27 +1,35 @@
 {
   final ExecutorService executor=executorInjector.getValue();
+  final AccessControlContext accessControlContext=AccessController.doPrivileged(GetAccessControlContextAction.getInstance());
   final Runnable task=new Runnable(){
     @Override public void run(){
-      JPA_LOGGER.stoppingPersistenceUnitService(1,pu.getScopedPersistenceUnitName());
-      if (entityManagerFactoryBuilder != null) {
-        WritableServiceBasedNamingStore.pushOwner(deploymentUnitServiceName);
-        try {
-          if (secondPhaseStarted == false) {
-            ROOT_LOGGER.tracef("PhaseOnePersistenceUnitServiceImpl cancelling %s " + "which didn't start (phase 2 not reached)",pu.getScopedPersistenceUnitName());
-            entityManagerFactoryBuilder.cancel();
-          }
-        }
- catch (        Throwable t) {
-          JPA_LOGGER.failedToStopPUService(t,pu.getScopedPersistenceUnitName());
-        }
+      PrivilegedAction<Void> privilegedAction=new PrivilegedAction<Void>(){
+        @Override public Void run(){
+          JPA_LOGGER.stoppingPersistenceUnitService(1,pu.getScopedPersistenceUnitName());
+          if (entityManagerFactoryBuilder != null) {
+            WritableServiceBasedNamingStore.pushOwner(deploymentUnitServiceName);
+            try {
+              if (secondPhaseStarted == false) {
+                ROOT_LOGGER.tracef("PhaseOnePersistenceUnitServiceImpl cancelling %s " + "which didn't start (phase 2 not reached)",pu.getScopedPersistenceUnitName());
+                entityManagerFactoryBuilder.cancel();
+              }
+            }
+ catch (            Throwable t) {
+              JPA_LOGGER.failedToStopPUService(t,pu.getScopedPersistenceUnitName());
+            }
  finally {
-          entityManagerFactoryBuilder=null;
-          pu.setTempClassLoaderFactory(null);
-          WritableServiceBasedNamingStore.popOwner();
+              entityManagerFactoryBuilder=null;
+              pu.setTempClassLoaderFactory(null);
+              WritableServiceBasedNamingStore.popOwner();
+            }
+          }
+          properties.getValue().remove(CDI_BEAN_MANAGER);
+          context.complete();
+          return null;
         }
       }
-      properties.getValue().remove(CDI_BEAN_MANAGER);
-      context.complete();
+;
+      WildFlySecurityManager.doChecked(privilegedAction,accessControlContext);
     }
   }
 ;
