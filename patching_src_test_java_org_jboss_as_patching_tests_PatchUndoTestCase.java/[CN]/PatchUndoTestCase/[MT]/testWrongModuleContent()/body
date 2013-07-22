@@ -1,0 +1,19 @@
+{
+  final PatchingTestBuilder builder=createDefaultBuilder();
+  ContentModificationUtils.addModule(builder.getRoot(),"base:patch:001","test.module",randomString());
+  final ModuleItem item=new ModuleItem("test.module","main",WRONG_HASH);
+  final ContentModification wrongModification=new ContentModification(item,IoUtils.NO_CONTENT,ModificationType.ADD);
+  final PatchingTestStepBuilder step1=builder.createStepBuilder();
+  step1.oneOffPatchIdentity(PRODUCT_VERSION).setPatchId("oo1").oneOffPatchElement("base:patch:001","base",false).addContentModification(wrongModification).getParent().addFileWithRandomContent(null,"test","content");
+  try {
+    apply(step1);
+    Assert.fail("should have failed");
+  }
+ catch (  PatchingException e) {
+    Assert.assertFalse(builder.hasFile("test","content"));
+    final InstalledIdentity identity=loadInstallationManager();
+    final PatchableTarget base=identity.getLayer("base");
+    Assert.assertFalse(base.getDirectoryStructure().getModulePatchDirectory("base:patch:001").exists());
+    Assert.assertFalse(identity.getInstalledImage().getPatchHistoryDir("oo1").exists());
+  }
+}
