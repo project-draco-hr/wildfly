@@ -1,0 +1,42 @@
+{
+  final Name name=new CompositeName("test");
+  final ServiceName serviceName=store.buildServiceName(name);
+  final Object value=new Object();
+  try {
+    store.lookup(name);
+    fail("Should have thrown name not found");
+  }
+ catch (  NameNotFoundException expect) {
+  }
+  final Set<ServiceName> fooDuBindingReferences=(Set<ServiceName>)container.getService(JndiNamingDependencyProcessor.serviceName(OWNER_FOO)).getValue();
+  assertFalse(fooDuBindingReferences.contains(serviceName));
+  final Set<ServiceName> barDuBindingReferences=(Set<ServiceName>)container.getService(JndiNamingDependencyProcessor.serviceName(OWNER_BAR)).getValue();
+  assertFalse(barDuBindingReferences.contains(serviceName));
+  WritableServiceBasedNamingStore.pushOwner(OWNER_FOO);
+  try {
+    store.bind(name,value);
+    assertTrue(fooDuBindingReferences.contains(serviceName));
+    assertFalse(barDuBindingReferences.contains(serviceName));
+  }
+  finally {
+    WritableServiceBasedNamingStore.popOwner();
+  }
+  WritableServiceBasedNamingStore.pushOwner(OWNER_BAR);
+  try {
+    store.rebind(name,value);
+    assertFalse(fooDuBindingReferences.contains(serviceName));
+    assertTrue(barDuBindingReferences.contains(serviceName));
+  }
+  finally {
+    WritableServiceBasedNamingStore.popOwner();
+  }
+  WritableServiceBasedNamingStore.pushOwner(OWNER_FOO);
+  try {
+    store.unbind(name);
+    assertFalse(fooDuBindingReferences.contains(serviceName));
+    assertFalse(barDuBindingReferences.contains(serviceName));
+  }
+  finally {
+    WritableServiceBasedNamingStore.popOwner();
+  }
+}
