@@ -106,12 +106,17 @@ deploymentUnit.addToAttachmentList(Attachments.DEPLOYMENT_COMPLETE_SERVICES,real
 final JBossWebRealmService realmService=new JBossWebRealmService(deploymentUnit);
 ServiceBuilder<Realm> realmBuilder=serviceTarget.addService(realmServiceName,realmService);
 realmBuilder.addDependency(DependencyType.REQUIRED,SecurityDomainService.SERVICE_NAME.append(securityDomain),SecurityDomainContext.class,realmService.getSecurityDomainContextInjector()).setInitialMode(Mode.ACTIVE).install();
+boolean componentRegistryExists=true;
 ComponentRegistry componentRegistry=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.COMPONENT_REGISTRY);
 if (componentRegistry == null) {
+componentRegistryExists=false;
 componentRegistry=new ComponentRegistry(null);
 }
 final WebDeploymentService webappService=new WebDeploymentService(webContext,new WebInjectionContainer(module.getClassLoader(),componentRegistry),setupActions,attributes);
 ServiceBuilder<StandardContext> webappBuilder=serviceTarget.addService(webappServiceName,webappService).addDependency(WebSubsystemServices.JBOSS_WEB_HOST.append(hostName),VirtualHost.class,new WebContextInjector(webContext)).addDependencies(dependentComponents).addDependency(realmServiceName,Realm.class,webappService.getRealm()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES)).addDependency(JndiNamingDependencyProcessor.serviceName(deploymentUnit.getServiceName()));
+if (componentRegistryExists) {
+webappBuilder.addDependency(ComponentRegistry.serviceName(deploymentUnit));
+}
 Services.addServerExecutorDependency(webappBuilder,webappService.getServerExecutorInjector(),false);
 for (final SetupAction action : setupActions) {
 webappBuilder.addDependencies(action.dependencies());
