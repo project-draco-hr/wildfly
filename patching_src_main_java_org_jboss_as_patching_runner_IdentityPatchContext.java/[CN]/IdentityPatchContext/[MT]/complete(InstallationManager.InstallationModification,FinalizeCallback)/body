@@ -1,0 +1,28 @@
+{
+  final List<File> processed=new ArrayList<File>();
+  try {
+    try {
+      if (stateUpdater.compareAndSet(this,State.PREPARED,State.INVALIDATE) && mode == PatchingTaskContext.Mode.APPLY) {
+        for (        final File invalidation : moduleInvalidations) {
+          processed.add(invalidation);
+          PatchModuleInvalidationUtils.processFile(invalidation,mode);
+        }
+      }
+      modification.complete();
+      callback.completed(this);
+      state=State.COMPLETED;
+    }
+ catch (    Exception e) {
+      this.moduleInvalidations.clear();
+      this.moduleInvalidations.addAll(processed);
+      throw new RuntimeException(e);
+    }
+  }
+  finally {
+    if (state != State.COMPLETED) {
+      modification.cancel();
+      callback.operationCancelled(this);
+      undoChanges();
+    }
+  }
+}
