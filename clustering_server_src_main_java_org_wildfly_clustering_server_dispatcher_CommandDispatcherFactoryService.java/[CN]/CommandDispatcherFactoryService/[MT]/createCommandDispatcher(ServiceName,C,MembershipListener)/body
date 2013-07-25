@@ -1,3 +1,25 @@
 {
-  return new ServiceCommandDispatcher<>(this.dispatcher,new ServiceCommandMarshaller<>(service,context,listener,this.services,this.marshallingContext,CURRENT_VERSION),this,this.timeout);
+  final int version=CURRENT_VERSION;
+  CommandMarshaller<C> marshaller=new CommandMarshaller<C>(){
+    @Override public <R>byte[] marshal(    Command<R,C> command) throws IOException {
+      try (ByteArrayOutputStream output=new ByteArrayOutputStream()){
+        output.write(version);
+        try (Marshaller marshaller=CommandDispatcherFactoryService.this.marshallingContext.createMarshaller(version)){
+          marshaller.start(Marshalling.createByteOutput(output));
+          marshaller.writeUTF(service.getCanonicalName());
+          marshaller.writeObject(command);
+          marshaller.flush();
+        }
+         return output.toByteArray();
+      }
+     }
+  }
+;
+  this.services.put(service,new SimpleImmutableEntry<Object,MembershipListener>(context,listener));
+  return new ServiceCommandDispatcher<C>(this.dispatcher,marshaller,this,this.timeout){
+    @Override public void close(){
+      CommandDispatcherFactoryService.this.services.remove(service);
+    }
+  }
+;
 }
