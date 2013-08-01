@@ -1,0 +1,35 @@
+{
+  String patchID=randomString();
+  File oneOffPatchDir=mkdir(tempDir,patchID);
+  final String testFile1Name="f1_" + randomString();
+  final String testFilePath1=AS_DISTRIBUTION + FILE_SEPARATOR + testFile1Name;
+  final String testContent1="test content1";
+  final String originalContent1="original content1";
+  setFileContent(testFilePath1,originalContent1);
+  final String testFile2Name="f2_" + randomString();
+  final String testFilePath2=AS_DISTRIBUTION + FILE_SEPARATOR + testFile2Name;
+  final String testContent2="test content2";
+  final String originalContent2="original content2";
+  setFileContent(testFilePath2,originalContent2);
+  ContentModification miscFileModified1=ContentModificationUtils.modifyMisc(oneOffPatchDir,patchID,testContent1,new File(testFilePath1),testFile1Name);
+  ContentModification miscFileModified2=ContentModificationUtils.modifyMisc(oneOffPatchDir,patchID,testContent2,new File(testFilePath2),testFile2Name);
+  ProductConfig productConfig=new ProductConfig(PRODUCT,AS_VERSION,"consoleSlot");
+  Patch oneOffPatch=PatchBuilder.create().setPatchId(patchID).setDescription("A one-off patch modifying multiple misc files.").oneOffPatchIdentity(productConfig.getProductName(),productConfig.getProductVersion()).getParent().addContentModification(miscFileModified1).addContentModification(miscFileModified2).build();
+  createPatchXMLFile(oneOffPatchDir,oneOffPatch);
+  File zippedPatch=createZippedPatchFile(oneOffPatchDir,patchID);
+  logger.info(zippedPatch.getAbsolutePath());
+  if (!new File(testFilePath2).setWritable(false)) {
+    logger.warn("Unable to revoke write permissions on file " + testFilePath2);
+    Assume.assumeFalse(true);
+  }
+  controller.start(CONTAINER);
+  boolean success=CliUtilsForPatching.applyPatch(zippedPatch.getAbsolutePath());
+  new File(testFilePath2).setWritable(true);
+  Assert.assertFalse("Patch should not be applied successfully",success);
+  Assert.assertFalse("The patch should not be listed as installed",CliUtilsForPatching.getInstalledPatches().contains(patchID));
+  controller.stop(CONTAINER);
+  String actualContent1=readFile(testFilePath1);
+  String actualContent2=readFile(testFilePath2);
+  Assert.assertEquals(originalContent1,actualContent1);
+  Assert.assertEquals(originalContent2,actualContent2);
+}
