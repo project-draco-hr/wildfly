@@ -1,8 +1,8 @@
 {
+  final ServiceContainer serviceContainer=context.getController().getServiceContainer();
   ClassLoader oldTccl=WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(getClass());
   try {
     jmsServer=new JMSServerManagerImpl(hornetQServer.getValue(),new AS7BindingRegistry(context.getController().getServiceContainer()));
-    final ServiceBuilder<Void> hornetqActivationService=context.getChildTarget().addService(HornetQActivationService.getHornetQActivationServiceName(hqServiceName),new HornetQActivationService()).setInitialMode(Mode.ACTIVE);
     hornetQServer.getValue().registerActivateCallback(new ActivateCallback(){
       private volatile ServiceController<Void> hornetqActivationController;
       public void preActivate(){
@@ -10,7 +10,7 @@
       public void activated(){
         hornetQServer.getValue().getRemotingService().allowInvmSecurityOverride(new HornetQPrincipal(HornetQDefaultCredentials.getUsername(),HornetQDefaultCredentials.getPassword()));
         if (hornetqActivationController == null) {
-          hornetqActivationController=hornetqActivationService.install();
+          hornetqActivationController=serviceContainer.addService(HornetQActivationService.getHornetQActivationServiceName(hqServiceName),new HornetQActivationService()).setInitialMode(Mode.ACTIVE).install();
         }
  else {
           hornetqActivationController.setMode(ACTIVE);
@@ -19,7 +19,8 @@
       public void deActivate(){
         if (hornetqActivationController != null) {
           if (!hornetqActivationController.getState().in(STOPPING,REMOVED)) {
-            hornetqActivationController.compareAndSetMode(ACTIVE,PASSIVE);
+            hornetqActivationController.compareAndSetMode(ACTIVE,REMOVE);
+            hornetqActivationController=null;
           }
         }
       }
