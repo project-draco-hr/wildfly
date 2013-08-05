@@ -1,0 +1,22 @@
+{
+  String layerPatchID=randomString();
+  File cpPatchDir=mkdir(tempDir,patchID);
+  Asset newManifest=new Asset(){
+    @Override public InputStream openStream(){
+      String line="JBossAS-Release-Version: " + targetAsVersion;
+      return new ByteArrayInputStream(line.getBytes());
+    }
+  }
+;
+  JavaArchive versionModuleJar=ShrinkWrap.create(JavaArchive.class).addPackage("org.jboss.as.version").addAsManifestResource(newManifest,"MANIFEST.MF");
+  ByteArrayOutputStream baos=new ByteArrayOutputStream();
+  versionModuleJar.as(ZipExporter.class).exportTo(baos);
+  ResourceItem versionModuleResourceItem=new ResourceItem("as-version.jar",baos.toByteArray());
+  final String versionModuleName="org.jboss.as.version";
+  final String originalVersionModulePath=MODULES_PATH + FILE_SEPARATOR + versionModuleName.replace(".",FILE_SEPARATOR)+ FILE_SEPARATOR+ "main";
+  ContentModification versionModuleModified=ContentModificationUtils.modifyModule(cpPatchDir,patchID,versionModuleName,HashUtils.hashFile(new File(originalVersionModulePath)),versionModuleResourceItem);
+  ProductConfig productConfig=new ProductConfig(PRODUCT,asVersion,"main");
+  Patch cpPatch=PatchBuilder.create().setPatchId(patchID).setDescription("A cp patch.").upgradeIdentity(productConfig.getProductName(),productConfig.getProductVersion(),targetAsVersion).getParent().upgradeElement(layerPatchID,"base",false).addContentModification(versionModuleModified).getParent().build();
+  createPatchXMLFile(cpPatchDir,cpPatch);
+  return createZippedPatchFile(cpPatchDir,patchID);
+}
