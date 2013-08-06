@@ -1,0 +1,49 @@
+{
+  if (logDir == null) {
+    logDir=new File(".");
+    logDir=new File(logDir,"target");
+    logDir=new File(logDir,"audit-log-test-log-dir").getAbsoluteFile();
+    if (!logDir.exists()) {
+      logDir.mkdirs();
+    }
+  }
+  for (  File file : logDir.listFiles()) {
+    file.delete();
+  }
+  pathManagerService=new PathManagerService(){
+{
+      super.addHardcodedAbsolutePath(getContainer(),"log.dir",logDir.getAbsolutePath());
+    }
+  }
+;
+  GlobalOperationHandlers.registerGlobalOperations(registration,processType);
+  registration.registerOperationHandler(CompositeOperationHandler.DEFINITION,CompositeOperationHandler.INSTANCE);
+  TestServiceListener listener=new TestServiceListener();
+  listener.reset(1);
+  getContainer().addService(PathManagerService.SERVICE_NAME,pathManagerService).addListener(listener).install();
+  try {
+    listener.latch.await(10,TimeUnit.SECONDS);
+  }
+ catch (  InterruptedException e) {
+    Thread.currentThread().interrupt();
+    throw new RuntimeException(e);
+  }
+  registration.registerSubModel(PathResourceDefinition.createSpecified(pathManagerService));
+  registration.registerSubModel(CoreManagementResourceDefinition.forStandaloneServer(new DelegatingConfigurableAuthorizer(),auditLogger,pathManagerService,new EnvironmentNameReader(){
+    public boolean isServer(){
+      return true;
+    }
+    public String getServerName(){
+      return "Test";
+    }
+    public String getHostName(){
+      return null;
+    }
+    public String getProductName(){
+      return null;
+    }
+  }
+));
+  pathManagerService.addPathManagerResources(rootResource);
+  rootResource.registerChild(CoreManagementResourceDefinition.PATH_ELEMENT,Resource.Factory.create());
+}

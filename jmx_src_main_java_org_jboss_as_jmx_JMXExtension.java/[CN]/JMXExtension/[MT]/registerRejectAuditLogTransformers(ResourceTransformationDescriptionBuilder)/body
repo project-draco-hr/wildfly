@@ -1,0 +1,38 @@
+{
+  ResourceTransformationDescriptionBuilder loggerBuilder=builder.addChildResource(JmxAuditLoggerResourceDefinition.PATH_ELEMENT);
+  loggerBuilder.getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,JmxAuditLoggerResourceDefinition.ENABLED).addRejectCheck(new RejectAttributeChecker.DefaultRejectAttributeChecker(){
+    public String getRejectionLogMessage(    Map<String,ModelNode> attributes){
+      return JmxMessages.MESSAGES.auditLogEnabledMustBeFalse();
+    }
+    protected boolean rejectAttribute(    PathAddress address,    String attributeName,    ModelNode attributeValue,    TransformationContext context){
+      return !attributeValue.isDefined() || attributeValue.asString().equals("true");
+    }
+  }
+,JmxAuditLoggerResourceDefinition.ENABLED);
+  loggerBuilder.setCustomResourceTransformer(ResourceTransformer.DISCARD);
+  builder.rejectChildResource(JmxAuditLoggerResourceDefinition.PATH_ELEMENT);
+  loggerBuilder.setCustomResourceTransformer(ResourceTransformer.DISCARD);
+  loggerBuilder.addOperationTransformationOverride(ADD).inheritResourceAttributeDefinitions().setCustomOperationTransformer(OperationTransformer.DISCARD);
+  loggerBuilder.addOperationTransformationOverride(REMOVE).inheritResourceAttributeDefinitions().setCustomOperationTransformer(OperationTransformer.DISCARD);
+  loggerBuilder.addOperationTransformationOverride(UNDEFINE_ATTRIBUTE_OPERATION).inheritResourceAttributeDefinitions().setCustomOperationTransformer(new OperationTransformer(){
+    public TransformedOperation transformOperation(    TransformationContext context,    PathAddress address,    ModelNode operation) throws OperationFailedException {
+      if (operation.require(ModelDescriptionConstants.NAME).asString().equals(JmxAuditLoggerResourceDefinition.ENABLED.getName())) {
+        OperationRejectionPolicy rejectPolicy=new OperationRejectionPolicy(){
+          @Override public boolean rejectOperation(          ModelNode preparedResult){
+            return true;
+          }
+          @Override public String getFailureDescription(){
+            return JmxMessages.MESSAGES.auditLogEnabledMustBeFalse();
+          }
+        }
+;
+        return new TransformedOperation(null,rejectPolicy,OperationResultTransformer.ORIGINAL_RESULT);
+      }
+      return OperationTransformer.DISCARD.transformOperation(context,address,operation);
+    }
+  }
+);
+  loggerBuilder.addOperationTransformationOverride(WRITE_ATTRIBUTE_OPERATION).inheritResourceAttributeDefinitions().setCustomOperationTransformer(OperationTransformer.DISCARD);
+  loggerBuilder.addOperationTransformationOverride(READ_ATTRIBUTE_OPERATION).inheritResourceAttributeDefinitions().setCustomOperationTransformer(OperationTransformer.DISCARD);
+  loggerBuilder.discardChildResource(JmxAuditLogHandlerReferenceResourceDefinition.PATH_ELEMENT);
+}

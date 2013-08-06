@@ -1,0 +1,46 @@
+{
+  File file1=new File(logDir,"test-file.log");
+  SimpleSyslogServer server=SimpleSyslogServer.createTcp(6666,false);
+  try {
+    ModelNode op=createAddSyslogHandlerTcpOperation("tcp","test-formatter",InetAddress.getByName("localhost"),SYSLOG_PORT,null,null);
+    executeForResult(op);
+    List<ModelNode> records1=readFile(file1,2);
+    List<ModelNode> ops=checkBootRecordHeader(records1.get(1),1,"core",false,false,true);
+    checkOpsEqual(op,ops.get(0));
+    op=createAddHandlerReferenceOperation("tcp");
+    executeForResult(op);
+    records1=readFile(file1,3);
+    ops=checkBootRecordHeader(records1.get(2),1,"core",false,false,true);
+    ModelNode syslogOp=checkBootRecordHeader(getSyslogRecord(server.receiveData()),1,"core",false,false,true).get(0);
+    checkOpsEqual(op,syslogOp);
+    Assert.assertEquals(syslogOp,ops.get(0));
+    op=createRemoveHandlerReferenceOperation("tcp");
+    executeForResult(op);
+    records1=readFile(file1,4);
+    ops=checkBootRecordHeader(records1.get(3),1,"core",false,false,true);
+    syslogOp=checkBootRecordHeader(getSyslogRecord(server.receiveData()),1,"core",false,false,true).get(0);
+    checkOpsEqual(op,syslogOp);
+    Assert.assertEquals(syslogOp,ops.get(0));
+  }
+  finally {
+    server.close();
+  }
+  server=SimpleSyslogServer.createTcp(6666,false);
+  try {
+    ModelNode op=createAddHandlerReferenceOperation("tcp");
+    executeForResult(op);
+    List<ModelNode> records1=readFile(file1,5);
+    List<ModelNode> ops=checkBootRecordHeader(records1.get(4),1,"core",false,false,true);
+    ModelNode syslogOp=checkBootRecordHeader(getSyslogRecord(server.receiveData()),1,"core",false,false,true).get(0);
+    checkOpsEqual(op,syslogOp);
+    Assert.assertEquals(syslogOp,ops.get(0));
+    op=createRemoveHandlerReferenceOperation("test-file");
+    executeForResult(op);
+    records1=readFile(file1,6);
+    ops=checkBootRecordHeader(records1.get(5),1,"core",false,false,true);
+    checkOpsEqual(op,ops.get(0));
+  }
+  finally {
+    server.close();
+  }
+}

@@ -1,0 +1,29 @@
+{
+  SimpleSyslogServer server1=SimpleSyslogServer.createUdp(SYSLOG_PORT);
+  try {
+    SimpleSyslogServer server2=SimpleSyslogServer.createUdp(SYSLOG_PORT2);
+    try {
+      executeForResult(createAddSyslogHandlerUdpOperation("rfc-3164","test-formatter",InetAddress.getByName("localhost"),SYSLOG_PORT,SyslogType.RFC3164,5000));
+      executeForResult(createAddSyslogHandlerUdpOperation("rfc-5424","test-formatter",InetAddress.getByName("localhost"),SYSLOG_PORT2,SyslogType.RFC5424,5000));
+      ModelNode composite=new ModelNode();
+      composite.get(OP_ADDR).setEmptyList();
+      composite.get(OP).set(COMPOSITE);
+      composite.get(STEPS).add(createAddHandlerReferenceOperation("rfc-3164"));
+      composite.get(STEPS).add(createAddHandlerReferenceOperation("rfc-5424"));
+      executeForResult(composite);
+      byte[] bytes1=server1.receiveData();
+      byte[] bytes2=server2.receiveData();
+      Assert.assertTrue(bytes2.length > bytes1.length);
+      ModelNode op1=checkBootRecordHeader(getSyslogRecord(bytes1),1,"core",false,false,true).get(0);
+      checkOpsEqual(composite,op1);
+      ModelNode op2=checkBootRecordHeader(getSyslogRecord(bytes2),1,"core",false,false,true).get(0);
+      Assert.assertEquals(op1,op2);
+    }
+  finally {
+      server2.close();
+    }
+  }
+  finally {
+    server1.close();
+  }
+}

@@ -1,0 +1,25 @@
+{
+  final Resource resource=context.createResource(PathAddress.EMPTY_ADDRESS);
+  final ModelNode model=resource.getModel();
+  for (  AttributeDefinition attr : JmxAuditLoggerResourceDefinition.ATTRIBUTE_DEFINITIONS) {
+    attr.validateAndSet(operation,model);
+  }
+  context.addStep(new OperationStepHandler(){
+    public void execute(    final OperationContext context,    final ModelNode operation) throws OperationFailedException {
+      final boolean wasReadOnly=auditLoggerProvider.isLogReadOnly();
+      final AuditLogger.Status oldStatus=auditLoggerProvider.getLoggerStatus();
+      auditLoggerProvider.setLogReadOnly(JmxAuditLoggerResourceDefinition.LOG_READ_ONLY.resolveModelAttribute(context,model).asBoolean());
+      boolean enabled=JmxAuditLoggerResourceDefinition.ENABLED.resolveModelAttribute(context,model).asBoolean();
+      auditLoggerProvider.setLoggerStatus(enabled ? AuditLogger.Status.LOGGING : AuditLogger.Status.DISABLED);
+      context.completeStep(new OperationContext.RollbackHandler(){
+        @Override public void handleRollback(        OperationContext context,        ModelNode operation){
+          auditLoggerProvider.setLogReadOnly(wasReadOnly);
+          auditLoggerProvider.setLoggerStatus(oldStatus);
+        }
+      }
+);
+    }
+  }
+,OperationContext.Stage.RUNTIME);
+  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+}

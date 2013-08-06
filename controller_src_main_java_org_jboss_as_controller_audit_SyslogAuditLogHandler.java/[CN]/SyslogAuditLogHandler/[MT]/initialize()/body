@@ -1,0 +1,80 @@
+{
+  try {
+    if (handler != null) {
+      return;
+    }
+    final Protocol protocol;
+switch (transport) {
+case UDP:
+      protocol=Protocol.UDP;
+    break;
+case TCP:
+  protocol=Protocol.TCP;
+break;
+case TLS:
+protocol=Protocol.SSL_TCP;
+break;
+default :
+throw new IllegalStateException("Unknown protocol");
+}
+handler=new SyslogHandler(syslogServerAddress,port,SyslogHandler.DEFAULT_FACILITY,syslogType,protocol,hostName == null ? InetAddress.getLocalHost().getHostName() : hostName);
+handler.setEscapeEnabled(false);
+handler.setAppName(appName);
+handler.setTruncate(truncate);
+if (maxLength != 0) {
+handler.setMaxLength(maxLength);
+}
+handler.setSyslogType(syslogType);
+if (transport != Transport.UDP) {
+if (messageTransfer == MessageTransfer.NON_TRANSPARENT_FRAMING) {
+handler.setUseCountingFraming(false);
+handler.setMessageDelimiter("\n");
+handler.setUseMessageDelimiter(true);
+}
+ else {
+handler.setUseCountingFraming(true);
+handler.setMessageDelimiter(null);
+handler.setUseMessageDelimiter(false);
+}
+if (transport == Transport.TLS && (tlsClientCertStorePath != null || tlsTrustStorePath != null)) {
+final SSLContext context=SSLContext.getInstance("TLS");
+KeyManager[] keyManagers=null;
+if (tlsClientCertStorePath != null) {
+final KeyManagerFactory kmf=KeyManagerFactory.getInstance("SunX509");
+final FileInputStream in=new FileInputStream(pathManager.resolveRelativePathEntry(tlsClientCertStorePath,tlsClientCertStoreRelativeTo));
+try {
+final KeyStore ks=KeyStore.getInstance("JKS");
+ks.load(in,tlsClientCertStorePassword.toCharArray());
+kmf.init(ks,tlsClientCertStoreKeyPassword != null ? tlsClientCertStoreKeyPassword.toCharArray() : tlsClientCertStorePassword.toCharArray());
+keyManagers=kmf.getKeyManagers();
+}
+  finally {
+IoUtils.safeClose(in);
+}
+}
+TrustManager[] trustManagers=null;
+if (tlsTrustStorePath != null) {
+final TrustManagerFactory tmf=TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+final FileInputStream in=new FileInputStream(pathManager.resolveRelativePathEntry(tlsTrustStorePath,tlsTrustStoreRelativeTo));
+try {
+final KeyStore ks=KeyStore.getInstance("JKS");
+ks.load(in,tlsTrustStorePassword.toCharArray());
+tmf.init(ks);
+trustManagers=tmf.getTrustManagers();
+}
+  finally {
+IoUtils.safeClose(in);
+}
+}
+context.init(keyManagers,trustManagers,null);
+handler.setOutputStream(new SSLContextOutputStream(context,syslogServerAddress,port));
+}
+ else {
+handler.setProtocol(transport == Transport.TCP ? Protocol.TCP : Protocol.SSL_TCP);
+}
+}
+}
+ catch (Exception e) {
+throw new RuntimeException(e);
+}
+}

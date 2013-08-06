@@ -1,11 +1,29 @@
 {
-  SecurityContext securityContext=exchange.getAttachment(SecurityContext.ATTACHMENT_KEY);
-  Subject subject=null;
+  final SecurityContext securityContext=exchange.getAttachment(SecurityContext.ATTACHMENT_KEY);
+  Subject useSubject=null;
   if (securityContext != null) {
-    Account account=securityContext.getAuthenticatedAccount();
+    final Account account=securityContext.getAuthenticatedAccount();
     if (account instanceof SubjectAccount) {
-      subject=((SubjectAccount)account).getSubject();
+      PrivilegedAction<Subject> copyAction=new PrivilegedAction<Subject>(){
+        @Override public Subject run(){
+          final Subject subject=((SubjectAccount)account).getSubject();
+          final Subject copySubject=new Subject();
+          copySubject.getPrincipals().addAll(subject.getPrincipals());
+          copySubject.getPrivateCredentials().addAll(subject.getPrivateCredentials());
+          copySubject.getPublicCredentials().addAll(subject.getPublicCredentials());
+          SocketAddress address=exchange.getConnection().getPeerAddress();
+          if (address instanceof InetSocketAddress) {
+            InetAddressPrincipal principal=new InetAddressPrincipal(((InetSocketAddress)address).getAddress());
+            copySubject.getPrincipals().add(new org.jboss.as.controller.security.InetAddressPrincipal(principal));
+          }
+          copySubject.getPrincipals().add(new AccessMechanismPrincipal(AccessMechanism.HTTP));
+          copySubject.setReadOnly();
+          return copySubject;
+        }
+      }
+;
+      useSubject=WildFlySecurityManager.isChecking() ? AccessController.doPrivileged(copyAction) : copyAction.run();
     }
   }
-  handleRequest(exchange,subject);
+  handleRequest(exchange,useSubject);
 }

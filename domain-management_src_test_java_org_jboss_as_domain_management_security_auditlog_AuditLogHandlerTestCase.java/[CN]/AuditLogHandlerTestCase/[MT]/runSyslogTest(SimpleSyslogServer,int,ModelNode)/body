@@ -1,0 +1,42 @@
+{
+  try {
+    File file=new File(logDir,"test-file.log");
+    executeForResult(handlerAddOperation);
+    List<ModelNode> records1=readFile(file,2);
+    List<ModelNode> ops=checkBootRecordHeader(records1.get(1),1,"core",false,false,true);
+    checkOpsEqual(handlerAddOperation,ops.get(0));
+    ModelNode op=createAddHandlerReferenceOperation("syslog-test");
+    executeForResult(op);
+    records1=readFile(file,3);
+    ops=checkBootRecordHeader(records1.get(2),1,"core",false,false,true);
+    checkOpsEqual(op,ops.get(0));
+    byte[] receivedBytes=server.receiveData();
+    List<ModelNode> syslogOps=checkBootRecordHeader(getSyslogRecord(receivedBytes),1,"core",false,false,true);
+    Assert.assertEquals(ops,syslogOps);
+    op=Util.createOperation(READ_RESOURCE_DESCRIPTION_OPERATION,PathAddress.EMPTY_ADDRESS);
+    executeForResult(op);
+    records1=readFile(file,4);
+    ops=checkBootRecordHeader(records1.get(3),1,"core",true,false,true);
+    checkOpsEqual(op,ops.get(0));
+    receivedBytes=server.receiveData();
+    syslogOps=checkBootRecordHeader(getSyslogRecord(receivedBytes),1,"core",true,false,true);
+    Assert.assertEquals(ops,syslogOps);
+    op=createRemoveHandlerReferenceOperation("syslog-test");
+    executeForResult(op);
+    records1=readFile(file,5);
+    ops=checkBootRecordHeader(records1.get(4),1,"core",false,false,true);
+    checkOpsEqual(op,ops.get(0));
+    receivedBytes=server.receiveData();
+    syslogOps=checkBootRecordHeader(getSyslogRecord(receivedBytes),1,"core",false,false,true);
+    Assert.assertEquals(ops,syslogOps);
+    op=Util.createOperation(READ_RESOURCE_DESCRIPTION_OPERATION,PathAddress.EMPTY_ADDRESS);
+    executeForResult(op);
+    records1=readFile(file,6);
+    ops=checkBootRecordHeader(records1.get(5),1,"core",true,false,true);
+    checkOpsEqual(op,ops.get(0));
+    Assert.assertNull(server.pollData());
+  }
+  finally {
+    server.close();
+  }
+}

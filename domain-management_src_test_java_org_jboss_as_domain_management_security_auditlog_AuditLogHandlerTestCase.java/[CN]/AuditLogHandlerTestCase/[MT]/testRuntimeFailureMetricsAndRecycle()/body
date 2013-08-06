@@ -1,0 +1,71 @@
+{
+  ModelNode op=createAddSyslogHandlerTcpOperation("syslog","test-formatter",InetAddress.getByName("localhost"),SYSLOG_PORT,null,MessageTransfer.OCTET_COUNTING);
+  op.get(STEPS).asList().get(0).get(SyslogAuditLogHandlerResourceDefinition.MAX_FAILURE_COUNT.getName()).set(2);
+  executeForResult(op);
+  final ModelNode readResource=Util.createOperation(READ_RESOURCE_OPERATION,AUDIT_ADDR);
+  readResource.get(ModelDescriptionConstants.RECURSIVE).set(true);
+  readResource.get(ModelDescriptionConstants.INCLUDE_RUNTIME).set(true);
+  ModelNode result=executeForResult(readResource);
+  checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.FILE_HANDLER,"test-file"),3,0,false);
+  checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.SYSLOG_HANDLER,"syslog"),2,0,false);
+  for (  File file : logDir.listFiles()) {
+    file.delete();
+  }
+  logDir.delete();
+  executeForResult(createAddHandlerReferenceOperation("syslog"));
+  result=executeForResult(readResource);
+  checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.FILE_HANDLER,"test-file"),3,1,false);
+  checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.SYSLOG_HANDLER,"syslog"),2,1,false);
+  result=executeForResult(readResource);
+  checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.FILE_HANDLER,"test-file"),3,2,false);
+  checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.SYSLOG_HANDLER,"syslog"),2,2,true);
+  result=executeForResult(readResource);
+  checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.FILE_HANDLER,"test-file"),3,3,true);
+  checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.SYSLOG_HANDLER,"syslog"),2,2,true);
+  SimpleSyslogServer server=SimpleSyslogServer.createTcp(6666,true);
+  try {
+    checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.FILE_HANDLER,"test-file"),3,3,true);
+    checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.SYSLOG_HANDLER,"syslog"),2,2,true);
+    executeForResult(Util.createOperation(ModelDescriptionConstants.RECYCLE,createSyslogHandlerAddress("syslog")));
+    server.receiveData();
+    logDir.mkdir();
+    result=executeForResult(readResource);
+    server.receiveData();
+    checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.FILE_HANDLER,"test-file"),3,3,true);
+    checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.SYSLOG_HANDLER,"syslog"),2,0,false);
+    executeForResult(Util.createOperation(ModelDescriptionConstants.RECYCLE,createFileHandlerAddress("test-file")));
+    server.receiveData();
+    File file=new File(logDir,"test-file.log");
+    Assert.assertTrue(file.exists());
+    result=executeForResult(readResource);
+    server.receiveData();
+    checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.FILE_HANDLER,"test-file"),3,0,false);
+    checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.SYSLOG_HANDLER,"syslog"),2,0,false);
+    long fileSize=file.length();
+    Assert.assertEquals(1,logDir.listFiles().length);
+    executeForResult(Util.createOperation(ModelDescriptionConstants.RECYCLE,createFileHandlerAddress("test-file")));
+    server.receiveData();
+    Assert.assertEquals(2,logDir.listFiles().length);
+    for (    File current : logDir.listFiles()) {
+      if (current.getName().equals(file.getName())) {
+        Assert.assertFalse(fileSize == current.length());
+      }
+ else {
+        Assert.assertEquals(fileSize,current.length());
+      }
+    }
+    op=Util.getWriteAttributeOperation(createFileHandlerAddress("test-file"),AuditLogHandlerResourceDefinition.MAX_FAILURE_COUNT.getName(),new ModelNode(7));
+    executeForResult(op);
+    server.receiveData();
+    op=Util.getWriteAttributeOperation(createSyslogHandlerAddress("syslog"),AuditLogHandlerResourceDefinition.MAX_FAILURE_COUNT.getName(),new ModelNode(4));
+    executeForResult(op);
+    server.receiveData();
+    result=executeForResult(readResource);
+    server.receiveData();
+    checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.FILE_HANDLER,"test-file"),7,0,false);
+    checkHandlerRuntimeFailureMetrics(result.get(ModelDescriptionConstants.SYSLOG_HANDLER,"syslog"),4,0,false);
+  }
+  finally {
+    server.close();
+  }
+}

@@ -1,0 +1,59 @@
+{
+  final PathAddress pathAddress=getAffectedHandlerAddress(operation);
+  final String name=Util.getNameFromAddress(pathAddress);
+  final Resource handlerResource=context.readResourceFromRoot(pathAddress);
+  final ModelNode handlerModel=handlerResource.getModel();
+  final String formatterName=FORMATTER.resolveModelAttribute(context,handlerModel).asString();
+  final int maxFailureCount=MAX_FAILURE_COUNT.resolveModelAttribute(context,handlerModel).asInt();
+  final SyslogAuditLogHandler handler=new SyslogAuditLogHandler(name,formatterName,maxFailureCount,pathManager);
+  if (environmentReader.isServer()) {
+    handler.setHostName(environmentReader.getHostName() != null ? environmentReader.getHostName() + ":" + environmentReader.getServerName() : environmentReader.getServerName());
+  }
+ else {
+    handler.setHostName(environmentReader.getHostName());
+  }
+  if (environmentReader.getProductName() != null) {
+    handler.setAppName(environmentReader.getProductName());
+  }
+  handler.setSyslogType(SyslogHandler.SyslogType.valueOf(SYSLOG_FORMAT.resolveModelAttribute(context,handlerModel).asString()));
+  handler.setTruncate(TRUNCATE.resolveModelAttribute(context,handlerModel).asBoolean());
+  if (handlerModel.hasDefined(MAX_LENGTH.getName())) {
+    handler.setMaxLength(MAX_LENGTH.resolveModelAttribute(context,handlerModel).asInt());
+  }
+  final Set<ResourceEntry> protocols=handlerResource.getChildren(PROTOCOL);
+  if (protocols.size() == 0) {
+    throw DomainManagementMessages.MESSAGES.noSyslogProtocol();
+  }
+  final ResourceEntry protocol=protocols.iterator().next();
+  final SyslogAuditLogHandler.Transport transport=SyslogAuditLogHandler.Transport.valueOf(protocol.getPathElement().getValue().toUpperCase());
+  handler.setTransport(transport);
+  try {
+    handler.setSyslogServerAddress(InetAddress.getByName(SyslogAuditLogProtocolResourceDefinition.HOST.resolveModelAttribute(context,protocol.getModel()).asString()));
+  }
+ catch (  UnknownHostException e) {
+    throw new OperationFailedException(e);
+  }
+  handler.setPort(SyslogAuditLogProtocolResourceDefinition.PORT.resolveModelAttribute(context,protocol.getModel()).asInt());
+  if (transport != SyslogAuditLogHandler.Transport.UDP) {
+    handler.setMessageTransfer(SyslogAuditLogHandler.MessageTransfer.valueOf(SyslogAuditLogProtocolResourceDefinition.Tcp.MESSAGE_TRANSFER.resolveModelAttribute(context,protocol.getModel()).asString()));
+  }
+  if (transport == SyslogAuditLogHandler.Transport.TLS) {
+    final Set<ResourceEntry> tlsStores=protocol.getChildren(AUTHENTICATION);
+    for (    ResourceEntry storeEntry : tlsStores) {
+      final ModelNode storeModel=storeEntry.getModel();
+      String type=storeEntry.getPathElement().getValue();
+      if (type.equals(CLIENT_CERT_STORE)) {
+        handler.setTlsClientCertStorePassword(resolveUndefinableAttribute(context,SyslogAuditLogProtocolResourceDefinition.TlsKeyStore.KEYSTORE_PASSWORD,storeModel));
+        handler.setTlsClientCertStorePath(SyslogAuditLogProtocolResourceDefinition.TlsKeyStore.KEYSTORE_PATH.resolveModelAttribute(context,storeModel).asString());
+        handler.setTlsClientCertStoreRelativeTo(resolveUndefinableAttribute(context,SyslogAuditLogProtocolResourceDefinition.TlsKeyStore.KEYSTORE_RELATIVE_TO,storeModel));
+        handler.setTlsClientCertStoreKeyPassword(resolveUndefinableAttribute(context,SyslogAuditLogProtocolResourceDefinition.TlsKeyStore.KEY_PASSWORD,storeModel));
+      }
+ else       if (type.equals(TRUSTSTORE)) {
+        handler.setTlsTruststorePassword(resolveUndefinableAttribute(context,SyslogAuditLogProtocolResourceDefinition.TlsKeyStore.KEYSTORE_PASSWORD,storeModel));
+        handler.setTlsTrustStorePath(SyslogAuditLogProtocolResourceDefinition.TlsKeyStore.KEYSTORE_PATH.resolveModelAttribute(context,storeModel).asString());
+        handler.setTlsTrustStoreRelativeTo(resolveUndefinableAttribute(context,SyslogAuditLogProtocolResourceDefinition.TlsKeyStore.KEYSTORE_RELATIVE_TO,storeModel));
+      }
+    }
+  }
+  return handler;
+}
