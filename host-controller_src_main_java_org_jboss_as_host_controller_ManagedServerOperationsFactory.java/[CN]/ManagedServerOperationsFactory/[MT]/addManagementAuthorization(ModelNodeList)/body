@@ -1,0 +1,38 @@
+{
+  ModelNode domainConfig=domainModel.get(CORE_SERVICE,MANAGEMENT,ACCESS,AUTHORIZATION);
+  if (domainConfig.isDefined()) {
+    ModelNode baseAddress=new ModelNode();
+    baseAddress.add(CORE_SERVICE,MANAGEMENT);
+    baseAddress.add(ACCESS,AUTHORIZATION);
+    if (domainConfig.hasDefined(PROVIDER)) {
+      ModelNode providerOp=Util.getWriteAttributeOperation(baseAddress,PROVIDER,domainConfig.get(PROVIDER));
+      updates.add(providerOp);
+    }
+    if (domainConfig.hasDefined(USE_REALM_ROLES)) {
+      ModelNode realmRolesOp=Util.getWriteAttributeOperation(baseAddress,USE_REALM_ROLES,domainConfig.get(USE_REALM_ROLES));
+      updates.add(realmRolesOp);
+    }
+    addRoleMappings(domainConfig,baseAddress,updates);
+    convertSimpleResources(domainConfig,SERVER_GROUP_SCOPED_ROLE,baseAddress,updates);
+    convertSimpleResources(domainConfig,HOST_SCOPED_ROLE,baseAddress,updates);
+    if (domainConfig.hasDefined(CONSTRAINT)) {
+      ModelNode constraints=domainConfig.get(CONSTRAINT);
+      if (constraints.hasDefined(APPLICATION_CLASSIFICATION)) {
+        convertSimpleResources(constraints.get(APPLICATION_CLASSIFICATION),APPLICATION_CLASSIFICATION,baseAddress,updates);
+      }
+      if (constraints.hasDefined(SENSITIVITY_CLASSIFICATION)) {
+        convertSimpleResources(constraints.get(SENSITIVITY_CLASSIFICATION),SENSITIVITY_CLASSIFICATION,baseAddress,updates);
+      }
+      if (constraints.hasDefined(VAULT_EXPRESSION)) {
+        ModelNode address=baseAddress.clone().add(CONSTRAINT,VAULT_EXPRESSION);
+        ModelNode ve=constraints.get(VAULT_EXPRESSION);
+        for (        AttributeDefinition ad : SensitivityResourceDefinition.getWritableAttributeDefinitions()) {
+          String attr=ad.getName();
+          if (ve.hasDefined(attr)) {
+            updates.add(Util.getWriteAttributeOperation(address,attr,ve.get(attr)));
+          }
+        }
+      }
+    }
+  }
+}
