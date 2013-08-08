@@ -1,23 +1,51 @@
 {
   return new State(){
     @Override public State execute(){
-      if (stateValues.getKnownUsers().contains(stateValues.getUserName())) {
+      if (stateValues.isExistingDisabledUser() || stateValues.isExistingEnabledUser()) {
         State duplicateContinuing=stateValues.isSilentOrNonInteractive() ? null : new PromptNewUserState(theConsole,stateValues);
         stateValues.setExistingUser(true);
         if (stateValues.isSilentOrNonInteractive()) {
           return ValidateUserState.this;
         }
  else {
-          String message=MESSAGES.aboutToUpdateUser(stateValues.getUserName());
-          String prompt=MESSAGES.isCorrectPrompt() + " " + MESSAGES.yes()+ "/"+ MESSAGES.no()+ "?";
-          return new ConfirmationChoice(theConsole,message,prompt,ValidateUserState.this,duplicateContinuing);
-        }
-      }
+          final boolean existingDisabledUser=stateValues.isExistingDisabledUser();
+          if (existingDisabledUser) {
+            theConsole.printf(MESSAGES.aboutToUpdateDisabledUser(stateValues.getUserName()));
+          }
  else {
-        stateValues.setExistingUser(false);
-        return ValidateUserState.this;
-      }
-    }
-  }
+            theConsole.printf(MESSAGES.aboutToUpdateEnabledUser(stateValues.getUserName()));
+          }
+          theConsole.printf(AddUser.NEW_LINE);
+          String response=theConsole.readLine("(a): ");
+          if (response == null) {
+            theConsole.printf(AddUser.NEW_LINE);
+            return null;
+          }
+          Option option=convertResponse(response,existingDisabledUser);
+switch (option) {
+case NEW:
+            return duplicateContinuing;
+case UPDATE:
+          break;
+case ENABLE:
+        stateValues.getOptions().setEnableDisableMode(true);
+      stateValues.getOptions().setDisable(false);
+    return new PreModificationState(theConsole,stateValues);
+case DISABLE:
+  stateValues.getOptions().setEnableDisableMode(true);
+stateValues.getOptions().setDisable(true);
+return new PreModificationState(theConsole,stateValues);
+default :
+return new ErrorState(theConsole,MESSAGES.invalidChoiceUpdateUserResponse(),this);
+}
+return ValidateUserState.this;
+}
+}
+ else {
+stateValues.setExistingUser(false);
+return ValidateUserState.this;
+}
+}
+}
 ;
 }

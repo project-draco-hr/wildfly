@@ -1,17 +1,23 @@
 {
-  String[] entry=new String[3];
-  try {
-    String hash=new UsernamePasswordHashUtil().generateHashedHexURP(stateValues.getUserName(),stateValues.getRealm(),stateValues.getPassword());
-    entry[0]=stateValues.getUserName();
-    entry[1]=hash;
-    entry[2]=String.valueOf(stateValues.getOptions().isDisable());
+  final String userName=stateValues.getUserName();
+  final boolean enableDisableMode=stateValues.getOptions().isEnableDisableMode();
+  final boolean disable=stateValues.getOptions().isDisable();
+  final String groups=stateValues.getGroups();
+  final String password;
+  if (stateValues.getPassword() != null) {
+    try {
+      password=new UsernamePasswordHashUtil().generateHashedHexURP(stateValues.getUserName(),stateValues.getRealm(),stateValues.getPassword().toCharArray());
+    }
+ catch (    NoSuchAlgorithmException e) {
+      return new ErrorState(theConsole,e.getMessage(),null,stateValues);
+    }
   }
- catch (  NoSuchAlgorithmException e) {
-    return new ErrorState(theConsole,e.getMessage(),null,stateValues);
+ else {
+    password=null;
   }
   for (  File current : stateValues.getUserFiles()) {
     try {
-      persist(entry,current,stateValues.getRealm());
+      persist(userName,password,enableDisableMode,disable,current,stateValues.getRealm());
       if (stateValues.isSilent() == false) {
         theConsole.printf(consoleUserMessage(current.getCanonicalPath()));
         theConsole.printf(NEW_LINE);
@@ -21,17 +27,16 @@
       return new ErrorState(theConsole,errorMessage(current.getAbsolutePath(),e),null,stateValues);
     }
   }
-  if (stateValues.groupPropertiesFound() && stateValues.getGroups() != null) {
+  if (stateValues.groupPropertiesFound() && (groups != null || enableDisableMode)) {
     for (    final File current : stateValues.getGroupFiles()) {
-      String[] groups={stateValues.getUserName(),stateValues.getGroups(),String.valueOf(stateValues.getOptions().isDisable())};
       try {
-        persist(groups,current);
+        persist(userName,groups,enableDisableMode,disable,current);
         if (stateValues.isSilent() == false) {
           theConsole.printf(consoleGroupsMessage(current.getCanonicalPath()));
           theConsole.printf(NEW_LINE);
         }
       }
- catch (      IOException e) {
+ catch (      Exception e) {
         return new ErrorState(theConsole,errorMessage(current.getAbsolutePath(),e),null,stateValues);
       }
     }
