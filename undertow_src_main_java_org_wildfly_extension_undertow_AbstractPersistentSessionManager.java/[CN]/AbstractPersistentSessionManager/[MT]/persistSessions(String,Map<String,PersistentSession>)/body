@@ -1,0 +1,31 @@
+{
+  try {
+    final Marshaller marshaller=createMarshaller();
+    try {
+      final Map<String,SessionEntry> serializedData=new HashMap<String,SessionEntry>();
+      for (      Map.Entry<String,PersistentSession> sessionEntry : sessionData.entrySet()) {
+        Map<String,byte[]> data=new HashMap<String,byte[]>();
+        for (        Map.Entry<String,Object> sessionAttribute : sessionEntry.getValue().getSessionData().entrySet()) {
+          try {
+            final ByteArrayOutputStream out=new ByteArrayOutputStream();
+            marshaller.start(new OutputStreamByteOutput(out));
+            marshaller.writeObject(sessionAttribute.getValue());
+            marshaller.finish();
+            data.put(sessionAttribute.getKey(),out.toByteArray());
+          }
+ catch (          Exception e) {
+            UndertowServletLogger.ROOT_LOGGER.failedToPersistSessionAttribute(sessionAttribute.getKey(),sessionAttribute.getValue(),sessionEntry.getKey());
+          }
+        }
+        serializedData.put(sessionEntry.getKey(),new SessionEntry(sessionEntry.getValue().getExpiration(),data));
+      }
+      persistSerializedSessions(deploymentName,serializedData);
+    }
+  finally {
+      marshaller.close();
+    }
+  }
+ catch (  Exception e) {
+    UndertowServletLogger.ROOT_LOGGER.failedToPersistSessions(e);
+  }
+}
