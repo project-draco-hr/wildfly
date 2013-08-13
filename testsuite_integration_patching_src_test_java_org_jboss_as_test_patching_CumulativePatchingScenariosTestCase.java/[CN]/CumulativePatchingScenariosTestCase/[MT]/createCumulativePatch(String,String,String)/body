@@ -1,7 +1,7 @@
 {
   String layerPatchID=randomString();
   File cpPatchDir=mkdir(tempDir,patchID);
-  final String moduleName="patch.cumulative.awesomemodule";
+  final String moduleName="org.wildfly.test." + randomString();
   final ResourceItem resourceItem1=new ResourceItem("testFile1","content1".getBytes());
   final ResourceItem resourceItem2=new ResourceItem("testFile2","content2".getBytes());
   Asset newManifest=new Asset(){
@@ -20,8 +20,10 @@
   final File installation=new File(AS_DISTRIBUTION);
   final File patchDir=new File(cpPatchDir,patchID);
   final ContentModification jbossModulesModification=PatchingTestUtil.updateModulesJar(installation,patchDir);
-  ContentModification moduleAdded=ContentModificationUtils.addModule(cpPatchDir,layerPatchID,moduleName,resourceItem1,resourceItem2);
-  ContentModification versionModuleModified=ContentModificationUtils.modifyModule(cpPatchDir,layerPatchID,versionModuleName,HashUtils.hashFile(new File(originalVersionModulePath)),versionModuleResourceItem);
+  Module newModule=new Module.Builder(moduleName).miscFile(resourceItem1).miscFile(resourceItem2).build();
+  Module modifiedModule=new Module.Builder(versionModuleName).resourceRoot(versionModuleResourceItem).property("jboss.api","private").dependency("org.jboss.logging").dependency("org.jboss.modules").build();
+  ContentModification moduleAdded=ContentModificationUtils.addModule(cpPatchDir,layerPatchID,newModule);
+  ContentModification versionModuleModified=ContentModificationUtils.modifyModule(cpPatchDir,layerPatchID,HashUtils.hashFile(new File(originalVersionModulePath)),modifiedModule);
   ProductConfig productConfig=new ProductConfig(PRODUCT,asVersion,"main");
   Patch cpPatch=PatchBuilder.create().setPatchId(patchID).setDescription("A cp patch.").upgradeIdentity(productConfig.getProductName(),productConfig.getProductVersion(),targetAsVersion).getParent().upgradeElement(layerPatchID,"base",false).addContentModification(moduleAdded).addContentModification(versionModuleModified).getParent().addContentModification(jbossModulesModification).build();
   createPatchXMLFile(cpPatchDir,cpPatch);

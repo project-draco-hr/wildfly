@@ -1,18 +1,19 @@
 {
   ProductConfig productConfig=new ProductConfig(PRODUCT,AS_VERSION,"main");
-  String moduleName=randomString();
-  File baseModuleDir=newFile(new File(PatchingTestUtil.AS_DISTRIBUTION),"modules",SYSTEM,LAYERS,BASE);
-  File moduleDir=createModule0(baseModuleDir,moduleName);
+  String moduleName="org.wildfly.test." + randomString();
+  Module module=new Module.Builder(moduleName).build();
+  File moduleDir=module.writeToDisk(new File(MODULES_PATH));
   logger.info("moduleDir = " + moduleDir.getAbsolutePath());
   String patchID=randomString();
   String baseLayerPatchID=randomString();
   File patchDir=mkdir(tempDir,patchID);
-  ContentModification moduleModified=ContentModificationUtils.modifyModule(patchDir,baseLayerPatchID,moduleDir,new ResourceItem("res1","new resource in the module".getBytes()));
+  Module updatedModule=new Module.Builder(moduleName).miscFile(new ResourceItem("res1","new resource in the module".getBytes())).build();
+  ContentModification moduleModified=ContentModificationUtils.modifyModule(patchDir,baseLayerPatchID,HashUtils.hashFile(moduleDir),updatedModule);
   Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).oneOffPatchIdentity(productConfig.getProductName(),productConfig.getProductVersion()).getParent().oneOffPatchElement(baseLayerPatchID,BASE,false).addContentModification(moduleModified).getParent().build();
   createPatchXMLFile(patchDir,patch);
   File zippedPatch=createZippedPatchFile(patchDir,patchID);
   logger.info(zippedPatch.getAbsolutePath());
-  File fileModifyModule=new File(moduleDir.getAbsolutePath() + FILE_SEPARATOR + "main","newFile");
+  File fileModifyModule=newFile(moduleDir,"newFile");
   dump(fileModifyModule,"test content");
   controller.start(CONTAINER);
   Assert.assertFalse("Server should reject patch installation in this case",CliUtilsForPatching.applyPatch(zippedPatch.getAbsolutePath()));

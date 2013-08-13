@@ -1,13 +1,14 @@
 {
   ProductConfig productConfig=new ProductConfig(PRODUCT,AS_VERSION,"main");
-  String moduleName=randomString();
-  File baseModuleDir=newFile(new File(PatchingTestUtil.AS_DISTRIBUTION),"modules",SYSTEM,LAYERS,BASE);
-  File moduleDir=createModule0(baseModuleDir,moduleName);
+  final String moduleName="org.wildfly.test." + randomString();
+  Module module=new Module.Builder(moduleName).build();
+  File moduleDir=module.writeToDisk(new File(MODULES_PATH));
   logger.info("moduleDir = " + moduleDir.getAbsolutePath());
   String patchID=randomString();
   String baseLayerPatchID=randomString();
   File patchDir=mkdir(tempDir,patchID);
-  ContentModification moduleModified=ContentModificationUtils.modifyModule(patchDir,baseLayerPatchID,moduleDir,new ResourceItem("res1","new resource in the module".getBytes()));
+  Module updatedModule=new Module.Builder(moduleName).miscFile(new ResourceItem("res1","new resource in the module".getBytes())).build();
+  ContentModification moduleModified=ContentModificationUtils.modifyModule(patchDir,baseLayerPatchID,HashUtils.hashFile(moduleDir),updatedModule);
   Patch patch=PatchBuilder.create().setPatchId(patchID).setDescription(randomString()).oneOffPatchIdentity(productConfig.getProductName(),productConfig.getProductVersion()).getParent().oneOffPatchElement(baseLayerPatchID,BASE,false).addContentModification(moduleModified).getParent().build();
   createPatchXMLFile(patchDir,patch);
   File zippedPatch=createZippedPatchFile(patchDir,patchID);
@@ -18,8 +19,10 @@
   controller.stop(CONTAINER);
   controller.start(CONTAINER);
   Assert.assertTrue("The patch " + patchID + " should be listed as installed",CliUtilsForPatching.getInstalledPatches().contains(patchID));
-  String newFilePath=Joiner.on(FILE_SEPARATOR).join(new String[]{PATCHES_PATH,baseLayerPatchID,moduleName,"main","res1"});
-  Assert.assertTrue("File " + newFilePath + " should exist",new File(newFilePath).exists());
+  File newFile=newFile(new File(PATCHES_PATH),baseLayerPatchID);
+  newFile=newFile(newFile,moduleName.split("\\."));
+  newFile=newFile(newFile,"main","res1");
+  Assert.assertTrue("File " + newFile.getAbsolutePath() + " should exist",newFile.exists());
   List<String> paths=CliUtilsForPatching.getResourceLoaderPathsForModule(moduleName,false);
   Assert.assertTrue("Module should be loaded from the .overlays directory but was: " + paths.get(0),paths.get(0).contains(".overlays" + File.separator + baseLayerPatchID));
   Assert.assertTrue("Rollback should be accepted",CliUtilsForPatching.rollbackPatch(patchID));
@@ -27,14 +30,14 @@
   controller.stop(CONTAINER);
   controller.start(CONTAINER);
   Assert.assertFalse("The patch " + patchID + " NOT should be listed as installed",CliUtilsForPatching.getInstalledPatches().contains(patchID));
-  Assert.assertFalse("File " + newFilePath + " should not exist",new File(newFilePath).exists());
+  Assert.assertFalse("File " + newFile.getAbsolutePath() + " should not exist",newFile.exists());
   Assert.assertTrue("Patch should be accepted",CliUtilsForPatching.applyPatch(zippedPatch.getAbsolutePath()));
   Assert.assertTrue("server should be in restart-required mode",CliUtilsForPatching.doesServerRequireRestart());
   controller.stop(CONTAINER);
   controller.start(CONTAINER);
   Assert.assertTrue("The patch " + patchID + " should be listed as installed",CliUtilsForPatching.getInstalledPatches().contains(patchID));
-  Assert.assertTrue("File " + newFilePath + " should exist",new File(newFilePath).exists());
   paths=CliUtilsForPatching.getResourceLoaderPathsForModule(moduleName,false);
   Assert.assertTrue("Module should be loaded from the .overlays directory but was: " + paths.get(0),paths.get(0).contains(".overlays" + File.separator + baseLayerPatchID));
+  Assert.assertTrue("File " + newFile.getAbsolutePath() + " should exist",newFile.exists());
   controller.stop(CONTAINER);
 }
