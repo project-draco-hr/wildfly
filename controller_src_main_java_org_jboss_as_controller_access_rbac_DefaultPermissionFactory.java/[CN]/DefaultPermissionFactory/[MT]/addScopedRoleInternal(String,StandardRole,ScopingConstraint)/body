@@ -1,21 +1,36 @@
 {
-  if (permissionsByRole.containsKey(roleName)) {
-    throw new IllegalStateException(String.format("role %s is already registered",roleName));
+  String officialForm=getOfficialForm(roleName);
+  if (permissionsByRole.containsKey(officialForm)) {
+    throw ControllerMessages.MESSAGES.roleIsAlreadyRegistered(roleName);
   }
-  ManagementPermissionCollection baseCollection=permissionsByRole.get(base.toString());
+  ManagementPermissionCollection baseCollection=permissionsByRole.get(getOfficialForm(base));
   if (baseCollection == null) {
-    throw new IllegalArgumentException(String.format("Unknown base role %s",base));
+    throw ControllerMessages.MESSAGES.unknownBaseRole(base.toString());
+  }
+  Map<Action.ActionEffect,ManagementPermission> monitorPermissions=new HashMap<Action.ActionEffect,ManagementPermission>();
+  ManagementPermissionCollection monitorCollection=permissionsByRole.get(getOfficialForm(StandardRole.MONITOR));
+  Enumeration<Permission> monitorEnumeration=monitorCollection.elements();
+  while (monitorEnumeration.hasMoreElements()) {
+    ManagementPermission monitorPerm=(ManagementPermission)monitorEnumeration.nextElement();
+    monitorPermissions.put(monitorPerm.getActionEffect(),monitorPerm);
   }
   ManagementPermissionCollection scopedPermissions=null;
   Enumeration<Permission> permissionEnumeration=baseCollection.elements();
   while (permissionEnumeration.hasMoreElements()) {
     ManagementPermission basePerm=(ManagementPermission)permissionEnumeration.nextElement();
-    ManagementPermission scopedPerm=basePerm.createScopedPermission(constraint);
+    Action.ActionEffect actionEffect=basePerm.getActionEffect();
+    CombinationManagementPermission combinedPermission=new CombinationManagementPermission(CombinationPolicy.PERMISSIVE,actionEffect);
     if (scopedPermissions == null) {
-      scopedPermissions=(ManagementPermissionCollection)scopedPerm.newPermissionCollection();
+      scopedPermissions=(ManagementPermissionCollection)combinedPermission.newPermissionCollection();
     }
-    scopedPermissions.add(scopedPerm);
+    ManagementPermission scopedPerm=basePerm.createScopedPermission(scopingConstraint.getStandardConstraint());
+    combinedPermission.addUnderlyingPermission(scopedPerm);
+    ManagementPermission monitorPerm=monitorPermissions.get(actionEffect);
+    if (monitorPerm != null) {
+      combinedPermission.addUnderlyingPermission(monitorPerm.createScopedPermission(scopingConstraint.getOutofScopeReadConstraint()));
+    }
+    scopedPermissions.add(combinedPermission);
   }
-  permissionsByRole.put(roleName,scopedPermissions);
-  scopedBaseMap.put(roleName,new ScopedBase(base,constraint));
+  permissionsByRole.put(officialForm,scopedPermissions);
+  scopedBaseMap.put(officialForm,new ScopedBase(base,scopingConstraint));
 }

@@ -1,0 +1,49 @@
+{
+  if (address.size() > 0) {
+    PathElement firstElement=address.getElement(0);
+    String type=firstElement.getKey();
+    if (HOST.equals(type)) {
+      String hostName=firstElement.getValue();
+      if (address.size() > 1) {
+        PathElement secondElement=address.getElement(1);
+        String lvlone=secondElement.getKey();
+        if (SERVER_CONFIG.equals(lvlone) || SERVER.equals(lvlone)) {
+          Resource hostResource=root.getChild(firstElement);
+          if (hostResource != null) {
+            String serverGroup=null;
+            Resource serverConfig=hostResource.getChild(PathElement.pathElement(SERVER_CONFIG,secondElement.getValue()));
+            if (serverConfig != null) {
+              ModelNode model=serverConfig.getModel();
+              if (model.hasDefined(GROUP)) {
+                serverGroup=model.get(GROUP).asString();
+              }
+            }
+            if (serverGroup == null && address.size() == 2 && SERVER_CONFIG.equals(lvlone) && ADD.equals(operation.require(OP).asString())) {
+              serverGroup=operation.get(GROUP).asString();
+            }
+            if (serverGroup != null) {
+              return HostServerGroupEffect.forServer(address,serverGroup,hostName);
+            }
+          }
+        }
+      }
+      return HostServerGroupEffect.forHost(address,hostName);
+    }
+ else     if (PROFILE.equals(type)) {
+      return getDomainEffect(address,firstElement.getValue(),profilesToGroups,root);
+    }
+ else     if (SOCKET_BINDING_GROUP.equals(type)) {
+      return getDomainEffect(address,firstElement.getValue(),socketsToGroups,root);
+    }
+ else     if (SERVER_GROUP.equals(type)) {
+      return HostServerGroupEffect.forServerGroup(address,firstElement.getValue());
+    }
+ else     if (DEPLOYMENT.equals(type)) {
+      return getDomainEffect(address,firstElement.getValue(),deploymentsToGroups,root);
+    }
+ else     if (DEPLOYMENT_OVERLAY.equals(type)) {
+      return getDomainEffect(address,firstElement.getValue(),overlaysToGroups,root);
+    }
+  }
+  return HostServerGroupEffect.forGlobal(address);
+}
