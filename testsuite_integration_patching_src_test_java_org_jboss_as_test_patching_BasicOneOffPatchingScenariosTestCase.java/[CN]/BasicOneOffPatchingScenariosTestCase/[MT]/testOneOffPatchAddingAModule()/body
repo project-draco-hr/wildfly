@@ -1,7 +1,9 @@
 {
   String patchID=randomString();
+  String invalidPatchId=randomString();
   String layerPatchID=randomString();
   File oneOffPatchDir=mkdir(tempDir,patchID);
+  File invalidOneOffPatchDir=mkdir(tempDir,invalidPatchId);
   final String moduleName="org.wildfly.test." + randomString();
   final String modulePath=PATCHES_PATH + FILE_SEPARATOR + layerPatchID+ FILE_SEPARATOR+ moduleName.replace(".",FILE_SEPARATOR)+ FILE_SEPARATOR+ "main";
   final ResourceItem resourceItem1=new ResourceItem("testFile1","content1".getBytes());
@@ -12,7 +14,12 @@
   Patch oneOffPatch=PatchBuilder.create().setPatchId(patchID).setDescription("A one-off patch adding a new module.").oneOffPatchIdentity(productConfig.getProductName(),productConfig.getProductVersion()).getParent().oneOffPatchElement(layerPatchID,"base",false).setDescription("New module for the base layer").addContentModification(moduleAdded).getParent().build();
   createPatchXMLFile(oneOffPatchDir,oneOffPatch);
   File zippedPatch=createZippedPatchFile(oneOffPatchDir,patchID);
+  ContentModification invalidContentModification=ContentModificationUtils.addModule(invalidOneOffPatchDir,invalidPatchId,newModule);
+  Patch invalidOneOffPatch=PatchBuilder.create().setPatchId(invalidPatchId).setDescription("A invalid one-off patch adding a new module.").oneOffPatchIdentity(productConfig.getProductName(),productConfig.getProductVersion()).getParent().oneOffPatchElement(layerPatchID,"base",false).setDescription("New module for the base layer").addContentModification(invalidContentModification).getParent().build();
+  createPatchXMLFile(invalidOneOffPatchDir,invalidOneOffPatch);
+  File zippedInvalidPatch=createZippedPatchFile(invalidOneOffPatchDir,invalidPatchId);
   controller.start(CONTAINER);
+  Assert.assertFalse("Patch shouldn't be accepted",CliUtilsForPatching.applyPatch(zippedInvalidPatch.getAbsolutePath()));
   Assert.assertTrue("Patch should be accepted",CliUtilsForPatching.applyPatch(zippedPatch.getAbsolutePath()));
   Assert.assertTrue("server should be in restart-required mode",CliUtilsForPatching.doesServerRequireRestart());
   controller.stop(CONTAINER);
