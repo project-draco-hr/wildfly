@@ -1,14 +1,23 @@
 {
   Throwable error=null;
   final boolean readOnly=true;
+  boolean shouldLog=false;
   try {
     int i=0;
     if (delegates.size() > 0) {
       for (      MBeanServerPlugin delegate : delegates) {
-        i+=delegate.getMBeanCount();
+        if (!delegate.shouldAuthorize() || authorizeSensitiveOperation(true,false)) {
+          i+=delegate.getMBeanCount();
+          if (delegate.shouldAuditLog()) {
+            shouldLog=true;
+          }
+        }
       }
     }
-    i+=rootMBeanServer.getMBeanCount();
+    if (!rootMBeanServer.shouldAuthorize() || authorizeSensitiveOperation(true,false)) {
+      i+=rootMBeanServer.getMBeanCount();
+      shouldLog=true;
+    }
     return i;
   }
  catch (  Exception e) {
@@ -16,6 +25,8 @@
     throw makeRuntimeException(e);
   }
  finally {
-    new MBeanServerAuditLogRecordFormatter(this,error,readOnly).getMBeanCount();
+    if (error != null || shouldLog) {
+      new MBeanServerAuditLogRecordFormatter(this,error,readOnly).getMBeanCount();
+    }
   }
 }

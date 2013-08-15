@@ -1,16 +1,25 @@
 {
   Throwable error=null;
   final boolean readOnly=true;
+  boolean shouldAuditLog=false;
   try {
     Set<ObjectInstance> result=new HashSet<ObjectInstance>();
     if (delegates.size() > 0) {
       for (      MBeanServerPlugin delegate : delegates) {
         if (name == null || (name.getDomain() != null && delegate.accepts(name))) {
-          result.addAll(delegate.queryMBeans(name,query));
+          if (!delegate.shouldAuthorize() || authorizeSensitiveOperation(true,false)) {
+            result.addAll(delegate.queryMBeans(name,query));
+            if (delegate.shouldAuditLog()) {
+              shouldAuditLog=true;
+            }
+          }
         }
       }
     }
-    result.addAll(rootMBeanServer.queryMBeans(name,query));
+    if (!rootMBeanServer.shouldAuthorize() || authorizeSensitiveOperation(true,false)) {
+      result.addAll(rootMBeanServer.queryMBeans(name,query));
+      shouldAuditLog=true;
+    }
     return result;
   }
  catch (  Exception e) {
@@ -18,7 +27,7 @@
     throw makeRuntimeException(e);
   }
  finally {
-    if (shouldAuditLog(null,readOnly)) {
+    if (error != null || shouldAuditLog) {
       new MBeanServerAuditLogRecordFormatter(this,error,readOnly).queryMBeans(name,query);
     }
   }

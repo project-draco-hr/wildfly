@@ -1,0 +1,19 @@
+{
+  final ThreadGroup threadGroup=new ThreadGroup("ServerService ThreadGroup");
+  final String namePattern="ServerService Thread Pool -- %t";
+  final ThreadFactory threadFactory=new JBossThreadFactory(threadGroup,Boolean.FALSE,null,namePattern,null,null,doPrivileged(GetAccessControlContextAction.getInstance()));
+  final ServerExecutorService serverExecutorService=new ServerExecutorService(threadFactory);
+  serviceTarget.addService(Services.JBOSS_SERVER_EXECUTOR,serverExecutorService).addAliases(ManagementRemotingServices.SHUTDOWN_EXECUTOR_NAME).install();
+  DelegatingResourceDefinition rootResourceDefinition=new DelegatingResourceDefinition();
+  ServerService service=new ServerService(configuration,processState,null,bootstrapListener,rootResourceDefinition,runningModeControl,vaultReader,auditLogger,authorizer);
+  ServiceBuilder<?> serviceBuilder=serviceTarget.addService(Services.JBOSS_SERVER_CONTROLLER,service);
+  serviceBuilder.addDependency(DeploymentMountProvider.SERVICE_NAME,DeploymentMountProvider.class,service.injectedDeploymentRepository);
+  serviceBuilder.addDependency(ContentRepository.SERVICE_NAME,ContentRepository.class,service.injectedContentRepository);
+  serviceBuilder.addDependency(Services.JBOSS_SERVICE_MODULE_LOADER,ServiceModuleLoader.class,service.injectedModuleLoader);
+  serviceBuilder.addDependency(Services.JBOSS_EXTERNAL_MODULE_SERVICE,ExternalModuleService.class,service.injectedExternalModuleService);
+  serviceBuilder.addDependency(PathManagerService.SERVICE_NAME,PathManager.class,service.injectedPathManagerService);
+  if (configuration.getServerEnvironment().isAllowModelControllerExecutor()) {
+    serviceBuilder.addDependency(Services.JBOSS_SERVER_EXECUTOR,ExecutorService.class,service.getExecutorServiceInjector());
+  }
+  serviceBuilder.install();
+}
