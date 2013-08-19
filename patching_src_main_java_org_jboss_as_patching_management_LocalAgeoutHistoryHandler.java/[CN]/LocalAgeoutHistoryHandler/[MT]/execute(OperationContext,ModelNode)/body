@@ -1,0 +1,38 @@
+{
+  context.acquireControllerLock();
+  final ServiceController<?> mgrService=context.getServiceRegistry(true).getRequiredService(InstallationManagerService.NAME);
+  final InstallationManager mgr=(InstallationManager)mgrService.getValue();
+  InstalledImage installedImage=mgr.getInstalledImage();
+  final PatchableTarget.TargetInfo info;
+  try {
+    info=mgr.getIdentity().loadTargetInfo();
+  }
+ catch (  IOException e) {
+    throw new OperationFailedException(PatchManagementMessages.MESSAGES.failedToLoadIdentity(),e);
+  }
+  final PatchingHistory.Iterator i=PatchingHistory.Factory.iterator(mgr,info);
+  if (i.hasNextCP()) {
+    i.nextCP();
+    while (i.hasNext()) {
+      final PatchingHistory.Entry entry=i.next();
+      final Map<String,String> layerPatches=entry.getLayerPatches();
+      if (!layerPatches.isEmpty()) {
+        for (        String layerName : layerPatches.keySet()) {
+          final Layer layer=mgr.getLayer(layerName);
+          if (layer == null) {
+            throw new OperationFailedException(PatchManagementMessages.MESSAGES.layerNotFound(layerName));
+          }
+          final File patchDir=layer.getDirectoryStructure().getModulePatchDirectory(layerPatches.get(layerName));
+          if (patchDir.exists()) {
+            recursiveDelete(patchDir);
+          }
+        }
+      }
+      final File patchHistoryDir=installedImage.getPatchHistoryDir(entry.getPatchId());
+      if (patchHistoryDir.exists()) {
+        recursiveDelete(patchHistoryDir);
+      }
+    }
+  }
+  context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+}

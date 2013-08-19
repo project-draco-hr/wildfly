@@ -1,0 +1,34 @@
+{
+  Module module=new Module.Builder("module-test").miscFile(new ResourceItem("resource-test",("module resource").getBytes())).build();
+  File moduleDir=module.writeToDisk(new File(MODULES_PATH));
+  byte[] targetHash=HashUtils.hashFile(moduleDir);
+  targetHash=applyOneOff("oneoff1",targetHash);
+  targetHash=applyCP("cp1",targetHash);
+  controller.start(CONTAINER);
+  ModelControllerClient client=null;
+  final ModelNode response;
+  try {
+    client=ModelControllerClient.Factory.create(TestSuiteEnvironment.getServerAddress(),TestSuiteEnvironment.getServerPort());
+    ModelNode op=new ModelNode();
+    op.get("address").add("core-service","patching");
+    op.get("operation").set("show-history");
+    response=client.execute(op);
+  }
+  finally {
+    if (client != null) {
+      client.close();
+    }
+    controller.stop(CONTAINER);
+  }
+  assertTrue(response.has("outcome"));
+  assertEquals("success",response.get("outcome").asString());
+  assertTrue(response.has("result"));
+  final List<ModelNode> list=response.get("result").asList();
+  assertEquals(2,list.size());
+  ModelNode entry=list.get(0);
+  assertEquals("cp1",entry.get("patch-id").asString());
+  assertEquals("cumulative",entry.get("type").asString());
+  entry=list.get(1);
+  assertEquals("oneoff1",entry.get("patch-id").asString());
+  assertEquals("one-off",entry.get("type").asString());
+}

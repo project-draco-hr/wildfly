@@ -1,0 +1,42 @@
+{
+  Module module=new Module.Builder("module-test").miscFile(new ResourceItem("resource-test",("module resource").getBytes())).build();
+  File moduleDir=module.writeToDisk(new File(MODULES_PATH));
+  byte[] targetHash=HashUtils.hashFile(moduleDir);
+  for (int i=0; i < patchIds.length; ++i) {
+    if (patchTypes[i]) {
+      targetHash=applyCP(patchIds[i],targetHash);
+    }
+ else {
+      targetHash=applyOneOff(patchIds[i],targetHash);
+    }
+  }
+  controller.start(CONTAINER);
+  ModelControllerClient client=null;
+  final ModelNode response;
+  try {
+    client=ModelControllerClient.Factory.create(TestSuiteEnvironment.getServerAddress(),TestSuiteEnvironment.getServerPort());
+    ModelNode op=new ModelNode();
+    op.get("address").add("core-service","patching");
+    op.get("operation").set("show-history");
+    response=client.execute(op);
+  }
+  finally {
+    if (client != null) {
+      client.close();
+    }
+    controller.stop(CONTAINER);
+  }
+  assertTrue(response.has("outcome"));
+  assertEquals("success",response.get("outcome").asString());
+  assertTrue(response.has("result"));
+  final List<ModelNode> list=response.get("result").asList();
+  assertEquals(patchIds.length,list.size());
+  for (int i=0; i < patchIds.length; ++i) {
+    final ModelNode info=list.get(i);
+    assertEquals(patchIds[patchIds.length - 1 - i],info.get("patch-id").asString());
+    assertTrue(info.has("type"));
+    final String type=patchTypes[patchTypes.length - 1 - i] ? "cumulative" : "one-off";
+    assertEquals(type,info.get("type").asString());
+    assertTrue(info.has("applied-at"));
+  }
+}
