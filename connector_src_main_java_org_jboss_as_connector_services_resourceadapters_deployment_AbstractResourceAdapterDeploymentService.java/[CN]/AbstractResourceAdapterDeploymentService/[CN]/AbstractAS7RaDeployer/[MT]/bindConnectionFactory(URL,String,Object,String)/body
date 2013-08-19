@@ -6,32 +6,34 @@
   ServiceBuilder connectionFactoryBuilder=serviceTarget.addService(connectionFactoryServiceName,connectionFactoryService);
   if (deploymentServiceName != null)   connectionFactoryBuilder.addDependency(deploymentServiceName);
   connectionFactoryBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+  final ContextNames.BindInfo bindInfo=getBindInfo(jndi);
   final ConnectionFactoryReferenceFactoryService referenceFactoryService=new ConnectionFactoryReferenceFactoryService();
-  final ServiceName referenceFactoryServiceName=ConnectionFactoryReferenceFactoryService.SERVICE_NAME_BASE.append(jndi);
+  final ServiceName referenceFactoryServiceName=ConnectionFactoryReferenceFactoryService.SERVICE_NAME_BASE.append(bindInfo.getBinderServiceName());
   serviceTarget.addService(referenceFactoryServiceName,referenceFactoryService).addDependency(connectionFactoryServiceName,Object.class,referenceFactoryService.getDataSourceInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
-  final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndi);
-  final BinderService binderService=new BinderService(bindInfo.getBindName());
-  serviceTarget.addService(bindInfo.getBinderServiceName(),binderService).addDependency(referenceFactoryServiceName,ManagedReferenceFactory.class,binderService.getManagedObjectInjector()).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addListener(new AbstractServiceListener<Object>(){
-    public void transition(    final ServiceController<? extends Object> controller,    final ServiceController.Transition transition){
+  if (isCreateBinderService()) {
+    final BinderService binderService=new BinderService(bindInfo.getBindName());
+    serviceTarget.addService(bindInfo.getBinderServiceName(),binderService).addDependency(referenceFactoryServiceName,ManagedReferenceFactory.class,binderService.getManagedObjectInjector()).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addListener(new AbstractServiceListener<Object>(){
+      public void transition(      final ServiceController<? extends Object> controller,      final ServiceController.Transition transition){
 switch (transition) {
 case STARTING_to_UP:
 {
-          DEPLOYMENT_CONNECTOR_LOGGER.boundJca("ConnectionFactory",jndi);
-          break;
-        }
+            DEPLOYMENT_CONNECTOR_LOGGER.boundJca("ConnectionFactory",jndi);
+            break;
+          }
 case STOPPING_to_DOWN:
 {
-        DEPLOYMENT_CONNECTOR_LOGGER.unboundJca("ConnectionFactory",jndi);
-        break;
-      }
+          DEPLOYMENT_CONNECTOR_LOGGER.unboundJca("ConnectionFactory",jndi);
+          break;
+        }
 case REMOVING_to_REMOVED:
 {
-      DEPLOYMENT_CONNECTOR_LOGGER.debugf("Removed JCA ConnectionFactory [%s]",jndi);
-    }
-}
+        DEPLOYMENT_CONNECTOR_LOGGER.debugf("Removed JCA ConnectionFactory [%s]",jndi);
+      }
+  }
 }
 }
 ).setInitialMode(ServiceController.Mode.ACTIVE).install();
+}
 if (cf instanceof javax.resource.Referenceable) {
 ((javax.resource.Referenceable)cf).setReference(new Reference(jndi));
 }

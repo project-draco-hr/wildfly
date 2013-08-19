@@ -1,0 +1,39 @@
+{
+  Map<String,String> props=new HashMap<>(properties);
+  List<String> connectors=getConnectors(props);
+  clearUnknownProperties(properties);
+  ModelNode model=new ModelNode();
+  for (  String connector : connectors) {
+    model.get(CONNECTOR).add(connector);
+  }
+  for (  Map.Entry<String,String> entry : properties.entrySet()) {
+    model.get(entry.getKey()).set(entry.getValue());
+  }
+  model.get(MIN_POOL_SIZE.getName()).set(minPoolSize);
+  model.get(MAX_POOL_SIZE.getName()).set(maxPoolSize);
+  if (user != null && !user.isEmpty()) {
+    model.get(ConnectionFactoryAttributes.Pooled.USER.getName()).set(user);
+  }
+  if (password != null && !password.isEmpty()) {
+    model.get(ConnectionFactoryAttributes.Pooled.PASSWORD.getName()).set(password);
+  }
+  if (clientId != null && !clientId.isEmpty()) {
+    model.get(CommonAttributes.CLIENT_ID.getName()).set(clientId);
+  }
+  String discoveryGroupName=model.hasDefined(DISCOVERY_GROUP_NAME.getName()) ? model.get(DISCOVERY_GROUP_NAME.getName()).asString() : null;
+  String jgroupsChannelName=model.hasDefined(JGROUPS_CHANNEL.getName()) ? model.get(JGROUPS_CHANNEL.getName()).asString() : null;
+  List<PooledConnectionFactoryConfigProperties> adapterParams=getAdapterParams(model);
+  String txSupport=transactional ? XA_TX : NO_TX;
+  final String pcfName=uniqueName(context,name);
+  final ContextNames.BindInfo bindInfo=ContextNames.bindInfoForEnvEntry(context.getApplicationName(),context.getModuleName(),context.getComponentName(),!context.isCompUsesModule(),name);
+  PooledConnectionFactoryService.installService(null,null,serviceTarget,pcfName,getHornetQServerName(),connectors,discoveryGroupName,jgroupsChannelName,adapterParams,bindInfo,txSupport,minPoolSize,maxPoolSize);
+  final ServiceName referenceFactoryServiceName=ConnectionFactoryReferenceFactoryService.SERVICE_NAME_BASE.append(bindInfo.getBinderServiceName());
+  serviceBuilder.addDependency(referenceFactoryServiceName,ManagedReferenceFactory.class,injector);
+  String managementName=managementName(context,name);
+  final PathElement serverElement=PathElement.pathElement(HORNETQ_SERVER,getHornetQServerName());
+  deploymentUnit.createDeploymentSubModel(MessagingExtension.SUBSYSTEM_NAME,serverElement);
+  final PathElement pcfPath=PathElement.pathElement(POOLED_CONNECTION_FACTORY,managementName);
+  PathAddress registration=PathAddress.pathAddress(serverElement,pcfPath);
+  MessagingXmlInstallDeploymentUnitProcessor.createDeploymentSubModel(registration,deploymentUnit);
+  PooledConnectionFactoryConfigurationRuntimeHandler.INSTANCE.registerResource(getHornetQServerName(),managementName,model);
+}
