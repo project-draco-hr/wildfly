@@ -4,7 +4,6 @@
   final String jndiName=model.get(JNDI_NAME.getName()).asString();
   boolean jta=JTA.resolveModelAttribute(context,operation).asBoolean();
   final ServiceTarget serviceTarget=context.getServiceTarget();
-  boolean enabled=false;
   ModelNode node=DATASOURCE_DRIVER.resolveModelAttribute(context,model);
   final String driverName=node.asString();
   final ServiceName driverServiceName=ServiceName.JBOSS.append("jdbc-driver",driverName.replaceAll("\\.","_"));
@@ -20,7 +19,8 @@
   if (jta) {
     dataSourceServiceBuilder.addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,dataSourceService.getTransactionIntegrationInjector()).addDependency(ConnectorServices.CCM_SERVICE,CachedConnectionManager.class,dataSourceService.getCcmInjector());
   }
-  dataSourceServiceBuilder.addListener(new DataSourceStatisticsListener(registration,resource,dsName));
+  ManagementResourceRegistration overrideRegistration=registration.isAllowsOverride() ? registration.registerOverrideModel(dsName,DataSourcesSubsystemProviders.OVERRIDE_DS_DESC) : registration;
+  dataSourceServiceBuilder.addListener(new DataSourceStatisticsListener(overrideRegistration,resource,dsName));
   dataSourceServiceBuilder.addListener(verificationHandler);
   startConfigAndAddDependency(dataSourceServiceBuilder,dataSourceService,dsName,serviceTarget,operation,verificationHandler);
   dataSourceServiceBuilder.addDependency(driverServiceName,Driver.class,dataSourceService.getDriverInjector());
