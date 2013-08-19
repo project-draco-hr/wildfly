@@ -1,0 +1,21 @@
+{
+  final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+  final PathAddress hostAddress=address.subAddress(0,address.size() - 1);
+  final PathAddress serverAddress=hostAddress.subAddress(0,hostAddress.size() - 1);
+  final String worker=AccessLogDefinition.WORKER.resolveModelAttribute(context,model).asString();
+  final String pattern=AccessLogDefinition.PATTERN.resolveModelAttribute(context,model).asString();
+  final String directory=AccessLogDefinition.DIRECTORY.resolveModelAttribute(context,model).asString();
+  final String filePrefix=AccessLogDefinition.PREFIX.resolveModelAttribute(context,model).asString();
+  final AccessLogService service=new AccessLogService(pattern,new File(directory),filePrefix);
+  final String serverName=serverAddress.getLastElement().getValue();
+  final String hostName=hostAddress.getLastElement().getValue();
+  final ServiceName serviceName=UndertowService.accessLogServiceName(serverName,hostName);
+  UndertowLogger.ROOT_LOGGER.warn("service name: " + serviceName);
+  final ServiceBuilder<AccessLogService> builder=context.getServiceTarget().addService(serviceName,service).addDependency(IOServices.WORKER.append(worker),XnioWorker.class,service.getWorker());
+  builder.setInitialMode(ServiceController.Mode.ACTIVE);
+  builder.addListener(verificationHandler);
+  final ServiceController<AccessLogService> serviceController=builder.install();
+  if (newControllers != null) {
+    newControllers.add(serviceController);
+  }
+}
