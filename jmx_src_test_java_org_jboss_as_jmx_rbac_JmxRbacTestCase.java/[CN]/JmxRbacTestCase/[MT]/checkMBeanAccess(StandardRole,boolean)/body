@@ -1,0 +1,264 @@
+{
+  if (sensitiveMBeans) {
+    ModelNode sensitiveMBeansOp=Util.getWriteAttributeOperation(PathAddress.pathAddress(ModelDescriptionConstants.SUBSYSTEM,JMXExtension.SUBSYSTEM_NAME),JMXSubsystemRootResource.CORE_MBEAN_SENSITIVITY.getName(),new ModelNode(sensitiveMBeans));
+    executeForResult(sensitiveMBeansOp);
+  }
+  final boolean canRead=standardRole == null ? true : canRead(standardRole,sensitiveMBeans);
+  final boolean canWrite=standardRole == null ? true : canWrite(standardRole,sensitiveMBeans);
+  final boolean canAccessSpecial=standardRole == null ? true : canAccessSpecial(standardRole);
+  Subject subject=standardRole == null ? null : new Subject(true,Collections.singleton(new RealmUser(roleToUserName(standardRole))),Collections.emptySet(),Collections.emptySet());
+  try {
+    Subject.doAs(subject,new PrivilegedExceptionAction<Void>(){
+      @Override public Void run() throws Exception {
+        Set<ObjectInstance> instances=server.queryMBeans(null,null);
+        Set<ObjectName> names=server.queryNames(null,null);
+        int count=server.getMBeanCount();
+        Assert.assertEquals(count,names.size());
+        Assert.assertEquals(count,instances.size());
+        Assert.assertNotNull(server.getDefaultDomain());
+        Assert.assertTrue(server.getDomains().length > 0);
+        if (canRead) {
+          Assert.assertTrue(names.contains(OBJECT_NAME));
+          Assert.assertNotNull(server.getObjectInstance(OBJECT_NAME));
+          Assert.assertTrue(server.isRegistered(OBJECT_NAME));
+          Assert.assertNotNull(server.getMBeanInfo(OBJECT_NAME));
+          Assert.assertTrue(server.isInstanceOf(OBJECT_NAME,BeanMBean.class.getName()));
+        }
+ else {
+          Assert.assertFalse(names.contains(OBJECT_NAME));
+          try {
+            server.getObjectInstance(OBJECT_NAME);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.isRegistered(OBJECT_NAME);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.getMBeanInfo(OBJECT_NAME);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.isInstanceOf(OBJECT_NAME,BeanMBean.class.getName());
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+        }
+        if (canRead) {
+          Assert.assertEquals(5,server.getAttribute(OBJECT_NAME,"Attr"));
+          server.getAttributes(OBJECT_NAME,new String[]{"Attr"});
+        }
+ else {
+          try {
+            server.getAttribute(OBJECT_NAME,"Attr");
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.getAttributes(OBJECT_NAME,new String[]{"Attr"});
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+        }
+        if (canWrite) {
+          server.setAttribute(OBJECT_NAME,new Attribute("Attr",new Integer(10)));
+          server.setAttributes(OBJECT_NAME,new AttributeList(Collections.singletonList(new Attribute("Attr",new Integer(10)))));
+        }
+ else {
+          try {
+            server.setAttribute(OBJECT_NAME,new Attribute("Attr",new Integer(10)));
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.setAttributes(OBJECT_NAME,new AttributeList(Collections.singletonList(new Attribute("Attr",new Integer(10)))));
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+        }
+        if (canWrite) {
+          server.createMBean(Bean.class.getName(),OBJECT_NAME2);
+          server.unregisterMBean(OBJECT_NAME2);
+          server.createMBean(Bean.class.getName(),OBJECT_NAME2,new Object[0],new String[0]);
+          server.unregisterMBean(OBJECT_NAME2);
+          server.registerMBean(new Bean(),OBJECT_NAME2);
+          server.unregisterMBean(OBJECT_NAME2);
+        }
+ else {
+          try {
+            server.createMBean(Bean.class.getName(),OBJECT_NAME2);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.createMBean(Bean.class.getName(),OBJECT_NAME2,new Object[0],new String[0]);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.registerMBean(new Bean(),OBJECT_NAME2);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.unregisterMBean(OBJECT_NAME);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+        }
+        final TestNotificationListener listener=new TestNotificationListener();
+        if (canRead) {
+          server.addNotificationListener(OBJECT_NAME,listener,listener,new Object());
+          server.removeNotificationListener(OBJECT_NAME,listener);
+        }
+ else {
+          try {
+            server.addNotificationListener(OBJECT_NAME,listener,listener,new Object());
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.removeNotificationListener(OBJECT_NAME,listener);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+        }
+        if (canWrite) {
+          Assert.assertNotNull(server.instantiate(Bean.class.getName()));
+          Assert.assertNotNull(server.instantiate(Bean.class.getName(),new Object[0],new String[0]));
+        }
+ else {
+          try {
+            server.instantiate(Bean.class.getName());
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.instantiate(Bean.class.getName(),new Object[0],new String[0]);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+        }
+        ByteArrayOutputStream bout=new ByteArrayOutputStream();
+        ObjectOutputStream out=new ObjectOutputStream(bout);
+        try {
+          out.writeObject(new Bean());
+        }
+  finally {
+          IoUtils.safeClose(out);
+        }
+        byte[] bytes=bout.toByteArray();
+        if (canAccessSpecial) {
+          Assert.assertNotNull(server.deserialize(OBJECT_NAME,bytes));
+          Assert.assertNotNull(server.deserialize(Bean.class.getName(),bytes));
+          try {
+            server.getClassLoader(OBJECT_NAME);
+          }
+ catch (          InstanceNotFoundException expected) {
+          }
+          Assert.assertNotNull(server.getClassLoaderRepository());
+          Assert.assertNotNull(server.getClassLoaderFor(OBJECT_NAME));
+        }
+ else {
+          try {
+            Assert.assertNotNull(server.deserialize(OBJECT_NAME,bytes));
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            Assert.assertNotNull(server.deserialize(Bean.class.getName(),bytes));
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.getClassLoader(OBJECT_NAME);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.getClassLoaderRepository();
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.getClassLoaderFor(OBJECT_NAME);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+        }
+        if (canRead) {
+          server.invoke(OBJECT_NAME_MODEL,"info",new Object[0],new String[0]);
+        }
+ else {
+          try {
+            server.invoke(OBJECT_NAME_MODEL,"info",new Object[0],new String[0]);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+        }
+        if (canWrite) {
+          server.invoke(OBJECT_NAME,"method",new Object[0],new String[0]);
+          server.invoke(OBJECT_NAME_MODEL,"action",new Object[0],new String[0]);
+          server.invoke(OBJECT_NAME_MODEL,"actionInfo",new Object[0],new String[0]);
+          server.invoke(OBJECT_NAME_MODEL,"unknown",new Object[0],new String[0]);
+        }
+ else {
+          try {
+            server.invoke(OBJECT_NAME,"method",new Object[0],new String[0]);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.invoke(OBJECT_NAME_MODEL,"action",new Object[0],new String[0]);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.invoke(OBJECT_NAME_MODEL,"actionInfo",new Object[0],new String[0]);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+          try {
+            server.invoke(OBJECT_NAME_MODEL,"unknown",new Object[0],new String[0]);
+            Assert.fail();
+          }
+ catch (          RuntimeMBeanException expected) {
+          }
+        }
+        return null;
+      }
+    }
+);
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(e);
+  }
+}

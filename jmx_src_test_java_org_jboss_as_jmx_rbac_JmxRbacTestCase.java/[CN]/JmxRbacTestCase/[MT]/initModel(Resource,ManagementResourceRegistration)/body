@@ -1,0 +1,51 @@
+{
+  PathManagerService pathManagerService=new PathManagerService(){
+  }
+;
+  GlobalOperationHandlers.registerGlobalOperations(registration,processType);
+  registration.registerOperationHandler(CompositeOperationHandler.DEFINITION,CompositeOperationHandler.INSTANCE);
+  registration.registerReadOnlyAttribute(LAUNCH_TYPE,new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      context.getResult().set(TYPE_STANDALONE);
+      context.stepCompleted();
+    }
+  }
+,AttributeAccess.Storage.RUNTIME);
+  TestServiceListener listener=new TestServiceListener();
+  listener.reset(1);
+  getContainer().addService(PathManagerService.SERVICE_NAME,pathManagerService).addListener(listener).install();
+  try {
+    listener.latch.await(10,TimeUnit.SECONDS);
+  }
+ catch (  InterruptedException e) {
+    Thread.currentThread().interrupt();
+    throw new RuntimeException(e);
+  }
+  registration.registerSubModel(PathResourceDefinition.createSpecified(pathManagerService));
+  registration.registerSubModel(CoreManagementResourceDefinition.forStandaloneServer(getAuthorizer(),getAuditLogger(),pathManagerService,new EnvironmentNameReader(){
+    public boolean isServer(){
+      return true;
+    }
+    public String getServerName(){
+      return "Test";
+    }
+    public String getHostName(){
+      return null;
+    }
+    public String getProductName(){
+      return null;
+    }
+  }
+));
+  pathManagerService.addPathManagerResources(rootResource);
+  ExtensionRegistry extensionRegistry=new ExtensionRegistry(ProcessType.STANDALONE_SERVER,new RunningModeControl(RunningMode.NORMAL),AuditLogger.NO_OP_LOGGER,getAuthorizer());
+  extensionRegistry.setWriterRegistry(new NullConfigurationPersister());
+  extensionRegistry.setSubsystemParentResourceRegistrations(registration,null);
+  JMXExtension extension=new JMXExtension();
+  extension.initialize(extensionRegistry.getExtensionContext("xxxx",false));
+  Resource coreManagementResource=Resource.Factory.create();
+  rootResource.registerChild(CoreManagementResourceDefinition.PATH_ELEMENT,coreManagementResource);
+  Resource accessAuthorizationResource=Resource.Factory.create();
+  accessAuthorizationResource.getModel().get(AccessAuthorizationResourceDefinition.PROVIDER.getName()).set(AccessAuthorizationResourceDefinition.Provider.SIMPLE.toString());
+  coreManagementResource.registerChild(AccessAuthorizationResourceDefinition.PATH_ELEMENT,accessAuthorizationResource);
+}
