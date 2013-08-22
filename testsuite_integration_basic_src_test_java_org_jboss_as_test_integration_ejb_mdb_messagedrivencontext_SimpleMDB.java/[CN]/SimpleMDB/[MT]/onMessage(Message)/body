@@ -1,21 +1,14 @@
 {
   logger.info("Received message: " + message);
   try {
-    if (message.getJMSReplyTo() != null) {
-      logger.info("Replying to " + message.getJMSReplyTo());
-      final Destination destination=message.getJMSReplyTo();
-      final MessageProducer replyProducer=session.createProducer(destination);
-      final Message replyMsg;
-      if (this.messageDrivenContext != null) {
-        replyMsg=session.createTextMessage(SUCCESS_REPLY);
+    final Destination replyTo=message.getJMSReplyTo();
+    if (replyTo != null) {
+      logger.info("Replying to " + replyTo);
+      try (JMSContext context=factory.createContext()){
+        String reply=(messageDrivenContext != null) ? SUCCESS_REPLY : FAILURE_REPLY;
+        context.createProducer().setJMSCorrelationID(message.getJMSMessageID()).send(replyTo,reply);
       }
- else {
-        replyMsg=session.createTextMessage(FAILURE_REPLY);
-      }
-      replyMsg.setJMSCorrelationID(message.getJMSMessageID());
-      replyProducer.send(replyMsg);
-      replyProducer.close();
-    }
+     }
   }
  catch (  JMSException jmse) {
     throw new RuntimeException(jmse);

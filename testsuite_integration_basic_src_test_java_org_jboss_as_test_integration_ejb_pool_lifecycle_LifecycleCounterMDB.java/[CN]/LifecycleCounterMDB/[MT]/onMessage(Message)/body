@@ -1,17 +1,16 @@
 {
   try {
     log.info(this + " received message " + message);
-    final Destination destination=message.getJMSReplyTo();
-    if (destination == null) {
-      log.info(this + " noticed that no reply-to destination has been set. Just returning");
+    final Destination replyTo=message.getJMSReplyTo();
+    if (replyTo == null) {
+      log.info(this + " noticed that no reply-to replyTo has been set. Just returning");
       return;
     }
-    final MessageProducer replyProducer=session.createProducer(destination);
-    final Message replyMsg=session.createTextMessage(Constants.REPLY_MESSAGE_PREFIX + ((TextMessage)message).getText());
-    replyMsg.setJMSCorrelationID(message.getJMSMessageID());
-    replyProducer.send(replyMsg);
-    replyProducer.close();
-  }
+    try (JMSContext context=factory.createContext()){
+      String reply=Constants.REPLY_MESSAGE_PREFIX + ((TextMessage)message).getText();
+      context.createProducer().setJMSCorrelationID(message.getJMSMessageID()).send(replyTo,reply);
+    }
+   }
  catch (  JMSException e) {
     throw new RuntimeException(e);
   }
