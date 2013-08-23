@@ -33,11 +33,16 @@
   }
   for (  Callback current : toRespondTo) {
     if (current instanceof AuthorizeCallback) {
-      AuthorizeCallback authorizeCallback=(AuthorizeCallback)current;
-      authorizeCallback.setAuthorized(authorizeCallback.getAuthenticationID().equals(authorizeCallback.getAuthorizationID()));
+      AuthorizeCallback acb=(AuthorizeCallback)current;
+      boolean authorized=acb.getAuthenticationID().equals(acb.getAuthorizationID());
+      if (authorized == false) {
+        SECURITY_LOGGER.tracef("Checking 'AuthorizeCallback', authorized=false, authenticationID=%s, authorizationID=%s.",acb.getAuthenticationID(),acb.getAuthorizationID());
+      }
+      acb.setAuthorized(authorized);
     }
  else     if (current instanceof PasswordCallback) {
       if (userFound == false) {
+        SECURITY_LOGGER.tracef("User '%s' not found in properties file.",userName);
         throw new UserNotFoundException(userName);
       }
       String password=users.get(userName).toString();
@@ -45,6 +50,7 @@
     }
  else     if (current instanceof DigestHashCallback) {
       if (userFound == false) {
+        SECURITY_LOGGER.tracef("User '%s' not found in properties file.",userName);
         throw new UserNotFoundException(userName);
       }
       String hash=users.get(userName).toString();
@@ -52,12 +58,17 @@
     }
  else     if (current instanceof VerifyPasswordCallback) {
       if (userFound == false) {
+        SECURITY_LOGGER.tracef("User '%s' not found in properties file.",userName);
         throw new UserNotFoundException(userName);
       }
       VerifyPasswordCallback vpc=(VerifyPasswordCallback)current;
       if (plainText) {
         String password=users.get(userName).toString();
-        vpc.setVerified(password.equals(vpc.getPassword()));
+        boolean verified=password.equals(vpc.getPassword());
+        if (verified == false) {
+          SECURITY_LOGGER.tracef("Password verification failed for user '%s'",userName);
+        }
+        vpc.setVerified(verified);
       }
  else {
         UsernamePasswordHashUtil hashUtil=getHashUtil();
@@ -66,7 +77,11 @@ synchronized (hashUtil) {
           hash=hashUtil.generateHashedHexURP(userName,realm,vpc.getPassword().toCharArray());
         }
         String expected=users.get(userName).toString();
-        vpc.setVerified(expected.equals(hash));
+        boolean verified=expected.equals(hash);
+        if (verified == false) {
+          SECURITY_LOGGER.tracef("Digest verification failed for user '%s'",userName);
+        }
+        vpc.setVerified(verified);
       }
     }
   }
