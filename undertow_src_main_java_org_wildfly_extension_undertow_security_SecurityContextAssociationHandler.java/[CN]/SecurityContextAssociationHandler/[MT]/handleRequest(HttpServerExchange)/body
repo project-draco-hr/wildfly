@@ -1,33 +1,24 @@
 {
   SecurityContext sc=exchange.getAttachment(UndertowSecurityAttachments.SECURITY_CONTEXT_ATTACHMENT);
-  final MappingManager mappingManager=securityDomainContext.getMappingManager();
   String previousContextID=null;
   RunAsIdentityMetaData identity=null;
+  RunAs old=null;
   try {
-    SecurityActions.setSecurityContextOnAssociation(sc);
-    if (mappingManager != null) {
-      MappingContext<RoleGroup> mc=mappingManager.getMappingContext(MappingType.ROLE.name());
-      if (mc != null && mc.hasModules()) {
-        SecurityRolesAssociation.setSecurityRoles(principleVsRoleMap);
-      }
-    }
-    ServletChain servlet=exchange.getAttachment(ServletRequestContext.ATTACHMENT_KEY).getCurrentServlet();
+    final ServletChain servlet=exchange.getAttachment(ServletRequestContext.ATTACHMENT_KEY).getCurrentServlet();
     identity=runAsIdentityMetaDataMap.get(servlet.getManagedServlet().getServletInfo().getName());
     RunAsIdentity runAsIdentity=null;
     if (identity != null) {
       UndertowLogger.ROOT_LOGGER.tracef("%s, runAs: %s",servlet.getManagedServlet().getServletInfo().getName(),identity);
       runAsIdentity=new RunAsIdentity(identity.getRoleName(),identity.getPrincipalName(),identity.getRunAsRoles());
     }
-    SecurityActions.pushRunAsIdentity(runAsIdentity,sc);
-    previousContextID=setContextID(contextId);
+    old=setRunAsIdentity(runAsIdentity,sc);
+    previousContextID=setContextID(setContextIdAction);
     next.handleRequest(exchange);
   }
   finally {
     if (identity != null) {
-      SecurityActions.popRunAsIdentity(sc);
+      setRunAsIdentity(old,sc);
     }
-    SecurityActions.clearSecurityContext();
-    SecurityRolesAssociation.setSecurityRoles(null);
-    setContextID(previousContextID);
+    setContextID(new SetContextIDAction(previousContextID));
   }
 }
