@@ -49,6 +49,23 @@
   UndertowDeploymentInfoService undertowDeploymentInfoService=UndertowDeploymentInfoService.builder().setAttributes(deploymentUnit.getAttachment(ServletContextAttribute.ATTACHMENT_KEY)).setContextPath(pathName).setDeploymentName(deploymentUnit.getName()).setDeploymentRoot(deploymentRoot).setMergedMetaData(warMetaData.getMergedJBossWebMetaData()).setModule(module).setScisMetaData(scisMetaData).setSecurityContextId(securityContextId).setSecurityDomain(securityDomain).setSharedTlds(tldsMetaData == null ? Collections.<TldMetaData>emptyList() : tldsMetaData.getSharedTlds(deploymentUnit)).setTldsMetaData(tldsMetaData).setSetupActions(setupActions).setOverlays(warMetaData.getOverlays()).setExpressionFactoryWrappers(deploymentUnit.getAttachmentList(ExpressionFactoryWrapper.ATTACHMENT_KEY)).setPredicatedHandlers(deploymentUnit.getAttachment(UndertowHandlersDeploymentProcessor.PREDICATED_HANDLERS)).setExplodedDeployment(ExplodedDeploymentMarker.isExplodedDeployment(deploymentUnit)).createUndertowDeploymentInfoService();
   final ServiceName deploymentInfoServiceName=deploymentServiceName.append(UndertowDeploymentInfoService.SERVICE_NAME);
   ServiceBuilder<DeploymentInfo> infoBuilder=serviceTarget.addService(deploymentInfoServiceName,undertowDeploymentInfoService).addDependency(UndertowService.SERVLET_CONTAINER.append(defaultContainer),ServletContainerService.class,undertowDeploymentInfoService.getContainer()).addDependency(SecurityDomainService.SERVICE_NAME.append(securityDomain),SecurityDomainContext.class,undertowDeploymentInfoService.getSecurityDomainContextValue()).addDependency(UndertowService.UNDERTOW,UndertowService.class,undertowDeploymentInfoService.getUndertowService()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES)).addDependency(PathManagerService.SERVICE_NAME,PathManager.class,undertowDeploymentInfoService.getPathManagerInjector()).addDependency(hostServiceName,Host.class,undertowDeploymentInfoService.getHost()).addDependencies(additionalDependencies);
+  final Set<String> seenExecutors=new HashSet<String>();
+  if (metaData.getExecutorName() != null) {
+    final InjectedValue<Executor> executor=new InjectedValue<Executor>();
+    infoBuilder.addDependency(IOServices.WORKER.append(metaData.getExecutorName()),Executor.class,executor);
+    undertowDeploymentInfoService.addInjectedExecutor(metaData.getExecutorName(),executor);
+    seenExecutors.add(metaData.getExecutorName());
+  }
+  if (metaData.getServlets() != null) {
+    for (    JBossServletMetaData servlet : metaData.getServlets()) {
+      if (servlet.getExecutorName() != null && !seenExecutors.contains(servlet.getExecutorName())) {
+        final InjectedValue<Executor> executor=new InjectedValue<Executor>();
+        infoBuilder.addDependency(IOServices.WORKER.append(servlet.getExecutorName()),Executor.class,executor);
+        undertowDeploymentInfoService.addInjectedExecutor(servlet.getExecutorName(),executor);
+        seenExecutors.add(servlet.getExecutorName());
+      }
+    }
+  }
   if (componentRegistryExists) {
     infoBuilder.addDependency(ComponentRegistry.serviceName(deploymentUnit),ComponentRegistry.class,undertowDeploymentInfoService.getComponentRegistryInjectedValue());
   }
