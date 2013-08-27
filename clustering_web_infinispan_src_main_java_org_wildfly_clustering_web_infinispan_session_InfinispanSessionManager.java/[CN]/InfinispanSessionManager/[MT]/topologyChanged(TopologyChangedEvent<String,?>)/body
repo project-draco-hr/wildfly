@@ -1,40 +1,39 @@
 {
-  if (!event.isPre()) {
-    Cache<String,?> cache=event.getCache();
-    Address localAddress=cache.getCacheManager().getAddress();
-    ConsistentHash oldHash=event.getConsistentHashAtStart();
-    ConsistentHash newHash=event.getConsistentHashAtEnd();
-    Set<Address> oldAddresses=new HashSet<>(oldHash.getMembers());
-    oldAddresses.removeAll(newHash.getMembers());
-    if (!oldAddresses.isEmpty()) {
-      for (      Object key : cache.getAdvancedCache().withFlags(Flag.CACHE_MODE_LOCAL,Flag.SKIP_CACHE_LOAD,Flag.SKIP_LOCKING).keySet()) {
-        if (key instanceof String) {
-          String sessionId=(String)key;
-          Address oldOwner=oldHash.locatePrimaryOwner(sessionId);
-          if (oldAddresses.contains(oldOwner)) {
-            Address newOwner=newHash.locatePrimaryOwner(sessionId);
-            if (localAddress.equals(newOwner)) {
-              boolean started=cache.startBatch();
-              try {
-                V value=this.factory.findValue(sessionId);
-                if (value != null) {
-                  InfinispanWebLogger.ROOT_LOGGER.debugf("Scheduling expiration of session %s on behalf of previous owner: %s",sessionId,oldOwner);
-                  ImmutableSession session=this.factory.createImmutableSession(sessionId,value);
-                  for (                  Scheduler<ImmutableSession> scheduler : this.schedulers) {
-                    scheduler.cancel(session);
-                    scheduler.schedule(session);
-                  }
+  if (event.isPre())   return;
+  Cache<String,?> cache=event.getCache();
+  Address localAddress=cache.getCacheManager().getAddress();
+  ConsistentHash oldHash=event.getConsistentHashAtStart();
+  ConsistentHash newHash=event.getConsistentHashAtEnd();
+  Set<Address> oldAddresses=new HashSet<>(oldHash.getMembers());
+  oldAddresses.removeAll(newHash.getMembers());
+  if (!oldAddresses.isEmpty()) {
+    for (    Object key : cache.getAdvancedCache().withFlags(Flag.CACHE_MODE_LOCAL,Flag.SKIP_CACHE_LOAD,Flag.SKIP_LOCKING).keySet()) {
+      if (key instanceof String) {
+        String sessionId=(String)key;
+        Address oldOwner=oldHash.locatePrimaryOwner(sessionId);
+        if (oldAddresses.contains(oldOwner)) {
+          Address newOwner=newHash.locatePrimaryOwner(sessionId);
+          if (localAddress.equals(newOwner)) {
+            boolean started=cache.startBatch();
+            try {
+              V value=this.factory.findValue(sessionId);
+              if (value != null) {
+                InfinispanWebLogger.ROOT_LOGGER.debugf("Scheduling expiration of session %s on behalf of previous owner: %s",sessionId,oldOwner);
+                ImmutableSession session=this.factory.createImmutableSession(sessionId,value);
+                for (                Scheduler<ImmutableSession> scheduler : this.schedulers) {
+                  scheduler.cancel(session);
+                  scheduler.schedule(session);
                 }
               }
+            }
   finally {
-                if (started) {
-                  cache.endBatch(false);
-                }
+              if (started) {
+                cache.endBatch(false);
               }
             }
+          }
  else {
-              InfinispanWebLogger.ROOT_LOGGER.tracef("Expiration of session %s will be scheduled by node %s on behalf of previous owner: %s",sessionId,newOwner,oldOwner);
-            }
+            InfinispanWebLogger.ROOT_LOGGER.tracef("Expiration of session %s will be scheduled by node %s on behalf of previous owner: %s",sessionId,newOwner,oldOwner);
           }
         }
       }

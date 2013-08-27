@@ -2,11 +2,10 @@
   ServiceName name=getServiceName(cluster);
   ContextNames.BindInfo bindInfo=createBinding(cluster);
   logger.debugf("Installing %s service, bound to ",name.getCanonicalName(),bindInfo.getAbsoluteJndiName());
+  CommandDispatcherFactoryConfig config=new CommandDispatcherFactoryConfig(moduleId);
+  Service<CommandDispatcherFactory> service=new CommandDispatcherFactoryService(config);
+  ServiceBuilder<?> builder=AsynchronousService.addService(target,name,service).addDependency(GlobalComponentRegistryService.getServiceName(cluster)).addDependency(ChannelGroupProvider.getServiceName(cluster),Group.class,config.getGroupInjector()).addDependency(ChannelNodeFactoryProvider.getServiceName(cluster),ChannelNodeFactory.class,config.getNodeFactoryInjector()).addDependency(ChannelService.getServiceName(cluster),Channel.class,config.getChannelInjector()).addDependency(Services.JBOSS_SERVICE_MODULE_LOADER,ModuleLoader.class,config.getModuleLoaderInjector()).setInitialMode(ServiceController.Mode.ON_DEMAND);
   BinderService binder=new BinderService(bindInfo.getBindName());
-  ServiceController<?> binderController=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(bindInfo.getBindName())).addDependency(name,CommandDispatcherFactory.class,new ManagedReferenceInjector<CommandDispatcherFactory>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(ServiceController.Mode.PASSIVE).install();
-  InjectedValue<Channel> channel=new InjectedValue<>();
-  InjectedValue<ModuleLoader> loader=new InjectedValue<>();
-  Service<CommandDispatcherFactory> service=new CommandDispatcherFactoryService(channel,loader,moduleId);
-  ServiceController<?> controller=target.addService(name,service).addDependency(CacheService.getServiceName(cluster,null)).addDependency(ChannelService.getServiceName(cluster),Channel.class,channel).addDependency(Services.JBOSS_SERVICE_MODULE_LOADER,ModuleLoader.class,loader).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
-  return Arrays.asList(controller,binderController);
+  ServiceBuilder<?> binderBuilder=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(bindInfo.getBindName())).addDependency(name,CommandDispatcherFactory.class,new ManagedReferenceInjector<CommandDispatcherFactory>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(ServiceController.Mode.PASSIVE);
+  return Arrays.asList(builder.install(),binderBuilder.install());
 }

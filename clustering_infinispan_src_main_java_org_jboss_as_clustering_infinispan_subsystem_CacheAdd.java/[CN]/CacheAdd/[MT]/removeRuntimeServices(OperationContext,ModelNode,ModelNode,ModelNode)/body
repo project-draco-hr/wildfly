@@ -1,0 +1,20 @@
+{
+  final PathAddress cacheAddress=getCacheAddressFromOperation(operation);
+  final PathAddress containerAddress=getCacheContainerAddressFromOperation(operation);
+  final String cacheName=cacheAddress.getLastElement().getValue();
+  final String containerName=containerAddress.getLastElement().getValue();
+  ModelNode resolvedValue=null;
+  final String jndiName=(resolvedValue=CacheResourceDefinition.JNDI_NAME.resolveModelAttribute(context,cacheModel)).isDefined() ? resolvedValue.asString() : null;
+  String defaultCacheName=CacheContainerResourceDefinition.DEFAULT_CACHE.resolveModelAttribute(context,containerModel).asString();
+  boolean defaultCache=cacheName.equals(defaultCacheName);
+  ContextNames.BindInfo binding=createCacheBinding((jndiName != null) ? JndiNameFactory.parse(jndiName) : createJndiName(containerName,cacheName));
+  context.removeService(binding.getBinderServiceName());
+  context.removeService(CacheService.getServiceName(containerName,cacheName));
+  context.removeService(CacheConfigurationService.getServiceName(containerName,cacheName));
+  for (  CacheServiceProvider provider : ServiceLoader.load(CacheServiceProvider.class,CacheServiceProvider.class.getClassLoader())) {
+    for (    ServiceName name : provider.getServiceNames(containerName,cacheName,defaultCache)) {
+      context.removeService(name);
+    }
+  }
+  log.debugf("cache %s removed for container %s",cacheName,containerName);
+}

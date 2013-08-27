@@ -10,14 +10,21 @@
   List<Dependency<?>> dependencies=new LinkedList<Dependency<?>>();
   ConfigurationBuilder builder=new ConfigurationBuilder().read(getDefaultConfiguration(this.mode));
   processModelNode(context,containerName,cacheModel,builder,dependencies);
-  String defaultCache=CacheContainerResourceDefinition.DEFAULT_CACHE.resolveModelAttribute(context,containerModel).asString();
+  String defaultCacheName=CacheContainerResourceDefinition.DEFAULT_CACHE.resolveModelAttribute(context,containerModel).asString();
+  boolean defaultCache=cacheName.equals(defaultCacheName);
   ServiceTarget target=context.getServiceTarget();
   Configuration config=builder.build();
   Collection<ServiceController<?>> controllers=new ArrayList<ServiceController<?>>(3);
   controllers.add(this.installCacheConfigurationService(target,containerName,cacheName,defaultCache,moduleId,builder,config,dependencies,verificationHandler));
   log.debugf("Cache configuration service for %s installed for container %s",cacheName,containerName);
   controllers.add(this.installCacheService(target,containerName,cacheName,defaultCache,initialMode,config,verificationHandler));
-  controllers.add(this.installJndiService(target,containerName,cacheName,jndiName,verificationHandler));
+  controllers.add(this.installJndiService(target,containerName,cacheName,defaultCache,jndiName,verificationHandler));
   log.debugf("Cache service for cache %s installed for container %s",cacheName,containerName);
+  if (config.clustering().cacheMode().isClustered()) {
+    for (    CacheServiceProvider provider : ServiceLoader.load(CacheServiceProvider.class,CacheServiceProvider.class.getClassLoader())) {
+      log.debugf("Installing %s for cache %s/%s",provider.getClass().getSimpleName(),containerName,cacheName);
+      controllers.addAll(provider.install(target,containerName,cacheName,defaultCache,moduleId));
+    }
+  }
   return controllers;
 }

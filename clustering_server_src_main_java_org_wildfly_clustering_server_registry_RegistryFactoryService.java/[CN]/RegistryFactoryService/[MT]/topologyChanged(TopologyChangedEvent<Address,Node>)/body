@@ -1,0 +1,28 @@
+{
+  if (event.isPre() && !event.getCache().getCacheManager().isCoordinator())   return;
+  Set<Address> addresses=new HashSet<>(event.getConsistentHashAtStart().getMembers());
+  addresses.removeAll(event.getConsistentHashAtEnd().getMembers());
+  final List<Node> nodes=new ArrayList<>(addresses.size());
+  for (  Address address : addresses) {
+    nodes.add(this.factory.createNode(address));
+  }
+  Operation<Map<K,V>> operation=new Operation<Map<K,V>>(){
+    @Override public Map<K,V> invoke(    Cache<Node,Entry<K,V>> cache){
+      Map<K,V> removed=new HashMap<>();
+      for (      Node node : nodes) {
+        Map.Entry<K,V> old=cache.remove(node);
+        if (old != null) {
+          removed.put(old.getKey(),old.getValue());
+        }
+      }
+      return removed;
+    }
+  }
+;
+  Map<K,V> removed=this.invoker.invoke(this.cache,operation);
+  if (!removed.isEmpty()) {
+    for (    Listener<K,V> listener : this.listeners) {
+      listener.removedEntries(removed);
+    }
+  }
+}
