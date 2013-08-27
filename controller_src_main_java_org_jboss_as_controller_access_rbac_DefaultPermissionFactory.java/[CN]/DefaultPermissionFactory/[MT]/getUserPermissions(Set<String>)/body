@@ -1,15 +1,16 @@
 {
-  configureRolePermissions(false);
+  PermsHolder currentPerms=configureRolePermissions();
+  PermissionCollection result=currentPerms.getPermissions(roles);
+  if (result != null) {
+    return result;
+  }
   ManagementPermissionCollection simple=null;
   Map<Action.ActionEffect,CombinationManagementPermission> combined=null;
   for (  String roleName : roles) {
     if (combinationPolicy == CombinationPolicy.REJECTING && simple != null) {
       throw ControllerMessages.MESSAGES.illegalMultipleRoles();
     }
-    ManagementPermissionCollection role;
-synchronized (this) {
-      role=permissionsByRole.get(getOfficialForm(roleName));
-    }
+    ManagementPermissionCollection role=currentPerms.permsByRole.get(getOfficialForm(roleName));
     if (role == null) {
       throw ControllerMessages.MESSAGES.unknownRole(roleName);
     }
@@ -41,7 +42,6 @@ synchronized (this) {
       }
     }
   }
-  PermissionCollection result;
   if (combined == null) {
     result=simple != null ? simple : NO_PERMISSIONS;
   }
@@ -51,5 +51,6 @@ synchronized (this) {
       result.add(cmp);
     }
   }
+  currentPerms.storePermissions(roles,result);
   return result;
 }
