@@ -4,28 +4,17 @@
   final String moduleName="org.wildfly.test." + randomString();
   final ResourceItem resourceItem1=new ResourceItem("testFile1","content1".getBytes());
   final ResourceItem resourceItem2=new ResourceItem("testFile2","content2".getBytes());
-  Asset newManifest=new Asset(){
-    @Override public InputStream openStream(){
-      String line="JBossAS-Release-Version: " + targetAsVersion + "\n";
-      return new ByteArrayInputStream(line.getBytes());
-    }
-  }
-;
-  JavaArchive versionModuleJar=ShrinkWrap.create(JavaArchive.class).addPackage("org.jboss.as.version").addAsManifestResource(newManifest,"MANIFEST.MF");
-  ByteArrayOutputStream baos=new ByteArrayOutputStream();
-  versionModuleJar.as(ZipExporter.class).exportTo(baos);
-  ResourceItem versionModuleResourceItem=new ResourceItem("as-version.jar",baos.toByteArray());
-  final String versionModuleName="org.jboss.as.version";
-  final String originalVersionModulePath=MODULES_PATH + FILE_SEPARATOR + versionModuleName.replace(".",FILE_SEPARATOR)+ FILE_SEPARATOR+ "main";
   final File installation=new File(AS_DISTRIBUTION);
   final File patchDir=new File(cpPatchDir,patchID);
   final ContentModification jbossModulesModification=PatchingTestUtil.updateModulesJar(installation,patchDir);
   Module newModule=new Module.Builder(moduleName).miscFile(resourceItem1).miscFile(resourceItem2).build();
-  Module modifiedModule=new Module.Builder(versionModuleName).resourceRoot(versionModuleResourceItem).property("jboss.api","private").dependency("org.jboss.logging").dependency("org.jboss.modules").build();
+  final String versionModuleName=ProductInfo.getVersionModule();
+  final String slot=ProductInfo.getVersionModuleSlot();
+  final String originalVersionModulePath=MODULES_PATH + FILE_SEPARATOR + versionModuleName.replace(".",FILE_SEPARATOR)+ FILE_SEPARATOR+ slot;
+  final Module modifiedModule=PatchingTestUtil.createVersionModule(targetAsVersion);
   ContentModification moduleAdded=ContentModificationUtils.addModule(cpPatchDir,layerPatchID,newModule);
   ContentModification versionModuleModified=ContentModificationUtils.modifyModule(cpPatchDir,layerPatchID,HashUtils.hashFile(new File(originalVersionModulePath)),modifiedModule);
-  ProductConfig productConfig=new ProductConfig(PRODUCT,asVersion,"main");
-  Patch cpPatch=PatchBuilder.create().setPatchId(patchID).setDescription("A cp patch.").upgradeIdentity(productConfig.getProductName(),productConfig.getProductVersion(),targetAsVersion).getParent().upgradeElement(layerPatchID,"base",false).addContentModification(moduleAdded).addContentModification(versionModuleModified).getParent().addContentModification(jbossModulesModification).build();
+  Patch cpPatch=PatchBuilder.create().setPatchId(patchID).setDescription("A cp patch.").upgradeIdentity(PRODUCT,asVersion,targetAsVersion).getParent().upgradeElement(layerPatchID,"base",false).addContentModification(moduleAdded).addContentModification(versionModuleModified).getParent().addContentModification(jbossModulesModification).build();
   createPatchXMLFile(cpPatchDir,cpPatch);
   return createZippedPatchFile(cpPatchDir,patchID);
 }
