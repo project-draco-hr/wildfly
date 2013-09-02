@@ -1,0 +1,29 @@
+{
+  final PatchingTestBuilder builder=createDefaultBuilder();
+  final byte[] standaloneHash=new byte[20];
+  final byte[] moduleHash=new byte[20];
+  final File existing=builder.getFile(FILE_EXISTING);
+  touch(existing);
+  dump(existing,randomString());
+  final byte[] existingHash=hashFile(existing);
+  final byte[] initialHash=Arrays.copyOf(existingHash,existingHash.length);
+  final PatchingTestStepBuilder cp1=builder.createStepBuilder();
+  final String cp1Id="CP1";
+  cp1.setPatchId(cp1Id).upgradeIdentity(PRODUCT_VERSION,PRODUCT_VERSION).upgradeElement("base-CP1","base",false).addModuleWithRandomContent("org.jboss.test",moduleHash).getParent().addFileWithRandomContent(standaloneHash,FILE_ONE).updateFileWithRandomContent(initialHash,existingHash,FILE_EXISTING);
+  ;
+  apply(cp1);
+  final PatchingTestStepBuilder oneOff1=builder.createStepBuilder();
+  final String oneOff1Id="oneOff1";
+  oneOff1.setPatchId(oneOff1Id).oneOffPatchIdentity(PRODUCT_VERSION).oneOffPatchElement("base-oneOff1","base",false).updateModuleWithRandomContent("org.jboss.test",moduleHash,null).getParent().updateFileWithRandomContent(standaloneHash,null,FILE_ONE).updateFileWithRandomContent(Arrays.copyOf(existingHash,existingHash.length),existingHash,FILE_EXISTING);
+  ;
+  apply(oneOff1);
+  final Context ctx=getContext();
+  PatchingHistory.State history=PatchingHistory.getInstance().getState(ctx);
+  PatchArtifact.State patch=history.getLastAppliedPatch();
+  assertPatch(ctx,patch,oneOff1Id,PatchType.ONE_OFF);
+  assertTrue(patch.hasPrevious(ctx));
+  patch=patch.getPrevious(ctx);
+  assertPatch(ctx,patch,cp1Id,PatchType.CUMULATIVE);
+  assertNoPrevious(ctx,patch);
+  assertNoGarbage(ctx,history);
+}
