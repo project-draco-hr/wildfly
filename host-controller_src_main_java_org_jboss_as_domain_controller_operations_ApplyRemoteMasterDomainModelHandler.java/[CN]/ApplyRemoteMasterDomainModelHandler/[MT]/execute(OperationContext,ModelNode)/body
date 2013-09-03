@@ -7,17 +7,21 @@
   final Set<byte[]> requiredContent=new HashSet<byte[]>();
   final Resource rootResource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
   clearDomain(rootResource);
+  if (!context.isBooting()) {
+    authorizerConfiguration.domainReconnectReset();
+  }
+  List<ModelNode> addOps=new ArrayList<ModelNode>();
   for (  final ModelNode resourceDescription : domainModel.asList()) {
     final PathAddress resourceAddress=PathAddress.pathAddress(resourceDescription.require(ReadMasterDomainModelUtil.DOMAIN_RESOURCE_ADDRESS));
     if (ignoredResourceRegistry.isResourceExcluded(resourceAddress)) {
       continue;
     }
-    final Resource resource=getResource(resourceAddress,rootResource,context);
     if (resourceAddress.size() == 1 && resourceAddress.getElement(0).getKey().equals(EXTENSION)) {
       continue;
     }
-    resource.writeModel(resourceDescription.get(ReadMasterDomainModelUtil.DOMAIN_RESOURCE_MODEL));
-    if (resourceAddress.size() == 1) {
+    ModelNode resourceModel=resourceDescription.get(ReadMasterDomainModelUtil.DOMAIN_RESOURCE_MODEL);
+    final Resource resource=getResource(resourceAddress,rootResource,resourceModel,context,addOps);
+    if (resource != null && resourceAddress.size() == 1) {
       PathElement pe=resourceAddress.getElement(0);
       String peKey=pe.getKey();
       if (peKey.equals(DEPLOYMENT)) {
@@ -57,7 +61,30 @@
     fileRepository.getDeploymentFiles(hash);
   }
   if (!context.isBooting()) {
-    makeAffectedServersRestartRequired(context,startRoot);
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        makeAffectedServersRestartRequired(context,startRoot);
+        context.completeStep(OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER);
+      }
+    }
+,OperationContext.Stage.MODEL,true);
+  }
+  ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
+  for (int i=addOps.size() - 1; i >= 0; i--) {
+    ModelNode subOperation=addOps.get(i);
+    PathAddress stepAddress=PathAddress.pathAddress(subOperation.get(OP_ADDR));
+    String stepOpName=subOperation.require(OP).asString();
+    OperationStepHandler stepHandler=registry.getOperationHandler(stepAddress,stepOpName);
+    if (stepHandler == null) {
+      ImmutableManagementResourceRegistration child=registry.getSubModel(stepAddress);
+      if (child == null) {
+        throw new IllegalStateException(MESSAGES.noSuchResourceType(stepAddress));
+      }
+ else {
+        throw new IllegalStateException(MESSAGES.noHandlerForOperation(stepOpName,stepAddress));
+      }
+    }
+    context.addStep(subOperation,stepHandler,OperationContext.Stage.MODEL,true);
   }
   context.stepCompleted();
 }
