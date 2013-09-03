@@ -1,0 +1,50 @@
+{
+  final int PORT=9176;
+  logFile=new File(System.getProperty("java.io.tmpdir"),FILE_NAME);
+  if (logFile.exists()) {
+    logFile.delete();
+  }
+  server=SyslogServer.getInstance("udp");
+  server.getConfig().setPort(PORT);
+  queue=new LinkedBlockingQueue<String>();
+  server.getConfig().addEventHandler(new BlockedFileSyslogServerEventHandler(queue,logFile.getAbsolutePath(),false));
+  SyslogServer.getThreadedInstance("udp");
+  ModelNode op;
+  final ModelNode compositeOp=new ModelNode();
+  compositeOp.get(OP).set(COMPOSITE);
+  compositeOp.get(OP_ADDR).setEmptyList();
+  ModelNode steps=compositeOp.get(STEPS);
+  op=new ModelNode();
+  op.get(OP).set(ADD);
+  op.get(OP_ADDR).add(CORE_SERVICE,MANAGEMENT);
+  op.get(OP_ADDR).add(ACCESS,AUDIT);
+  op.get(OP_ADDR).add(SYSLOG_HANDLER,SYSLOG_HANDLER_NAME);
+  op.get(FORMATTER).set(JSON_FORMATTER);
+  op.get(SYSLOG_FORMAT).set("RFC5424");
+  steps.add(op);
+  op=new ModelNode();
+  op.get(OP).set(ADD);
+  op.get(OP_ADDR).add(CORE_SERVICE,MANAGEMENT);
+  op.get(OP_ADDR).add(ACCESS,AUDIT);
+  op.get(OP_ADDR).add(SYSLOG_HANDLER,SYSLOG_HANDLER_NAME);
+  op.get(OP_ADDR).add(PROTOCOL,UDP);
+  op.get("port").set(PORT);
+  op.get("host").set("localhost");
+  steps.add(op);
+  applyUpdate(managementClient.getControllerClient(),compositeOp,false);
+  op=new ModelNode();
+  op.get(OP).set(ADD);
+  op.get(OP_ADDR).add(CORE_SERVICE,MANAGEMENT);
+  op.get(OP_ADDR).add(ACCESS,AUDIT);
+  op.get(OP_ADDR).add(LOGGER,AUDIT_LOG);
+  op.get(OP_ADDR).add(HANDLER,SYSLOG_HANDLER_NAME);
+  applyUpdate(managementClient.getControllerClient(),op,false);
+  op=new ModelNode();
+  op.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
+  op.get(OP_ADDR).add(CORE_SERVICE,MANAGEMENT);
+  op.get(OP_ADDR).add(ACCESS,AUDIT);
+  op.get(OP_ADDR).add(LOGGER,AUDIT_LOG);
+  op.get(NAME).set(LOG_READ_ONLY);
+  op.get(VALUE).set("false");
+  applyUpdate(managementClient.getControllerClient(),op,false);
+}

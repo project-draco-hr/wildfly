@@ -1,0 +1,29 @@
+{
+  if (logFile.exists()) {
+    logFile.delete();
+    server.getConfig().removeAllEventHandlers();
+    server.getConfig().addEventHandler(new BlockedFileSyslogServerEventHandler(queue,logFile.getAbsolutePath(),false));
+  }
+  Assert.assertEquals(0,readFile(logFile));
+  makeOneLog();
+  queue.poll(3 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
+  Assert.assertEquals("Audit log is logged to syslog even it isn't enabled",0,readFile(logFile));
+  try {
+    enableLog();
+    Assert.assertEquals(1,readFile(logFile));
+    makeOneLog();
+    queue.poll(15 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
+    Assert.assertEquals("Audit log isn't logged to syslog",2,readFile(logFile));
+  }
+  finally {
+    disableLog();
+  }
+  if (logFile.exists()) {
+    logFile.delete();
+    server.getConfig().removeAllEventHandlers();
+    server.getConfig().addEventHandler(new BlockedFileSyslogServerEventHandler(queue,logFile.getAbsolutePath(),false));
+  }
+  makeOneLog();
+  queue.poll(3 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
+  Assert.assertEquals("Audit log is logged to syslog even it was disabled",0,readFile(logFile));
+}
