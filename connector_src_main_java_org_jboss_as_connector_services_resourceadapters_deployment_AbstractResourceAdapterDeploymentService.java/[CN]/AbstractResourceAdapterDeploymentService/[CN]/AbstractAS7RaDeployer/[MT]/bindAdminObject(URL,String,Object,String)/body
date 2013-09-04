@@ -4,33 +4,35 @@
   final AdminObjectService adminObjectService=new AdminObjectService(ao);
   final ServiceName adminObjectServiceName=AdminObjectService.SERVICE_NAME_BASE.append(jndi);
   serviceTarget.addService(adminObjectServiceName,adminObjectService).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  final ContextNames.BindInfo bindInfo=getBindInfo(jndi);
   final AdminObjectReferenceFactoryService referenceFactoryService=new AdminObjectReferenceFactoryService();
-  final ServiceName referenceFactoryServiceName=AdminObjectReferenceFactoryService.SERVICE_NAME_BASE.append(jndi);
+  final ServiceName referenceFactoryServiceName=AdminObjectReferenceFactoryService.SERVICE_NAME_BASE.append(bindInfo.getBinderServiceName());
   serviceTarget.addService(referenceFactoryServiceName,referenceFactoryService).addDependency(adminObjectServiceName,Object.class,referenceFactoryService.getAdminObjectInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
-  final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndi);
-  final BinderService binderService=new BinderService(bindInfo.getBindName());
-  final ServiceName binderServiceName=bindInfo.getBinderServiceName();
-  serviceTarget.addService(binderServiceName,binderService).addDependency(referenceFactoryServiceName,ManagedReferenceFactory.class,binderService.getManagedObjectInjector()).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addListener(new AbstractServiceListener<Object>(){
-    public void transition(    final ServiceController<? extends Object> controller,    final ServiceController.Transition transition){
+  if (isCreateBinderService()) {
+    final BinderService binderService=new BinderService(bindInfo.getBindName());
+    final ServiceName binderServiceName=bindInfo.getBinderServiceName();
+    serviceTarget.addService(binderServiceName,binderService).addDependency(referenceFactoryServiceName,ManagedReferenceFactory.class,binderService.getManagedObjectInjector()).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addListener(new AbstractServiceListener<Object>(){
+      public void transition(      final ServiceController<? extends Object> controller,      final ServiceController.Transition transition){
 switch (transition) {
 case STARTING_to_UP:
 {
-          DEPLOYMENT_CONNECTOR_LOGGER.boundJca("AdminObject",jndi);
-          break;
-        }
+            DEPLOYMENT_CONNECTOR_LOGGER.boundJca("AdminObject",jndi);
+            break;
+          }
 case STOPPING_to_DOWN:
 {
-        DEPLOYMENT_CONNECTOR_LOGGER.unboundJca("AdminObject",jndi);
-        break;
-      }
+          DEPLOYMENT_CONNECTOR_LOGGER.unboundJca("AdminObject",jndi);
+          break;
+        }
 case REMOVING_to_REMOVED:
 {
-      DEPLOYMENT_CONNECTOR_LOGGER.debugf("Removed JCA AdminObject [%s]",jndi);
-    }
-}
+        DEPLOYMENT_CONNECTOR_LOGGER.debugf("Removed JCA AdminObject [%s]",jndi);
+      }
+  }
 }
 }
 ).setInitialMode(ServiceController.Mode.ACTIVE).install();
+}
 if (ao instanceof javax.resource.Referenceable) {
 ((javax.resource.Referenceable)ao).setReference(new Reference(jndi));
 }

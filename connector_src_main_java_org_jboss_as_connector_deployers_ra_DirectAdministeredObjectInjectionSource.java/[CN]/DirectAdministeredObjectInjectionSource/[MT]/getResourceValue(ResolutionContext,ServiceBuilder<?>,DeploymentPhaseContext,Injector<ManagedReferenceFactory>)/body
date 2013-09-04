@@ -1,0 +1,91 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final Module module=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
+  final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
+  String realId=null;
+  String aoClass=null;
+  SUBSYSTEM_RA_LOGGER.debugf("@AdministeredObjectDefinition: %s for %s binding to %s ",className,resourceAdapter,jndiName);
+  try {
+    Set<String> rars=mdr.getResourceAdapters();
+    if (rars == null || rars.isEmpty()) {
+      throw MESSAGES.emptyMdr(jndiName);
+    }
+    for (    String rar : rars) {
+      if (rar.indexOf(raId) != -1) {
+        realId=rar;
+      }
+    }
+    if (realId == null) {
+      throw MESSAGES.raNotFound(resourceAdapter,jndiName);
+    }
+    Connector cmd=mdr.getResourceAdapter(realId);
+    if (cmd.getVersion() == Connector.Version.V_10) {
+      throw MESSAGES.adminObjectForJCA10(resourceAdapter,jndiName);
+    }
+ else {
+      ResourceAdapter1516 ra1516=(ResourceAdapter1516)cmd.getResourceadapter();
+      if (ra1516.getAdminObjects() != null) {
+        for (        org.jboss.jca.common.api.metadata.ra.AdminObject ao : ra1516.getAdminObjects()) {
+          if (ao.getAdminobjectClass().getValue().equals(className))           aoClass=ao.getAdminobjectClass().getValue();
+        }
+      }
+    }
+    if (aoClass == null || !aoClass.equals(className)) {
+      throw MESSAGES.invalidAdminObject(aoClass,resourceAdapter,jndiName);
+    }
+    Map<String,String> raConfigProperties=new HashMap<String,String>();
+    Map<String,String> aoConfigProperties=new HashMap<String,String>();
+    if (properties != null) {
+      for (      String prop : properties) {
+        String key=prop.substring(0,prop.indexOf("="));
+        String value=prop.substring(prop.indexOf("=") + 1);
+        if (key.startsWith("ra.")) {
+          raConfigProperties.put(key.substring(3),value);
+        }
+ else         if (key.startsWith("ao.")) {
+          aoConfigProperties.put(key.substring(3),value);
+        }
+ else {
+          aoConfigProperties.put(key,value);
+        }
+      }
+    }
+    CommonAdminObject ao=new CommonAdminObjectImpl(aoConfigProperties,aoClass,jndiName,poolName(aoClass,interfaceName),Boolean.TRUE,Boolean.TRUE);
+    IronJacamar ijmd=new IronJacamarImpl(null,raConfigProperties,Collections.singletonList(ao),null,Collections.<String>emptyList(),null);
+    String serviceName=jndiName;
+    serviceName=serviceName.replace(':','_');
+    serviceName=serviceName.replace('/','_');
+    ResourceAdapterActivatorService activator=new ResourceAdapterActivatorService(cmd,ijmd,module.getClassLoader(),serviceName);
+    final ContextNames.BindInfo bindInfo=ContextNames.bindInfoForEnvEntry(context.getApplicationName(),context.getModuleName(),context.getComponentName(),!context.isCompUsesModule(),jndiName);
+    activator.setBindInfo(bindInfo);
+    activator.setCreateBinderService(false);
+    ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+    ServiceBuilder adminObjectServiceBuilder=serviceTarget.addService(ConnectorServices.RESOURCE_ADAPTER_ACTIVATOR_SERVICE.append(serviceName),activator).addDependency(ConnectorServices.IRONJACAMAR_MDR,AS7MetadataRepository.class,activator.getMdrInjector()).addDependency(ConnectorServices.RA_REPOSITORY_SERVICE,ResourceAdapterRepository.class,activator.getRaRepositoryInjector()).addDependency(ConnectorServices.MANAGEMENT_REPOSITORY_SERVICE,ManagementRepository.class,activator.getManagementRepositoryInjector()).addDependency(ConnectorServices.RESOURCE_ADAPTER_REGISTRY_SERVICE,ResourceAdapterDeploymentRegistry.class,activator.getRegistryInjector()).addDependency(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,TransactionIntegration.class,activator.getTxIntegrationInjector()).addDependency(ConnectorServices.CONNECTOR_CONFIG_SERVICE,JcaSubsystemConfiguration.class,activator.getConfigInjector()).addDependency(SubjectFactoryService.SERVICE_NAME,SubjectFactory.class,activator.getSubjectFactoryInjector()).addDependency(ConnectorServices.CCM_SERVICE,CachedConnectionManager.class,activator.getCcmInjector()).addDependency(NamingService.SERVICE_NAME).addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER).addDependency(ConnectorServices.BOOTSTRAP_CONTEXT_SERVICE.append("default"));
+    adminObjectServiceBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+    serviceBuilder.addDependency(AdminObjectReferenceFactoryService.SERVICE_NAME_BASE.append(bindInfo.getBinderServiceName()),ManagedReferenceFactory.class,injector);
+    serviceBuilder.addListener(new AbstractServiceListener<Object>(){
+      public void transition(      final ServiceController<? extends Object> controller,      final ServiceController.Transition transition){
+switch (transition) {
+case STARTING_to_UP:
+{
+            DEPLOYMENT_CONNECTOR_LOGGER.adminObjectAnnotation(jndiName);
+            break;
+          }
+case STOPPING_to_DOWN:
+{
+          DEPLOYMENT_CONNECTOR_LOGGER.unboundJca("AdminObject",jndiName);
+          break;
+        }
+case REMOVING_to_REMOVED:
+{
+        DEPLOYMENT_CONNECTOR_LOGGER.debugf("Removed JCA AdminObject [%s]",jndiName);
+      }
+  }
+}
+}
+);
+}
+ catch (Exception e) {
+throw new DeploymentUnitProcessingException(e);
+}
+}
