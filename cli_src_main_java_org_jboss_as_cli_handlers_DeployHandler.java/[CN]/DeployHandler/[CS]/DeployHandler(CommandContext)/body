@@ -5,14 +5,19 @@
   addRequiredPath(requiredAddress);
   l=new ArgumentWithoutValue(this,"-l");
   l.setExclusive(true);
+  l.setAccessRequirement(listPermission);
+  final AccessRequirement addOrReplacePermission=AccessRequirementBuilder.Factory.create(ctx).any().requirement(mainAddPermission).requirement(fullReplacePermission).build();
   final FilenameTabCompleter pathCompleter=Util.isWindows() ? new WindowsFilenameTabCompleter(ctx) : new DefaultFilenameTabCompleter(ctx);
   path=new FileSystemPathArgument(this,pathCompleter,0,"--path");
   path.addCantAppearAfter(l);
+  path.setAccessRequirement(addOrReplacePermission);
   url=new ArgumentWithValue(this,"--url");
   url.addCantAppearAfter(path);
   path.addCantAppearAfter(url);
+  url.setAccessRequirement(addOrReplacePermission);
   force=new ArgumentWithoutValue(this,"--force","-f");
   force.addRequiredPreceding(path);
+  force.setAccessRequirement(fullReplacePermission);
   name=new ArgumentWithValue(this,new CommandLineCompleter(){
     @Override public int complete(    CommandContext ctx,    String buffer,    int cursor,    List<String> candidates){
       ParsedCommandLine args=ctx.getParsedCommandLine();
@@ -59,8 +64,10 @@
   name.addCantAppearAfter(l);
   path.addCantAppearAfter(name);
   url.addCantAppearAfter(name);
+  name.setAccessRequirement(deployPermission);
   rtName=new ArgumentWithValue(this,"--runtime-name");
   rtName.addRequiredPreceding(path);
+  rtName.setAccessRequirement(addOrReplacePermission);
   allServerGroups=new ArgumentWithoutValue(this,"--all-server-groups"){
     @Override public boolean canAppearNext(    CommandContext ctx) throws CommandFormatException {
       if (!ctx.isDomainMode()) {
@@ -74,9 +81,10 @@
   allServerGroups.addRequiredPreceding(name);
   allServerGroups.addCantAppearAfter(force);
   force.addCantAppearAfter(allServerGroups);
+  allServerGroups.setAccessRequirement(deployPermission);
   serverGroups=new ArgumentWithValue(this,new CommaSeparatedCompleter(){
     @Override protected Collection<String> getAllCandidates(    CommandContext ctx){
-      return Util.getServerGroups(ctx.getModelControllerClient());
+      return serverGroupAddPermission.getAllowedOn(ctx);
     }
   }
 ,"--server-groups"){
@@ -92,6 +100,7 @@
   serverGroups.addRequiredPreceding(name);
   serverGroups.addCantAppearAfter(force);
   force.addCantAppearAfter(serverGroups);
+  serverGroups.setAccessRequirement(deployPermission);
   serverGroups.addCantAppearAfter(allServerGroups);
   allServerGroups.addCantAppearAfter(serverGroups);
   disabled=new ArgumentWithoutValue(this,"--disabled");
@@ -100,8 +109,10 @@
   disabled.addCantAppearAfter(allServerGroups);
   disabled.addCantAppearAfter(force);
   force.addCantAppearAfter(disabled);
+  disabled.setAccessRequirement(mainAddPermission);
   unmanaged=new ArgumentWithoutValue(this,"--unmanaged");
   unmanaged.addRequiredPreceding(path);
+  unmanaged.setAccessRequirement(mainAddPermission);
   script=new ArgumentWithValue(this,"--script");
   script.addRequiredPreceding(path);
 }

@@ -3,45 +3,24 @@
     return false;
   }
   if (requiredAddress == null) {
-    return true;
+    return ctx.getConfig().isAccessControl() ? accessRequirement.isSatisfied(ctx) : true;
   }
   if (dependsOnProfile && ctx.isDomainMode()) {
-    return true;
+    return ctx.getConfig().isAccessControl() ? accessRequirement.isSatisfied(ctx) : true;
   }
-  if (addressAvailable != null) {
-    return addressAvailable.booleanValue();
+  if (available != null) {
+    return available.booleanValue();
   }
   final ModelControllerClient client=ctx.getModelControllerClient();
   if (client == null) {
     return false;
   }
-  final ModelNode request=new ModelNode();
-  final ModelNode address=request.get(Util.ADDRESS);
   if (requiredType == null) {
-    address.setEmptyList();
-    request.get(Util.OPERATION).set(Util.VALIDATE_ADDRESS);
-    final ModelNode addressValue=request.get(Util.VALUE);
-    for (    OperationRequestAddress.Node node : requiredAddress) {
-      addressValue.add(node.getType(),node.getName());
-    }
-    final ModelNode response;
-    try {
-      response=ctx.getModelControllerClient().execute(request);
-    }
- catch (    IOException e) {
-      return false;
-    }
-    final ModelNode result=response.get(Util.RESULT);
-    if (!result.isDefined()) {
-      return false;
-    }
-    final ModelNode valid=result.get(Util.VALID);
-    if (!valid.isDefined()) {
-      return false;
-    }
-    addressAvailable=valid.asBoolean();
+    available=isAddressValid(ctx);
   }
  else {
+    final ModelNode request=new ModelNode();
+    final ModelNode address=request.get(Util.ADDRESS);
     for (    OperationRequestAddress.Node node : requiredAddress) {
       address.add(node.getType(),node.getName());
     }
@@ -53,7 +32,10 @@
  catch (    IOException e) {
       return false;
     }
-    addressAvailable=Util.listContains(result,requiredType);
+    available=Util.listContains(result,requiredType);
   }
-  return addressAvailable;
+  if (ctx.getConfig().isAccessControl()) {
+    available=available && accessRequirement.isSatisfied(ctx);
+  }
+  return available;
 }

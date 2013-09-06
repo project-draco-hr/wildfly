@@ -4,22 +4,37 @@
   }
   ModelNode request=initRequest(ctx);
   if (request == null) {
-    return Collections.emptyList();
+    return Collections.emptyIterator();
   }
   request.get(Util.OPERATION).set(Util.READ_RESOURCE_DESCRIPTION);
+  if (ctx.getConfig().isAccessControl()) {
+    request.get(Util.ACCESS_CONTROL).set(Util.COMBINED_DESCRIPTIONS);
+  }
   ModelNode result;
   try {
     result=ctx.getModelControllerClient().execute(request);
   }
  catch (  IOException e) {
-    return Collections.emptyList();
+    return Collections.emptyIterator();
   }
   if (!result.hasDefined(Util.RESULT)) {
-    return Collections.emptyList();
+    return Collections.emptyIterator();
   }
   result=result.get(Util.RESULT);
   if (!result.hasDefined(Util.ATTRIBUTES)) {
-    return Collections.emptyList();
+    return Collections.emptyIterator();
   }
-  return result.get(Util.ATTRIBUTES).asPropertyList();
+  final ModelNode accessControl;
+  if (ctx.getConfig().isAccessControl()) {
+    if (result.has(Util.ACCESS_CONTROL)) {
+      accessControl=result.get(Util.ACCESS_CONTROL);
+    }
+ else {
+      accessControl=null;
+    }
+  }
+ else {
+    accessControl=null;
+  }
+  return getAttributeIterator(result.get(Util.ATTRIBUTES).asPropertyList(),accessControl);
 }
