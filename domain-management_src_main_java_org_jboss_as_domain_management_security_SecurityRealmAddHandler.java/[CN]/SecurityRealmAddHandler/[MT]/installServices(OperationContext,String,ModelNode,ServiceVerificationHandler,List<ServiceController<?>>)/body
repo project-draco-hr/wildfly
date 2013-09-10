@@ -6,54 +6,44 @@
   final ServiceTarget serviceTarget=context.getServiceTarget();
   final boolean mapGroupsToRoles=SecurityRealmResourceDefinition.MAP_GROUPS_TO_ROLES.resolveModelAttribute(context,model).asBoolean();
   final SecurityRealmService securityRealmService=new SecurityRealmService(realmName,mapGroupsToRoles);
-  final ServiceName realmServiceName=SecurityRealmService.BASE_SERVICE_NAME.append(realmName);
+  final ServiceName realmServiceName=SecurityRealm.ServiceUtil.createServiceName(realmName);
   ServiceBuilder<?> realmBuilder=serviceTarget.addService(realmServiceName,securityRealmService);
-  ServiceName plugInLoaderName=null;
-  ServiceName authenticationName=null;
-  ServiceName authorizationName=null;
   ModelNode authTruststore=null;
   if (plugIns != null) {
-    plugInLoaderName=addPlugInLoaderService(realmServiceName,plugIns,serviceTarget,newControllers);
+    addPlugInLoaderService(realmName,plugIns,serviceTarget,newControllers);
   }
+  InjectedSetValue<CallbackHandlerService> injectorSet=securityRealmService.getCallbackHandlerService();
   if (authentication != null) {
     if (authentication.hasDefined(TRUSTSTORE)) {
       authTruststore=authentication.require(TRUSTSTORE);
-      ServiceName ccName=addClientCertService(realmServiceName,serviceTarget,newControllers);
-      realmBuilder.addDependency(ccName,CallbackHandlerService.class,securityRealmService.getCallbackHandlerService().injector());
+      addClientCertService(realmName,serviceTarget,newControllers,realmBuilder,injectorSet.injector());
     }
     if (authentication.hasDefined(LOCAL)) {
-      ServiceName localName=addLocalService(context,authentication.require(LOCAL),realmServiceName,serviceTarget,newControllers);
-      realmBuilder.addDependency(localName,CallbackHandlerService.class,securityRealmService.getCallbackHandlerService().injector());
+      addLocalService(context,authentication.require(LOCAL),realmName,serviceTarget,newControllers,realmBuilder,injectorSet.injector());
     }
     if (authentication.hasDefined(JAAS)) {
-      authenticationName=addJaasService(context,authentication.require(JAAS),realmServiceName,serviceTarget,newControllers,context.isNormalServer());
+      addJaasService(context,authentication.require(JAAS),realmName,serviceTarget,newControllers,context.isNormalServer(),realmBuilder,injectorSet.injector());
     }
  else     if (authentication.hasDefined(LDAP)) {
-      authenticationName=addLdapService(context,authentication.require(LDAP),realmServiceName,serviceTarget,newControllers);
+      addLdapService(context,authentication.require(LDAP),realmName,serviceTarget,newControllers,realmBuilder,injectorSet.injector());
     }
  else     if (authentication.hasDefined(PLUG_IN)) {
-      authenticationName=addPlugInAuthenticationService(context,authentication.require(PLUG_IN),realmServiceName,plugInLoaderName,securityRealmService,serviceTarget,newControllers);
+      addPlugInAuthenticationService(context,authentication.require(PLUG_IN),realmName,securityRealmService,serviceTarget,newControllers,realmBuilder,injectorSet.injector());
     }
  else     if (authentication.hasDefined(PROPERTIES)) {
-      authenticationName=addPropertiesAuthenticationService(context,authentication.require(PROPERTIES),realmServiceName,realmName,serviceTarget,newControllers);
+      addPropertiesAuthenticationService(context,authentication.require(PROPERTIES),realmName,serviceTarget,newControllers,realmBuilder,injectorSet.injector());
     }
  else     if (authentication.hasDefined(USERS)) {
-      authenticationName=addUsersService(context,authentication.require(USERS),realmServiceName,realmName,serviceTarget,newControllers);
+      addUsersService(context,authentication.require(USERS),realmName,serviceTarget,newControllers,realmBuilder,injectorSet.injector());
     }
   }
   if (authorization != null) {
     if (authorization.hasDefined(PROPERTIES)) {
-      authorizationName=addPropertiesAuthorizationService(context,authorization.require(PROPERTIES),realmServiceName,realmName,serviceTarget,newControllers);
+      addPropertiesAuthorizationService(context,authorization.require(PROPERTIES),realmName,serviceTarget,newControllers,realmBuilder,securityRealmService.getSubjectSupplementalInjector());
     }
  else     if (authorization.hasDefined(PLUG_IN)) {
-      authorizationName=addPlugInAuthorizationService(context,authorization.require(PLUG_IN),realmServiceName,plugInLoaderName,realmName,serviceTarget,newControllers);
+      addPlugInAuthorizationService(context,authorization.require(PLUG_IN),realmName,serviceTarget,newControllers,realmBuilder,securityRealmService.getSubjectSupplementalInjector());
     }
-  }
-  if (authenticationName != null) {
-    realmBuilder.addDependency(authenticationName,CallbackHandlerService.class,securityRealmService.getCallbackHandlerService().injector());
-  }
-  if (authorizationName != null) {
-    realmBuilder.addDependency(authorizationName,SubjectSupplementalService.class,securityRealmService.getSubjectSupplementalInjector());
   }
   ModelNode ssl=null;
   if (serverIdentities != null) {
@@ -61,13 +51,11 @@
       ssl=serverIdentities.require(SSL);
     }
     if (serverIdentities.hasDefined(SECRET)) {
-      ServiceName secretServiceName=addSecretService(context,serverIdentities.require(SECRET),realmServiceName,serviceTarget,newControllers);
-      realmBuilder.addDependency(secretServiceName,CallbackHandlerFactory.class,securityRealmService.getSecretCallbackFactory());
+      addSecretService(context,serverIdentities.require(SECRET),realmName,serviceTarget,newControllers,realmBuilder,securityRealmService.getSecretCallbackFactory());
     }
   }
   if (ssl != null || authTruststore != null) {
-    ServiceName sslServiceName=addSSLService(context,ssl,authTruststore,realmServiceName,serviceTarget,newControllers);
-    realmBuilder.addDependency(sslServiceName,SSLIdentity.class,securityRealmService.getSSLIdentityInjector());
+    addSSLService(context,ssl,authTruststore,realmName,serviceTarget,newControllers,realmBuilder,securityRealmService.getSSLIdentityInjector());
   }
   realmBuilder.setInitialMode(Mode.ACTIVE);
   ServiceController<?> sc=realmBuilder.install();
