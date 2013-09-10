@@ -1,0 +1,99 @@
+{
+  final JsonParser parser=Json.createParser(new StringReader(json));
+  final StepExecutionBuilder builder=StepExecutionBuilder.create();
+  String key=null;
+  while (parser.hasNext()) {
+    final Event event=parser.next();
+switch (event) {
+case KEY_NAME:
+      key=parser.getString();
+    break;
+case VALUE_FALSE:
+case VALUE_NULL:
+case VALUE_NUMBER:
+case VALUE_STRING:
+case VALUE_TRUE:
+  final String value=parser.getString();
+if (key == null) {
+  throw new IllegalStateException(String.format("No key for value '%s'. Parsing position: %s%n\t%s",value,parser.getLocation(),json));
+}
+switch (key) {
+case ID:
+if (value != null) {
+  builder.setId(Long.parseLong(value));
+}
+break;
+case NAME:
+builder.setName(value);
+break;
+case STATUS:
+if (value != null) {
+builder.setStatus(BatchStatus.valueOf(value));
+}
+break;
+case EXIT_STATUS:
+builder.setExitStatus(value);
+break;
+case END_TIME:
+if (value != null) {
+builder.setEndTime(Long.parseLong(value));
+}
+break;
+case START_TIME:
+if (value != null) {
+builder.setStartTime(Long.parseLong(value));
+}
+break;
+case PERSISTENT_USER_DATA:
+builder.setPersistentUserData(deserialize(value));
+case METRICS:
+String k=null;
+String metricType=null;
+String metricValue=null;
+while (parser.hasNext()) {
+final Event e=parser.next();
+switch (e) {
+case KEY_NAME:
+k=parser.getString();
+break;
+case VALUE_FALSE:
+case VALUE_NULL:
+case VALUE_NUMBER:
+case VALUE_STRING:
+case VALUE_TRUE:
+if (k == null) {
+throw new IllegalStateException(String.format("No key for value '%s'. Parsing position: %s%n\t%s",value,parser.getLocation(),json));
+}
+switch (k) {
+case METRIC_TYPE:
+metricType=parser.getString();
+break;
+case METRIC_VALUE:
+metricValue=parser.getString();
+break;
+}
+if (metricType != null && metricValue != null) {
+final MetricType type=MetricType.valueOf(metricType);
+final long v=Long.parseLong(parser.getString());
+final Metric m=new Metric(){
+@Override public MetricType getType(){
+return type;
+}
+@Override public long getValue(){
+return v;
+}
+}
+;
+builder.addMetric(m);
+}
+break;
+}
+}
+break;
+}
+break;
+}
+}
+parser.close();
+return builder.build();
+}

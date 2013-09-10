@@ -1,0 +1,37 @@
+{
+  final String jobXml=req.getParameter(JOB_XML_PARAMETER);
+  final String timeoutString=req.getParameter(TIMEOUT_PARAM);
+  final String wait=req.getParameter(WAIT_FOR_COMPLETION);
+  if (jobXml == null) {
+    throw new IllegalStateException(String.format("%s is a required parameter",JOB_XML_PARAMETER));
+  }
+  final Properties params=parseParams(req,Arrays.asList(TIMEOUT_PARAM,WAIT_FOR_COMPLETION));
+  final JobExecution jobExecution=service.start(jobXml,params);
+  long timeout=TimeoutUtil.adjust(timeoutString == null ? DEFAULT_TIMEOUT : Integer.parseInt(timeoutString));
+  long sleep=100L;
+  final boolean waitForCompletion=(wait == null || Boolean.parseBoolean(wait));
+  boolean b=waitForCompletion;
+  while (b) {
+switch (jobExecution.getBatchStatus()) {
+case STARTED:
+case STARTING:
+case STOPPING:
+      try {
+        TimeUnit.MILLISECONDS.sleep(sleep);
+      }
+ catch (      InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    timeout-=sleep;
+  sleep=Math.max(sleep / 2,100L);
+break;
+default :
+b=false;
+break;
+}
+if (timeout <= 0) {
+throw new IllegalStateException(String.format("Batch job '%s' did not complete withing allotted time.",jobXml));
+}
+}
+if (waitForCompletion) write(resp,jobExecution);
+}
