@@ -1,0 +1,29 @@
+{
+  createWorkingDir();
+  DirectoryServiceFactory dsf=new DefaultDirectoryServiceFactory();
+  dsf.init(DIRECTORY_NAME);
+  directoryService=dsf.getDirectoryService();
+  directoryService.getChangeLog().setEnabled(false);
+  SchemaManager schemaManager=directoryService.getSchemaManager();
+  PartitionFactory pf=dsf.getPartitionFactory();
+  Partition p=pf.createPartition(schemaManager,"simple","dc=simple,dc=wildfly,dc=org",1000,workingDir);
+  pf.addIndex(p,"uid",5);
+  pf.addIndex(p,"departmentNumber",5);
+  p.initialize();
+  directoryService.addPartition(p);
+  CoreSession adminSession=directoryService.getAdminSession();
+  InputStream ldifInput=LdapAuthenticationTestCase.class.getResourceAsStream("simple-partition.ldif");
+  LdifReader ldifReader=new LdifReader(ldifInput);
+  for (  LdifEntry ldifEntry : ldifReader) {
+    adminSession.add(new DefaultEntry(schemaManager,ldifEntry.getEntry()));
+  }
+  ldifReader.close();
+  ldifInput.close();
+  ldapServer=new LdapServer();
+  ldapServer.setServiceName("DefaultLDAP");
+  Transport ldap=new TcpTransport("0.0.0.0",LDAP_PORT,3,5);
+  ldapServer.addTransports(ldap);
+  ldapServer.setDirectoryService(directoryService);
+  ldapServer.start();
+  System.out.println("Started");
+}
