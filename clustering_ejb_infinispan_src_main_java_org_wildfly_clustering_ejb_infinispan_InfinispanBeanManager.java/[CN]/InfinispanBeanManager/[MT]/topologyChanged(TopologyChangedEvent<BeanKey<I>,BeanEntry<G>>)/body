@@ -1,0 +1,43 @@
+{
+  if (event.isPre())   return;
+  Cache<BeanKey<I>,BeanEntry<G>> cache=event.getCache();
+  Address localAddress=cache.getCacheManager().getAddress();
+  ConsistentHash oldHash=event.getConsistentHashAtStart();
+  ConsistentHash newHash=event.getConsistentHashAtEnd();
+  Set<Address> oldAddresses=new HashSet<>(oldHash.getMembers());
+  oldAddresses.removeAll(newHash.getMembers());
+  if (!oldAddresses.isEmpty()) {
+    for (    Object cacheKey : cache.getAdvancedCache().withFlags(Flag.CACHE_MODE_LOCAL,Flag.SKIP_CACHE_LOAD,Flag.SKIP_LOCKING).keySet()) {
+      if (this.accept(cacheKey)) {
+        @SuppressWarnings("unchecked") BeanKey<I> key=(BeanKey<I>)cacheKey;
+        Address oldOwner=oldHash.locatePrimaryOwner(key);
+        if (oldAddresses.contains(oldOwner)) {
+          Address newOwner=newHash.locatePrimaryOwner(key);
+          I id=key.getId();
+          if (localAddress.equals(newOwner)) {
+            boolean started=cache.startBatch();
+            try {
+              BeanEntry<G> entry=this.beanFactory.findValue(id);
+              if (entry != null) {
+                InfinispanEjbLogger.ROOT_LOGGER.debugf("Scheduling expiration of bean %s on behalf of previous owner: %s",id,oldOwner);
+                Bean<G,I,T> bean=this.beanFactory.createBean(id,entry);
+                for (                Scheduler<Bean<G,I,T>> scheduler : this.schedulers) {
+                  scheduler.cancel(bean);
+                  scheduler.schedule(bean);
+                }
+              }
+            }
+  finally {
+              if (started) {
+                cache.endBatch(false);
+              }
+            }
+          }
+ else {
+            InfinispanEjbLogger.ROOT_LOGGER.tracef("Expiration of bean %s will be scheduled by node %s on behalf of previous owner: %s",id,newOwner,oldOwner);
+          }
+        }
+      }
+    }
+  }
+}

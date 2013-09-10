@@ -1,0 +1,44 @@
+{
+  MarshallingContext context=new SimpleMarshallingContextFactory().createMarshallingContext(this.config.getValue(),this.context.getClassLoader());
+  MarshalledValueFactory<MarshallingContext> factory=new SimpleMarshalledValueFactory(context);
+  Cache<G,BeanGroupEntry<I,T>> groupCache=this.cache.getValue();
+  org.infinispan.configuration.cache.Configuration config=groupCache.getCacheConfiguration();
+  BeanGroupFactory<G,I,T> groupFactory=new InfinispanBeanGroupFactory<>(groupCache,this.invoker,factory,context);
+  Configuration<G,G,BeanGroupEntry<I,T>,BeanGroupFactory<G,I,T>> groupConfiguration=new SimpleConfiguration<>(groupCache,groupFactory,groupIdentifierFactory);
+  Cache<BeanKey<I>,BeanEntry<G>> beanCache=this.cache.getValue();
+  String beanName=this.context.getBeanClass().getName();
+  final boolean evictionAllowed=config.persistence().usingStores();
+  final boolean passivationEnabled=evictionAllowed && config.persistence().passivation();
+  final boolean persistent=config.clustering().cacheMode().isClustered() || (evictionAllowed && !passivationEnabled);
+  BeanFactory<G,I,T> beanFactory=new InfinispanBeanFactory<>(beanName,groupFactory,beanCache,this.invoker,this.context.getTimeout(),persistent ? passivationListener : null);
+  Configuration<I,BeanKey<I>,BeanEntry<G>,BeanFactory<G,I,T>> beanConfiguration=new SimpleConfiguration<>(beanCache,beanFactory,beanIdentifierFactory);
+  NodeFactory<Address> nodeFactory=this.nodeFactory.getValue();
+  Registry<String,?> registry=this.registry.getValue();
+  final Time timeout=this.context.getTimeout();
+  ExpirationConfiguration<T> expiration=new ExpirationConfiguration<T>(){
+    @Override public Time getTimeout(){
+      return timeout;
+    }
+    @Override public RemoveListener<T> getRemoveListener(){
+      return removeListener;
+    }
+  }
+;
+  final BeanPassivationConfiguration passivationConfig=this.passivationConfig;
+  PassivationConfiguration<T> passivation=new PassivationConfiguration<T>(){
+    @Override public PassivationListener<T> getPassivationListener(){
+      return passivationListener;
+    }
+    @Override public boolean isEvictionAllowed(){
+      return evictionAllowed;
+    }
+    @Override public boolean isPersistent(){
+      return persistent;
+    }
+    @Override public BeanPassivationConfiguration getConfiguration(){
+      return passivationConfig;
+    }
+  }
+;
+  return new InfinispanBeanManager<>(beanName,beanConfiguration,groupConfiguration,this.affinityFactory.getValue(),registry,nodeFactory,expiration,passivation);
+}

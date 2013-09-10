@@ -1,0 +1,24 @@
+{
+  DeploymentUnit unit=context.getDeploymentUnit();
+  final ServiceName name=unit.getServiceName();
+  EEModuleDescription moduleDescription=unit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
+  if (moduleDescription == null) {
+    return;
+  }
+  final ServiceTarget target=context.getServiceTarget();
+  @SuppressWarnings("rawtypes") final InjectedValue<CacheFactoryBuilderRegistry> registry=new InjectedValue<>();
+  Service<Void> service=new AbstractService<Void>(){
+    @Override public void start(    StartContext context){
+      Collection<CacheFactoryBuilder<?,?>> builders=registry.getValue().getBuilders();
+      for (      CacheFactoryBuilder<?,?> builder : builders) {
+        builder.installDeploymentUnitDependencies(target,name);
+      }
+    }
+  }
+;
+  target.addService(name.append("cache-dependencies-installer"),service).addDependency(CacheFactoryBuilderRegistryService.SERVICE_NAME,CacheFactoryBuilderRegistry.class,registry).install();
+  InjectedValue<ModuleDeployment> deployment=new InjectedValue<>();
+  Module module=unit.getAttachment(org.jboss.as.server.deployment.Attachments.MODULE);
+  Value<ModuleLoader> moduleLoader=new ImmediateValue<>(module.getModuleLoader());
+  target.addService(VersionedMarshallingConfigurationService.getServiceName(name),new VersionedMarshallingConfigurationService(deployment,moduleLoader)).addDependency(name.append(ModuleDeployment.SERVICE_NAME),ModuleDeployment.class,deployment).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+}

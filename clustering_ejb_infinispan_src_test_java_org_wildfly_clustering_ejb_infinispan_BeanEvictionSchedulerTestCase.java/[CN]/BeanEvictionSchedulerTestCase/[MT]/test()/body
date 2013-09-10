@@ -1,0 +1,26 @@
+{
+  String evictedBeanId="evicted";
+  String activeBeanId="active";
+  Bean<Object,String,Object> evictedBean=mock(Bean.class);
+  Bean<Object,String,Object> activeBean=mock(Bean.class);
+  Batcher batcher=mock(Batcher.class);
+  Batch batch=mock(Batch.class);
+  Evictor<String> evictor=mock(Evictor.class);
+  ExecutorService executor=mock(ExecutorService.class);
+  BeanPassivationConfiguration config=mock(BeanPassivationConfiguration.class);
+  ArgumentCaptor<Runnable> capturedTask=ArgumentCaptor.forClass(Runnable.class);
+  when(config.getMaxSize()).thenReturn(1);
+  try (Scheduler<Bean<Object,String,Object>> scheduler=new BeanEvictionScheduler<>(batcher,evictor,config,executor)){
+    when(evictedBean.getId()).thenReturn(evictedBeanId);
+    when(activeBean.getId()).thenReturn(activeBeanId);
+    scheduler.schedule(evictedBean);
+    verifyZeroInteractions(executor);
+    scheduler.schedule(activeBean);
+    verify(executor).submit(capturedTask.capture());
+    when(batcher.startBatch()).thenReturn(batch);
+    capturedTask.getValue().run();
+    verify(evictor).evict(evictedBeanId);
+    verify(evictor,never()).evict(activeBeanId);
+    verify(batch).close();
+  }
+ }

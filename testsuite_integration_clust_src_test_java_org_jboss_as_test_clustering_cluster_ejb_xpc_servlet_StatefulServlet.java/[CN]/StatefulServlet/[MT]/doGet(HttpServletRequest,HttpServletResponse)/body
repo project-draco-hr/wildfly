@@ -1,0 +1,88 @@
+{
+  HttpSession session=req.getSession(true);
+  Stateful bean=(Stateful)session.getAttribute(BEAN);
+  if (bean == null) {
+    try {
+      bean=new LocalEJBDirectory(StatefulBean.MODULE).lookupStateful(StatefulBean.class,Stateful.class);
+    }
+ catch (    NamingException e) {
+      throw new ServletException(e);
+    }
+  }
+  Command command=Command.valueOf(req.getParameter(COMMAND));
+  log.info(StatefulServlet.class.getName() + ": command = " + command);
+  String answer=null;
+switch (command) {
+case CREATE_EMPLOYEE:
+{
+      bean.createEmployee("Tom Brady","New England Patriots",1);
+      answer=bean.getEmployee(1).getName();
+      break;
+    }
+case GET_EMPLOYEE:
+{
+    Employee employee=bean.getEmployee(1);
+    if (employee == null) {
+      throw new ServletException("couldn't load Employee entity (with id=1) from database");
+    }
+    answer=employee.getName();
+    break;
+  }
+case DELETE_EMPLOYEE:
+{
+  bean.deleteEmployee(1);
+  answer=command.toString();
+  break;
+}
+case GET_EMPLOYEES_IN_2LC:
+{
+long count=bean.getEmployeesInMemory();
+if (count == -1) {
+  throw new ServletException("couldn't get number of employees in second level cache");
+}
+answer=String.valueOf(count);
+break;
+}
+case GET_2ND_BEAN_EMPLOYEE:
+{
+Employee employee=bean.getSecondBeanEmployee(1);
+answer=employee.getName();
+break;
+}
+case DESTROY:
+{
+bean.destroy();
+answer=command.toString();
+break;
+}
+case FLUSH:
+{
+bean.flush();
+break;
+}
+case ECHO:
+{
+bean.echo(req.getParameter(MESSAGE));
+break;
+}
+case CLEAR:
+{
+bean.clear();
+break;
+}
+case DELETE_EMPLOYEE_DIRECT:
+{
+int deleted=bean.executeNativeSQL("delete from Employee where id=1");
+if (deleted < 1) {
+throw new ServletException("couldn't delete entity in database, deleted row count =" + deleted);
+}
+break;
+}
+}
+if (answer != null) {
+resp.setHeader(ANSWER,answer);
+}
+resp.getWriter().write("Success");
+session.setAttribute(BEAN,bean);
+log.info(StatefulServlet.class.getName() + ": command = " + command+ " finished");
+}

@@ -1,0 +1,59 @@
+{
+  ContextSelector<EJBClientContext> selector=EJBClientContextSelector.setup(CLIENT_PROPERTIES);
+  try (EJBDirectory context=new RemoteEJBDirectory(MODULE_NAME)){
+    Incrementor bean=context.lookupStateful(StatefulIncrementorBean.class,Incrementor.class);
+    Result<Integer> result=bean.increment();
+    String target=result.getNode();
+    int count=1;
+    System.out.println("Established weak affinity to " + target);
+    Assert.assertEquals(count++,result.getValue().intValue());
+    for (int i=0; i < COUNT; ++i) {
+      result=bean.increment();
+      Assert.assertEquals(count++,result.getValue().intValue());
+      Assert.assertEquals(String.valueOf(i),target,result.getNode());
+    }
+    undeploy(this.findDeployment(target));
+    result=bean.increment();
+    String failoverTarget=result.getNode();
+    Assert.assertEquals(count++,result.getValue().intValue());
+    Assert.assertNotEquals(target,failoverTarget);
+    deploy(this.findDeployment(target));
+    Thread.sleep(CLIENT_TOPOLOGY_UPDATE_WAIT);
+    result=bean.increment();
+    String failbackTarget=result.getNode();
+    Assert.assertEquals(count++,result.getValue().intValue());
+    Assert.assertEquals(failoverTarget,failbackTarget);
+    result=bean.increment();
+    target=result.getNode();
+    Assert.assertEquals(count++,result.getValue().intValue());
+    System.out.println("Reestablished weak affinity to " + target);
+    for (int i=0; i < COUNT; ++i) {
+      result=bean.increment();
+      Assert.assertEquals(count++,result.getValue().intValue());
+      Assert.assertEquals(String.valueOf(i),target,result.getNode());
+    }
+    stop(this.findContainer(target));
+    result=bean.increment();
+    failoverTarget=result.getNode();
+    Assert.assertEquals(count++,result.getValue().intValue());
+    Assert.assertNotEquals(target,failoverTarget);
+    start(this.findContainer(target));
+    Thread.sleep(CLIENT_TOPOLOGY_UPDATE_WAIT);
+    result=bean.increment();
+    failbackTarget=result.getNode();
+    Assert.assertEquals(count++,result.getValue().intValue());
+    Assert.assertEquals(failoverTarget,failbackTarget);
+    result=bean.increment();
+    target=result.getNode();
+    Assert.assertEquals(count++,result.getValue().intValue());
+    System.out.println("Reestablished weak affinity to " + target);
+    for (int i=0; i < COUNT; ++i) {
+      result=bean.increment();
+      Assert.assertEquals(count++,result.getValue().intValue());
+      Assert.assertEquals(String.valueOf(i),target,result.getNode());
+    }
+  }
+  finally {
+    EJBClientContext.setSelector(selector);
+  }
+}

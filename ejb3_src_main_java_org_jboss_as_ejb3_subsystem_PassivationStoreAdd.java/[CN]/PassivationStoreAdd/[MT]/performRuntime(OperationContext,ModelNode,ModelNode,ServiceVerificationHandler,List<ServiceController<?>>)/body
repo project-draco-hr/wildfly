@@ -1,3 +1,25 @@
 {
-  serviceControllers.addAll(installRuntimeServices(context,operation,model,verificationHandler));
+  final String name=PathAddress.pathAddress(operation.get(ModelDescriptionConstants.ADDRESS)).getLastElement().getValue();
+  final int initialMaxSize=PassivationStoreResourceDefinition.MAX_SIZE.resolveModelAttribute(context,model).asInt();
+  final String containerName=PassivationStoreResourceDefinition.CACHE_CONTAINER.resolveModelAttribute(context,model).asString();
+  ModelNode beanCacheNode=PassivationStoreResourceDefinition.BEAN_CACHE.resolveModelAttribute(context,model);
+  final String cacheName=beanCacheNode.isDefined() ? beanCacheNode.asString() : null;
+  BeanManagerFactoryBuilderConfiguration config=new BeanManagerFactoryBuilderConfiguration(){
+    private volatile int maxSize=initialMaxSize;
+    @Override public String getContainerName(){
+      return containerName;
+    }
+    @Override public String getCacheName(){
+      return cacheName;
+    }
+    @Override public int getMaxSize(){
+      return this.maxSize;
+    }
+    @Override public void setMaxSize(    int size){
+      this.maxSize=size;
+    }
+  }
+;
+  ServiceBuilder<?> builder=new DistributableCacheFactoryBuilderService<>(name,config).build(context.getServiceTarget()).setInitialMode(ServiceController.Mode.ON_DEMAND);
+  serviceControllers.add(builder.install());
 }

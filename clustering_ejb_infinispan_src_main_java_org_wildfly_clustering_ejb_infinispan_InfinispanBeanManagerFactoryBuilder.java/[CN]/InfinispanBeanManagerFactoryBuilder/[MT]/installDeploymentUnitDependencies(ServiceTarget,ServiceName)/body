@@ -1,0 +1,18 @@
+{
+  String cacheName=getCacheName(deploymentUnitServiceName);
+  ServiceName configurationServiceName=CacheConfigurationService.getServiceName(this.config.getContainerName(),cacheName);
+  final InjectedValue<EmbeddedCacheManager> container=new InjectedValue<>();
+  InjectedValue<Configuration> configuration=new InjectedValue<>();
+  target.addService(configurationServiceName,new BeanCacheConfigurationService(cacheName,container,configuration)).addDependency(EmbeddedCacheManagerService.getServiceName(this.config.getContainerName()),EmbeddedCacheManager.class,container).addDependency(CacheConfigurationService.getServiceName(this.config.getContainerName(),this.config.getCacheName()),Configuration.class,configuration).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  ServiceName cacheServiceName=CacheService.getServiceName(this.config.getContainerName(),cacheName);
+  CacheService.Dependencies dependencies=new CacheService.Dependencies(){
+    @Override public EmbeddedCacheManager getCacheContainer(){
+      return container.getValue();
+    }
+    @Override public XAResourceRecoveryRegistry getRecoveryRegistry(){
+      return null;
+    }
+  }
+;
+  AsynchronousService.addService(target,cacheServiceName,new CacheService<>(cacheName,dependencies)).addDependency(configurationServiceName).addDependency(deploymentUnitServiceName.append("marshalling-configuration")).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+}

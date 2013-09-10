@@ -1,0 +1,38 @@
+{
+  DefaultHttpClient client=HttpClientUtils.relaxedCookieHttpClient();
+  URI xpc1_create_url=StatefulServlet.createEmployeeURI(baseURL1);
+  URI xpc1_get_url=StatefulServlet.getEmployeeURI(baseURL1);
+  URI xpc2_get_url=StatefulServlet.getEmployeeURI(baseURL2);
+  URI xpc1_getempsecond_url=StatefulServlet.get2ndBeanEmployeeURI(baseURL1);
+  URI xpc2_getempsecond_url=StatefulServlet.get2ndBeanEmployeeURI(baseURL2);
+  URI xpc2_getdestroy_url=StatefulServlet.destroyURI(baseURL2);
+  try {
+    stop(CONTAINER_2);
+    log.info(new Date() + "create employee entity ");
+    String employeeName=executeUrlWithAnswer(client,xpc1_create_url,"create entity that lives in the extended persistence context that this test will verify is always available");
+    assertEquals(employeeName,"Tom Brady");
+    log.info(new Date() + "1. about to read entity on node1");
+    employeeName=executeUrlWithAnswer(client,xpc1_get_url,"1. xpc on node1, node1 should be able to read entity on node1");
+    assertEquals(employeeName,"Tom Brady");
+    employeeName=executeUrlWithAnswer(client,xpc1_getempsecond_url,"1. xpc on node1, node1 should be able to read entity from second bean on node1");
+    assertEquals(employeeName,"Tom Brady");
+    start(CONTAINER_2);
+    log.info(new Date() + "2. started node2 + deployed, about to read entity on node1");
+    employeeName=executeUrlWithAnswer(client,xpc2_get_url,"2. started node2, xpc on node1, node1 should be able to read entity on node1");
+    assertEquals(employeeName,"Tom Brady");
+    employeeName=executeUrlWithAnswer(client,xpc2_getempsecond_url,"2. started node2, xpc on node1, node1 should be able to read entity from second bean on node1");
+    assertEquals(employeeName,"Tom Brady");
+    stop(CONTAINER_1);
+    log.info(new Date() + "3. stopped node1 to force failover, about to read entity on node2");
+    employeeName=executeUrlWithAnswer(client,xpc2_get_url,"3. stopped deployment on node1, xpc should failover to node2, node2 should be able to read entity from xpc");
+    assertEquals(employeeName,"Tom Brady");
+    employeeName=executeUrlWithAnswer(client,xpc2_getempsecond_url,"3. stopped deployment on node1, xpc should failover to node2, node2 should be able to read entity from xpc that is on node2 (second bean)");
+    assertEquals(employeeName,"Tom Brady");
+    String destroyed=executeUrlWithAnswer(client,xpc2_getdestroy_url,"4. destroy the bean on node2");
+    assertEquals(destroyed,"DESTROY");
+    log.info(new Date() + "4. test is done");
+  }
+  finally {
+    org.apache.http.client.utils.HttpClientUtils.closeQuietly(client);
+  }
+}
