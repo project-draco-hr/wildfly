@@ -1,0 +1,68 @@
+{
+  final Module module;
+  try {
+    module=Module.getBootModuleLoader().loadModule(ModuleIdentifier.create("org.jboss.as.ee"));
+  }
+ catch (  Throwable e) {
+    throw new IOException(e);
+  }
+  final SecurityManager sm=System.getSecurityManager();
+  final ClassLoader classLoader;
+  if (sm == null) {
+    classLoader=currentThread().getContextClassLoader();
+  }
+ else {
+    classLoader=AccessController.doPrivileged(new PrivilegedAction<ClassLoader>(){
+      @Override public ClassLoader run(){
+        return currentThread().getContextClassLoader();
+      }
+    }
+);
+  }
+  if (sm == null) {
+    currentThread().setContextClassLoader(module.getClassLoader());
+  }
+ else {
+    AccessController.doPrivileged(new PrivilegedAction<Object>(){
+      @Override public Object run(){
+        currentThread().setContextClassLoader(module.getClassLoader());
+        return null;
+      }
+    }
+);
+  }
+  try {
+    in.defaultReadObject();
+    final ServiceName serviceName=(ServiceName)in.readObject();
+    final ServiceController<?> serviceController=CurrentServiceContainer.getServiceContainer().getService(serviceName);
+    if (serviceController == null) {
+      throw EeMessages.MESSAGES.concurrentContextServiceNotInstalled(serviceName);
+    }
+    concurrentContext=(ConcurrentContext)serviceController.getValue();
+    setupHandles=new ArrayList<>();
+    ContextHandleFactory factory=null;
+    String factoryName=null;
+    for (int i=in.read(); i > 0; i--) {
+      factoryName=in.readUTF();
+      factory=concurrentContext.factoryMap.get(factoryName);
+      if (factory == null) {
+        throw EeMessages.MESSAGES.factoryNotFound(concurrentContext,factoryName);
+      }
+      setupHandles.add(factory.readHandle(in));
+    }
+  }
+  finally {
+    if (sm == null) {
+      currentThread().setContextClassLoader(classLoader);
+    }
+ else {
+      AccessController.doPrivileged(new PrivilegedAction<Object>(){
+        @Override public Object run(){
+          currentThread().setContextClassLoader(classLoader);
+          return null;
+        }
+      }
+);
+    }
+  }
+}
