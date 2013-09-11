@@ -1,0 +1,34 @@
+{
+  MBeanServerConnection connection=getConnection();
+  ModelNode attributes=new ModelNode();
+  ModelNode filtered=new ModelNode().setEmptyList();
+  ModelNode headers=null;
+  for (  MBeanAttributeInfo attribute : attributeInfos) {
+    String attributeName=attribute.getName();
+    try {
+      Object attributeValue=connection.getAttribute(objectName,attributeName);
+      try {
+        attributes.get(JmxInterfaceStringUtils.toDashCase(attributeName)).set(modelNode(attributeValue));
+      }
+ catch (      UnsupportedOperationException e) {
+      }
+    }
+ catch (    JMException e) {
+      String message=e.getMessage();
+      if (message.contains("14807") || message.contains("14883")) {
+        throw e;
+      }
+ else       if (message.contains("13456")) {
+        filtered.add(JmxInterfaceStringUtils.toDashCase(attributeName));
+      }
+ else {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+  if (!filtered.asList().isEmpty()) {
+    headers=new ModelNode();
+    headers.get(ACCESS_CONTROL,"filtered-attributes").set(filtered);
+  }
+  return new ModelNode[]{attributes,headers};
+}
