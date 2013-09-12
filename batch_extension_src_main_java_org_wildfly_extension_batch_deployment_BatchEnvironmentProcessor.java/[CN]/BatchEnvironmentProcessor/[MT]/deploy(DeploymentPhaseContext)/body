@@ -1,17 +1,26 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
-  if (deploymentUnit.hasAttachment(Attachments.MODULE) && WeldDeploymentMarker.isWeldDeployment(deploymentUnit)) {
-    final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
-    final ClassLoader moduleClassLoader=module.getClassLoader();
-    final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
-    final BatchEnvironmentService service=new BatchEnvironmentService();
-    BatchEnvironmentFactory.getInstance().add(moduleClassLoader,service);
-    final ServiceBuilder<BatchEnvironment> serviceBuilder=serviceTarget.addService(BatchServiceNames.batchDeploymentServiceName(deploymentUnit),service);
-    serviceBuilder.addDependency(BatchServiceNames.BATCH_SERVICE_NAME,Properties.class,service.getPropertiesInjector());
-    serviceBuilder.addDependency(TxnServices.JBOSS_TXN_USER_TRANSACTION,UserTransaction.class,service.getUserTransactionInjector());
-    serviceBuilder.addDependency(ConcurrentServiceNames.DEFAULT_MANAGED_EXECUTOR_SERVICE_SERVICE_NAME,ExecutorService.class,service.getExecutorServiceInjector());
-    service.getClassLoaderInjector().setValue(new ImmediateValue<ClassLoader>(moduleClassLoader));
-    serviceBuilder.addDependency(BatchServiceNames.beanManagerServiceName(deploymentUnit),new CastingInjector<BeanManager>(service.getBeanManagerInjector(),BeanManager.class));
-    serviceBuilder.install();
+  if (deploymentUnit.hasAttachment(Attachments.MODULE) && deploymentUnit.hasAttachment(Attachments.DEPLOYMENT_ROOT)) {
+    if (WeldDeploymentMarker.isWeldDeployment(deploymentUnit)) {
+      final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+      final ClassLoader moduleClassLoader=module.getClassLoader();
+      final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+      final BatchEnvironmentService service=new BatchEnvironmentService();
+      BatchEnvironmentFactory.getInstance().add(moduleClassLoader,service);
+      final ServiceBuilder<BatchEnvironment> serviceBuilder=serviceTarget.addService(BatchServiceNames.batchDeploymentServiceName(deploymentUnit),service);
+      serviceBuilder.addDependency(BatchServiceNames.BATCH_SERVICE_NAME,Properties.class,service.getPropertiesInjector());
+      serviceBuilder.addDependency(TxnServices.JBOSS_TXN_USER_TRANSACTION,UserTransaction.class,service.getUserTransactionInjector());
+      serviceBuilder.addDependency(ConcurrentServiceNames.DEFAULT_MANAGED_EXECUTOR_SERVICE_SERVICE_NAME,ExecutorService.class,service.getExecutorServiceInjector());
+      service.getClassLoaderInjector().setValue(new ImmediateValue<ClassLoader>(moduleClassLoader));
+      serviceBuilder.addDependency(BatchServiceNames.beanManagerServiceName(deploymentUnit),new CastingInjector<BeanManager>(service.getBeanManagerInjector(),BeanManager.class));
+      serviceBuilder.install();
+    }
+ else {
+      final ResourceRoot root=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+      final VirtualFile dir=root.getRoot().getChild("META-INF/batch-jobs");
+      if (dir.exists() && !dir.getChildren().isEmpty()) {
+        BatchLogger.LOGGER.cdiNotEnabled();
+      }
+    }
   }
 }
