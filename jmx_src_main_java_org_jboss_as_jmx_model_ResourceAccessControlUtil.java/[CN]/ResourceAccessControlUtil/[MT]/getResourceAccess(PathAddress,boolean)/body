@@ -1,0 +1,27 @@
+{
+  ModelNode op=Util.createOperation(READ_RESOURCE_DESCRIPTION_OPERATION,address);
+  op.get(ACCESS_CONTROL).set(ReadResourceDescriptionHandler.AccessControl.TRIM_DESCRIPTONS.toModelNode());
+  if (operations) {
+    op.get(OPERATIONS).set(true);
+    op.get(INHERITED).set(false);
+  }
+  ModelNode result=controller.execute(op,null,ModelController.OperationTransactionControl.COMMIT,null);
+  if (!result.get(OUTCOME).asString().equals(SUCCESS)) {
+    return NOT_ADDRESSABLE;
+  }
+ else {
+    final ModelNode accessControl=result.get(RESULT,ACCESS_CONTROL);
+    ModelNode useAccessControl=null;
+    if (accessControl.hasDefined(EXCEPTIONS) && accessControl.get(EXCEPTIONS).keys().size() > 0) {
+      String key=address.toModelNode().asString();
+      ModelNode exception=accessControl.get(EXCEPTIONS,key);
+      if (exception.isDefined()) {
+        useAccessControl=exception;
+      }
+    }
+    if (useAccessControl == null) {
+      useAccessControl=accessControl.get(DEFAULT);
+    }
+    return new ResourceAccessControl(useAccessControl);
+  }
+}
