@@ -1,31 +1,57 @@
 {
-  ParseUtils.requireSingleAttribute(reader,NAME);
-  String name=reader.getAttributeValue(0);
-  ModelNode addr=address.clone().add(ROLE_MAPPING,name);
   final ModelNode add=new ModelNode();
-  add.get(OP_ADDR).set(addr);
-  add.get(OP).set(ADD);
   list.add(add);
-  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
-    requireNamespace(reader,expectedNs);
-    final Element element=Element.forName(reader.getLocalName());
-switch (element) {
-case INCLUDE:
+  String name=null;
+  final int count=reader.getAttributeCount();
+  for (int i=0; i < count; i++) {
+    final String value=reader.getAttributeValue(i);
+    if (!isNoNamespaceAttribute(reader,i)) {
+      throw unexpectedAttribute(reader,i);
+    }
+ else {
+      final Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case NAME:
+        name=value;
+      break;
+case INCLUDE_ALL:
 {
-        ModelNode includeAddr=addr.clone().add(INCLUDE);
-        parseIncludeExclude(reader,includeAddr,expectedNs,list);
-        break;
-      }
-case EXCLUDE:
-{
-      ModelNode excludeAddr=addr.clone().add(EXCLUDE);
-      parseIncludeExclude(reader,excludeAddr,expectedNs,list);
+      RoleMappingResourceDefinition.INCLUDE_ALL.parseAndSetParameter(value,add,reader);
       break;
     }
 default :
 {
-    throw unexpectedElement(reader);
+    throw unexpectedAttribute(reader,i);
   }
+}
+}
+}
+if (name == null) {
+throw missingRequired(reader,Collections.singleton(Attribute.NAME));
+}
+ModelNode addr=address.clone().add(ROLE_MAPPING,name);
+add.get(OP_ADDR).set(addr);
+add.get(OP).set(ADD);
+while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+requireNamespace(reader,expectedNs);
+final Element element=Element.forName(reader.getLocalName());
+switch (element) {
+case INCLUDE:
+{
+ModelNode includeAddr=addr.clone().add(INCLUDE);
+parseIncludeExclude(reader,includeAddr,expectedNs,list);
+break;
+}
+case EXCLUDE:
+{
+ModelNode excludeAddr=addr.clone().add(EXCLUDE);
+parseIncludeExclude(reader,excludeAddr,expectedNs,list);
+break;
+}
+default :
+{
+throw unexpectedElement(reader);
+}
 }
 }
 }
