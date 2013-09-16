@@ -1,0 +1,36 @@
+{
+  VaultExpressionSensitivityConfig.INSTANCE.setConfiguredRequiresAccessPermission(false);
+  VaultExpressionSensitivityConfig.INSTANCE.setConfiguredRequiresReadPermission(true);
+  VaultExpressionSensitivityConfig.INSTANCE.setConfiguredRequiresWritePermission(true);
+  try {
+    PathElement pathElement=ONE_A;
+    ChildResourceDefinition oneChild=new ChildResourceDefinition(pathElement);
+    oneChild.addAttribute("attr1");
+    oneChild.addOperation("test",true,false,null);
+    rootRegistration.registerSubModel(oneChild);
+    Subject subject=standardRole == null ? null : new Subject(true,Collections.singleton(new RealmUser(roleToUserName(standardRole))),Collections.emptySet(),Collections.emptySet());
+    Subject.doAs(subject,new PrivilegedExceptionAction<Void>(){
+      @Override public Void run() throws Exception {
+        Assert.assertFalse(server.queryNames(null,null).contains(ONE_A_NAME));
+        try {
+          String add="addOneA";
+          Object[] params=new String[]{"${VAULT::AA::bb::cc}"};
+          String[] sig=new String[]{String.class.getName()};
+          server.invoke(ROOT_NAME,add,params,sig);
+          Assert.assertTrue(executable);
+          Assert.assertTrue(server.queryNames(null,null).contains(ONE_A_NAME));
+        }
+ catch (        JMRuntimeException e) {
+          Assert.assertFalse(executable);
+        }
+        return null;
+      }
+    }
+);
+  }
+  finally {
+    VaultExpressionSensitivityConfig.INSTANCE.setConfiguredRequiresAccessPermission(false);
+    VaultExpressionSensitivityConfig.INSTANCE.setConfiguredRequiresReadPermission(true);
+    VaultExpressionSensitivityConfig.INSTANCE.setConfiguredRequiresWritePermission(true);
+  }
+}
