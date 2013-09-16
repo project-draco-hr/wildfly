@@ -1,40 +1,30 @@
 {
-  final ServerConfig config=getServerConfig(context);
-  if (config != null) {
+  if (context.isBooting()) {
     final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
     final PathElement confElem=address.getElement(address.size() - 3);
     final String configType=confElem.getKey();
     final String configName=confElem.getValue();
-    final String handlerChainType=address.getElement(address.size() - 2).getKey();
     final String handlerChainId=address.getElement(address.size() - 2).getValue();
     final String handlerName=address.getElement(address.size() - 1).getValue();
     final String handlerClass=operation.require(CLASS).asString();
-    for (    final CommonConfig commonConfig : getConfigs(config,configType)) {
-      if (configName.equals(commonConfig.getConfigName())) {
-        final List<UnifiedHandlerChainMetaData> handlerChains;
-        if (PRE_HANDLER_CHAIN.equals(handlerChainType)) {
-          handlerChains=commonConfig.getPreHandlerChains();
-        }
- else         if (POST_HANDLER_CHAIN.equals(handlerChainType)) {
-          handlerChains=commonConfig.getPostHandlerChains();
-        }
- else {
-          throw MESSAGES.wrongHandlerChainType(handlerChainType,PRE_HANDLER_CHAIN,POST_HANDLER_CHAIN);
-        }
-        final UnifiedHandlerChainMetaData handlerChain=getChain(handlerChains,handlerChainId);
-        if (handlerChain == null) {
-          throw MESSAGES.multipleHandlerChainsWithSameId(handlerChainType,handlerChainId,configName);
-        }
-        final UnifiedHandlerMetaData handler=new UnifiedHandlerMetaData();
-        handler.setHandlerName(handlerName);
-        handler.setHandlerClass(handlerClass);
-        handlerChain.addHandler(handler);
-        if (!context.isBooting()) {
-          context.reloadRequired();
-        }
-        return;
-      }
+    final HandlerService service=new HandlerService(handlerName,handlerClass);
+    final ServiceTarget target=context.getServiceTarget();
+    final ServiceName configServiceName=((ENDPOINT_CONFIG.equals(configType) ? WSServices.ENDPOINT_CONFIG_SERVICE : WSServices.CLIENT_CONFIG_SERVICE)).append(configName);
+    final ServiceRegistry registry=context.getServiceRegistry(false);
+    if (registry.getService(configServiceName) == null) {
+      throw MESSAGES.missingConfig(configName);
     }
-    throw MESSAGES.missingConfig(configName);
+    final ServiceName handlerChainServiceName=configServiceName.append(HANDLER_CHAIN).append(handlerChainId);
+    if (registry.getService(handlerChainServiceName) == null) {
+      String handlerChainType=address.getElement(address.size() - 2).getKey();
+      throw MESSAGES.missingHandlerChain(configName,handlerChainType,handlerChainId);
+    }
+    final ServiceName handlerServiceName=handlerChainServiceName.append(HANDLER).append(handlerName);
+    final ServiceBuilder<?> handlerServiceBuilder=target.addService(handlerServiceName,service);
+    handlerServiceBuilder.addDependency(handlerChainServiceName,UnifiedHandlerChainMetaData.class,service.getHandlerChain());
+    handlerServiceBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+  }
+ else {
+    context.reloadRequired();
   }
 }

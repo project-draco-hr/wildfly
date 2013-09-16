@@ -1,13 +1,14 @@
 {
-  final ServerConfig config=getServerConfig(context);
-  if (config != null) {
+  if (context.isBooting()) {
     final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
     final String name=address.getLastElement().getValue();
-    EndpointConfig endpointConfig=new EndpointConfig();
-    endpointConfig.setConfigName(name);
-    config.addEndpointConfig(endpointConfig);
-    if (!context.isBooting()) {
-      context.reloadRequired();
-    }
+    final ConfigService endpointConfigService=new ConfigService(name,false);
+    final ServiceTarget target=context.getServiceTarget();
+    final ServiceBuilder<?> clientServiceBuilder=target.addService(WSServices.ENDPOINT_CONFIG_SERVICE.append(name),endpointConfigService);
+    clientServiceBuilder.addDependency(WSServices.CONFIG_SERVICE,ServerConfig.class,endpointConfigService.getServerConfig());
+    clientServiceBuilder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+  }
+ else {
+    context.reloadRequired();
   }
 }
