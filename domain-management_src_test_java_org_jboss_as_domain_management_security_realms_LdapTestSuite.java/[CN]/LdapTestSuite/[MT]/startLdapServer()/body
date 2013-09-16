@@ -1,0 +1,29 @@
+{
+  if (initialised == true) {
+    System.out.println("Already Initialised");
+    return false;
+  }
+  createWorkingDir();
+  DirectoryServiceFactory dsf=new DefaultDirectoryServiceFactory();
+  dsf.init(DIRECTORY_NAME);
+  directoryService=dsf.getDirectoryService();
+  directoryService.getChangeLog().setEnabled(false);
+  SchemaManager schemaManager=directoryService.getSchemaManager();
+  createPartition(dsf,schemaManager,"simple","dc=simple,dc=wildfly,dc=org");
+  createPartition(dsf,schemaManager,"group-to-principal","dc=group-to-principal,dc=wildfly,dc=org");
+  createPartition(dsf,schemaManager,"principal-to-group","dc=principal-to-group,dc=wildfly,dc=org");
+  CoreSession adminSession=directoryService.getAdminSession();
+  processLdif(schemaManager,adminSession,"memberOf-schema.ldif");
+  processLdif(schemaManager,adminSession,"simple-partition.ldif");
+  processLdif(schemaManager,adminSession,"group-to-principal.ldif");
+  processLdif(schemaManager,adminSession,"principal-to-group.ldif");
+  ldapServer=new LdapServer();
+  ldapServer.setServiceName("DefaultLDAP");
+  Transport ldap=new TcpTransport("0.0.0.0",LDAP_PORT,3,5);
+  ldapServer.addTransports(ldap);
+  ldapServer.setDirectoryService(directoryService);
+  ldapServer.start();
+  System.out.println("Started");
+  initialised=true;
+  return true;
+}
