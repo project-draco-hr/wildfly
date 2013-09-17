@@ -1,0 +1,38 @@
+{
+  ModelControllerClient client=managementClient.getControllerClient();
+  for (  ExpectedDef expectedDef : EXPECTED_DEFS) {
+    AccessConstraintKey acdKey=expectedDef.key;
+    String constraint=ModelDescriptionConstants.SENSITIVE.equals(acdKey.getType()) ? ModelDescriptionConstants.SENSITIVITY_CLASSIFICATION : ModelDescriptionConstants.APPLICATION_CLASSIFICATION;
+    String acdType=acdKey.isCore() ? "core" : acdKey.getSubsystemName();
+    String path=String.format(ADDR_FORMAT,acdKey.getType(),acdType,acdKey.getName());
+    ModelNode op=createOpNode(path,READ_CHILDREN_RESOURCES_OPERATION);
+    op.get(ModelDescriptionConstants.CHILD_TYPE).set(ModelDescriptionConstants.APPLIES_TO);
+    System.out.println("Testing " + acdKey);
+    ModelNode result=RbacUtil.executeOperation(client,op,Outcome.SUCCESS).get(ModelDescriptionConstants.RESULT);
+    Assert.assertTrue(acdKey + "result is defined",result.isDefined());
+    Assert.assertTrue(acdKey + "result has content",result.asInt() > 0);
+    boolean foundResource=false;
+    boolean foundAttr=false;
+    boolean foundOps=false;
+    for (    Property prop : result.asPropertyList()) {
+      ModelNode pathResult=prop.getValue();
+      if (pathResult.get(ModelDescriptionConstants.ENTIRE_RESOURCE).asBoolean()) {
+        Assert.assertTrue(acdKey + " -- " + prop.getName()+ " resource",expectedDef.expectResource);
+        foundResource=true;
+      }
+      ModelNode attrs=pathResult.get(ATTRIBUTES);
+      if (attrs.isDefined() && attrs.asInt() > 0) {
+        Assert.assertTrue(acdKey + " -- " + prop.getName()+ " attributes = "+ attrs.asString(),expectedDef.expectAttributes);
+        foundAttr=true;
+      }
+      ModelNode ops=pathResult.get(OPERATIONS);
+      if (ops.isDefined() && ops.asInt() > 0) {
+        Assert.assertTrue(acdKey + " -- " + prop.getName()+ " operations = "+ ops.asString(),expectedDef.expectOps);
+        foundOps=true;
+      }
+    }
+    Assert.assertEquals(acdKey + " -- resource",expectedDef.expectResource,foundResource);
+    Assert.assertEquals(acdKey + " -- attributes",expectedDef.expectAttributes,foundAttr);
+    Assert.assertEquals(acdKey + " -- operations",expectedDef.expectOps,foundOps);
+  }
+}
