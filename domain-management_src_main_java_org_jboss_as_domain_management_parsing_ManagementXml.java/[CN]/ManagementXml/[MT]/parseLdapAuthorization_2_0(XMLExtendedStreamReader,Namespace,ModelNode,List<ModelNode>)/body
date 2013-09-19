@@ -2,7 +2,7 @@
   ModelNode addr=realmAddress.clone().add(AUTHORIZATION,LDAP);
   ModelNode ldapAuthorization=Util.getEmptyOperation(ADD,addr);
   list.add(ldapAuthorization);
-  Set<Attribute> required=EnumSet.of(Attribute.CONNECTION,Attribute.BASE_DN);
+  Set<Attribute> required=EnumSet.of(Attribute.CONNECTION);
   final int count=reader.getAttributeCount();
   for (int i=0; i < count; i++) {
     final String value=reader.getAttributeValue(i);
@@ -18,53 +18,38 @@ case CONNECTION:
           LdapAuthorizationResourceDefinition.CONNECTION.parseAndSetParameter(value,ldapAuthorization,reader);
           break;
         }
-case BASE_DN:
-{
-        LdapAuthorizationResourceDefinition.BASE_DN.parseAndSetParameter(value,ldapAuthorization,reader);
-        break;
-      }
-case RECURSIVE:
-{
-      LdapAuthorizationResourceDefinition.RECURSIVE.parseAndSetParameter(value,ldapAuthorization,reader);
-      break;
-    }
-case USER_DN:
-{
-    LdapAuthorizationResourceDefinition.USER_DN.parseAndSetParameter(value,ldapAuthorization,reader);
-    break;
-  }
 default :
 {
-  throw unexpectedAttribute(reader,i);
+        throw unexpectedAttribute(reader,i);
+      }
+  }
 }
 }
-}
-}
-if (required.size() > 0) {
+if (required.isEmpty() == false) {
 throw missingRequired(reader,required);
 }
-boolean choiceFound=false;
+Set<Element> foundElements=new HashSet<Element>();
 while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
 requireNamespace(reader,expectedNs);
 final Element element=Element.forName(reader.getLocalName());
+if (foundElements.add(element) == false) {
+  throw unexpectedElement(reader);
+}
 switch (element) {
-case ADVANCED_FILTER:
-choiceFound=true;
-parseAdvancePropertiesAuthorization(reader,realmAddress,list,ldapAuthorization);
-break;
-case GROUPS_FILTER:
+case USERNAME_TO_DN:
 {
-choiceFound=true;
-parseGroupsPropertiesAuthorization(reader,realmAddress,list,ldapAuthorization);
-break;
+    parseUsernameToDn(reader,expectedNs,addr,list);
+    break;
+  }
+case GROUP_SEARCH:
+{
+  parseGroupSearch(reader,expectedNs,addr,list);
+  break;
 }
 default :
 {
 throw unexpectedElement(reader);
 }
 }
-}
-if (!choiceFound) {
-throw missingOneOf(reader,EnumSet.of(Element.ADVANCED_FILTER,Element.USERNAME_FILTER,Element.GROUPS_FILTER));
 }
 }

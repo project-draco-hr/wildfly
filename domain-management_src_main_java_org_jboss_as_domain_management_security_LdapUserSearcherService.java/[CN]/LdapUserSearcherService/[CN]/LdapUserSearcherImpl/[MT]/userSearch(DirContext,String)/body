@@ -1,0 +1,54 @@
+{
+  NamingEnumeration<SearchResult> searchEnumeration=null;
+  try {
+    SearchControls searchControls=new SearchControls();
+    if (recursive) {
+      SECURITY_LOGGER.trace("Performing recursive search");
+      searchControls.setSearchScope(SearchControls.SUBTREE_SCOPE);
+    }
+ else {
+      SECURITY_LOGGER.trace("Performing single level search");
+      searchControls.setSearchScope(SearchControls.ONELEVEL_SCOPE);
+    }
+    searchControls.setReturningAttributes(new String[]{userDnAttribute});
+    searchControls.setTimeLimit(searchTimeLimit);
+    Object[] filterArguments=new Object[]{suppliedName};
+    String filter=userNameAttribute != null ? "(" + userNameAttribute + "={0})" : advancedFilter;
+    SECURITY_LOGGER.tracef("Searching for user '%s' using filter '%s'.",suppliedName,filter);
+    searchEnumeration=dirContext.search(baseDn,filter,filterArguments,searchControls);
+    if (searchEnumeration.hasMore() == false) {
+      SECURITY_LOGGER.tracef("User '%s' not found in directory.",suppliedName);
+      throw MESSAGES.userNotFoundInDirectory(suppliedName);
+    }
+    String distinguishedUserDN=null;
+    SearchResult result=searchEnumeration.next();
+    Attributes attributes=result.getAttributes();
+    if (attributes != null) {
+      Attribute dn=attributes.get(userDnAttribute);
+      if (dn != null) {
+        distinguishedUserDN=(String)dn.get();
+      }
+    }
+    if (distinguishedUserDN == null) {
+      if (result.isRelative() == true) {
+        distinguishedUserDN=result.getName() + ("".equals(baseDn) ? "" : "," + baseDn);
+      }
+ else {
+        String name=result.getName();
+        SECURITY_LOGGER.tracef("Can't follow referral for authentication: %s",name);
+        throw MESSAGES.nameNotFound(suppliedName);
+      }
+    }
+    SECURITY_LOGGER.tracef("DN '%s' found for user '%s'",distinguishedUserDN,suppliedName);
+    return new LdapEntry(suppliedName,distinguishedUserDN);
+  }
+  finally {
+    if (searchEnumeration != null) {
+      try {
+        searchEnumeration.close();
+      }
+ catch (      Exception ignored) {
+      }
+    }
+  }
+}
