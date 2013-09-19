@@ -1,0 +1,107 @@
+{
+  if (callbacks.length == 1 && callbacks[0] instanceof AuthorizeCallback) {
+    AuthorizeCallback acb=(AuthorizeCallback)callbacks[0];
+    String authenticationId=acb.getAuthenticationID();
+    String authorizationId=acb.getAuthorizationID();
+    boolean authorized=authenticationId.equals(authorizationId);
+    if (authorized == false) {
+      SECURITY_LOGGER.tracef("Checking 'AuthorizeCallback', authorized=false, authenticationID=%s, authorizationID=%s.",authenticationId,authorizationId);
+    }
+    acb.setAuthorized(authorized);
+    return;
+  }
+  ConnectionManager connectionManager=UserLdapCallbackHandler.this.connectionManager.getValue();
+  VerifyPasswordCallback verifyPasswordCallback=null;
+  String username=null;
+  for (  Callback current : callbacks) {
+    if (current instanceof NameCallback) {
+      username=((NameCallback)current).getDefaultName();
+    }
+ else     if (current instanceof RealmCallback) {
+    }
+ else     if (current instanceof VerifyPasswordCallback) {
+      verifyPasswordCallback=(VerifyPasswordCallback)current;
+    }
+ else {
+      throw new UnsupportedCallbackException(current);
+    }
+  }
+  if (username == null || username.length() == 0) {
+    SECURITY_LOGGER.trace("No username or 0 length username supplied.");
+    throw MESSAGES.noUsername();
+  }
+  if (verifyPasswordCallback == null) {
+    SECURITY_LOGGER.trace("No password supplied.");
+    throw MESSAGES.noPassword();
+  }
+  String password=verifyPasswordCallback.getPassword();
+  if (password == null || (allowEmptyPassword == false && password.length() == 0)) {
+    SECURITY_LOGGER.trace("No password or 0 length password supplied.");
+    throw MESSAGES.noPassword();
+  }
+  DirContext searchContext=null;
+  DirContext userContext=null;
+  NamingEnumeration<SearchResult> searchEnumeration=null;
+  try {
+    searchContext=(DirContext)connectionManager.getConnection();
+    SearchControls searchControls=new SearchControls();
+    if (recursive) {
+      SECURITY_LOGGER.trace("Performing recursive search");
+      searchControls.setSearchScope(SearchControls.SUBTREE_SCOPE);
+    }
+ else {
+      SECURITY_LOGGER.trace("Performing single level search");
+      searchControls.setSearchScope(SearchControls.ONELEVEL_SCOPE);
+    }
+    searchControls.setReturningAttributes(new String[]{userDn});
+    searchControls.setTimeLimit(searchTimeLimit);
+    Object[] filterArguments=new Object[]{username};
+    String filter=usernameAttribute != null ? "(" + usernameAttribute + "={0})" : advancedFilter;
+    SECURITY_LOGGER.tracef("Searching for user '%s' using filter '%s'.",username,filter);
+    searchEnumeration=searchContext.search(baseDn,filter,filterArguments,searchControls);
+    if (searchEnumeration.hasMore() == false) {
+      SECURITY_LOGGER.tracef("User '%s' not found in directory.",username);
+      throw MESSAGES.userNotFoundInDirectory(username);
+    }
+    String distinguishedUserDN=null;
+    SearchResult result=searchEnumeration.next();
+    Attributes attributes=result.getAttributes();
+    if (attributes != null) {
+      Attribute dn=attributes.get(userDn);
+      if (dn != null) {
+        distinguishedUserDN=(String)dn.get();
+      }
+    }
+    if (distinguishedUserDN == null) {
+      if (result.isRelative() == true) {
+        distinguishedUserDN=result.getName() + ("".equals(baseDn) ? "" : "," + baseDn);
+      }
+ else {
+        String name=result.getName();
+        SECURITY_LOGGER.tracef("Can't follow referral for authentication: %s",name);
+        throw MESSAGES.nameNotFound(name);
+      }
+    }
+    SECURITY_LOGGER.tracef("DN '%s' found for user '%s'",distinguishedUserDN,username);
+    try {
+      userContext=(DirContext)connectionManager.getConnection(distinguishedUserDN,password);
+      if (userContext != null) {
+        SECURITY_LOGGER.tracef("Password verified for user '%s'",username);
+        verifyPasswordCallback.setVerified(true);
+      }
+    }
+ catch (    Exception e) {
+      SECURITY_LOGGER.tracef("Password verification failed for user '%s'",username);
+      verifyPasswordCallback.setVerified(false);
+    }
+  }
+ catch (  Exception e) {
+    SECURITY_LOGGER.trace("Unable to verify identity.",e);
+    throw MESSAGES.cannotPerformVerification(e);
+  }
+ finally {
+    UserLdapCallbackHandler.this.safeClose(searchEnumeration);
+    safeClose(verifyPasswordCallback,searchContext);
+    UserLdapCallbackHandler.this.safeClose(userContext);
+  }
+}
