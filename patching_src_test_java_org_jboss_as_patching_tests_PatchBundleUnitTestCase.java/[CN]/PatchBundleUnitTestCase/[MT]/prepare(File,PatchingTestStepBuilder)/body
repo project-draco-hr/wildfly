@@ -1,0 +1,35 @@
+{
+  final File tempDir=new File(root,randomString());
+  tempDir.mkdir();
+  final List<BundledPatch.BundledPatchEntry> entries=new ArrayList<BundledPatch.BundledPatchEntry>();
+  for (  final PatchingTestStepBuilder step : steps) {
+    final Patch patch=step.build();
+    writePatch(step.getPatchDir(),patch);
+    final String patchId=patch.getPatchId();
+    final String path=patchId + ".zip";
+    final File patchOutput=new File(tempDir,path);
+    ZipUtils.zip(step.getPatchDir(),patchOutput);
+    entries.add(new BundledPatch.BundledPatchEntry(patchId,path));
+  }
+  final File multiPatchXml=new File(tempDir,PatchBundleXml.MULTI_PATCH_XML);
+  try {
+    final OutputStream os=new FileOutputStream(multiPatchXml);
+    try {
+      PatchBundleXml.marshal(os,new BundledPatch(){
+        @Override public List<BundledPatchEntry> getPatches(){
+          return entries;
+        }
+      }
+);
+    }
+  finally {
+      safeClose(os);
+    }
+  }
+ catch (  Exception e) {
+    throw new PatchingException(e);
+  }
+  final File result=new File(root,"multi-step-contents.zip");
+  ZipUtils.zip(tempDir,result);
+  return result;
+}

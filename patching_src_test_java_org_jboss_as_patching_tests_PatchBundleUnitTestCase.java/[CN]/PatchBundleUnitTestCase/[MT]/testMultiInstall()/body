@@ -1,0 +1,45 @@
+{
+  final PatchingTestBuilder builder=createDefaultBuilder("layer-2","layer-1","base");
+  final byte[] moduleHashOne=new byte[20];
+  final byte[] moduleHashTwo=new byte[20];
+  final byte[] moduleHashThree=new byte[20];
+  final byte[] moduleHashFour=new byte[20];
+  final byte[] moduleHashFive=new byte[20];
+  final byte[] moduleHashSix=new byte[20];
+  final PatchingTestStepBuilder cp1=builder.createStepBuilder();
+  cp1.setPatchId("CP1").upgradeIdentity(PRODUCT_VERSION,PRODUCT_VERSION).upgradeElement("base-CP1","base",false).addModuleWithRandomContent("org.jboss.test",moduleHashOne);
+  final PatchingTestStepBuilder cp2=builder.createStepBuilder();
+  cp2.setPatchId("CP2").upgradeIdentity(PRODUCT_VERSION,PRODUCT_VERSION).upgradeElement("layer-1-CP1","layer-1",false).addModuleWithRandomContent("org.jboss.test.two",moduleHashTwo);
+  final PatchingTestStepBuilder cp3=builder.createStepBuilder();
+  cp3.setPatchId("CP3").upgradeIdentity(PRODUCT_VERSION,PRODUCT_VERSION).upgradeElement("layer-2-CP1","layer-2",false).removeModule("org.jboss.test.three","main",moduleHashThree);
+  final PatchingTestStepBuilder cp4=builder.createStepBuilder();
+  cp4.setPatchId("CP4").upgradeIdentity(PRODUCT_VERSION,PRODUCT_VERSION).upgradeElement("base-CP2","base",false).addModuleWithRandomContent("org.jboss.test.four",moduleHashFour);
+  final PatchingTestStepBuilder cp5=builder.createStepBuilder();
+  cp5.setPatchId("CP5").upgradeIdentity(PRODUCT_VERSION,PRODUCT_VERSION).upgradeElement("base-CP3","base",false).updateModuleWithRandomContent("org.jboss.test.four",moduleHashFour,null).getParent().upgradeElement("layer-1-CP2","layer-1",false).addModuleWithRandomContent("org.jboss.test.five",moduleHashFive).getParent().upgradeElement("layer-2-CP2","layer-2",false).addModuleWithRandomContent("org.jboss.test.six",moduleHashSix);
+  final File multiPatch=prepare(builder.getRoot(),cp1,cp2,cp3,cp4,cp5);
+  InstallationManager mgr=loadInstallationManager();
+  final PatchTool patchTool=PatchTool.Factory.create(mgr);
+  final PatchingResult result=patchTool.applyPatch(multiPatch,ContentVerificationPolicy.STRICT);
+  result.commit();
+  try {
+    PatchStepAssertions.APPLY.after(builder.getFile(JBOSS_INSTALLATION),cp5.build(),mgr);
+  }
+ catch (  IOException e) {
+    throw new PatchingException(e);
+  }
+  mgr=loadInstallationManager();
+  PatchStepAssertions.assertModule("base-CP3",mgr.getLayer("base"),"org.jboss.test","main");
+  PatchStepAssertions.assertModule("base-CP3",mgr.getLayer("base"),"org.jboss.test.four","main");
+  PatchStepAssertions.assertModule("layer-1-CP2",mgr.getLayer("layer-1"),"org.jboss.test.two","main");
+  PatchStepAssertions.assertModule("layer-1-CP2",mgr.getLayer("layer-1"),"org.jboss.test.five","main");
+  PatchStepAssertions.assertModule("layer-2-CP2",mgr.getLayer("layer-2"),"org.jboss.test.three","main");
+  PatchStepAssertions.assertModule("layer-2-CP2",mgr.getLayer("layer-2"),"org.jboss.test.six","main");
+  rollback(cp5);
+  mgr=loadInstallationManager();
+  PatchStepAssertions.assertModule("base-CP2",mgr.getLayer("base"),"org.jboss.test","main");
+  PatchStepAssertions.assertModule("base-CP2",mgr.getLayer("base"),"org.jboss.test.four","main");
+  rollback(cp4);
+  rollback(cp3);
+  rollback(cp2);
+  rollback(cp1);
+}

@@ -1,0 +1,35 @@
+{
+  PatchingResult result=null;
+  final List<BundledPatch.BundledPatchEntry> results=new ArrayList<BundledPatch.BundledPatchEntry>();
+  final Iterator<BundledPatch.BundledPatchEntry> iterator=bundledPatch.getPatches().iterator();
+  while (iterator.hasNext()) {
+    final BundledPatch.BundledPatchEntry entry=iterator.next();
+    final File patch=new File(workDir,entry.getPatchPath());
+    final FileInputStream is=new FileInputStream(patch);
+    try {
+      result=applyPatch(workDir,is,contentPolicy);
+    }
+ catch (    PatchingException e) {
+      for (      BundledPatch.BundledPatchEntry committed : results) {
+        try {
+          rollback(committed.getPatchId(),contentPolicy,false,false).commit();
+        }
+ catch (        PatchingException oe) {
+          PatchLogger.ROOT_LOGGER.debugf(oe,"failed to rollback patch '%s'",committed.getPatchId());
+        }
+      }
+      throw e;
+    }
+ finally {
+      safeClose(is);
+    }
+    if (iterator.hasNext()) {
+      result.commit();
+      results.add(0,entry);
+    }
+  }
+  if (result == null) {
+    throw new PatchingException();
+  }
+  return new WrappedMultiInstallPatch(result,contentPolicy,results);
+}

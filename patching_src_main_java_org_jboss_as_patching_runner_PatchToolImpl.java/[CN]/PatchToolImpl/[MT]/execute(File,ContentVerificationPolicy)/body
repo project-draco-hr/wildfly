@@ -1,21 +1,27 @@
 {
-  final PatchContentProvider contentProvider=PatchContentProvider.DefaultContentProvider.create(workDir);
-  final File patchXml=new File(workDir,PatchXml.PATCH_XML);
-  final InputStream patchIS=new FileInputStream(patchXml);
-  final PatchMetadataResolver patchResolver;
-  try {
-    patchResolver=PatchXml.parse(patchIS);
-    patchIS.close();
-  }
+  final File patchBundleXml=new File(workDir,PatchBundleXml.MULTI_PATCH_XML);
+  if (patchBundleXml.exists()) {
+    final InputStream patchIs=new FileInputStream(patchBundleXml);
+    try {
+      final BundledPatch bundledPatch=PatchBundleXml.parse(patchIs);
+      return applyPatchBundle(workDir,bundledPatch,contentPolicy);
+    }
   finally {
-    safeClose(patchIS);
+      safeClose(patchIs);
+    }
   }
-  final InstallationManager.InstallationModification modification=manager.modifyInstallation(callback);
-  try {
-    return runner.applyPatch(patchResolver,contentProvider,contentPolicy,modification);
-  }
- catch (  Exception e) {
-    modification.cancel();
-    throw rethrowException(e);
+ else {
+    final File patchXml=new File(workDir,PatchXml.PATCH_XML);
+    final PatchContentProvider contentProvider=PatchContentProvider.DefaultContentProvider.create(workDir);
+    final InputStream patchIS=new FileInputStream(patchXml);
+    final PatchMetadataResolver patchResolver;
+    try {
+      patchResolver=PatchXml.parse(patchIS);
+      patchIS.close();
+    }
+  finally {
+      safeClose(patchIS);
+    }
+    return apply(patchResolver,contentProvider,contentPolicy);
   }
 }
