@@ -1,0 +1,39 @@
+{
+  final CountDownLatch completed=new CountDownLatch(1);
+  final AtomicReference<ModelNode> preparedResult=new AtomicReference<>();
+  final BlockingQueue<TransactionalProtocolClient.PreparedOperation<TransactionalProtocolClient.Operation>> queue=new ArrayBlockingQueue<TransactionalProtocolClient.PreparedOperation<TransactionalProtocolClient.Operation>>(1,true);
+  final TransactionalProtocolClient.TransactionalOperationListener<TransactionalProtocolClient.Operation> operationListener=new TransactionalProtocolClient.TransactionalOperationListener<TransactionalProtocolClient.Operation>(){
+    @Override public void operationPrepared(    TransactionalProtocolClient.PreparedOperation<TransactionalProtocolClient.Operation> prepared){
+      try {
+        preparedResult.set(prepared.getPreparedResult());
+      }
+  finally {
+        completed.countDown();
+      }
+    }
+    @Override public void operationFailed(    TransactionalProtocolClient.Operation operation,    ModelNode result){
+      completed.countDown();
+    }
+    @Override public void operationComplete(    TransactionalProtocolClient.Operation operation,    ModelNode result){
+      completed.countDown();
+    }
+  }
+;
+  final ModelNode validateAddress=Util.createOperation(ValidateAddressOperationHandler.OPERATION_NAME,operationAddress);
+  validateAddress.get(VALUE).set(paramAddress.toModelNode());
+  validateAddress.get(OPERATION_HEADERS).set(original.get(OPERATION_HEADERS));
+  Future<ModelNode> futureResult=client.execute(operationListener,validateAddress,messageHandler,null);
+  try {
+    completed.await();
+  }
+ catch (  InterruptedException e) {
+    if (futureResult != null) {
+      futureResult.cancel(false);
+    }
+  }
+  ModelNode result=preparedResult.get();
+  if (result != null) {
+    return result.get(RESULT,VALID).asBoolean(true);
+  }
+  return false;
+}
