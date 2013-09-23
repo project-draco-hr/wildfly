@@ -1,0 +1,35 @@
+{
+  for (  AttributeDefinition attribute : READ_LOG_FILE.getParameters()) {
+    attribute.validateOperation(operation);
+  }
+  final String fileName=NAME.resolveModelAttribute(context,operation).asString();
+  final int numberOfLines=LINES.resolveModelAttribute(context,operation).asInt();
+  final int skip=SKIP.resolveModelAttribute(context,operation).asInt();
+  final boolean tail=TAIL.resolveModelAttribute(context,operation).asBoolean();
+  final ModelNode encodingModel=CommonAttributes.ENCODING.resolveModelAttribute(context,operation);
+  final String encoding=(encodingModel.isDefined() ? encodingModel.asString() : null);
+  final File path=new File(pathManager.resolveRelativePathEntry(fileName,ServerEnvironment.SERVER_LOG_DIR));
+  if (!path.exists()) {
+    throw LoggingMessages.MESSAGES.logFileNotFound(fileName,ServerEnvironment.SERVER_LOG_DIR);
+  }
+  if (!path.canRead()) {
+    throw LoggingMessages.MESSAGES.readPermissionDenied(fileName,ServerEnvironment.SERVER_LOG_DIR);
+  }
+  try {
+    final List<String> lines;
+    if (numberOfLines == 0) {
+      lines=Collections.emptyList();
+    }
+ else {
+      lines=readLines(path,encoding,tail,skip,numberOfLines);
+    }
+    final ModelNode result=context.getResult().setEmptyList();
+    for (    String line : lines) {
+      result.add(line);
+    }
+  }
+ catch (  IOException e) {
+    throw LoggingMessages.MESSAGES.failedToReadLogFile(e,fileName);
+  }
+  context.completeStep(ResultHandler.NOOP_RESULT_HANDLER);
+}
