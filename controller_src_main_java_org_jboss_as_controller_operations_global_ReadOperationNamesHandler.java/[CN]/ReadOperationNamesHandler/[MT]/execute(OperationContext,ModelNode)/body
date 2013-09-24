@@ -1,12 +1,26 @@
 {
   final ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
   final Map<String,OperationEntry> operations=registry.getOperationDescriptions(PathAddress.EMPTY_ADDRESS,true);
+  final boolean accessControl=ACCESS_CONTROL.resolveModelAttribute(context,operation).asBoolean();
   final ModelNode result=new ModelNode();
   if (operations.size() > 0) {
+    final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
     for (    final Map.Entry<String,OperationEntry> entry : operations.entrySet()) {
       if (entry.getValue().getType() == OperationEntry.EntryType.PUBLIC) {
         if (context.getProcessType() != ProcessType.DOMAIN_SERVER || entry.getValue().getFlags().contains(OperationEntry.Flag.RUNTIME_ONLY)) {
-          result.add(entry.getKey());
+          boolean add=true;
+          if (accessControl) {
+            ModelNode operationToCheck=Util.createOperation(entry.getKey(),address);
+            operationToCheck.get(OPERATION_HEADERS).set(operation.get(OPERATION_HEADERS));
+            AuthorizationResult authorizationResult=context.authorizeOperation(operationToCheck);
+            add=authorizationResult.getDecision() == Decision.PERMIT;
+          }
+          if (add) {
+            result.add(entry.getKey());
+          }
+ else {
+            context.getResponseHeaders().get(ModelDescriptionConstants.ACCESS_CONTROL,FILTERED_OPERATIONS).add(entry.getKey());
+          }
         }
       }
     }
