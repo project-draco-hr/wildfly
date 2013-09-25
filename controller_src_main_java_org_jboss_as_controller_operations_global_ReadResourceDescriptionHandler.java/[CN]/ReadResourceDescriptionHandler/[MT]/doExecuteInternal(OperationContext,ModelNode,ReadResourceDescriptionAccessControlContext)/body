@@ -1,2 +1,107 @@
 {
+  for (  AttributeDefinition def : DEFINITION.getParameters()) {
+    def.validateOperation(operation);
+  }
+  final String opName=operation.require(OP).asString();
+  final int recursiveDepth=RECURSIVE_DEPTH.resolveModelAttribute(context,operation).asInt();
+  final boolean recursive=recursiveDepth > 0 || RECURSIVE.resolveModelAttribute(context,operation).asBoolean();
+  final boolean proxies=PROXIES.resolveModelAttribute(context,operation).asBoolean();
+  final boolean ops=OPERATIONS.resolveModelAttribute(context,operation).asBoolean();
+  final boolean aliases=INCLUDE_ALIASES.resolveModelAttribute(context,operation).asBoolean();
+  final boolean inheritedOps=INHERITED.resolveModelAttribute(context,operation).asBoolean();
+  final AccessControl accessControl=AccessControl.forName(ACCESS_CONTROL.resolveModelAttribute(context,operation).asString());
+  final ImmutableManagementResourceRegistration registry=getResourceRegistrationCheckForAlias(context,accessControlContext.opAddress,accessControlContext);
+  final DescriptionProvider descriptionProvider=registry.getModelDescription(PathAddress.EMPTY_ADDRESS);
+  final Locale locale=GlobalOperationHandlers.getLocale(context,operation);
+  final ModelNode nodeDescription=descriptionProvider.getModelDescription(locale);
+  final Map<String,ModelNode> operations=ops ? new HashMap<String,ModelNode>() : null;
+  final Map<PathElement,ModelNode> childResources=recursive ? new HashMap<PathElement,ModelNode>() : Collections.<PathElement,ModelNode>emptyMap();
+  if (accessControl != AccessControl.NONE) {
+    accessControlContext.initLocalResourceAddresses(context,operation);
+  }
+  final ReadResourceDescriptionAssemblyHandler assemblyHandler=new ReadResourceDescriptionAssemblyHandler(nodeDescription,operations,childResources,accessControlContext,accessControl);
+  context.addStep(assemblyHandler,OperationContext.Stage.MODEL,true);
+  if (ops) {
+    for (    final Map.Entry<String,OperationEntry> entry : registry.getOperationDescriptions(PathAddress.EMPTY_ADDRESS,inheritedOps).entrySet()) {
+      if (entry.getValue().getType() == OperationEntry.EntryType.PUBLIC) {
+        if (context.getProcessType() != ProcessType.DOMAIN_SERVER || entry.getValue().getFlags().contains(OperationEntry.Flag.RUNTIME_ONLY)) {
+          final DescriptionProvider provider=entry.getValue().getDescriptionProvider();
+          operations.put(entry.getKey(),provider.getModelDescription(locale));
+        }
+      }
+    }
+  }
+  if (nodeDescription.hasDefined(ATTRIBUTES)) {
+    for (    final String attr : nodeDescription.require(ATTRIBUTES).keys()) {
+      final AttributeAccess access=registry.getAttributeAccess(PathAddress.EMPTY_ADDRESS,attr);
+      final AttributeAccess.AccessType accessType=access == null ? AttributeAccess.AccessType.READ_ONLY : access.getAccessType();
+      final AttributeAccess.Storage storage=access == null ? AttributeAccess.Storage.CONFIGURATION : access.getStorageType();
+      final ModelNode attrNode=nodeDescription.get(ATTRIBUTES,attr);
+      String displayedAccessType=context.getProcessType() == ProcessType.DOMAIN_SERVER && storage == AttributeAccess.Storage.CONFIGURATION ? AttributeAccess.AccessType.READ_ONLY.toString() : accessType.toString();
+      attrNode.get(ACCESS_TYPE).set(displayedAccessType);
+      attrNode.get(STORAGE).set(storage.toString());
+      if (accessType == AttributeAccess.AccessType.READ_WRITE) {
+        Set<AttributeAccess.Flag> flags=access.getFlags();
+        if (flags.contains(AttributeAccess.Flag.RESTART_ALL_SERVICES)) {
+          attrNode.get(RESTART_REQUIRED).set("all-services");
+        }
+ else         if (flags.contains(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)) {
+          attrNode.get(RESTART_REQUIRED).set("resource-services");
+        }
+ else         if (flags.contains(AttributeAccess.Flag.RESTART_JVM)) {
+          attrNode.get(RESTART_REQUIRED).set("jvm");
+        }
+ else {
+          attrNode.get(RESTART_REQUIRED).set("no-services");
+        }
+      }
+    }
+  }
+  if (accessControl != AccessControl.NONE) {
+    accessControlContext.checkResourceAccess(context,registry,nodeDescription,operations);
+  }
+  if (recursive) {
+    for (    final PathElement element : registry.getChildAddresses(PathAddress.EMPTY_ADDRESS)) {
+      PathAddress relativeAddr=PathAddress.pathAddress(element);
+      ImmutableManagementResourceRegistration childReg=registry.getSubModel(relativeAddr);
+      boolean readChild=true;
+      if (childReg.isRemote() && !proxies) {
+        readChild=false;
+      }
+      if (childReg.isAlias() && !aliases) {
+        readChild=false;
+      }
+      if (readChild) {
+        final int newDepth=recursiveDepth > 0 ? recursiveDepth - 1 : 0;
+        final ModelNode rrOp=operation.clone();
+        final PathAddress address;
+        try {
+          address=PathAddress.pathAddress(accessControlContext.opAddress,element);
+        }
+ catch (        Exception e) {
+          continue;
+        }
+        rrOp.get(OP_ADDR).set(address.toModelNode());
+        rrOp.get(RECURSIVE_DEPTH.getName()).set(newDepth);
+        final ModelNode rrRsp=new ModelNode();
+        childResources.put(element,rrRsp);
+        final OperationStepHandler handler=getRecursiveStepHandler(childReg,opName,accessControlContext,address);
+        context.addStep(rrRsp,rrOp,handler,OperationContext.Stage.MODEL,true);
+      }
+      nodeDescription.get(CHILDREN,element.getKey(),MODEL_DESCRIPTION,element.getValue());
+    }
+  }
+  context.completeStep(new OperationContext.RollbackHandler(){
+    @Override public void handleRollback(    OperationContext context,    ModelNode operation){
+      if (!context.hasFailureDescription()) {
+        for (        final ModelNode value : childResources.values()) {
+          if (value.hasDefined(FAILURE_DESCRIPTION)) {
+            context.getFailureDescription().set(value.get(FAILURE_DESCRIPTION));
+            break;
+          }
+        }
+      }
+    }
+  }
+);
 }
