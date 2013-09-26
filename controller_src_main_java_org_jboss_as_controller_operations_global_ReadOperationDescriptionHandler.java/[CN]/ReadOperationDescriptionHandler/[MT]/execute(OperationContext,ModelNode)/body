@@ -1,5 +1,6 @@
 {
   String operationName=NAME.resolveModelAttribute(context,operation).asString();
+  boolean accessControl=ACCESS_CONTROL.resolveModelAttribute(context,operation).asBoolean();
   final ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
   OperationEntry operationEntry=registry.getOperationEntry(PathAddress.EMPTY_ADDRESS,operationName);
   if (operationEntry == null || (context.getProcessType() == ProcessType.DOMAIN_SERVER && !operationEntry.getFlags().contains(OperationEntry.Flag.RUNTIME_ONLY))) {
@@ -20,6 +21,13 @@
  else       if (flags.contains(OperationEntry.Flag.RESTART_JVM)) {
         result.get(RESTART_REQUIRED).set("jvm");
       }
+    }
+    if (accessControl) {
+      final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+      ModelNode operationToCheck=Util.createOperation(operationName,address);
+      operationToCheck.get(OPERATION_HEADERS).set(operation.get(OPERATION_HEADERS));
+      AuthorizationResult authorizationResult=context.authorizeOperation(operationToCheck);
+      result.get(ACCESS_CONTROL.getName(),EXECUTE).set(authorizationResult.getDecision() == Decision.PERMIT);
     }
     context.getResult().set(result);
   }
