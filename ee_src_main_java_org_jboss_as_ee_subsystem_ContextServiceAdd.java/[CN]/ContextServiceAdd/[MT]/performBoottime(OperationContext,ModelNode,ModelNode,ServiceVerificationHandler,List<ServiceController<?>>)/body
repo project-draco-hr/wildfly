@@ -1,0 +1,22 @@
+{
+  final String name=PathAddress.pathAddress(operation.get(ModelDescriptionConstants.ADDRESS)).getLastElement().getValue();
+  final String jndiName=ContextServiceResourceDefinition.JNDI_NAME_AD.resolveModelAttribute(context,model).asString();
+  final boolean useTransactionSetupProvider=ContextServiceResourceDefinition.USE_TRANSACTION_SETUP_PROVIDER_AD.resolveModelAttribute(context,model).asBoolean();
+  final ContextServiceService contextServiceService=new ContextServiceService(name,jndiName);
+  final ServiceBuilder<ContextServiceImpl> serviceBuilder=context.getServiceTarget().addService(ConcurrentServiceNames.getContextServiceServiceName(name),contextServiceService).addInjectionValue(contextServiceService.getContextSetupProvider(),new ImmediateValue<ContextSetupProvider>(new DefaultContextSetupProviderImpl()));
+  if (useTransactionSetupProvider) {
+    final TransactionSetupProviderService transactionSetupProviderService=new TransactionSetupProviderService();
+    final ServiceBuilder<TransactionSetupProvider> transactionSetupServiceBuilder=context.getServiceTarget().addService(ConcurrentServiceNames.TRANSACTION_SETUP_PROVIDER_SERVICE_NAME,transactionSetupProviderService).addDependency(ServiceName.JBOSS.append("txn","TransactionManager"),TransactionManager.class,transactionSetupProviderService.getTransactionManagerInjectedValue());
+    newControllers.add(transactionSetupServiceBuilder.addListener(verificationHandler).install());
+    serviceBuilder.addDependency(ConcurrentServiceNames.TRANSACTION_SETUP_PROVIDER_SERVICE_NAME,TransactionSetupProvider.class,contextServiceService.getTransactionSetupProvider());
+  }
+  if (verificationHandler != null) {
+    serviceBuilder.addListener(verificationHandler);
+  }
+  if (newControllers != null) {
+    newControllers.add(serviceBuilder.install());
+  }
+ else {
+    serviceBuilder.install();
+  }
+}
