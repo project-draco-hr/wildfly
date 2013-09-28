@@ -1,0 +1,29 @@
+{
+  ResourceTransformationDescriptionBuilder builder=TransformationDescriptionBuilder.Factory.createInstance(CoreManagementResourceDefinition.PATH_ELEMENT);
+  builder.setCustomResourceTransformer(new ResourceTransformer(){
+    @Override public void transformResource(    ResourceTransformationContext context,    PathAddress address,    Resource resource) throws OperationFailedException {
+      Resource accessAuth=resource.getChild(AccessAuthorizationResourceDefinition.PATH_ELEMENT);
+      if (accessAuth != null) {
+        ModelNode model=accessAuth.getModel();
+        String providerName=AccessAuthorizationResourceDefinition.PROVIDER.resolveModelAttribute(ExpressionResolver.REJECTING,model).asString();
+        AccessAuthorizationResourceDefinition.Provider provider=AccessAuthorizationResourceDefinition.Provider.valueOf(providerName.toUpperCase(Locale.ENGLISH));
+        if (provider != AccessAuthorizationResourceDefinition.Provider.SIMPLE) {
+          final ResourceTransformationContext childContext=context.addTransformedResource(PathAddress.EMPTY_ADDRESS,resource);
+          childContext.processChildren(resource);
+        }
+      }
+    }
+  }
+);
+  ResourceTransformationDescriptionBuilder accessBuilder=builder.addChildResource(AccessAuthorizationResourceDefinition.PATH_ELEMENT).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.DEFINED,AccessAuthorizationResourceDefinition.PROVIDER).setDiscard(new DiscardAttributeChecker.DefaultDiscardAttributeChecker(){
+    @Override protected boolean isValueDiscardable(    PathAddress address,    String attributeName,    ModelNode attributeValue,    TransformationContext context){
+      return !attributeValue.isDefined() || AccessAuthorizationResourceDefinition.Provider.SIMPLE.toString().equalsIgnoreCase(attributeValue.asString());
+    }
+  }
+,AccessAuthorizationResourceDefinition.PROVIDER).setDiscard(DiscardAttributeChecker.ALWAYS,AccessAuthorizationResourceDefinition.PERMISSION_COMBINATION_POLICY).end();
+  accessBuilder.discardChildResource(PathElement.pathElement(ModelDescriptionConstants.CONSTRAINT));
+  accessBuilder.discardChildResource(PathElement.pathElement(ModelDescriptionConstants.ROLE_MAPPING));
+  accessBuilder.discardChildResource(PathElement.pathElement(ModelDescriptionConstants.SERVER_GROUP_SCOPED_ROLE));
+  accessBuilder.discardChildResource(PathElement.pathElement(ModelDescriptionConstants.HOST_SCOPED_ROLE));
+  TransformationDescription.Tools.register(builder.build(),domain);
+}
