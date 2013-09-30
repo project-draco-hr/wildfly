@@ -1,14 +1,42 @@
 {
   LOGGER.info("Principal name: " + principalName);
   final KerberosTime timeStamp=new KerberosTime();
-  final long principalType=1L;
-  final Keytab keytab=Keytab.getInstance();
-  final List<KeytabEntry> entries=new ArrayList<KeytabEntry>();
-  for (  Map.Entry<EncryptionType,EncryptionKey> keyEntry : KerberosKeyFactory.getKerberosKeys(principalName,passPhrase).entrySet()) {
-    final EncryptionKey key=keyEntry.getValue();
-    final byte keyVersion=(byte)key.getKeyVersion();
-    entries.add(new KeytabEntry(principalName,principalType,timeStamp,keyVersion,key));
+  DataOutputStream dos=null;
+  try {
+    dos=new DataOutputStream(new FileOutputStream(keytabFile));
+    dos.write(Keytab.VERSION_52);
+    for (    Map.Entry<EncryptionType,EncryptionKey> keyEntry : KerberosKeyFactory.getKerberosKeys(principalName,passPhrase).entrySet()) {
+      final EncryptionKey key=keyEntry.getValue();
+      final byte keyVersion=(byte)key.getKeyVersion();
+      final ByteArrayOutputStream baos=new ByteArrayOutputStream();
+      DataOutputStream entryDos=new DataOutputStream(baos);
+      String[] spnSplit=principalName.split("@");
+      String nameComponent=spnSplit[0];
+      String realm=spnSplit[1];
+      String[] nameComponents=nameComponent.split("/");
+      try {
+        entryDos.writeShort((short)nameComponents.length);
+        entryDos.writeUTF(realm);
+        for (        String component : nameComponents) {
+          entryDos.writeUTF(component);
+        }
+        entryDos.writeInt(1);
+        entryDos.writeInt((int)(timeStamp.getTime() / 1000));
+        entryDos.write(keyVersion);
+        entryDos.writeShort((short)key.getKeyType().getValue());
+        byte[] data=key.getKeyValue();
+        entryDos.writeShort((short)data.length);
+        entryDos.write(data);
+      }
+  finally {
+        IOUtils.closeQuietly(entryDos);
+      }
+      final byte[] entryBytes=baos.toByteArray();
+      dos.writeInt(entryBytes.length);
+      dos.write(entryBytes);
+    }
   }
-  keytab.setEntries(entries);
-  keytab.write(keytabFile);
+  finally {
+    IOUtils.closeQuietly(dos);
+  }
 }
