@@ -1,15 +1,23 @@
 {
-  if (deploymentManager != null) {
-    Deployment deployment=deploymentManager.getDeployment();
-    try {
-      host.getValue().unregisterDeployment(deployment);
-      deploymentManager.stop();
+  final ClassLoader old=Thread.currentThread().getContextClassLoader();
+  DeploymentInfo deploymentInfo=deploymentInfoInjectedValue.getValue();
+  Thread.currentThread().setContextClassLoader(deploymentInfo.getClassLoader());
+  try {
+    if (deploymentManager != null) {
+      Deployment deployment=deploymentManager.getDeployment();
+      try {
+        host.getValue().unregisterDeployment(deployment);
+        deploymentManager.stop();
+      }
+ catch (      ServletException e) {
+        throw new RuntimeException(e);
+      }
+      deploymentManager.undeploy();
+      container.getValue().getServletContainer().removeDeployment(deploymentInfoInjectedValue.getValue());
     }
- catch (    ServletException e) {
-      throw new RuntimeException(e);
-    }
-    deploymentManager.undeploy();
-    container.getValue().getServletContainer().removeDeployment(deploymentInfoInjectedValue.getValue());
+    recursiveDelete(deploymentInfoInjectedValue.getValue().getTempDir());
   }
-  recursiveDelete(deploymentInfoInjectedValue.getValue().getTempDir());
+  finally {
+    Thread.currentThread().setContextClassLoader(old);
+  }
 }
