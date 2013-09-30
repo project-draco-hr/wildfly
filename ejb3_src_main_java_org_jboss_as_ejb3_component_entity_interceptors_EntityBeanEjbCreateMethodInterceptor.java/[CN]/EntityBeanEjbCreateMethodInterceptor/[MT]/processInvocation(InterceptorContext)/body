@@ -1,0 +1,52 @@
+{
+  final Object existing=context.getPrivateData(EntityBeanComponent.PRIMARY_KEY_CONTEXT_KEY);
+  final Method ejbCreate=(Method)context.getPrivateData(EntityBeanHomeCreateInterceptorFactory.EJB_CREATE_METHOD_KEY);
+  final Method ejbPostCreate=(Method)context.getPrivateData(EntityBeanHomeCreateInterceptorFactory.EJB_POST_CREATE_METHOD_KEY);
+  final Object[] params=(Object[])context.getPrivateData(EntityBeanHomeCreateInterceptorFactory.PARAMETERS_KEY);
+  final ComponentClientInstance clientInstance=context.getPrivateData(ComponentClientInstance.class);
+  if (existing != null) {
+    clientInstance.setViewInstanceData(EntityBeanComponent.PRIMARY_KEY_CONTEXT_KEY,existing);
+    return existing;
+  }
+  final Component component=context.getPrivateData(Component.class);
+  if (!(component instanceof EntityBeanComponent)) {
+    throw MESSAGES.unexpectedComponent(component,EntityBeanComponent.class);
+  }
+  final EntityBeanComponent entityBeanComponent=(EntityBeanComponent)component;
+  final EntityBeanComponentInstance instance=entityBeanComponent.acquireUnAssociatedInstance();
+  final Object primaryKey=invokeEjbCreate(context,ejbCreate,instance,params);
+  instance.associate(primaryKey);
+  clientInstance.setViewInstanceData(EntityBeanComponent.PRIMARY_KEY_CONTEXT_KEY,primaryKey);
+  boolean synchronizationRegistered=false;
+  boolean exception=false;
+  final boolean instanceCachedBefore=entityBeanComponent.getCache().contains(primaryKey);
+  entityBeanComponent.getCache().create(instance);
+  try {
+    invokeEjbPostCreate(context,ejbPostCreate,instance,params);
+    final TransactionSynchronizationRegistry transactionSynchronizationRegistry=entityBeanComponent.getTransactionSynchronizationRegistry();
+    if (transactionSynchronizationRegistry.getTransactionKey() != null) {
+      if (!instanceCachedBefore) {
+        transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization(){
+          @Override public void beforeCompletion(){
+          }
+          @Override public void afterCompletion(          final int status){
+            entityBeanComponent.getCache().release(instance,status == Status.STATUS_COMMITTED);
+          }
+        }
+);
+      }
+      synchronizationRegistered=true;
+    }
+    return context.proceed();
+  }
+ catch (  Exception e) {
+    entityBeanComponent.getCache().release(instance,false);
+    exception=true;
+    throw e;
+  }
+ finally {
+    if (!synchronizationRegistered && !exception) {
+      entityBeanComponent.getCache().release(instance,true);
+    }
+  }
+}

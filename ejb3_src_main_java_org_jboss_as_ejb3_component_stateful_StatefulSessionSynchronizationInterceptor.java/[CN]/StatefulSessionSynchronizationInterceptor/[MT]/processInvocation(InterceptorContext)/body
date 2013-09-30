@@ -1,6 +1,8 @@
 {
   final StatefulSessionComponent component=getComponent(context,StatefulSessionComponent.class);
   final StatefulSessionComponentInstance instance=getComponentInstance(context);
+  final OwnableReentrantLock lock=instance.getLock();
+  final Object threadLock=instance.getThreadLock();
   final TransactionSynchronizationRegistry transactionSynchronizationRegistry=component.getTransactionSynchronizationRegistry();
   final Object lockOwner=getLockOwner(transactionSynchronizationRegistry);
   lock.pushOwner(lockOwner);
@@ -21,7 +23,7 @@ synchronized (threadLock) {
       boolean wasTxSyncRegistered=false;
       try {
         if (containerManagedTransactions) {
-          if (!synchronizationRegistered) {
+          if (!instance.isSynchronizationRegistered()) {
             currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
             final int status=transactionSynchronizationRegistry.getTransactionStatus();
             if (currentTransactionKey != null && status != Status.STATUS_COMMITTED) {
@@ -32,7 +34,7 @@ synchronized (threadLock) {
                 ROOT_LOGGER.trace("Registered tx synchronization: " + statefulSessionSync + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
               }
               instance.afterBegin();
-              synchronizationRegistered=true;
+              instance.setSynchronizationRegistered(true);
               context.putPrivateData(StatefulTransactionMarker.class,StatefulTransactionMarker.of(true));
             }
           }
@@ -43,11 +45,11 @@ synchronized (threadLock) {
         return context.proceed();
       }
   finally {
-        if (!wasTxSyncRegistered && !synchronizationRegistered) {
+        if (!wasTxSyncRegistered && !instance.isSynchronizationRegistered()) {
           releaseInstance(instance);
         }
  else         if (!wasTxSyncRegistered) {
-          releaseLock();
+          releaseLock(instance);
           instance.getComponent().getCache().release(instance);
         }
       }

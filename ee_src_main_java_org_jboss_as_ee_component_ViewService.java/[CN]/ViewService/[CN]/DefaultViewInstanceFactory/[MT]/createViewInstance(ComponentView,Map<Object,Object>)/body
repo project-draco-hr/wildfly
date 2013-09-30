@@ -1,19 +1,9 @@
 {
-  final SimpleInterceptorFactoryContext factoryContext=new SimpleInterceptorFactoryContext();
-  final Component component=componentView.getComponent();
-  factoryContext.getContextData().put(Component.class,component);
-  factoryContext.getContextData().put(ComponentView.class,componentView);
-  factoryContext.getContextData().putAll(contextData);
-  final Interceptor clientPostConstructInterceptor=clientPostConstruct.create(factoryContext);
-  final Interceptor clientPreDestroyInterceptor=clientPreDestroy.create(factoryContext);
-  final Map<Method,InterceptorFactory> clientInterceptorFactories=ViewService.this.clientInterceptorFactories;
-  IdentityHashMap<Method,Interceptor> clientEntryPoints=new IdentityHashMap<Method,Interceptor>(clientInterceptorFactories.size());
-  for (  Method method : clientInterceptorFactories.keySet()) {
-    clientEntryPoints.put(method,clientInterceptorFactories.get(method).create(factoryContext));
-  }
   final Object proxy;
+  final Component component=componentView.getComponent();
+  final ComponentClientInstance instance=new ComponentClientInstance();
   try {
-    proxy=proxyFactory.newInstance(new ProxyInvocationHandler(clientEntryPoints,component,componentView));
+    proxy=proxyFactory.newInstance(new ProxyInvocationHandler(clientInterceptors,instance,componentView));
   }
  catch (  InstantiationException e) {
     InstantiationError error=new InstantiationError(e.getMessage());
@@ -30,8 +20,13 @@ catch (  IllegalAccessException e) {
   InterceptorContext context=new InterceptorContext();
   context.putPrivateData(ComponentView.class,componentView);
   context.putPrivateData(Component.class,component);
+  context.putPrivateData(ComponentClientInstance.class,instance);
   context.setContextData(new HashMap<String,Object>());
+  for (  Map.Entry<Object,Object> entry : contextData.entrySet()) {
+    context.putPrivateData(entry.getKey(),entry.getValue());
+  }
   clientPostConstructInterceptor.processInvocation(context);
+  instance.constructionComplete();
   return new ManagedReference(){
     @Override public void release(){
       try {

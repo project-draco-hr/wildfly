@@ -34,7 +34,7 @@
   final InterceptorFactory instantiator;
   final ComponentFactory instanceFactory=configuration.getInstanceFactory();
   if (instanceFactory != null) {
-    instantiator=new ComponentInstantiatorInterceptorFactory(instanceFactory,BasicComponentInstance.INSTANCE_KEY,true);
+    instantiator=new ImmediateInterceptorFactory(new ComponentInstantiatorInterceptor(instanceFactory,BasicComponentInstance.INSTANCE_KEY,true));
   }
  else {
     final ClassReflectionIndex<?> componentClassIndex=deploymentReflectionIndex.getClassIndex(configuration.getComponentClass());
@@ -42,7 +42,7 @@
     if (constructor == null) {
       throw MESSAGES.defaultConstructorNotFound(configuration.getComponentClass());
     }
-    instantiator=new ComponentInstantiatorInterceptorFactory(new ConstructorComponentFactory(constructor),BasicComponentInstance.INSTANCE_KEY,true);
+    instantiator=new ImmediateInterceptorFactory(new ComponentInstantiatorInterceptor(new ConstructorComponentFactory(constructor),BasicComponentInstance.INSTANCE_KEY,true));
   }
   final List<InterceptorDescription> interceptorWithLifecycleCallbacks=new ArrayList<InterceptorDescription>();
   if (!description.isExcludeDefaultInterceptors()) {
@@ -72,8 +72,8 @@
     if (constructor == null) {
       throw MESSAGES.defaultConstructorNotFoundOnComponent(interceptorClassName,configuration.getComponentClass());
     }
-    instantiators.addFirst(new ComponentInstantiatorInterceptorFactory(new ConstructorComponentFactory(constructor),contextKey,false));
-    destructors.addLast(new ManagedReferenceReleaseInterceptorFactory(contextKey));
+    instantiators.addFirst(new ImmediateInterceptorFactory(new ComponentInstantiatorInterceptor(new ConstructorComponentFactory(constructor),contextKey,false)));
+    destructors.addLast(new ImmediateInterceptorFactory(new ManagedReferenceReleaseInterceptor(contextKey)));
     final boolean interceptorHasLifecycleCallbacks=interceptorWithLifecycleCallbacks.contains(interceptorDescription);
     new ClassDescriptionTraversal(interceptorClass.getModuleClass(),applicationClasses){
       @Override public void handle(      final Class<?> clazz,      EEModuleClassDescription classDescription) throws DeploymentUnitProcessingException {
@@ -108,7 +108,7 @@
         if (methodIdentifier != null) {
           final Method method=ClassReflectionIndexUtil.findRequiredMethod(deploymentReflectionIndex,clazz,methodIdentifier);
           if (isNotOverriden(clazz,method,interceptorClass.getModuleClass(),deploymentReflectionIndex)) {
-            final InterceptorFactory interceptorFactory=new ManagedReferenceLifecycleMethodInterceptorFactory(contextKey,method,changeMethod,lifecycleMethod);
+            final InterceptorFactory interceptorFactory=new ImmediateInterceptorFactory(new ManagedReferenceLifecycleMethodInterceptor(contextKey,method,changeMethod,lifecycleMethod));
             List<InterceptorFactory> factories=classMap.get(interceptorClassName);
             if (factories == null) {
               classMap.put(interceptorClassName,factories=new ArrayList<InterceptorFactory>());

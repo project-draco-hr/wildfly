@@ -1,0 +1,23 @@
+{
+  BeanManagerImpl beanManager=this.weldContainer.getValue().getBeanManager(beanArchiveId);
+  EjbDescriptor<Object> descriptor=beanManager.getEjbDescriptor(this.ejbName);
+  SessionBean<Object> bean=null;
+  if (descriptor != null) {
+    bean=beanManager.getBean(descriptor);
+  }
+  InterceptorBindings interceptorBindings=this.interceptorBindings.getValue();
+  final ComponentInstance componentInstance=interceptorContext.getPrivateData(ComponentInstance.class);
+  WeldInterceptorInstances existing=(WeldInterceptorInstances)componentInstance.getInstanceData(SerializedCdiInterceptorsKey.class);
+  if (existing == null) {
+    WeldCreationalContext<Object> creationalContext=beanManager.createCreationalContext(bean);
+    HashMap<String,SerializableContextualInstance<Interceptor<Object>,Object>> interceptorInstances=new HashMap<String,SerializableContextualInstance<Interceptor<Object>,Object>>();
+    if (interceptorBindings != null) {
+      for (      Interceptor<?> interceptor : interceptorBindings.getAllInterceptors()) {
+        addInterceptorInstance((Interceptor<Object>)interceptor,beanManager,interceptorInstances,creationalContext);
+      }
+    }
+    WeldInterceptorInstances instances=new WeldInterceptorInstances(creationalContext,interceptorInstances);
+    componentInstance.setInstanceData(SerializedCdiInterceptorsKey.class,instances);
+  }
+  return interceptorContext.proceed();
+}
