@@ -1,0 +1,47 @@
+{
+  final File multiPatchContent=new File(tmp,"patch-bundle-content");
+  multiPatchContent.mkdir();
+  final File multiPatchXml=new File(multiPatchContent,MultiPatchXml.MULTI_PATCH_XML);
+  final MultiPatch metadata;
+  if (existing != null && existing.exists()) {
+    ZipUtils.unzip(existing,multiPatchContent);
+    final InputStream is=new FileInputStream(multiPatchXml);
+    try {
+      metadata=MultiPatchXml.parse(is);
+    }
+  finally {
+      IoUtils.safeClose(is);
+    }
+  }
+ else {
+    metadata=new MultiPatch(){
+      @Override public List<MultiPatchEntry> getPatches(){
+        return Collections.emptyList();
+      }
+    }
+;
+  }
+  final File patchContent=new File(tmp,"patch-content");
+  ZipUtils.unzip(patch,patchContent);
+  final File patchXml=new File(patchContent,PatchXml.PATCH_XML);
+  final Patch patchMetadata=PatchXml.parse(patchXml).resolvePatch(null,null);
+  final String patchID=patchMetadata.getPatchId();
+  final String patchPath=patchID + ".zip";
+  final List<MultiPatch.MultiPatchEntry> entries=new ArrayList<MultiPatch.MultiPatchEntry>(metadata.getPatches());
+  entries.add(new MultiPatch.MultiPatchEntry(patchID,patchPath));
+  final File patchTarget=new File(multiPatchContent,patchPath);
+  IoUtils.copyFile(patch,patchTarget);
+  final OutputStream os=new FileOutputStream(multiPatchXml);
+  try {
+    MultiPatchXml.marshal(os,new MultiPatch(){
+      @Override public List<MultiPatchEntry> getPatches(){
+        return entries;
+      }
+    }
+);
+  }
+  finally {
+    IoUtils.safeClose(os);
+  }
+  ZipUtils.zip(multiPatchContent,target);
+}
