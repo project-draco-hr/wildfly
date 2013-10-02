@@ -1,0 +1,25 @@
+{
+  final PatchingTestBuilder builder=createDefaultBuilder("layer-2","layer-1","base");
+  final byte[] moduleHashOne=new byte[20];
+  final byte[] moduleHashTwo=new byte[20];
+  final byte[] moduleHashThree=new byte[20];
+  final PatchingTestStepBuilder cp1=builder.createStepBuilder();
+  cp1.setPatchId("CP1").upgradeIdentity(PRODUCT_VERSION,PRODUCT_VERSION).upgradeElement("base-CP1","base",false).addModuleWithRandomContent("org.jboss.test",moduleHashOne);
+  final PatchingTestStepBuilder cp2=builder.createStepBuilder();
+  cp2.setPatchId("CP2").upgradeIdentity(PRODUCT_VERSION,PRODUCT_VERSION).upgradeElement("layer-1-CP1","layer-1",false).addModuleWithRandomContent("org.jboss.test.two",moduleHashTwo);
+  final PatchingTestStepBuilder cp3=builder.createStepBuilder();
+  cp3.setPatchId("CP3").upgradeIdentity(PRODUCT_VERSION,PRODUCT_VERSION).upgradeElement("layer-2-CP1","layer-2",false).removeModule("org.jboss.test.three","main",moduleHashThree);
+  apply(cp1);
+  apply(cp2);
+  final File multiPatch=prepare(builder.getRoot(),cp1,cp2,cp3);
+  InstallationManager mgr=updateInstallationManager();
+  final PatchTool patchTool=PatchTool.Factory.create(mgr);
+  final PatchingResult result=patchTool.applyPatch(multiPatch,ContentVerificationPolicy.STRICT);
+  result.commit();
+  try {
+    PatchStepAssertions.APPLY.after(builder.getFile(JBOSS_INSTALLATION),cp3.build(),mgr);
+  }
+ catch (  IOException e) {
+    throw new PatchingException(e);
+  }
+}
