@@ -1,0 +1,17 @@
+{
+  if (deploymentUnit.hasAttachment(Attachments.MODULE)) {
+    final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+    final ClassLoader moduleClassLoader=module.getClassLoader();
+    final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+    final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+    final InjectedEENamespaceContextSelector namespaceContextSelector=moduleDescription.getNamespaceContextSelector();
+    final BatchEnvironmentService service=new BatchEnvironmentService(namespaceContextSelector);
+    final ServiceBuilder<BatchEnvironment> serviceBuilder=serviceTarget.addService(BatchServiceNames.batchDeploymentServiceName(deploymentUnit),service);
+    serviceBuilder.addDependency(BatchServiceNames.BATCH_PROPERTIES,Properties.class,service.getPropertiesInjector());
+    serviceBuilder.addDependency(TxnServices.JBOSS_TXN_USER_TRANSACTION,UserTransaction.class,service.getUserTransactionInjector());
+    serviceBuilder.addDependency(BatchServiceNames.BATCH_THREAD_POOL_NAME,ExecutorService.class,service.getExecutorServiceInjector());
+    service.getClassLoaderInjector().setValue(new ImmediateValue<ClassLoader>(moduleClassLoader));
+    serviceBuilder.addDependency(BatchServiceNames.beanManagerServiceName(deploymentUnit),new CastingInjector<BeanManager>(service.getBeanManagerInjector(),BeanManager.class));
+    serviceBuilder.install();
+  }
+}
