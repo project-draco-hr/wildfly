@@ -1,27 +1,29 @@
 {
   ManagementPermissionCollection baseCollection=permissionsByRole.get(getOfficialForm(base));
   int constraintIndex=getConstraintIndex(scopingConstraint.getFactory());
-  Map<Action.ActionEffect,ManagementPermission> monitorPermissions=new HashMap<Action.ActionEffect,ManagementPermission>();
+  Map<Action.ActionEffect,SimpleManagementPermission> monitorPermissions=new HashMap<Action.ActionEffect,SimpleManagementPermission>();
   ManagementPermissionCollection monitorCollection=permissionsByRole.get(getOfficialForm(StandardRole.MONITOR));
   Enumeration<Permission> monitorEnumeration=monitorCollection.elements();
   while (monitorEnumeration.hasMoreElements()) {
-    ManagementPermission monitorPerm=(ManagementPermission)monitorEnumeration.nextElement();
+    SimpleManagementPermission monitorPerm=(SimpleManagementPermission)monitorEnumeration.nextElement();
     monitorPermissions.put(monitorPerm.getActionEffect(),monitorPerm);
   }
   ManagementPermissionCollection scopedPermissions=null;
   Enumeration<Permission> permissionEnumeration=baseCollection.elements();
+  String scopedBaseName=officialForm + " (" + getOfficialForm(base)+ " permissions)";
   while (permissionEnumeration.hasMoreElements()) {
-    ManagementPermission basePerm=(ManagementPermission)permissionEnumeration.nextElement();
+    SimpleManagementPermission basePerm=(SimpleManagementPermission)permissionEnumeration.nextElement();
     Action.ActionEffect actionEffect=basePerm.getActionEffect();
     CombinationManagementPermission combinedPermission=new CombinationManagementPermission(CombinationPolicy.PERMISSIVE,actionEffect);
     if (scopedPermissions == null) {
-      scopedPermissions=(ManagementPermissionCollection)combinedPermission.newPermissionCollection();
+      scopedPermissions=new ManagementPermissionCollection(officialForm,CombinationManagementPermission.class);
     }
     ManagementPermission scopedPerm=basePerm.createScopedPermission(scopingConstraint.getStandardConstraint(),constraintIndex);
-    combinedPermission.addUnderlyingPermission(scopedPerm);
-    ManagementPermission monitorPerm=monitorPermissions.get(actionEffect);
+    combinedPermission.addUnderlyingPermission(scopedBaseName,scopedPerm);
+    SimpleManagementPermission monitorPerm=monitorPermissions.get(actionEffect);
+    String scopedReadOnlyName=officialForm + " (READ-ONLY permissions)";
     if (monitorPerm != null) {
-      combinedPermission.addUnderlyingPermission(monitorPerm.createScopedPermission(scopingConstraint.getOutofScopeReadConstraint(),constraintIndex));
+      combinedPermission.addUnderlyingPermission(scopedReadOnlyName,monitorPerm.createScopedPermission(scopingConstraint.getOutofScopeReadConstraint(),constraintIndex));
     }
     scopedPermissions.add(combinedPermission);
   }
