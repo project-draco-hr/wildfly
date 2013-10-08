@@ -1,30 +1,28 @@
 {
-  if (logFile.exists()) {
-    logFile.delete();
-    server.getConfig().removeAllEventHandlers();
-    server.getConfig().addEventHandler(new BlockedFileSyslogServerEventHandler(queue,logFile.getAbsolutePath(),false));
-  }
-  Assert.assertEquals(0,readFile(logFile));
+  final BlockingQueue<SyslogServerEventIF> queue=BlockedSyslogServerEventHandler.getQueue();
+  queue.clear();
+  SyslogServerEventIF syslogEvent=null;
   makeOneLog();
-  queue.poll(3 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
-  Assert.assertEquals("Audit log is logged to syslog even it isn't enabled",0,readFile(logFile));
+  syslogEvent=queue.poll(1 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
+  Assert.assertNull("No message was expected in the syslog",syslogEvent);
   try {
-    enableLog();
-    queue.poll(15 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
-    Assert.assertEquals("Enabled message of audit log isn't logged to syslog",1,readFile(logFile));
+    setAuditlogEnabled(true);
+    syslogEvent=queue.poll(5 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
+    Assert.assertNotNull("Enabling audit log wasn't logged into the syslog",syslogEvent);
     makeOneLog();
-    queue.poll(15 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
-    Assert.assertEquals("Audit log isn't logged to syslog",2,readFile(logFile));
+    syslogEvent=queue.poll(5 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
+    Assert.assertNotNull("Auditable event was't logged into the syslog",syslogEvent);
   }
   finally {
-    disableLog();
+    setAuditlogEnabled(false);
   }
-  if (logFile.exists()) {
-    logFile.delete();
-    server.getConfig().removeAllEventHandlers();
-    server.getConfig().addEventHandler(new BlockedFileSyslogServerEventHandler(queue,logFile.getAbsolutePath(),false));
-  }
+  syslogEvent=queue.poll(5 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
+  Assert.assertNotNull("Disabling audit log wasn't logged into the syslog",syslogEvent);
   makeOneLog();
-  queue.poll(3 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
-  Assert.assertEquals("Audit log is logged to syslog even it was disabled",0,readFile(logFile));
+  syslogEvent=queue.poll(1 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
+  Assert.assertNull("No message was expected in the syslog",syslogEvent);
+  for (  Long property : properties) {
+    Utils.applyUpdate(Util.createRemoveOperation(PathAddress.pathAddress().append(SYSTEM_PROPERTY,Long.toString(property))),managementClient.getControllerClient());
+  }
+  properties.clear();
 }

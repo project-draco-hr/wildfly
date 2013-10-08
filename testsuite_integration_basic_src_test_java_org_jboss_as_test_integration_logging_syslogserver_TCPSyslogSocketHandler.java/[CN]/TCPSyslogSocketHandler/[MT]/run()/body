@@ -1,0 +1,53 @@
+{
+  try {
+    final BufferedInputStream bis=new BufferedInputStream(socket.getInputStream());
+    int b=-1;
+    final ByteArrayOutputStream baos=new ByteArrayOutputStream();
+    boolean firstByte=true;
+    boolean octetCounting=false;
+    StringBuilder octetLenStr=new StringBuilder();
+    do {
+      b=bis.read();
+      if (firstByte && b >= '1' && b <= '9') {
+        octetCounting=true;
+      }
+      firstByte=false;
+      if (octetCounting) {
+        if (b != ' ') {
+          octetLenStr.append((char)b);
+        }
+ else {
+          int len=Integer.parseInt(octetLenStr.toString());
+          handleSyslogMessage(IOUtils.toByteArray(bis,len));
+          octetLenStr=new StringBuilder();
+          firstByte=true;
+          octetCounting=false;
+        }
+      }
+ else {
+switch (b) {
+case -1:
+case '\r':
+case '\n':
+          if (baos.size() > 0) {
+            handleSyslogMessage(baos.toByteArray());
+            baos.reset();
+            firstByte=true;
+          }
+        break;
+default :
+      baos.write(b);
+    break;
+}
+}
+}
+ while (b != -1);
+}
+ catch (IOException e) {
+LOGGER.warn("IOException occured",e);
+}
+ finally {
+IOUtils.closeQuietly(socket);
+sockets.remove(socket);
+}
+}

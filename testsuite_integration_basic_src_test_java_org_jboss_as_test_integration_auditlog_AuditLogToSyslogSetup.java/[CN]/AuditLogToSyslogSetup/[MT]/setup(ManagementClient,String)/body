@@ -1,0 +1,34 @@
+{
+  SyslogServer.shutdown();
+  final String host=Utils.getHost(managementClient);
+  SyslogServerConfigIF config=getSyslogConfig();
+  config.setUseStructuredData(true);
+  config.setHost(host);
+  config.setPort(SYSLOG_PORT);
+  config.addEventHandler(new BlockedSyslogServerEventHandler());
+  final String syslogProtocol=getSyslogProtocol();
+  server=SyslogServer.createInstance(syslogProtocol,config);
+  SyslogServer.getThreadedInstance(syslogProtocol);
+  ModelNode op;
+  final ModelNode compositeOp=new ModelNode();
+  compositeOp.get(OP).set(COMPOSITE);
+  compositeOp.get(OP_ADDR).setEmptyList();
+  ModelNode steps=compositeOp.get(STEPS);
+  op=Util.createAddOperation(AUDIT_SYSLOG_HANDLER_ADDR);
+  op.get(FORMATTER).set(JSON_FORMATTER);
+  op.get(SYSLOG_FORMAT).set("RFC5424");
+  steps.add(op);
+  final ModelNode auditlogSyslogProtocol=addAuditlogSyslogProtocol();
+  auditlogSyslogProtocol.get(PORT).set(SYSLOG_PORT);
+  auditlogSyslogProtocol.get(HOST).set(host);
+  steps.add(auditlogSyslogProtocol);
+  Utils.applyUpdate(compositeOp,managementClient.getControllerClient());
+  List<ModelNode> protocolSettings=addProtocolSettings();
+  if (protocolSettings != null) {
+    Utils.applyUpdates(protocolSettings,managementClient.getControllerClient());
+  }
+  op=Util.createAddOperation(AUDIT_LOG_LOGGER_SYSLOG_HANDLER_ADDR);
+  Utils.applyUpdate(op,managementClient.getControllerClient());
+  op=Util.getWriteAttributeOperation(AUDIT_LOG_LOGGER_ADDR,LOG_READ_ONLY,false);
+  Utils.applyUpdate(op,managementClient.getControllerClient());
+}
