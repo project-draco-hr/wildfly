@@ -1,0 +1,13 @@
+{
+  String subsystemXml="<subsystem xmlns=\"" + Namespace.CURRENT.getUriString() + "\">"+ "   <expose-resolved-model domain-name=\"${test.domain-name:non-standard}\" proper-property-format=\"${test.proper-property-format:true}\"/>"+ "   <expose-expression-model domain-name=\"jboss.as\"/>"+ "   <remoting-connector use-management-endpoint=\"${test.exp:false}\"/>"+ "   <audit-log enabled=\"${test:false}\" log-boot=\"true\" log-read-only=\"true\">"+ "      <handlers>"+ "          <handler name=\"test\"/>"+ "      </handlers>"+ "   </audit-log>"+ "</subsystem>";
+  KernelServicesBuilder builder=createKernelServicesBuilder(new ManagementAuditLogInitialization());
+  ModelVersion version_1_1_0=ModelVersion.create(1,1,0);
+  builder.createLegacyKernelServicesBuilder(null,controllerVersion,version_1_1_0).addMavenResourceURL("org.jboss.as:jboss-as-jmx:" + controllerVersion.getMavenGavVersion());
+  KernelServices mainServices=builder.build();
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  KernelServices legacyServices=mainServices.getLegacyServices(version_1_1_0);
+  Assert.assertNotNull(legacyServices);
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  PathAddress subsystemAddress=PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,JMXExtension.SUBSYSTEM_NAME));
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,version_1_1_0,builder.parseXml(subsystemXml),new FailedOperationTransformationConfig().addFailedAttribute(subsystemAddress.append(JmxAuditLoggerResourceDefinition.PATH_ELEMENT),new FailedOperationTransformationConfig.ChainedConfig(createChainedConfigList(new FailedOperationTransformationConfig.RejectExpressionsConfig(JmxAuditLoggerResourceDefinition.ENABLED),new ChangeEnabledFromTrueToFalseConfig(JmxAuditLoggerResourceDefinition.ENABLED)),JmxAuditLoggerResourceDefinition.ENABLED)));
+}
