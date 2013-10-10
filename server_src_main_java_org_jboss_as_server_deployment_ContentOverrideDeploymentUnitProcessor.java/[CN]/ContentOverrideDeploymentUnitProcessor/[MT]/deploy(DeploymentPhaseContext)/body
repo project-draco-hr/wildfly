@@ -1,9 +1,13 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
-  if (deploymentUnit.getParent() != null) {
-    return;
-  }
   final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  final Map<String,ResourceRoot> resourceRootMap=new HashMap<String,ResourceRoot>();
+  final AttachmentList<ResourceRoot> rootList=deploymentUnit.getAttachment(Attachments.RESOURCE_ROOTS);
+  if (rootList != null) {
+    for (    ResourceRoot root : rootList) {
+      resourceRootMap.put(root.getRoot().getPathNameRelativeTo(deploymentRoot.getRoot()),root);
+    }
+  }
   final boolean exploded=MountExplodedMarker.isMountExploded(deploymentUnit) && !ExplodedDeploymentMarker.isExplodedDeployment(deploymentUnit);
   final Set<String> paths=new HashSet<String>();
   for (  final DeploymentOverlayService deploymentOverlay : indexService.getOverrides(deploymentUnit.getName())) {
@@ -11,13 +15,32 @@
       try {
         if (!paths.contains(override.getPath())) {
           VirtualFile mountPoint=deploymentRoot.getRoot().getChild(override.getPath());
-          paths.add(override.getPath());
-          if (exploded) {
-            copyFile(override.getContentHash().getPhysicalFile(),mountPoint.getPhysicalFile());
+          if (resourceRootMap.containsKey(override.getPath())) {
+            ResourceRoot existingRoot=resourceRootMap.get(override.getPath());
+            close(existingRoot.getMountHandle());
+            if (rootList != null) {
+              rootList.remove(existingRoot);
+            }
+            Closeable handle=VFS.mountZip(override.getContentHash(),mountPoint,TempFileProviderService.provider());
+            deploymentUnit.addToAttachmentList(MOUNTED_FILES,handle);
+            ResourceRoot newRoot=new ResourceRoot(override.getContentHash().getName(),mountPoint,new MountHandle(handle));
+            for (            AttachmentKey<?> key : existingRoot.attachmentKeys()) {
+              newRoot.putAttachment((AttachmentKey<Object>)key,existingRoot.getAttachment(key));
+            }
+            for (            FilterSpecification filter : existingRoot.getExportFilters()) {
+              newRoot.getExportFilters().add(filter);
+            }
+            deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,newRoot);
           }
  else {
-            Closeable handle=VFS.mountReal(override.getContentHash().getPhysicalFile(),mountPoint);
-            deploymentUnit.addToAttachmentList(MOUNTED_FILES,handle);
+            paths.add(override.getPath());
+            if (exploded) {
+              copyFile(override.getContentHash().getPhysicalFile(),mountPoint.getPhysicalFile());
+            }
+ else {
+              Closeable handle=VFS.mountReal(override.getContentHash().getPhysicalFile(),mountPoint);
+              deploymentUnit.addToAttachmentList(MOUNTED_FILES,handle);
+            }
           }
         }
       }
