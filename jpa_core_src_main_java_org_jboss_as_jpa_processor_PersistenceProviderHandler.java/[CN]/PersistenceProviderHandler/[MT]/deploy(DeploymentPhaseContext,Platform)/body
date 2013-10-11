@@ -1,0 +1,46 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+  final ServicesAttachment servicesAttachment=deploymentUnit.getAttachment(Attachments.SERVICES);
+  if (module != null && servicesAttachment != null) {
+    final ModuleClassLoader deploymentModuleClassLoader=module.getClassLoader();
+    PersistenceProvider provider;
+    final List<String> providerNames=servicesAttachment.getServiceImplementations(PERSISTENCE_PROVIDER_CLASSNAME);
+    List<PersistenceProvider> providerList=new ArrayList<PersistenceProvider>();
+    for (    String providerName : providerNames) {
+      try {
+        final Class<? extends PersistenceProvider> providerClass=deploymentModuleClassLoader.loadClass(providerName).asSubclass(PersistenceProvider.class);
+        final Constructor<? extends PersistenceProvider> constructor=providerClass.getConstructor();
+        provider=constructor.newInstance();
+        providerList.add(provider);
+      }
+ catch (      Exception e) {
+        throw MESSAGES.cannotDeployApp(e,providerName);
+      }
+    }
+    if (providerList.size() > 0) {
+      final String adapterClass=deploymentUnit.getAttachment(JpaAttachments.ADAPTOR_CLASS_NAME);
+      PersistenceProviderAdaptor adaptor;
+      if (adapterClass != null) {
+        try {
+          adaptor=(PersistenceProviderAdaptor)deploymentModuleClassLoader.loadClass(adapterClass).newInstance();
+          adaptor.injectJtaManager(JtaManagerImpl.getInstance());
+          adaptor.injectPlatform(platform);
+          savePersistenceProviderInDeploymentUnit(deploymentUnit,new PersistenceProviderDeploymentHolder(providerList,adaptor));
+        }
+ catch (        InstantiationException e) {
+          throw MESSAGES.cannotCreateAdapter(e,adapterClass);
+        }
+catch (        IllegalAccessException e) {
+          throw MESSAGES.cannotCreateAdapter(e,adapterClass);
+        }
+catch (        ClassNotFoundException e) {
+          throw MESSAGES.cannotCreateAdapter(e,adapterClass);
+        }
+      }
+ else {
+        savePersistenceProviderInDeploymentUnit(deploymentUnit,new PersistenceProviderDeploymentHolder(providerList));
+      }
+    }
+  }
+}
