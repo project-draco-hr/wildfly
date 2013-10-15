@@ -1,0 +1,64 @@
+{
+  final ManagementClient managementClient=createManagementClient();
+  final ModelControllerClient client=managementClient.getControllerClient();
+  try {
+    ModelNode op=Operations.createAddOperation(CUSTOM_FORMATTER_ADDRESS);
+    op.get("class").set("java.util.logging.XMLFormatter");
+    op.get("module").set("org.jboss.logmanager");
+    executeOperation(client,op);
+    op=Operations.createAddOperation(HANDLER_ADDRESS);
+    final ModelNode file=op.get("file");
+    file.get("relative-to").set("jboss.server.log.dir");
+    file.get("path").set(FILE_NAME);
+    op.get("append").set(false);
+    op.get("autoflush").set(true);
+    op.get("named-formatter").set(CUSTOM_FORMATTER_NAME);
+    executeOperation(client,op);
+    op=Operations.createOperation("add-handler",ROOT_LOGGER_ADDRESS);
+    op.get(ModelDescriptionConstants.NAME).set(HANDLER_NAME);
+    executeOperation(client,op);
+    op=Operations.createOperation("resolve-path",HANDLER_ADDRESS);
+    ModelNode result=executeOperation(client,op);
+    final Path logFile=Paths.get(readResultAsString(result));
+    Assert.assertTrue("The log file was not created.",Files.exists(logFile));
+    doLog(url,"Test message: ",5);
+    try (BufferedReader reader=Files.newBufferedReader(logFile,Charset.forName("utf-8"))){
+      final Pattern pattern=Pattern.compile("^(<message>)+(Test message: \\d)+(</message>)$");
+      final List<String> messages=new ArrayList<>(5);
+      String line;
+      while ((line=reader.readLine()) != null) {
+        final String trimmedLine=line.trim();
+        final Matcher m=pattern.matcher(trimmedLine);
+        if (m.matches()) {
+          messages.add(m.group(2));
+        }
+      }
+      Assert.assertEquals(5,messages.size());
+      int count=0;
+      for (      String msg : messages) {
+        Assert.assertEquals("Test message: " + count++,msg);
+      }
+    }
+     op=Operations.createOperation("remove-handler",ROOT_LOGGER_ADDRESS);
+    op.get(ModelDescriptionConstants.NAME).set(HANDLER_NAME);
+    executeOperation(client,op);
+    op=Operations.createRemoveOperation(CUSTOM_FORMATTER_ADDRESS);
+    executeOperation(client,op);
+    op=Operations.createRemoveOperation(HANDLER_ADDRESS);
+    executeOperation(client,op);
+    op=Operations.createReadAttributeOperation(ROOT_LOGGER_ADDRESS,"handlers");
+    result=executeOperation(client,op);
+    final List<ModelNode> handlers=Operations.readResult(result).asList();
+    for (    ModelNode handler : handlers) {
+      Assert.assertNotEquals(CUSTOM_FORMATTER_NAME,handler.asString());
+    }
+    verifyRemoved(client,CUSTOM_FORMATTER_ADDRESS);
+    verifyRemoved(client,HANDLER_ADDRESS);
+    Files.delete(logFile);
+    Assert.assertFalse(Files.exists(logFile));
+  }
+  finally {
+    safeClose(managementClient);
+    safeClose(client);
+  }
+}

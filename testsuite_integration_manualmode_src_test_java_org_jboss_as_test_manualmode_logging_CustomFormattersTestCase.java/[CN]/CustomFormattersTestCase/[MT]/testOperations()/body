@@ -1,0 +1,29 @@
+{
+  final ManagementClient managementClient=createManagementClient();
+  final ModelControllerClient client=managementClient.getControllerClient();
+  try {
+    ModelNode op=Operations.createAddOperation(CUSTOM_FORMATTER_ADDRESS);
+    op.get("class").set("org.jboss.logmanager.formatters.PatternFormatter");
+    op.get("module").set("org.jboss.logmanager");
+    executeOperation(client,op);
+    final ModelNode properties=new ModelNode().setEmptyList();
+    properties.add("pattern","%s%E%n");
+    testWrite(client,CUSTOM_FORMATTER_ADDRESS,"properties",properties);
+    testUndefine(client,CUSTOM_FORMATTER_ADDRESS,"properties");
+    ModelNode result=testWrite(client,CUSTOM_FORMATTER_ADDRESS,"class","java.util.logging.XMLFormatter");
+    Assert.assertTrue(result.get("response-headers").get("operation-requires-reload").asBoolean());
+    testUndefine(client,CUSTOM_FORMATTER_ADDRESS,"class",true);
+    restart(managementClient);
+    result=testWrite(client,CUSTOM_FORMATTER_ADDRESS,"module","sun.jdk");
+    Assert.assertTrue(result.get("response-headers").get("operation-requires-reload").asBoolean());
+    testUndefine(client,CUSTOM_FORMATTER_ADDRESS,"module",true);
+    restart(managementClient);
+    op=Operations.createRemoveOperation(CUSTOM_FORMATTER_ADDRESS);
+    executeOperation(client,op);
+    verifyRemoved(client,CUSTOM_FORMATTER_ADDRESS);
+  }
+  finally {
+    safeClose(managementClient);
+    safeClose(client);
+  }
+}
