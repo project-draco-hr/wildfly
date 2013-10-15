@@ -1,0 +1,30 @@
+{
+  final RandomAccessFile raf=new RandomAccessFile(file,"rw");
+  try {
+    final FileChannel channel=raf.getChannel();
+    try {
+      long pos=channel.size() - ENDLEN;
+      if (!validateEndRecord(file,channel,pos,endSig)) {
+        pos=scanForEndSig(file,channel,searchPattern,badSkipBytes,endSig);
+      }
+      if (pos == -1) {
+        PatchLogger.ROOT_LOGGER.cannotInvalidateZip(file.getAbsolutePath());
+        return;
+      }
+      channel.position(pos);
+      final ByteBuffer buffer=ByteBuffer.allocate(4);
+      buffer.order(ByteOrder.LITTLE_ENDIAN);
+      buffer.putInt(newSig);
+      buffer.flip();
+      while (buffer.hasRemaining()) {
+        channel.write(buffer);
+      }
+    }
+  finally {
+      safeClose(channel);
+    }
+  }
+  finally {
+    safeClose(raf);
+  }
+}

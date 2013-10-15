@@ -1,0 +1,36 @@
+{
+  channel.position(0);
+  ByteBuffer bb=getByteBuffer(CHUNK_SIZE);
+  long end=channel.size();
+  while (channel.position() <= end) {
+    read(bb,channel);
+    int bufferPos=0;
+    while (bufferPos <= bb.limit() - SIG_PATTERN_LENGTH) {
+      int patternPos;
+      for (patternPos=SIG_PATTERN_LENGTH - 1; patternPos >= 0 && LOCSIG_PATTERN[patternPos] == bb.get(bufferPos + patternPos); --patternPos) {
+      }
+switch (patternPos) {
+case -1:
+{
+          long startLocRecord=channel.position() - bb.limit() + bufferPos;
+          long currentPos=channel.position();
+          if (validateLocalFileRecord(channel,startLocRecord,-1)) {
+            return startLocRecord;
+          }
+          channel.position(currentPos);
+          bufferPos+=4;
+          break;
+        }
+case 3:
+{
+        int idx=bb.get(bufferPos + patternPos) - Byte.MIN_VALUE;
+        bufferPos+=LOC_BAD_BYTE_SKIP[idx];
+        break;
+      }
+default :
+    bufferPos+=4;
+}
+}
+}
+return -1;
+}
