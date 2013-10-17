@@ -4,18 +4,25 @@
     return;
   }
   final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  final boolean exploded=MountExplodedMarker.isMountExploded(deploymentUnit) && !ExplodedDeploymentMarker.isExplodedDeployment(deploymentUnit);
   final Set<String> paths=new HashSet<String>();
   for (  final DeploymentOverlayService deploymentOverlay : indexService.getOverrides(deploymentUnit.getName())) {
     for (    final ContentService override : deploymentOverlay.getContentServices()) {
-      if (!paths.contains(override.getPath())) {
-        paths.add(override.getPath());
-        try {
-          Closeable handle=VFS.mountReal(override.getContentHash().getPhysicalFile(),deploymentRoot.getRoot().getChild(override.getPath()));
-          deploymentUnit.addToAttachmentList(MOUNTED_FILES,handle);
+      try {
+        if (!paths.contains(override.getPath())) {
+          VirtualFile mountPoint=deploymentRoot.getRoot().getChild(override.getPath());
+          paths.add(override.getPath());
+          if (exploded) {
+            copyFile(override.getContentHash().getPhysicalFile(),mountPoint.getPhysicalFile());
+          }
+ else {
+            Closeable handle=VFS.mountReal(override.getContentHash().getPhysicalFile(),mountPoint);
+            deploymentUnit.addToAttachmentList(MOUNTED_FILES,handle);
+          }
         }
- catch (        IOException e) {
-          throw ServerMessages.MESSAGES.deploymentOverlayFailed(e,deploymentOverlay.getName(),override.getPath());
-        }
+      }
+ catch (      IOException e) {
+        throw ServerMessages.MESSAGES.deploymentOverlayFailed(e,deploymentOverlay.getName(),override.getPath());
       }
     }
   }
