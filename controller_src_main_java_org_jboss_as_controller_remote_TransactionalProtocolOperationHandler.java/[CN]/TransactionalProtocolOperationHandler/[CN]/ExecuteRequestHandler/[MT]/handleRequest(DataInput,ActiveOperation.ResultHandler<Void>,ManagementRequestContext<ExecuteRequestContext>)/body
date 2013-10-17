@@ -4,15 +4,33 @@
   operation.readExternal(input);
   ProtocolUtils.expectHeader(input,ModelControllerProtocol.PARAM_INPUTSTREAMS_LENGTH);
   final int attachmentsLength=input.readInt();
-  PrivilegedAction<Void> action=new PrivilegedAction<Void>(){
+  final Subject subject;
+  final Boolean readSubject=channelAssociation.getAttachments().getAttachment(TransactionalProtocolClient.SEND_SUBJECT);
+  if (readSubject != null && readSubject) {
+    subject=readSubject(input);
+  }
+ else {
+    subject=null;
+  }
+  final PrivilegedAction<Void> action=new PrivilegedAction<Void>(){
     @Override public Void run(){
       doExecute(operation,attachmentsLength,context);
       return null;
     }
   }
 ;
-  context.getAttachment().setAction(action);
   final ExecuteRequestContext executeRequestContext=context.getAttachment();
   executeRequestContext.initialize(context);
-  channelAssociation.executeRequest(context.getAttachment().getOperationId(),new GetSubjectResponseHandler());
+  context.executeAsync(new AsyncTask<TransactionalProtocolOperationHandler.ExecuteRequestContext>(){
+    @Override public void execute(    final ManagementRequestContext<ExecuteRequestContext> context) throws Exception {
+      AccessController.doPrivileged(new PrivilegedAction<Void>(){
+        @Override public Void run(){
+          Subject.doAs(subject,action);
+          return null;
+        }
+      }
+);
+    }
+  }
+);
 }
