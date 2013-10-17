@@ -1,0 +1,22 @@
+{
+  String subsystemXml=readResource("subsystem.xml");
+  ModelVersion modelVersion=ModelVersion.create(1,1,0);
+  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT).setSubsystemXml(subsystemXml);
+  builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).configureReverseControllerCheck(AdditionalInitialization.MANAGEMENT,null,new OperationFixer(){
+    @Override public ModelNode fixOperation(    ModelNode operation){
+      String name=operation.get(ModelDescriptionConstants.OP).asString();
+      PathAddress addr=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR));
+      if (name.equals(ModelDescriptionConstants.ADD) && addr.size() == 1 && addr.getElement(0).equals(XTSExtension.SUBSYSTEM_PATH)) {
+        operation.get(ModelDescriptionConstants.HOST).set("default-host");
+        operation.get(XTSSubsystemDefinition.DEFAULT_CONTEXT_PROPAGATION.getName()).set(false);
+      }
+      return operation;
+    }
+  }
+).addMavenResourceURL("org.jboss.as:jboss-as-xts:" + controllerVersion.getMavenGavVersion());
+  KernelServices mainServices=builder.build();
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  checkSubsystemModelTransformation(mainServices,modelVersion);
+}
