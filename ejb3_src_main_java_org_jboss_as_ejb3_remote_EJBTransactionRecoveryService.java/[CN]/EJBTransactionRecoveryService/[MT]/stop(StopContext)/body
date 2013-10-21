@@ -1,5 +1,22 @@
 {
-  this.receiverContexts.clear();
-  recoveryManagerService.getValue().removeXAResourceRecovery(this);
-  logger.debug("Un-registered " + this + " from the transaction recovery manager");
+  ExecutorService executorService=executor.getValue();
+  Runnable r=new Runnable(){
+    @Override public void run(){
+synchronized (this) {
+        try {
+          EJBTransactionRecoveryService.this.receiverContexts.clear();
+          recoveryManagerService.getValue().removeXAResourceRecovery(EJBTransactionRecoveryService.this);
+          logger.debug("Un-registered " + this + " from the transaction recovery manager");
+        }
+  finally {
+          stopContext.complete();
+        }
+      }
+    }
+  }
+;
+synchronized (r) {
+    executorService.execute(r);
+    stopContext.asynchronous();
+  }
 }
