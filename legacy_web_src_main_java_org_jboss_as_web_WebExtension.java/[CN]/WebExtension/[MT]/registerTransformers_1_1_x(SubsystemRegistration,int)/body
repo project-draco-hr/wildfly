@@ -6,15 +6,7 @@
   subsystemRoot.addChildResource(STATIC_RESOURCES_PATH).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,WebStaticResources.STATIC_ATTRIBUTES);
   subsystemRoot.addChildResource(CONTAINER_PATH).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,WebContainerDefinition.CONTAINER_ATTRIBUTES);
   final ResourceTransformationDescriptionBuilder connectorBuilder=subsystemRoot.addChildResource(CONNECTOR_PATH);
-  connectorBuilder.getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,WebConnectorDefinition.CONNECTOR_ATTRIBUTES).addRejectCheck(new RejectAttributeChecker.DefaultRejectAttributeChecker(){
-    @Override protected boolean rejectAttribute(    PathAddress address,    String attributeName,    ModelNode attributeValue,    TransformationContext context){
-      return attributeValue.isDefined();
-    }
-    @Override public String getRejectionLogMessage(    Map<String,ModelNode> attributes){
-      return WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314();
-    }
-  }
-,Constants.VIRTUAL_SERVER).setValueConverter(new AttributeConverter.DefaultAttributeConverter(){
+  connectorBuilder.getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,WebConnectorDefinition.CONNECTOR_ATTRIBUTES).setValueConverter(new AttributeConverter.DefaultAttributeConverter(){
     @Override protected void convertAttribute(    PathAddress address,    String attributeName,    ModelNode attributeValue,    TransformationContext context){
       if (!attributeValue.isDefined()) {
         attributeValue.set(defaultRedirectPort);
@@ -36,6 +28,17 @@
     }
   }
 );
+  if (micro == 0) {
+    connectorBuilder.getAttributeBuilder().addRejectCheck(new RejectAttributeChecker.DefaultRejectAttributeChecker(){
+      @Override protected boolean rejectAttribute(      PathAddress address,      String attributeName,      ModelNode attributeValue,      TransformationContext context){
+        return attributeValue.isDefined();
+      }
+      @Override public String getRejectionLogMessage(      Map<String,ModelNode> attributes){
+        return WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314();
+      }
+    }
+,Constants.VIRTUAL_SERVER);
+  }
   connectorBuilder.addChildRedirection(SSL_PATH,SSL_ALIAS).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,WebSSLDefinition.SSL_ATTRIBUTES).addRejectCheck(RejectAttributeChecker.DEFINED,WebSSLDefinition.SSL_PROTOCOL).setDiscard(DiscardAttributeChecker.UNDEFINED,WebSSLDefinition.SSL_PROTOCOL).setValueConverter(new AttributeConverter.DefaultAttributeConverter(){
     @Override protected void convertAttribute(    PathAddress address,    String attributeName,    ModelNode attributeValue,    TransformationContext context){
       if (attributeValue.isDefined() && attributeValue.asString().equals(address.getLastElement().getKey())) {
@@ -46,9 +49,9 @@
 ,WebSSLDefinition.NAME).end();
   final ResourceTransformationDescriptionBuilder hostBuilder=subsystemRoot.addChildResource(HOST_PATH).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,WebVirtualHostDefinition.DEFAULT_WEB_MODULE).end();
   final ResourceTransformationDescriptionBuilder rewriteBuilder=hostBuilder.addChildResource(REWRITE_PATH).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,WebReWriteDefinition.FLAGS,WebReWriteDefinition.PATTERN,WebReWriteDefinition.SUBSTITUTION).end();
-  rewriteBuilder.addChildResource(REWRITECOND_PATH).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,WebReWriteConditionDefinition.ATTRIBUTES);
+  rewriteBuilder.addChildResource(REWRITECOND_PATH).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,WebReWriteConditionDefinition.ATTRIBUTES).addRejectCheck(RejectAttributeChecker.UNDEFINED,WebReWriteConditionDefinition.FLAGS);
   hostBuilder.addChildRedirection(SSO_PATH,SSO_ALIAS).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,WebSSODefinition.SSO_ATTRIBUTES).end();
   final ResourceTransformationDescriptionBuilder accessLogBuilder=hostBuilder.addChildRedirection(ACCESS_LOG_PATH,ACCESS_LOG_ALIAS).getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,WebAccessLogDefinition.ACCESS_LOG_ATTRIBUTES).end();
   accessLogBuilder.addChildRedirection(DIRECTORY_PATH,DIRECTORY_ALIAS);
-  TransformationDescription.Tools.register(subsystemRoot.build(),registration,ModelVersion.create(1,1,0));
+  TransformationDescription.Tools.register(subsystemRoot.build(),registration,ModelVersion.create(1,1,micro));
 }

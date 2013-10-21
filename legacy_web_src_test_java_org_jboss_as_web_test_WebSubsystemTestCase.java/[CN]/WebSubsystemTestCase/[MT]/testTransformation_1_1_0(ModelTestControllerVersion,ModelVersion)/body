@@ -1,15 +1,14 @@
 {
   String subsystemXml=readResource("subsystem-1.1.0.xml");
-  ModelVersion modelVersion=ModelVersion.create(1,1,0);
   KernelServicesBuilder builder=createKernelServicesBuilder(createAdditionalInitialization()).setSubsystemXml(subsystemXml);
   builder.createLegacyKernelServicesBuilder(createAdditionalInitialization(),controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-web:" + controllerVersion.getMavenGavVersion()).setExtensionClassName("org.jboss.as.web.WebExtension").configureReverseControllerCheck(createAdditionalInitialization(),null);
   KernelServices mainServices=builder.build();
   KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
   Assert.assertTrue(mainServices.isSuccessfulBoot());
   Assert.assertTrue(legacyServices.isSuccessfulBoot());
-  checkSubsystemModelTransformation(mainServices,modelVersion,AccessLogPrefixFixer.INSTANCE);
+  checkSubsystemModelTransformation(mainServices,modelVersion,AccessLogPrefixFixer_1_1_x.INSTANCE);
   ModelNode mainModel=mainServices.readWholeModel().get(SUBSYSTEM,SUBSYSTEM_NAME);
-  ModelNode legacyModel=AccessLogPrefixFixer.INSTANCE.fixModel(legacyServices.readWholeModel().get(SUBSYSTEM,SUBSYSTEM_NAME));
+  ModelNode legacyModel=AccessLogPrefixFixer_1_1_x.INSTANCE.fixModel(legacyServices.readWholeModel().get(SUBSYSTEM,SUBSYSTEM_NAME));
   ModelNode sslConfig=mainModel.get(Constants.CONNECTOR,"https",Constants.CONFIGURATION,Constants.SSL);
   Assert.assertTrue(sslConfig.isDefined());
   Assert.assertFalse(legacyModel.get(Constants.CONNECTOR,"https",Constants.CONFIGURATION,Constants.SSL).isDefined());
@@ -36,7 +35,12 @@
   connectorWriteVirtualServer.get(VALUE).add("vs1");
   mainServices.executeForResult(connectorWriteVirtualServer);
   ModelNode result=mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,connectorWriteVirtualServer));
-  Assert.assertTrue(result.get(FAILURE_DESCRIPTION).asString().endsWith(WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314()));
+  if (modelVersion.getMicro() == 0) {
+    Assert.assertTrue(result.get(FAILURE_DESCRIPTION).asString().endsWith(WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314()));
+  }
+ else {
+    checkOutcome(result);
+  }
   ModelNode connectorValues=mainServices.readWholeModel().get(SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,Constants.CONNECTOR,"http");
   Assert.assertTrue(connectorValues.hasDefined(VIRTUAL_SERVER));
   ModelNode connectorRemove=createOperation(REMOVE,SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,Constants.CONNECTOR,"http");
@@ -49,8 +53,13 @@
   checkOutcome(mainServices.executeOperation(connectorAdd));
   TransformedOperation transOp=mainServices.transformOperation(modelVersion,connectorAdd);
   result=mainServices.executeOperation(modelVersion,transOp);
-  Assert.assertEquals(FAILED,result.get(OUTCOME).asString());
-  Assert.assertTrue(result.get(FAILURE_DESCRIPTION).asString().endsWith(WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314()));
+  if (modelVersion.getMicro() == 0) {
+    Assert.assertEquals(FAILED,result.get(OUTCOME).asString());
+    Assert.assertTrue(result.get(FAILURE_DESCRIPTION).asString().endsWith(WebMessages.MESSAGES.transformationVersion_1_1_0_JBPAPP_9314()));
+  }
+ else {
+    checkOutcome(result);
+  }
   connectorAdd=createOperation(ADD,SUBSYSTEM,WebExtension.SUBSYSTEM_NAME,Constants.CONNECTOR,"as75871");
   for (  String key : connectorValues.keys()) {
     if (!key.equals(REDIRECT_PORT) && !key.equals(VIRTUAL_SERVER)) {

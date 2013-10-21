@@ -1,0 +1,14 @@
+{
+  ModelVersion modelVersion=ModelVersion.create(1,2,0);
+  KernelServicesBuilder builder=createKernelServicesBuilder(createAdditionalInitialization());
+  builder.createLegacyKernelServicesBuilder(createAdditionalInitialization(),controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-web:" + controllerVersion.getMavenGavVersion()).setExtensionClassName("org.jboss.as.web.WebExtension").configureReverseControllerCheck(createAdditionalInitialization(),null);
+  KernelServices mainServices=builder.build();
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  Assert.assertTrue("main services did not boot",mainServices.isSuccessfulBoot());
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  final PathAddress subsystem=PathAddress.EMPTY_ADDRESS.append("subsystem","web");
+  final PathAddress defaultHost=subsystem.append(PathElement.pathElement("virtual-server","default-host"));
+  List<ModelNode> xmlOps=builder.parseXmlResource("subsystem.xml");
+  FailedOperationTransformationConfig config=new FailedOperationTransformationConfig().addFailedAttribute(subsystem.append(PathElement.pathElement("connector","https"),PathElement.pathElement("configuration","ssl")),new FailedOperationTransformationConfig.NewAttributesConfig("ssl-protocol")).addFailedAttribute(defaultHost.append(PathElement.pathElement("rewrite","with-conditions"),PathElement.pathElement("condition","no-flags")),new SetMissingRewriteConditionFlagsConfig("flags"));
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,modelVersion,xmlOps,config);
+}
