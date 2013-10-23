@@ -16,7 +16,7 @@
     ServiceBuilder<PersistenceUnitService> builder=serviceTarget.addService(puServiceName,service);
     builder.addDependency(JPAServiceNames.getJPAServiceName());
     builder.addDependency(puServiceName.append(FIRST_PHASE),new CastingInjector<>(service.getPhaseOnePersistenceUnitServiceImplInjector(),PhaseOnePersistenceUnitServiceImpl.class));
-    boolean useDefaultDataSource=true;
+    boolean useDefaultDataSource=Configuration.allowDefaultDataSourceUse(pu);
     final String jtaDataSource=adjustJndi(pu.getJtaDataSourceName());
     final String nonJtaDataSource=adjustJndi(pu.getNonJtaDataSourceName());
     if (jtaDataSource != null && jtaDataSource.length() > 0) {
@@ -25,7 +25,7 @@
         useDefaultDataSource=false;
       }
  else {
-        builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(jtaDataSource),new CastingInjector<DataSource>(service.getJtaDataSourceInjector(),DataSource.class));
+        builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(jtaDataSource),new CastingInjector<>(service.getJtaDataSourceInjector(),DataSource.class));
         useDefaultDataSource=false;
       }
     }
@@ -35,17 +35,20 @@
         useDefaultDataSource=false;
       }
  else {
-        builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(nonJtaDataSource),new CastingInjector<DataSource>(service.getNonJtaDataSourceInjector(),DataSource.class));
+        builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(nonJtaDataSource),new CastingInjector<>(service.getNonJtaDataSourceInjector(),DataSource.class));
         useDefaultDataSource=false;
       }
     }
     if (useDefaultDataSource) {
-      String defaultJtaDataSource=adjustJndi(JPAService.getDefaultDataSourceName());
-      if ((defaultJtaDataSource == null || defaultJtaDataSource.isEmpty()) && eeModuleDescription != null) {
+      String defaultJtaDataSource=null;
+      if (eeModuleDescription != null) {
         defaultJtaDataSource=eeModuleDescription.getDefaultResourceJndiNames().getDataSource();
       }
-      if (defaultJtaDataSource != null && defaultJtaDataSource.length() > 0) {
-        builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(defaultJtaDataSource),new CastingInjector<DataSource>(service.getJtaDataSourceInjector(),DataSource.class));
+      if (defaultJtaDataSource == null || defaultJtaDataSource.isEmpty()) {
+        defaultJtaDataSource=adjustJndi(JPAService.getDefaultDataSourceName());
+      }
+      if (defaultJtaDataSource != null && !defaultJtaDataSource.isEmpty()) {
+        builder.addDependency(AbstractDataSourceService.SERVICE_NAME_BASE.append(defaultJtaDataSource),new CastingInjector<>(service.getJtaDataSourceInjector(),DataSource.class));
         JPA_LOGGER.tracef("%s is using the default data source '%s'",puServiceName,defaultJtaDataSource);
       }
     }
