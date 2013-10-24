@@ -1,0 +1,75 @@
+{
+  String host;
+  String contextRoot;
+  int port;
+  Socket socket=null;
+  BufferedReader in=null;
+  BufferedWriter out=null;
+  String response;
+  Matcher matcher=Pattern.compile("http://(.*):(\\d{1,5})/(.*)").matcher(contextPath.toString());
+  if (matcher.find()) {
+    host=matcher.group(1);
+    port=Integer.valueOf(matcher.group(2));
+    contextRoot=matcher.group(3);
+  }
+ else {
+    throw new AssertionError("Cannot parse the test archive URL");
+  }
+  try {
+    socket=new Socket(host,port);
+    out=new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+    out.write("GET /" + contextRoot + "TestUpgradeServlet HTTP/1.1"+ CRLF);
+    out.write("Host: " + host + ":"+ port+ CRLF);
+    out.write("Upgrade: foo" + CRLF);
+    out.write("Connection: Upgrade" + CRLF);
+    out.write(CRLF);
+    out.flush();
+    System.out.println("Upgrade requested");
+    in=new BufferedReader(new InputStreamReader(socket.getInputStream()));
+    String line=null;
+    while ((line=in.readLine()) != null) {
+      System.out.println(line);
+      if ("".equals(line)) {
+        break;
+      }
+    }
+    out.write("dummy request" + CRLF);
+    out.flush();
+    System.out.println("Dummy request sent");
+    StringBuilder buffer=new StringBuilder();
+    while (!(line=in.readLine()).equals("END")) {
+      System.out.println(line);
+      buffer.append(line);
+    }
+    response=buffer.toString();
+  }
+  finally {
+    if (out != null) {
+      try {
+        out.close();
+      }
+ catch (      Exception e) {
+        e.printStackTrace();
+      }
+    }
+    if (in != null) {
+      try {
+        in.close();
+      }
+ catch (      Exception e) {
+        e.printStackTrace();
+      }
+    }
+    if (socket != null) {
+      try {
+        socket.close();
+      }
+ catch (      Exception e) {
+        e.printStackTrace();
+      }
+    }
+  }
+  assertTrue(response.contains("isPostConstructCallbackInvoked: true"));
+  assertTrue(response.contains("isInterceptorInvoked: true"));
+  assertTrue(response.contains("isInjectionOk: true"));
+}
