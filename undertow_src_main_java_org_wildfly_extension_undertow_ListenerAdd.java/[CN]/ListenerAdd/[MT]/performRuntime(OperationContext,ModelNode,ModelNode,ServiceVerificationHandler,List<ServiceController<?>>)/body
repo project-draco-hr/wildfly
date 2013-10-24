@@ -1,0 +1,21 @@
+{
+  final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+  final PathAddress parent=address.subAddress(0,address.size() - 1);
+  String name=address.getLastElement().getValue();
+  String bindingRef=ListenerResourceDefinition.SOCKET_BINDING.resolveModelAttribute(context,model).asString();
+  String workerName=ListenerResourceDefinition.WORKER.resolveModelAttribute(context,model).asString();
+  String bufferPoolName=ListenerResourceDefinition.BUFFER_POOL.resolveModelAttribute(context,model).asString();
+  boolean enabled=ListenerResourceDefinition.ENABLED.resolveModelAttribute(context,model).asBoolean();
+  OptionMap options=OptionList.resolveOptions(context,model,ListenerResourceDefinition.OPTIONS);
+  String serverName=parent.getLastElement().getValue();
+  final ListenerService<? extends ListenerService> service=createService(name,serverName,context,model,options);
+  final ServiceBuilder<? extends ListenerService> serviceBuilder=context.getServiceTarget().addService(constructServiceName(name),service);
+  serviceBuilder.addDependency(IOServices.WORKER.append(workerName),XnioWorker.class,service.getWorker()).addDependency(SocketBinding.JBOSS_BINDING_NAME.append(bindingRef),SocketBinding.class,service.getBinding()).addDependency(IOServices.BUFFER_POOL.append(bufferPoolName),Pool.class,service.getBufferPool()).addDependency(UndertowService.SERVER.append(serverName),Server.class,service.getServerService());
+  configureAdditionalDependencies(context,serviceBuilder,model,service);
+  serviceBuilder.setInitialMode(enabled ? ServiceController.Mode.ACTIVE : ServiceController.Mode.NEVER);
+  serviceBuilder.addListener(verificationHandler);
+  final ServiceController<? extends ListenerService> serviceController=serviceBuilder.install();
+  if (newControllers != null) {
+    newControllers.add(serviceController);
+  }
+}
