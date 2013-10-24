@@ -1,0 +1,31 @@
+{
+  final ModelControllerClient client=domainMasterLifecycleUtil.getDomainClient();
+  final ModelNode patchOp=new ModelNode();
+  patchOp.get(OP).set("patch");
+  patchOp.get(OP_ADDR).set(PATCH_ADDR);
+  final String patchID="simple-domain-patch";
+  final File patch=createPatch(patchID);
+  final Operation op=OperationBuilder.create(patchOp).addFileAsAttachment(patch).build();
+  try {
+    final ModelNode result=client.execute(op);
+    validateResponse(result);
+  }
+  finally {
+    StreamUtils.safeClose(op);
+  }
+  restartSlave(client);
+  final ModelNode patchesOp=new ModelNode();
+  patchesOp.get(OP).set(READ_ATTRIBUTE_OPERATION);
+  patchesOp.get(OP_ADDR).set(PATCH_ADDR);
+  patchesOp.get(NAME).set("patches");
+  final ModelNode entry=new ModelNode().set(patchID);
+  Assert.assertTrue(executeForResult(client,patchesOp).asList().contains(entry));
+  final ModelNode rollback=new ModelNode();
+  rollback.get(OP).set("rollback");
+  rollback.get(OP_ADDR).set(PATCH_ADDR);
+  rollback.get("patch-id").set(patchID);
+  rollback.get("reset-configuration").set(false);
+  executeForResult(client,rollback);
+  restartSlave(client);
+  Assert.assertTrue(executeForResult(client,patchesOp).asList().isEmpty());
+}
