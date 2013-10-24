@@ -1,11 +1,23 @@
 {
-  EjbServices ejbServices=beanManager.getServices().get(EjbServices.class);
-  if (ejbServices instanceof ForwardingEjbServices) {
-    ejbServices=((ForwardingEjbServices)ejbServices).delegate();
+  if (ejbName != null) {
+    EjbServices ejbServices=manager.getServices().get(EjbServices.class);
+    if (ejbServices instanceof ForwardingEjbServices) {
+      ejbServices=((ForwardingEjbServices)ejbServices).delegate();
+    }
+    if (ejbServices instanceof WeldEjbServices) {
+      return ((WeldEjbServices)ejbServices).getBindings(ejbName);
+    }
   }
-  InterceptorBindings interceptorBindings=null;
-  if (ejbServices instanceof WeldEjbServices) {
-    interceptorBindings=((WeldEjbServices)ejbServices).getBindings(ejbName);
+ else {
+    SlimAnnotatedType<?> type=(SlimAnnotatedType<?>)manager.createAnnotatedType(componentClass);
+    if (!manager.getInterceptorModelRegistry().containsKey(type)) {
+      EnhancedAnnotatedType<?> enhancedType=manager.getServices().get(ClassTransformer.class).getEnhancedAnnotatedType(type);
+      InterceptionModelInitializer.of(manager,enhancedType,null).init();
+    }
+    InterceptionModel<ClassMetadata<?>> model=manager.getInterceptorModelRegistry().get(type);
+    if (model != null) {
+      return new InterceptorBindingsAdapter(manager.getInterceptorModelRegistry().get(type));
+    }
   }
-  return interceptorBindings;
+  return null;
 }
