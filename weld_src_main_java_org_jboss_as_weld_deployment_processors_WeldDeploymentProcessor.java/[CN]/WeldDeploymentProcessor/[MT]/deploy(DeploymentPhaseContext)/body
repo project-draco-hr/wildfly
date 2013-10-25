@@ -25,10 +25,6 @@
   final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
   final EEApplicationDescription eeApplicationDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_APPLICATION_DESCRIPTION);
   bdmsByIdentifier.put(module.getIdentifier(),rootBeanDeploymentModule);
-  for (  final BeanDeploymentModule additional : deploymentUnit.getAttachmentList(WeldAttachments.VISIBLE_ADDITIONAL_BEAN_DEPLOYMENT_MODULE)) {
-    additional.addBeanDeploymentModule(rootBeanDeploymentModule);
-    rootBeanDeploymentModule.addBeanDeploymentModule(additional);
-  }
   moduleSpecByIdentifier.put(module.getIdentifier(),moduleSpecification);
   beanDeploymentArchives.addAll(rootBeanDeploymentModule.getBeanDeploymentArchives());
   final List<DeploymentUnit> subDeployments=deploymentUnit.getAttachmentList(Attachments.SUB_DEPLOYMENTS);
@@ -47,7 +43,6 @@
       continue;
     }
     beanDeploymentArchives.addAll(bdm.getBeanDeploymentArchives());
-    List<BeanDeploymentModule> additionalModules=subDeployment.getAttachmentList(WeldAttachments.VISIBLE_ADDITIONAL_BEAN_DEPLOYMENT_MODULE);
     bdmsByIdentifier.put(subDeploymentModule.getIdentifier(),bdm);
     moduleSpecByIdentifier.put(subDeploymentModule.getIdentifier(),subDeploymentModuleSpec);
     final ResourceRoot subDeploymentRoot=subDeployment.getAttachment(Attachments.DEPLOYMENT_ROOT);
@@ -55,12 +50,6 @@
     bdm.addService(EjbInjectionServices.class,ejbInjectionServices);
     final ResourceInjectionServices resourceInjectionServices=new WeldResourceInjectionServices(deploymentUnit.getServiceRegistry(),eeModuleDescription);
     bdm.addService(ResourceInjectionServices.class,resourceInjectionServices);
-    for (    final BeanDeploymentModule additional : additionalModules) {
-      additional.addBeanDeploymentModule(bdm);
-      bdm.addBeanDeploymentModule(additional);
-      bdm.addService(EjbInjectionServices.class,ejbInjectionServices);
-      bdm.addService(ResourceInjectionServices.class,resourceInjectionServices);
-    }
   }
   for (  Map.Entry<ModuleIdentifier,BeanDeploymentModule> entry : bdmsByIdentifier.entrySet()) {
     final ModuleSpecification bdmSpec=moduleSpecByIdentifier.get(entry.getKey());
@@ -79,10 +68,10 @@
   final ResourceInjectionServices resourceInjectionServices=new WeldResourceInjectionServices(deploymentUnit.getServiceRegistry(),eeModuleDescription);
   rootBeanDeploymentModule.addService(EjbInjectionServices.class,ejbInjectionServices);
   rootBeanDeploymentModule.addService(ResourceInjectionServices.class,resourceInjectionServices);
-  for (  final BeanDeploymentModule additional : deploymentUnit.getAttachmentList(WeldAttachments.ADDITIONAL_BEAN_DEPLOYMENT_MODULES)) {
-    beanDeploymentArchives.addAll(additional.getBeanDeploymentArchives());
-    additional.addService(EjbInjectionServices.class,ejbInjectionServices);
-    additional.addService(ResourceInjectionServices.class,resourceInjectionServices);
+  for (  final BeanDeploymentArchiveImpl additional : deploymentUnit.getAttachmentList(WeldAttachments.ADDITIONAL_BEAN_DEPLOYMENT_MODULES)) {
+    beanDeploymentArchives.add(additional);
+    additional.getServices().add(EjbInjectionServices.class,ejbInjectionServices);
+    additional.getServices().add(ResourceInjectionServices.class,resourceInjectionServices);
   }
   final Collection<Metadata<Extension>> extensions=WeldPortableExtensions.getPortableExtensions(deploymentUnit).getExtensions();
   final WeldDeployment deployment=new WeldDeployment(beanDeploymentArchives,extensions,module,subDeploymentLoaders,deploymentUnit);
