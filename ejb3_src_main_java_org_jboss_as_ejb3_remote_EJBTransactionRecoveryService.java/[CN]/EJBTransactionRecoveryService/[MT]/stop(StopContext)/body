@@ -1,22 +1,25 @@
 {
-  ExecutorService executorService=executor.getValue();
-  Runnable r=new Runnable(){
+  final ExecutorService executorService=executor.getValue();
+  final Runnable task=new Runnable(){
     @Override public void run(){
-synchronized (this) {
-        try {
-          EJBTransactionRecoveryService.this.receiverContexts.clear();
-          recoveryManagerService.getValue().removeXAResourceRecovery(EJBTransactionRecoveryService.this);
-          logger.debug("Un-registered " + this + " from the transaction recovery manager");
-        }
+      try {
+        EJBTransactionRecoveryService.this.receiverContexts.clear();
+        recoveryManagerService.getValue().removeXAResourceRecovery(EJBTransactionRecoveryService.this);
+        logger.debug("Un-registered " + this + " from the transaction recovery manager");
+      }
   finally {
-          stopContext.complete();
-        }
+        stopContext.complete();
       }
     }
   }
 ;
-synchronized (r) {
-    executorService.execute(r);
+  try {
+    executorService.execute(task);
+  }
+ catch (  RejectedExecutionException e) {
+    task.run();
+  }
+ finally {
     stopContext.asynchronous();
   }
 }
