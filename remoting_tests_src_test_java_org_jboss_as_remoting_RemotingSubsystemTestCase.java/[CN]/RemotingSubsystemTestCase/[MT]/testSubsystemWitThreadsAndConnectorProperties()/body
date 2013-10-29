@@ -1,0 +1,27 @@
+{
+  final int port=12345;
+  KernelServices services=createKernelServicesBuilder(new AdditionalInitialization(){
+    @Override protected void setupController(    ControllerInitializer controllerInitializer){
+      controllerInitializer.addSocketBinding("test",port);
+    }
+    @Override protected void addExtraServices(    ServiceTarget target){
+      AbsolutePathService.addService(ServerEnvironment.CONTROLLER_TEMP_DIR,new File("target/temp" + System.currentTimeMillis()).getAbsolutePath(),target);
+    }
+  }
+).setSubsystemXmlResource("remoting-with-threads.xml").build();
+  ServiceController<?> endPointService=services.getContainer().getRequiredService(RemotingServices.SUBSYSTEM_ENDPOINT);
+  assertNotNull(endPointService);
+  ServiceName connectorServiceName=RemotingServices.serverServiceName("test-connector");
+  ServiceController<?> connectorService=services.getContainer().getRequiredService(connectorServiceName);
+  assertNotNull(connectorService);
+  ModelNode model=services.readWholeModel();
+  ModelNode subsystem=model.require(SUBSYSTEM).require(RemotingExtension.SUBSYSTEM_NAME);
+  assertEquals(1,subsystem.require(CommonAttributes.WORKER_READ_THREADS).asInt());
+  assertEquals(4,subsystem.require(CommonAttributes.WORKER_TASK_CORE_THREADS).asInt());
+  assertEquals(60,subsystem.require(CommonAttributes.WORKER_TASK_KEEPALIVE).asInt());
+  assertEquals(16384,subsystem.require(CommonAttributes.WORKER_TASK_LIMIT).asInt());
+  assertEquals(16,subsystem.require(CommonAttributes.WORKER_TASK_MAX_THREADS).asInt());
+  assertEquals(1,subsystem.require(CommonAttributes.WORKER_WRITE_THREADS).asInt());
+  ModelNode connector=subsystem.require(CommonAttributes.CONNECTOR).require("test-connector");
+  assertEquals(1,connector.require(CommonAttributes.PROPERTY).require("org.xnio.Options.WORKER_ACCEPT_THREADS").require(CommonAttributes.VALUE).asInt());
+}
