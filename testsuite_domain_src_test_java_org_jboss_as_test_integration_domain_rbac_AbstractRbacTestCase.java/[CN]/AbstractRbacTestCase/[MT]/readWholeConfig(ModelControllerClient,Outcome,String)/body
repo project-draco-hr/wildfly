@@ -1,0 +1,32 @@
+{
+  Outcome expectedOutcomeForReadConfigAsXml=expectedOutcome;
+  if (this instanceof AbstractServerGroupScopedRolesTestCase) {
+    expectedOutcomeForReadConfigAsXml=Outcome.UNAUTHORIZED;
+  }
+  ModelNode op=createOpNode(null,READ_CONFIG_AS_XML_OPERATION);
+  configureRoles(op,roles);
+  RbacUtil.executeOperation(client,op,expectedOutcomeForReadConfigAsXml);
+  ModelControllerClient domainClient=testSupport.getDomainMasterLifecycleUtil().getDomainClient();
+  op=createOpNode(null,READ_CHILDREN_NAMES_OPERATION);
+  op.get(CHILD_TYPE).set(PROFILE);
+  ModelNode profiles=RbacUtil.executeOperation(domainClient,op,Outcome.SUCCESS);
+  for (  ModelNode profile : profiles.get(RESULT).asList()) {
+    Outcome expectedOutcomeForProfile=expectedOutcome;
+    if (this instanceof AbstractServerGroupScopedRolesTestCase) {
+      expectedOutcomeForProfile="profile-a".equals(profile.asString()) ? expectedOutcome : Outcome.HIDDEN;
+    }
+    op=createOpNode("profile=" + profile.asString(),DESCRIBE);
+    configureRoles(op,roles);
+    ModelNode result=RbacUtil.executeOperation(client,op,expectedOutcomeForProfile);
+    assertEquals(expectedOutcomeForProfile == Outcome.SUCCESS,result.hasDefined(RESULT));
+    op=createOpNode("profile=" + profile.asString(),READ_CHILDREN_NAMES_OPERATION);
+    op.get(CHILD_TYPE).set(SUBSYSTEM);
+    ModelNode subsystems=RbacUtil.executeOperation(domainClient,op,Outcome.SUCCESS);
+    for (    ModelNode subsystem : subsystems.get(RESULT).asList()) {
+      op=createOpNode("profile=" + profile.asString() + "/subsystem="+ subsystem.asString(),DESCRIBE);
+      configureRoles(op,roles);
+      result=RbacUtil.executeOperation(client,op,expectedOutcomeForProfile);
+      assertEquals(expectedOutcomeForProfile == Outcome.SUCCESS,result.hasDefined(RESULT));
+    }
+  }
+}
