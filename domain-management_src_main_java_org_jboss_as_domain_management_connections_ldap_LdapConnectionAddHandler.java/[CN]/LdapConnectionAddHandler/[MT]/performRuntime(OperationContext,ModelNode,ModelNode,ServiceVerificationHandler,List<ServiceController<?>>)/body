@@ -1,15 +1,16 @@
 {
   PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
   final String name=address.getLastElement().getValue();
-  final ModelNode resolvedModel=createResolvedLdapConfiguration(context,model);
   final ServiceTarget serviceTarget=context.getServiceTarget();
-  final LdapConnectionManagerService connectionManagerService=new LdapConnectionManagerService(resolvedModel);
+  final LdapConnectionManagerService connectionManagerService=new LdapConnectionManagerService();
+  updateRuntime(context,model,connectionManagerService);
   ServiceBuilder<LdapConnectionManagerService> sb=serviceTarget.addService(LdapConnectionManagerService.ServiceUtil.createServiceName(name),connectionManagerService).setInitialMode(ServiceController.Mode.ON_DEMAND);
   if (verificationHandler != null) {
     sb.addListener(verificationHandler);
   }
-  if (resolvedModel.hasDefined(SECURITY_REALM)) {
-    SSLIdentity.ServiceUtil.addDependency(sb,connectionManagerService.getSSLIdentityInjector(),resolvedModel.require(SECURITY_REALM).asString(),false);
+  ModelNode securityRealm=SECURITY_REALM.resolveModelAttribute(context,model);
+  if (securityRealm.isDefined()) {
+    SSLIdentity.ServiceUtil.addDependency(sb,connectionManagerService.getSSLIdentityInjector(),securityRealm.asString(),false);
   }
   ServiceController<LdapConnectionManagerService> sc=sb.install();
   if (controllers != null) {
