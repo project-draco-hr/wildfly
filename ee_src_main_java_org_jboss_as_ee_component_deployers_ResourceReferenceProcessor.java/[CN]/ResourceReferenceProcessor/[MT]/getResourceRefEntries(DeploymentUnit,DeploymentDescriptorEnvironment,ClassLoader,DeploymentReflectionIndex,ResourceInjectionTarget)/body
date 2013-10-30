@@ -22,26 +22,31 @@
         throw MESSAGES.cannotLoad(e,resourceRef.getType());
       }
     }
-    LookupInjectionSource injectionSource=new LookupInjectionSource(name);
+    InjectionSource injectionSource=new LookupInjectionSource(name);
     classType=processInjectionTargets(resourceInjectionTarget,injectionSource,classLoader,deploymentReflectionIndex,resourceRef,classType);
-    final BindingConfiguration bindingConfiguration;
     if (!isEmpty(resourceRef.getLookupName())) {
-      bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(resourceRef.getLookupName()));
+      if (classType != null) {
+        injectionSource=InjectionUtils.getInjectionSource(resourceRef.getLookupName(),classType.getName());
+      }
+ else {
+        injectionSource=new LookupInjectionSource(resourceRef.getLookupName());
+      }
     }
  else     if (!isEmpty(resourceRef.getResUrl())) {
+      final String url=resourceRef.getResUrl();
       if (classType != null && classType.equals(URI.class)) {
         try {
-          bindingConfiguration=new BindingConfiguration(name,new FixedInjectionSource(new ManagedReferenceFactory(){
+          injectionSource=new FixedInjectionSource(new ManagedReferenceFactory(){
             @Override public ManagedReference getReference(){
               try {
-                return new ValueManagedReference(new ImmediateValue(new URI(resourceRef.getResUrl())));
+                return new ImmediateManagedReference(new URI(url));
               }
  catch (              URISyntaxException e) {
                 throw new RuntimeException(e);
               }
             }
           }
-,new URI(resourceRef.getResUrl())));
+,new URI(url));
         }
  catch (        URISyntaxException e) {
           throw MESSAGES.cannotParseResourceRefUri(e,resourceRef.getResUrl());
@@ -49,17 +54,17 @@
       }
  else {
         try {
-          bindingConfiguration=new BindingConfiguration(name,new FixedInjectionSource(new ManagedReferenceFactory(){
+          injectionSource=new FixedInjectionSource(new ManagedReferenceFactory(){
             @Override public ManagedReference getReference(){
               try {
-                return new ValueManagedReference(new ImmediateValue(new URL(resourceRef.getResUrl())));
+                return new ImmediateManagedReference(new URL(url));
               }
  catch (              MalformedURLException e) {
                 throw new RuntimeException(e);
               }
             }
           }
-,new URL(resourceRef.getResUrl())));
+,new URL(url));
         }
  catch (        MalformedURLException e) {
           throw MESSAGES.cannotParseResourceRefUri(e,resourceRef.getResUrl());
@@ -72,16 +77,15 @@
       }
       final String lookup=ResourceInjectionAnnotationParsingProcessor.FIXED_LOCATIONS.get(classType.getName());
       if (lookup != null) {
-        bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource(lookup));
+        injectionSource=new LookupInjectionSource(lookup);
       }
  else {
         final EEResourceReferenceProcessor resourceReferenceProcessor=registry.getResourceReferenceProcessor(classType.getName());
         if (resourceReferenceProcessor != null) {
-          InjectionSource valueSource=resourceReferenceProcessor.getResourceReferenceBindingSource();
-          bindingConfiguration=new BindingConfiguration(name,valueSource);
+          injectionSource=resourceReferenceProcessor.getResourceReferenceBindingSource();
         }
  else         if (!resourceRef.getResourceRefName().startsWith("java:")) {
-          bindingConfiguration=new BindingConfiguration(name,new LookupInjectionSource("java:jboss/resources/" + resourceRef.getResourceRefName()));
+          injectionSource=new LookupInjectionSource("java:jboss/resources/" + resourceRef.getResourceRefName());
         }
  else {
           ROOT_LOGGER.cannotResolve("resource-env-ref",name);
@@ -89,7 +93,7 @@
         }
       }
     }
-    bindings.add(bindingConfiguration);
+    bindings.add(new BindingConfiguration(name,injectionSource));
   }
   return bindings;
 }
