@@ -1,0 +1,76 @@
+{
+  if (alias != null) {
+    this.alias=alias;
+  }
+  if (keySize != 0) {
+    this.keySize=keySize;
+  }
+  if (keyStoreType == null) {
+    this.keyStoreType="JCEKS";
+  }
+ else {
+    if (!keyStoreType.equals("JCEKS") && !keyStoreType.equals("JKS")) {
+      throw new IllegalArgumentException("Wrong keyStoreType. Supported are only (JCEKS or JKS). Preferred is JCEKS.");
+    }
+    this.keyStoreType=keyStoreType;
+  }
+  if (keyStorePassword == null) {
+    this.keyStorePassword=DEFAULT_PASSWORD;
+  }
+ else   if (keyStorePassword.startsWith(PicketBoxSecurityVault.PASS_MASK_PREFIX)) {
+    throw new IllegalArgumentException("keyStorePassword cannot be a masked password, use plain text password, please");
+  }
+ else {
+    this.keyStorePassword=keyStorePassword;
+  }
+  try {
+    File keyStoreFile=new File(keyStore);
+    if (!keyStoreFile.exists()) {
+      if (!this.keyStoreType.equals("JCEKS")) {
+        throw new RuntimeException("keyStoreType has to be JCEKS when creating new key store");
+      }
+      KeyStore ks=KeyStoreUtil.createKeyStore(this.keyStoreType,this.keyStorePassword.toCharArray());
+      KeyGenerator keyGenerator=KeyGenerator.getInstance("AES");
+      keyGenerator.init(this.keySize);
+      SecretKey secretKey=keyGenerator.generateKey();
+      KeyStore.SecretKeyEntry skEntry=new KeyStore.SecretKeyEntry(secretKey);
+      KeyStore.PasswordProtection p=new KeyStore.PasswordProtection(this.keyStorePassword.toCharArray());
+      ks.setEntry(this.alias,skEntry,p);
+      ks.store(new FileOutputStream(keyStoreFile),this.keyStorePassword.toCharArray());
+    }
+    this.keyStore=keyStoreFile.getAbsolutePath();
+  }
+ catch (  Exception e) {
+    throw new RuntimeException("Problem creating keyStore: ",e);
+  }
+  File vaultDirectory=new File(encodedVaultFileDirectory);
+  if (!vaultDirectory.exists()) {
+    vaultDirectory.mkdirs();
+    this.encodedVaultFileDirectory=vaultDirectory.getAbsolutePath();
+  }
+ else   if (!vaultDirectory.isDirectory()) {
+    throw new RuntimeException("Vault encryption directory has to be directory, but " + vaultDirectory.getAbsolutePath() + " is not.");
+  }
+  this.encodedVaultFileDirectory=vaultDirectory.getAbsolutePath();
+  if (salt == null) {
+    String tmp=Long.toHexString(System.currentTimeMillis()) + Long.toHexString(System.currentTimeMillis()) + Long.toHexString(System.currentTimeMillis())+ Long.toHexString(System.currentTimeMillis());
+    this.salt=tmp.substring(0,8);
+  }
+ else {
+    this.salt=salt;
+  }
+  if (iterationCount <= 0) {
+    this.iterationCount=new Random().nextInt(90) + 1;
+  }
+  if (LOGGER.isDebugEnabled()) {
+    logCreatedVault();
+  }
+  try {
+    this.vaultSession=new VaultSession(this.keyStore,this.keyStorePassword,this.encodedVaultFileDirectory,this.salt,this.iterationCount);
+    this.vaultSession.startVaultSession(this.alias);
+  }
+ catch (  Exception e) {
+    throw new RuntimeException("Problem creating VaultSession: ",e);
+  }
+  LOGGER.debug("VaultSession started");
+}

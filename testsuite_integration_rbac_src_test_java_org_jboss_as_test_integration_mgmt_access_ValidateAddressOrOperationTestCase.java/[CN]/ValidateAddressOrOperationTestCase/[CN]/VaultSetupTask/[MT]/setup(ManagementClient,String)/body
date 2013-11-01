@@ -1,0 +1,35 @@
+{
+  ModelNode op;
+  vaultHandler=new VaultHandler(RESOURCE_LOCATION);
+  String vaultBlock="ds_ExampleDS";
+  String attributeName="password";
+  String vaultPasswordString=vaultHandler.addSecuredAttribute(vaultBlock,attributeName,"sa".toCharArray());
+  String vaultPassword="${" + vaultPasswordString + "}";
+  op=new ModelNode();
+  op.get(OP).set(ADD);
+  op.get(OP_ADDR).add(CORE_SERVICE,VAULT);
+  ModelNode vaultOption=op.get(VAULT_OPTIONS);
+  vaultOption.get("KEYSTORE_URL").set(vaultHandler.getKeyStore());
+  vaultOption.get("KEYSTORE_PASSWORD").set(vaultHandler.getMaskedKeyStorePassword());
+  vaultOption.get("KEYSTORE_ALIAS").set(vaultHandler.getAlias());
+  vaultOption.get("SALT").set(vaultHandler.getSalt());
+  vaultOption.get("ITERATION_COUNT").set(vaultHandler.getIterationCountAsString());
+  vaultOption.get("ENC_FILE_DIR").set(vaultHandler.getEncodedVaultFileDirectory());
+  managementClient.getControllerClient().execute(new OperationBuilder(op).build());
+  ModelNode address=new ModelNode();
+  address.add(SUBSYSTEM,"datasources");
+  address.add("data-source",DATA_SOURCE);
+  address.protect();
+  op=new ModelNode();
+  op.get(OP).set(ADD);
+  op.get(OP_ADDR).set(address);
+  op.get("jndi-name").set("java:jboss/datasources/" + DATA_SOURCE);
+  op.get("use-java-context").set("true");
+  op.get("driver-name").set("h2");
+  op.get("pool-name").set("masked");
+  op.get("connection-url").set("jdbc:h2:mem:masked;DB_CLOSE_DELAY=-1");
+  op.get("user-name").set("sa");
+  op.get("password").set(vaultPassword);
+  op.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  managementClient.getControllerClient().execute(new OperationBuilder(op).build());
+}
