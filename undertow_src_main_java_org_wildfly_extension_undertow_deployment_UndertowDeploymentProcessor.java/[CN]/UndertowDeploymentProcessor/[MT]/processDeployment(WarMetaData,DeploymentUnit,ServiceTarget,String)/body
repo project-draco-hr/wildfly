@@ -89,6 +89,18 @@
   final UndertowDeploymentService service=new UndertowDeploymentService(injectionContainer,!isWebappBundle);
   final ServiceBuilder<UndertowDeploymentService> builder=serviceTarget.addService(deploymentServiceName,service).addDependencies(dependentComponents).addDependency(UndertowService.SERVLET_CONTAINER.append(defaultContainer),ServletContainerService.class,service.getContainer()).addDependency(hostServiceName,Host.class,service.getHost()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES)).addDependency(deploymentInfoServiceName,DeploymentInfo.class,service.getDeploymentInfoInjectedValue());
   deploymentUnit.addToAttachmentList(Attachments.DEPLOYMENT_COMPLETE_SERVICES,deploymentServiceName);
+  AbstractSecurityDeployer<WarMetaData> deployer=new WarJACCDeployer();
+  JaccService<WarMetaData> jaccService=deployer.deploy(deploymentUnit);
+  if (jaccService != null) {
+    final ServiceName jaccServiceName=deploymentUnit.getServiceName().append(JaccService.SERVICE_NAME);
+    ServiceBuilder<?> jaccBuilder=serviceTarget.addService(jaccServiceName,jaccService);
+    if (deploymentUnit.getParent() != null) {
+      final DeploymentUnit parentDU=deploymentUnit.getParent();
+      jaccBuilder.addDependency(parentDU.getServiceName().append(JaccService.SERVICE_NAME),PolicyConfiguration.class,jaccService.getParentPolicyInjector());
+    }
+    jaccBuilder.addDependency(deploymentServiceName);
+    jaccBuilder.setInitialMode(Mode.PASSIVE).install();
+  }
   if (isWebappBundle) {
     UndertowDeploymentService.ContextActivatorImpl activator=new UndertowDeploymentService.ContextActivatorImpl(builder.install());
     deploymentUnit.putAttachment(ContextActivator.ATTACHMENT_KEY,activator);

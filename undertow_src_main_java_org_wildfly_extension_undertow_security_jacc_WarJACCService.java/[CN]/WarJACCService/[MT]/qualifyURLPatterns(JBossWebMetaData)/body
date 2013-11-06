@@ -1,0 +1,68 @@
+{
+  ArrayList<PatternInfo> prefixList=new ArrayList<PatternInfo>();
+  ArrayList<PatternInfo> extensionList=new ArrayList<PatternInfo>();
+  ArrayList<PatternInfo> exactList=new ArrayList<PatternInfo>();
+  HashMap<String,PatternInfo> patternMap=new HashMap<String,PatternInfo>();
+  PatternInfo defaultInfo=null;
+  List<SecurityConstraintMetaData> constraints=metaData.getSecurityConstraints();
+  if (constraints != null) {
+    for (    SecurityConstraintMetaData constraint : constraints) {
+      WebResourceCollectionsMetaData resourceCollectionsMetaData=constraint.getResourceCollections();
+      if (resourceCollectionsMetaData != null) {
+        for (        WebResourceCollectionMetaData resourceCollectionMetaData : resourceCollectionsMetaData) {
+          List<String> urlPatterns=resourceCollectionMetaData.getUrlPatterns();
+          for (          String url : urlPatterns) {
+            int type=getPatternType(url);
+            PatternInfo info=patternMap.get(url);
+            if (info == null) {
+              info=new PatternInfo(url,type);
+              patternMap.put(url,info);
+switch (type) {
+case PREFIX:
+                prefixList.add(info);
+              break;
+case EXTENSION:
+            extensionList.add(info);
+          break;
+case EXACT:
+        exactList.add(info);
+      break;
+case DEFAULT:
+    defaultInfo=info;
+  break;
+}
+}
+}
+}
+}
+}
+}
+for (int i=0; i < prefixList.size(); i++) {
+PatternInfo info=prefixList.get(i);
+for (int j=0; j < prefixList.size(); j++) {
+if (i == j) continue;
+PatternInfo other=prefixList.get(j);
+if (info.matches(other)) info.addQualifier(other);
+}
+for (PatternInfo other : exactList) {
+if (info.matches(other)) info.addQualifier(other);
+}
+}
+for (PatternInfo info : extensionList) {
+for (PatternInfo other : prefixList) {
+info.addQualifier(other);
+}
+for (PatternInfo other : exactList) {
+if (info.isExtensionFor(other)) info.addQualifier(other);
+}
+}
+if (defaultInfo == null) {
+defaultInfo=new PatternInfo("/",DEFAULT);
+patternMap.put("/",defaultInfo);
+}
+for (PatternInfo info : patternMap.values()) {
+if (info == defaultInfo) continue;
+defaultInfo.addQualifier(info);
+}
+return patternMap;
+}
