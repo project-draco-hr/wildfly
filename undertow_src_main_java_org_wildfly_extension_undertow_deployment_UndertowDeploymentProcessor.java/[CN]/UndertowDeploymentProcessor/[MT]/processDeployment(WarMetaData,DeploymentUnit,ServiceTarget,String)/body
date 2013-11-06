@@ -36,7 +36,8 @@
     metaDataSecurityDomain=metaDataSecurityDomain.trim();
   }
   String securityDomain=metaDataSecurityDomain == null ? SecurityConstants.DEFAULT_APPLICATION_POLICY : SecurityUtil.unprefixSecurityDomain(metaDataSecurityDomain);
-  final ServiceName deploymentServiceName=UndertowService.deploymentServiceName(hostName,pathName);
+  String serverInstanceName=metaData.getServerInstanceName() == null ? defaultServer : metaData.getServerInstanceName();
+  final ServiceName deploymentServiceName=UndertowService.deploymentServiceName(serverInstanceName,hostName,pathName);
   final Set<ServiceName> additionalDependencies=new HashSet<>();
   for (  final SetupAction setupAction : setupActions) {
     Set<ServiceName> dependencies=setupAction.dependencies();
@@ -44,7 +45,7 @@
       additionalDependencies.addAll(dependencies);
     }
   }
-  final ServiceName hostServiceName=UndertowService.virtualHostName(defaultServer,hostName);
+  final ServiceName hostServiceName=UndertowService.virtualHostName(serverInstanceName,hostName);
   TldsMetaData tldsMetaData=deploymentUnit.getAttachment(TldsMetaData.ATTACHMENT_KEY);
   UndertowDeploymentInfoService undertowDeploymentInfoService=UndertowDeploymentInfoService.builder().setAttributes(deploymentUnit.getAttachment(ServletContextAttribute.ATTACHMENT_KEY)).setContextPath(pathName).setDeploymentName(deploymentUnit.getName()).setDeploymentRoot(deploymentRoot).setMergedMetaData(warMetaData.getMergedJBossWebMetaData()).setModule(module).setScisMetaData(scisMetaData).setSecurityContextId(securityContextId).setSecurityDomain(securityDomain).setSharedTlds(tldsMetaData == null ? Collections.<TldMetaData>emptyList() : tldsMetaData.getSharedTlds(deploymentUnit)).setTldsMetaData(tldsMetaData).setSetupActions(setupActions).setOverlays(warMetaData.getOverlays()).setExpressionFactoryWrappers(deploymentUnit.getAttachmentList(ExpressionFactoryWrapper.ATTACHMENT_KEY)).setPredicatedHandlers(deploymentUnit.getAttachment(UndertowHandlersDeploymentProcessor.PREDICATED_HANDLERS)).setExplodedDeployment(ExplodedDeploymentMarker.isExplodedDeployment(deploymentUnit)).createUndertowDeploymentInfoService();
   final ServiceName deploymentInfoServiceName=deploymentServiceName.append(UndertowDeploymentInfoService.SERVICE_NAME);
@@ -99,5 +100,6 @@
   final ModelNode node=deploymentUnit.getDeploymentSubsystemModel(UndertowExtension.SUBSYSTEM_NAME);
   node.get(DeploymentDefinition.CONTEXT_ROOT.getName()).set("".equals(pathName) ? "/" : pathName);
   node.get(DeploymentDefinition.VIRTUAL_HOST.getName()).set(hostName);
+  node.get(DeploymentDefinition.SERVER.getName()).set(serverInstanceName);
   processManagement(deploymentUnit,metaData);
 }
