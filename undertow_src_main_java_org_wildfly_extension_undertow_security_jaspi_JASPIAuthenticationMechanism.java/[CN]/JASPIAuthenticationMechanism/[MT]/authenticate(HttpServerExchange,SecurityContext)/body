@@ -1,0 +1,24 @@
+{
+  final ServletRequestContext requestContext=exchange.getAttachment(ServletRequestContext.ATTACHMENT_KEY);
+  final JASPIServerAuthenticationManager sam=createJASPIAuthenticationManager();
+  final GenericMessageInfo messageInfo=createMessageInfo(exchange,securityContext);
+  final String applicationIdentifier=buildApplicationIdentifier(requestContext);
+  final JASPICallbackHandler cbh=new JASPICallbackHandler();
+  ROOT_LOGGER.debugf("validateRequest for layer [%s] and applicationContextIdentifier [%s]",JASPI_HTTP_SERVLET_LAYER,applicationIdentifier);
+  if (sam.isValid(messageInfo,new Subject(),JASPI_HTTP_SERVLET_LAYER,applicationIdentifier,cbh)) {
+    Account account=securityContext.getAuthenticatedAccount();
+    if (account == null) {
+      ROOT_LOGGER.debug("Creating account with credentials from JASPI callbackhandler.");
+      account=createAccount(cbh);
+      securityContext.authenticationComplete(account,MECHANISM_NAME);
+    }
+ else {
+      ROOT_LOGGER.debug("Account already setup from JASPI modules.");
+    }
+    if (account == null) {
+      securityContext.authenticationFailed("JASPI authentication failed.",MECHANISM_NAME);
+    }
+  }
+  secureResponse(exchange,securityContext,sam,messageInfo,cbh);
+  return securityContext.getAuthenticatedAccount() != null ? AuthenticationMechanismOutcome.AUTHENTICATED : AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+}
