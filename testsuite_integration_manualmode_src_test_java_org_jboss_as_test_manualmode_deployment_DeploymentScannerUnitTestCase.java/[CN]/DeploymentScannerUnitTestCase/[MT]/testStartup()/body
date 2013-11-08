@@ -1,0 +1,42 @@
+{
+  container.start(CONTAINER);
+  try {
+    client=TestSuiteEnvironment.getModelControllerClient();
+    try {
+      final File deploymentOne=new File(deployDir,"deployment-one.jar");
+      final File deploymentTwo=new File(deployDir,"deployment-two.jar");
+      createDeployment(deploymentOne,"org.jboss.modules");
+      createDeployment(deploymentTwo,"non.existing.dependency");
+      addDeploymentScanner();
+      try {
+        while (!exists(DEPLOYMENT_ONE)) {
+          Thread.sleep(200);
+        }
+        Assert.assertTrue(exists(DEPLOYMENT_ONE));
+        Assert.assertEquals("OK",deploymentState(DEPLOYMENT_ONE));
+        Assert.assertTrue(exists(DEPLOYMENT_TWO));
+        Assert.assertEquals("FAILED",deploymentState(DEPLOYMENT_TWO));
+        final File oneDeployed=new File(deployDir,"deployment-one.jar.deployed");
+        final File twoFailed=new File(deployDir,"deployment-two.jar.failed");
+        container.stop(CONTAINER);
+        container.start(CONTAINER);
+        while (!isRunning()) {
+          Thread.sleep(200);
+        }
+        Assert.assertTrue(oneDeployed.exists());
+        Assert.assertTrue(twoFailed.exists());
+        Assert.assertTrue(exists(DEPLOYMENT_ONE));
+        Assert.assertEquals("OK",deploymentState(DEPLOYMENT_ONE));
+      }
+  finally {
+        removeDeploymentScanner();
+      }
+    }
+  finally {
+      StreamUtils.safeClose(client);
+    }
+  }
+  finally {
+    container.stop(CONTAINER);
+  }
+}
