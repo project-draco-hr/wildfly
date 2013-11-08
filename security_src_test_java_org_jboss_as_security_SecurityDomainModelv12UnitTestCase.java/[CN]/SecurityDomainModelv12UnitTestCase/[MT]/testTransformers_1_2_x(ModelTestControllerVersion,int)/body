@@ -1,11 +1,18 @@
 {
   ModelVersion modelVersion=ModelVersion.create(1,2,micro);
-  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT);
+  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT).setSubsystemXmlResource("transformers.xml");
   builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-security:" + controllerVersion.getMavenGavVersion()).dontPersistXml();
   KernelServices mainServices=builder.build();
   Assert.assertTrue(mainServices.isSuccessfulBoot());
   Assert.assertTrue(mainServices.getLegacyServices(modelVersion).isSuccessfulBoot());
-  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,modelVersion,builder.parseXml(readResource("transformers.xml")),new FailedOperationTransformationConfig());
+  checkSubsystemModelTransformation(mainServices,modelVersion,new ModelFixer(){
+    @Override public ModelNode fixModel(    ModelNode modelNode){
+      ModelNode node=modelNode.get("security-domain","other","acl","classic").get("login-module");
+      modelNode.get("security-domain","other","acl","classic","acl-modules").add(node.get("AclThingy"));
+      return modelNode;
+    }
+  }
+);
   ModelNode composite=Util.createEmptyOperation("composite",null);
   ModelNode steps=composite.get(STEPS);
   PathAddress secDomAddr=getSecurityDomainAddress("modules");
@@ -18,5 +25,4 @@
   steps.add(getSecurityDomainComponentAdd(secDomAddr.append(PathElement.pathElement(Constants.MAPPING,Constants.CLASSIC)),Constants.MAPPING_MODULES));
   ModelTestUtils.checkOutcome(mainServices.executeOperation(composite));
   ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,composite)));
-  checkSubsystemModelTransformation(mainServices,modelVersion);
 }
