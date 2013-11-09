@@ -3,24 +3,57 @@
   final String moduleName=resolutionContext.getModuleName();
   final String componentName=resolutionContext.getComponentName();
   final boolean compUsesModule=resolutionContext.isCompUsesModule();
-  final String lookupName;
-  if (!this.lookupName.contains("java:")) {
+  final String scheme=org.jboss.as.naming.InitialContext.getURLScheme(lookupName);
+  if (scheme == null) {
     if (componentName != null && !compUsesModule) {
-      lookupName="java:comp/env/" + this.lookupName;
+      ContextNames.bindInfoFor(applicationName,moduleName,componentName,"java:comp/env/" + lookupName).setupLookupInjection(serviceBuilder,injector,phaseContext.getDeploymentUnit(),optional);
     }
  else     if (compUsesModule) {
-      lookupName="java:module/env/" + this.lookupName;
+      ContextNames.bindInfoFor(applicationName,moduleName,componentName,"java:module/env/" + lookupName).setupLookupInjection(serviceBuilder,injector,phaseContext.getDeploymentUnit(),optional);
     }
  else {
-      lookupName="java:jboss/env" + this.lookupName;
+      ContextNames.bindInfoFor(applicationName,moduleName,componentName,"java:jboss/env/" + lookupName).setupLookupInjection(serviceBuilder,injector,phaseContext.getDeploymentUnit(),optional);
     }
   }
- else   if (this.lookupName.startsWith("java:comp/") && compUsesModule) {
-    lookupName="java:module/" + this.lookupName.substring(10);
-  }
  else {
-    lookupName=this.lookupName;
+    if (scheme.equals("java")) {
+      if (compUsesModule && lookupName.startsWith("java:comp/")) {
+        ContextNames.bindInfoFor(applicationName,moduleName,componentName,"java:module/" + lookupName.substring(10)).setupLookupInjection(serviceBuilder,injector,phaseContext.getDeploymentUnit(),optional);
+      }
+ else {
+        ContextNames.bindInfoFor(applicationName,moduleName,componentName,lookupName).setupLookupInjection(serviceBuilder,injector,phaseContext.getDeploymentUnit(),optional);
+      }
+    }
+ else {
+      final ManagedReferenceFactory managedReferenceFactory;
+      if (URL_SCHEMES.contains(scheme)) {
+        managedReferenceFactory=new ManagedReferenceFactory(){
+          @Override public ManagedReference getReference(){
+            try {
+              return new ImmediateManagedReference(new URL(lookupName));
+            }
+ catch (            MalformedURLException e) {
+              throw new RuntimeException(e);
+            }
+          }
+        }
+;
+      }
+ else {
+        managedReferenceFactory=new ManagedReferenceFactory(){
+          @Override public ManagedReference getReference(){
+            try {
+              return new ImmediateManagedReference(new InitialContext().lookup(lookupName));
+            }
+ catch (            NamingException e) {
+              EeLogger.ROOT_LOGGER.tracef(e,"failed to lookup %s",lookupName);
+              return null;
+            }
+          }
+        }
+;
+      }
+      injector.inject(managedReferenceFactory);
+    }
   }
-  final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(applicationName,moduleName,componentName,lookupName);
-  bindInfo.setupLookupInjection(serviceBuilder,injector,phaseContext.getDeploymentUnit());
 }

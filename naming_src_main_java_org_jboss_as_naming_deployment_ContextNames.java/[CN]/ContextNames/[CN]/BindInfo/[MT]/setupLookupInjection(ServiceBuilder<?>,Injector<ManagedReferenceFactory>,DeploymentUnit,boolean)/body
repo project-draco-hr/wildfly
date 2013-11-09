@@ -2,7 +2,8 @@
   final ExternalContexts externalContexts=deploymentUnit.getAttachment(Attachments.EXTERNAL_CONTEXTS);
   final ServiceName parentExternalContextServiceName=externalContexts != null ? externalContexts.getParentExternalContext(getBinderServiceName()) : null;
   final ServiceName dependencyServiceName=parentExternalContextServiceName == null ? getBinderServiceName() : parentExternalContextServiceName;
-  serviceBuilder.addDependency(dependencyServiceName);
+  final ServiceBuilder.DependencyType dependencyType=optional ? ServiceBuilder.DependencyType.OPTIONAL : ServiceBuilder.DependencyType.REQUIRED;
+  serviceBuilder.addDependency(dependencyType,dependencyServiceName);
   final Injector<NamingStore> lookupInjector=new Injector<NamingStore>(){
     @Override public void uninject(){
       targetInjector.uninject();
@@ -11,14 +12,18 @@
       final NamingContext storeBaseContext=new NamingContext(value,null);
       final ManagedReferenceFactory factory=new ManagedReferenceFactory(){
         @Override public ManagedReference getReference(){
-          Object bindValue=null;
           try {
-            bindValue=storeBaseContext.lookup(getBindName());
+            return new ImmediateManagedReference(storeBaseContext.lookup(getBindName()));
           }
  catch (          NamingException e) {
-            throw MESSAGES.resourceLookupForInjectionFailed(getAbsoluteJndiName(),e);
+            if (!optional) {
+              throw MESSAGES.resourceLookupForInjectionFailed(getAbsoluteJndiName(),e);
+            }
+ else {
+              NamingLogger.ROOT_LOGGER.tracef(e,"failed to lookup %s",getAbsoluteJndiName());
+            }
           }
-          return new ImmediateManagedReference(bindValue);
+          return null;
         }
       }
 ;
