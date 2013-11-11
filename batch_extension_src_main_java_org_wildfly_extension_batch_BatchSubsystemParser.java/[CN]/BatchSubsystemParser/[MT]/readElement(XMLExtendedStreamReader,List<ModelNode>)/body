@@ -1,15 +1,21 @@
 {
   final PathAddress subsystemAddress=PathAddress.pathAddress(BatchSubsystemDefinition.SUBSYSTEM_PATH);
-  list.add(Util.createAddOperation(subsystemAddress));
+  final ModelNode subsystemAddOp=Util.createAddOperation(subsystemAddress);
+  list.add(subsystemAddOp);
+  final ModelNode jdbcAddOp=Util.createAddOperation(subsystemAddress.append(JobRepositoryDefinition.JDBC.getPathElement()));
+  list.add(jdbcAddOp);
+  final Set<Element> requiredElements=EnumSet.of(Element.JOB_REPOSITORY,Element.THREAD_POOL);
   while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
     final Namespace namespace=Namespace.forUri(reader.getNamespaceURI());
     if (namespace == Namespace.BATCH_1_0) {
       final String localName=reader.getLocalName();
       final Element element=Element.forName(localName);
       if (element == Element.JOB_REPOSITORY) {
-        parseJobRepository(reader,subsystemAddress,list);
+        requiredElements.remove(Element.JOB_REPOSITORY);
+        parseJobRepository(reader,subsystemAddOp,jdbcAddOp);
       }
  else       if (element == Element.THREAD_POOL) {
+        requiredElements.remove(Element.THREAD_POOL);
         threadsParser.parseUnboundedQueueThreadPool(reader,namespace.getUriString(),org.jboss.as.threads.Namespace.THREADS_1_1,subsystemAddress.toModelNode(),list,BatchConstants.THREAD_POOL,BatchConstants.THREAD_POOL_NAME);
       }
  else       if (element == Element.THREAD_FACTORY) {
@@ -22,6 +28,9 @@
  else {
       throw ParseUtils.unexpectedElement(reader);
     }
+  }
+  if (!requiredElements.isEmpty()) {
+    throw ParseUtils.missingRequired(reader,requiredElements);
   }
   ParseUtils.requireNoContent(reader);
 }
