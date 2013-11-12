@@ -1,0 +1,30 @@
+{
+  super.performRemove(context,operation,model);
+  if (hostControllerInfo != null) {
+    final String serverGroup=PathAddress.pathAddress(operation.require(OP_ADDR)).getLastElement().getValue();
+    final ModelNode validate=new ModelNode();
+    validate.get(OP).set("validate");
+    validate.get(OP_ADDR).add(HOST,hostControllerInfo.getLocalHostName());
+    context.addStep(validate,new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        final Resource host=context.readResource(PathAddress.EMPTY_ADDRESS,false);
+        final Set<Resource.ResourceEntry> entries=host.getChildren(SERVER_CONFIG);
+        final Set<String> foundServer=new HashSet<String>();
+        if (entries != null && !entries.isEmpty()) {
+          for (          final Resource.ResourceEntry entry : entries) {
+            final Resource server=context.readResource(PathAddress.pathAddress(entry.getPathElement()),false);
+            final String group=server.getModel().require(GROUP).asString();
+            if (group.equals(serverGroup)) {
+              foundServer.add(entry.getName());
+            }
+          }
+        }
+        if (!foundServer.isEmpty()) {
+          throw DomainControllerMessages.MESSAGES.cannotRemoveUsedServerGroup(serverGroup,foundServer);
+        }
+        context.stepCompleted();
+      }
+    }
+,OperationContext.Stage.VERIFY);
+  }
+}
