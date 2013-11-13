@@ -1,0 +1,41 @@
+{
+  final KernelServices kernelServices=boot(getSubsystemXml("/minimal-subsystem.xml"));
+  final ModelNode address=createAddress(BatchSubsystemDefinition.THREAD_POOL_PATH);
+  final ModelNode removeOp=SubsystemOperations.createRemoveOperation(address);
+  executeOperation(kernelServices,removeOp);
+  String marshalledXml=kernelServices.getPersistedSubsystemXml();
+  try {
+    boot(marshalledXml);
+    Assert.fail("Should be missing <thread-pool/>");
+  }
+ catch (  XMLStreamException ignore) {
+  }
+  final ModelNode addOp=SubsystemOperations.createAddOperation(address);
+  addOp.get("max-threads").set(10);
+  final ModelNode keepAlive=addOp.get("keepalive-time");
+  keepAlive.get("time").set(100L);
+  keepAlive.get("unit").set(TimeUnit.MILLISECONDS.toString());
+  executeOperation(kernelServices,addOp);
+  marshalledXml=kernelServices.getPersistedSubsystemXml();
+  try {
+    final KernelServices k=boot(marshalledXml);
+    Assert.assertTrue(k.isSuccessfulBoot());
+  }
+ catch (  XMLStreamException e) {
+    final StringWriter writer=new StringWriter();
+    e.printStackTrace(new PrintWriter(writer));
+    Assert.fail("Failed to parse XML; " + writer.toString());
+  }
+  final Operation compositeOp=CompositeOperationBuilder.create().addStep(removeOp).addStep(addOp).build();
+  executeOperation(kernelServices,compositeOp);
+  marshalledXml=kernelServices.getPersistedSubsystemXml();
+  try {
+    final KernelServices k=boot(marshalledXml);
+    Assert.assertTrue(k.isSuccessfulBoot());
+  }
+ catch (  XMLStreamException e) {
+    final StringWriter writer=new StringWriter();
+    e.printStackTrace(new PrintWriter(writer));
+    Assert.fail("Failed to parse XML; " + writer.toString());
+  }
+}
