@@ -1,0 +1,46 @@
+{
+  String name=address.getLastElement().getValue();
+  final String jndiName=getJndiName(fullModel,context);
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  final MailSessionConfig config=from(context,fullModel);
+  final MailSessionService service=new MailSessionService(config);
+  final ServiceName serviceName=MAIL_SESSION_SERVICE_NAME.append(name);
+  final ServiceBuilder<?> mailSessionBuilder=serviceTarget.addService(serviceName,service);
+  addOutboundSocketDependency(service,mailSessionBuilder,config.getImapServer());
+  addOutboundSocketDependency(service,mailSessionBuilder,config.getPop3Server());
+  addOutboundSocketDependency(service,mailSessionBuilder,config.getSmtpServer());
+  for (  CustomServerConfig server : config.getCustomServers()) {
+    if (server.getOutgoingSocketBinding() != null) {
+      addOutboundSocketDependency(service,mailSessionBuilder,server);
+    }
+  }
+  final ManagedReferenceFactory valueManagedReferenceFactory=new MailSessionManagedReferenceFactory(service);
+  final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndiName);
+  final BinderService binderService=new BinderService(bindInfo.getBindName());
+  final ServiceBuilder<?> binderBuilder=serviceTarget.addService(bindInfo.getBinderServiceName(),binderService).addInjection(binderService.getManagedObjectInjector(),valueManagedReferenceFactory).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addListener(new AbstractServiceListener<Object>(){
+    public void transition(    final ServiceController<? extends Object> controller,    final ServiceController.Transition transition){
+switch (transition) {
+case STARTING_to_UP:
+{
+          MailLogger.ROOT_LOGGER.boundMailSession(jndiName);
+          break;
+        }
+case START_REQUESTED_to_DOWN:
+{
+        MailLogger.ROOT_LOGGER.unboundMailSession(jndiName);
+        break;
+      }
+case REMOVING_to_REMOVED:
+{
+      MailLogger.ROOT_LOGGER.removedMailSession(jndiName);
+      break;
+    }
+}
+}
+}
+);
+mailSessionBuilder.setInitialMode(ServiceController.Mode.ACTIVE).addListener(verificationHandler);
+binderBuilder.setInitialMode(ServiceController.Mode.ACTIVE).addListener(verificationHandler);
+controllers.add(mailSessionBuilder.install());
+controllers.add(binderBuilder.install());
+}
