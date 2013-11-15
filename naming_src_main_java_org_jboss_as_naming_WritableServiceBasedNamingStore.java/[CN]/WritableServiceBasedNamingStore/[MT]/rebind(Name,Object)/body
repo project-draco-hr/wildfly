@@ -1,10 +1,18 @@
 {
-  final ServiceName deploymentUnitServiceName=requireOwner();
+  final Object owner=requireOwner();
   final ServiceName bindName=buildServiceName(name);
-  try {
-    unbind(name,bindName);
+  final ServiceController<?> controller=getServiceRegistry().getService(bindName);
+  if (controller == null) {
+    bind(name,object,owner,bindName);
   }
- catch (  NamingException ignore) {
+ else {
+    final BinderService binderService=(BinderService)controller.getService();
+    if (owner instanceof ServiceName) {
+      final ServiceName deploymentUnitServiceName=(ServiceName)owner;
+      binderService.acquire();
+      final RuntimeBindReleaseService.References duBindingReferences=(RuntimeBindReleaseService.References)controller.getServiceContainer().getService(JndiNamingDependencyProcessor.serviceName(deploymentUnitServiceName)).getValue();
+      duBindingReferences.add(binderService);
+    }
+    binderService.getManagedObjectInjector().setValue(new ImmediateValue(new ImmediateManagedReferenceFactory(object)));
   }
-  bind(name,bindName,object,deploymentUnitServiceName);
 }

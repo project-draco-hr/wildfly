@@ -1,5 +1,20 @@
 {
   requireOwner();
   final ServiceName bindName=buildServiceName(name);
-  unbind(name,bindName);
+  final ServiceController<?> controller=getServiceRegistry().getService(bindName);
+  if (controller == null) {
+    throw MESSAGES.cannotResolveService(bindName);
+  }
+  controller.setMode(ServiceController.Mode.REMOVE);
+  final StabilityMonitor monitor=new StabilityMonitor();
+  monitor.addController(controller);
+  try {
+    monitor.awaitStability();
+  }
+ catch (  Exception e) {
+    throw namingException("Failed to unbind [" + bindName + "]",e);
+  }
+ finally {
+    monitor.removeController(controller);
+  }
 }

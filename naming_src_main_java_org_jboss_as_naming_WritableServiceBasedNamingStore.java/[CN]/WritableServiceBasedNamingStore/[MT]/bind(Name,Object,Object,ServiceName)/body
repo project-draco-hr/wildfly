@@ -1,0 +1,35 @@
+{
+  ServiceTarget serviceTarget=this.serviceTarget;
+  ServiceName deploymentUnitServiceName=null;
+  if (owner instanceof ServiceName) {
+    deploymentUnitServiceName=(ServiceName)owner;
+  }
+ else {
+    serviceTarget=(ServiceTarget)owner;
+  }
+  try {
+    final BinderService binderService=new BinderService(name.toString(),null,deploymentUnitServiceName != null);
+    final ServiceBuilder<?> builder=serviceTarget.addService(bindName,binderService).addDependency(getServiceNameBase(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).addInjection(binderService.getManagedObjectInjector(),new ImmediateManagedReferenceFactory(object)).setInitialMode(ServiceController.Mode.ACTIVE);
+    final ServiceController<?> binderServiceController=builder.install();
+    final StabilityMonitor monitor=new StabilityMonitor();
+    monitor.addController(binderServiceController);
+    try {
+      monitor.awaitStability();
+    }
+  finally {
+      monitor.removeController(binderServiceController);
+    }
+    final Exception startException=binderServiceController.getStartException();
+    if (startException != null) {
+      throw startException;
+    }
+    if (deploymentUnitServiceName != null) {
+      binderService.acquire();
+      final RuntimeBindReleaseService.References duBindingReferences=(RuntimeBindReleaseService.References)binderServiceController.getServiceContainer().getService(JndiNamingDependencyProcessor.serviceName(deploymentUnitServiceName)).getValue();
+      duBindingReferences.add(binderService);
+    }
+  }
+ catch (  Exception e) {
+    throw namingException("Failed to bind [" + object + "] at location ["+ bindName+ "]",e);
+  }
+}
