@@ -23,20 +23,25 @@
   File serverDir=serverDirProp == null ? new File(environment.getDomainServersDir(),serverName) : new File(serverDirProp);
   final String logDir=addPathProperty(command,"log",ServerEnvironment.SERVER_LOG_DIR,bootTimeProperties,directoryGrouping,environment.getDomainLogDir(),serverDir);
   addPathProperty(command,"tmp",ServerEnvironment.SERVER_TEMP_DIR,bootTimeProperties,directoryGrouping,environment.getDomainTempDir(),serverDir);
-  addPathProperty(command,"data",ServerEnvironment.SERVER_DATA_DIR,bootTimeProperties,directoryGrouping,environment.getDomainDataDir(),serverDir);
-  final File loggingConfig=new File(getAbsolutePath(environment.getDomainServersDir(),serverName,"data","logging.properties"));
+  final String dataDir=addPathProperty(command,"data",ServerEnvironment.SERVER_DATA_DIR,bootTimeProperties,directoryGrouping,environment.getDomainDataDir(),serverDir);
+  final File loggingConfig=new File(dataDir,"logging.properties");
   final String path;
   if (loggingConfig.exists()) {
     path="file:" + loggingConfig.getAbsolutePath();
   }
  else {
     command.add("-Dorg.jboss.boot.log.file=" + getAbsolutePath(new File(logDir),"server.log"));
-    final String fileName=WildFlySecurityManager.getPropertyPrivileged("logging.configuration",null);
-    if (fileName == null) {
-      path="file:" + getAbsolutePath(environment.getDomainConfigurationDir(),"default-server-logging.properties");
+    final String domainConfigFile="file:" + getAbsolutePath(environment.getDomainConfigurationDir(),"logging.properties");
+    final String systemPropConfigFile=WildFlySecurityManager.getPropertyPrivileged("logging.configuration",null);
+    final File defaultConfigFile=getAbsoluteFile(environment.getDomainConfigurationDir(),"default-server-logging.properties");
+    if (domainConfigFile.equals(systemPropConfigFile) && defaultConfigFile.exists()) {
+      path="file:" + defaultConfigFile.getAbsolutePath();
+    }
+ else     if (systemPropConfigFile != null) {
+      path=systemPropConfigFile;
     }
  else {
-      path=fileName;
+      path=domainConfigFile;
     }
   }
   command.add(String.format("-Dlogging.configuration=%s",path));
