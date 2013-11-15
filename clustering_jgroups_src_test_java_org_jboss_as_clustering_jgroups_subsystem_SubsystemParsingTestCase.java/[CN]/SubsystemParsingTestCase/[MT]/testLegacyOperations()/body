@@ -1,0 +1,33 @@
+{
+  List<ModelNode> ops=new LinkedList<ModelNode>();
+  PathAddress subsystemAddress=PathAddress.EMPTY_ADDRESS.append(SUBSYSTEM,getMainSubsystemName());
+  PathAddress udpAddress=subsystemAddress.append("stack","udp");
+  PathAddress tcpAddress=subsystemAddress.append("stack","tcp");
+  ModelNode op=Util.createAddOperation(subsystemAddress);
+  op.get("default-stack").set("udp");
+  ops.add(op);
+  op=Util.createAddOperation(udpAddress);
+  ModelNode transport=new ModelNode();
+  transport.get("type").set("UDP");
+  transport.get("socket-binding").set("jgroups-udp");
+  ModelNode protocols=new ModelNode();
+  String[] protocolList={"PING","MERGE3","FD_SOCK","FD","VERIFY_SUSPECT","BARRIER","pbcast.NAKACK2","UNICAST2","pbcast.STABLE","pbcast.GMS","UFC","MFC","FRAG2","RSVP"};
+  for (int i=0; i < protocolList.length; i++) {
+    ModelNode protocol=new ModelNode();
+    protocol.get(ModelKeys.TYPE).set(protocolList[i]);
+    protocol.get("socket-binding").set("jgroups-udp");
+    System.out.println("adding protocol = " + protocol.toString());
+    protocols.add(protocol);
+  }
+  op.get("transport").set(transport);
+  op.get("protocols").set(protocols);
+  ops.add(op);
+  ops.add(Util.getWriteAttributeOperation(udpAddress.append("protocol","FD_SOCK"),"socket-binding",new ModelNode("jgroups-udp-fd")));
+  KernelServices servicesA=createKernelServicesBuilder(createAdditionalInitialization()).setBootOperations(ops).build();
+  Assert.assertTrue("Subsystem boot failed!",servicesA.isSuccessfulBoot());
+  final ModelNode modelA=servicesA.readWholeModel();
+  validateModel(modelA);
+  ModelNode protos=modelA.get(SUBSYSTEM,getMainSubsystemName(),"stack","udp","protocols");
+  Assert.assertEquals("we should get back same number of protocols that we send",14,protos.asList().size());
+  servicesA.shutdown();
+}
