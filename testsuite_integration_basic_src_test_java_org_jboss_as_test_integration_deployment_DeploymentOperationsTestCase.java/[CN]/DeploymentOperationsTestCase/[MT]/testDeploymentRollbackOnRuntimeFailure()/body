@@ -6,7 +6,10 @@
   final ModelNode composite=new ModelNode();
   composite.get(OP).set(COMPOSITE);
   composite.get(OPERATION_HEADERS).get(ROLLBACK_ON_RUNTIME_FAILURE).set(false);
-  final ModelNode steps=composite.get(STEPS).setEmptyList();
+  final ModelNode nested=composite.get(STEPS).setEmptyList().add();
+  nested.get(OP).set(COMPOSITE);
+  nested.get(OP_ADDR).setEmptyList();
+  final ModelNode steps=nested.get(STEPS).setEmptyList();
   final ModelNode deployOne=steps.add();
   deployOne.get(OP).set(ADD);
   deployOne.get(OP_ADDR).set(DEPLOYMENT_ONE.toModelNode());
@@ -20,7 +23,9 @@
   final Operation operation=OperationBuilder.create(composite,true).addFileAsAttachment(deploymentOne).addFileAsAttachment(deploymentTwo).build();
   final ModelControllerClient client=getModelControllerClient();
   try {
-    final ModelNode result=client.execute(operation);
+    final ModelNode overallResult=client.execute(operation);
+    Assert.assertTrue(overallResult.asString(),SUCCESS.equals(overallResult.get(OUTCOME).asString()));
+    final ModelNode result=overallResult.get(RESULT,"step-1");
     Assert.assertTrue(result.asString(),SUCCESS.equals(result.get(OUTCOME).asString()));
     final ModelNode step1=result.get(RESULT,"step-1");
     Assert.assertEquals(SUCCESS,step1.get(OUTCOME).asString());
