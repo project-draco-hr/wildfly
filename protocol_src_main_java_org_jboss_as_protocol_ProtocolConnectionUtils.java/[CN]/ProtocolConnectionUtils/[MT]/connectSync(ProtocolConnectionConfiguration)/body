@@ -1,31 +1,18 @@
 {
-  final CallbackHandler handler=configuration.getCallbackHandler();
-  final CallbackHandler actualHandler=handler != null ? handler : new AnonymousCallbackHandler();
-  final WrapperCallbackHandler wrapperHandler=new WrapperCallbackHandler(actualHandler);
-  final IoFuture<Connection> future=connect(wrapperHandler,configuration);
   long timeoutMillis=configuration.getConnectionTimeout();
-  IoFuture.Status status=future.await(timeoutMillis,TimeUnit.MILLISECONDS);
-  while (status == IoFuture.Status.WAITING) {
-    if (wrapperHandler.isInCall()) {
-      status=future.await(timeoutMillis,TimeUnit.MILLISECONDS);
-    }
- else {
-      long lastInteraction=wrapperHandler.getCallFinished();
-      if (lastInteraction > 0) {
-        long now=System.currentTimeMillis();
-        long timeSinceLast=now - lastInteraction;
-        if (timeSinceLast < timeoutMillis) {
-          status=future.await(timeoutMillis - timeSinceLast,TimeUnit.MILLISECONDS);
-        }
- else {
-          status=null;
-        }
-      }
- else {
-        status=null;
-      }
-    }
+  CallbackHandler handler=configuration.getCallbackHandler();
+  final CallbackHandler actualHandler;
+  ProtocolTimeoutHandler timeoutHandler=configuration.getTimeoutHandler();
+  if (timeoutHandler == null) {
+    GeneralTimeoutHandler defaultTimeoutHandler=new GeneralTimeoutHandler();
+    actualHandler=handler != null ? new WrapperCallbackHandler(defaultTimeoutHandler,handler) : new AnonymousCallbackHandler();
+    timeoutHandler=defaultTimeoutHandler;
   }
+ else {
+    actualHandler=handler != null ? handler : new AnonymousCallbackHandler();
+  }
+  final IoFuture<Connection> future=connect(actualHandler,configuration);
+  IoFuture.Status status=timeoutHandler.await(future,timeoutMillis);
   if (status == IoFuture.Status.DONE) {
     return future.get();
   }
