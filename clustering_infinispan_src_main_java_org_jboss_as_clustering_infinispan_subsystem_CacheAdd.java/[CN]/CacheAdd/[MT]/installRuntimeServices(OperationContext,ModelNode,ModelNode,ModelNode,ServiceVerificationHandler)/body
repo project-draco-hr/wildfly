@@ -4,23 +4,25 @@
   String cacheName=cacheAddress.getLastElement().getValue();
   String containerName=containerAddress.getLastElement().getValue();
   ModelNode resolvedValue=null;
-  final String jndiName=((resolvedValue=CacheResourceDefinition.JNDI_NAME.resolveModelAttribute(context,cacheModel)).isDefined()) ? resolvedValue.asString() : null;
-  final ServiceController.Mode initialMode=StartMode.valueOf(CacheResourceDefinition.START.resolveModelAttribute(context,cacheModel).asString()).getMode();
-  final ModuleIdentifier moduleId=(resolvedValue=CacheResourceDefinition.MODULE.resolveModelAttribute(context,cacheModel)).isDefined() ? ModuleIdentifier.fromString(resolvedValue.asString()) : null;
+  String jndiName=(resolvedValue=CacheResourceDefinition.JNDI_NAME.resolveModelAttribute(context,cacheModel)).isDefined() ? resolvedValue.asString() : null;
+  ServiceController.Mode initialMode=StartMode.valueOf(CacheResourceDefinition.START.resolveModelAttribute(context,cacheModel).asString()).getMode();
+  String module=(resolvedValue=CacheResourceDefinition.MODULE.resolveModelAttribute(context,cacheModel)).isDefined() ? resolvedValue.asString() : (Indexing.valueOf(CacheResourceDefinition.INDEXING.resolveModelAttribute(context,cacheModel).asString()).isEnabled() ? QUERY_MODULE : null);
+  ModuleIdentifier moduleId=(module != null) ? ModuleIdentifier.fromString(module) : null;
   List<Dependency<?>> dependencies=new LinkedList<>();
   ConfigurationBuilder builder=new ConfigurationBuilder().read(getDefaultConfiguration(this.mode));
-  processModelNode(context,containerName,cacheModel,builder,dependencies);
+  CacheConfigurationDependencies cacheConfigurationDependencies=new CacheConfigurationDependencies();
+  CacheDependencies cacheDependencies=new CacheDependencies();
+  processModelNode(context,containerName,cacheModel,builder,cacheConfigurationDependencies,cacheDependencies,dependencies);
   String defaultCacheName=CacheContainerResourceDefinition.DEFAULT_CACHE.resolveModelAttribute(context,containerModel).asString();
   boolean defaultCache=cacheName.equals(defaultCacheName);
   ServiceTarget target=context.getServiceTarget();
-  Configuration config=builder.build();
   Collection<ServiceController<?>> controllers=new ArrayList<>(3);
-  controllers.add(this.installCacheConfigurationService(target,containerName,cacheName,defaultCache,moduleId,builder,config,dependencies,verificationHandler));
+  controllers.add(this.installCacheConfigurationService(target,containerName,cacheName,defaultCache,moduleId,builder,cacheConfigurationDependencies,dependencies,verificationHandler));
   log.debugf("Cache configuration service for %s installed for container %s",cacheName,containerName);
-  controllers.add(this.installCacheService(target,containerName,cacheName,defaultCache,initialMode,config,verificationHandler));
+  controllers.add(this.installCacheService(target,containerName,cacheName,defaultCache,initialMode,cacheDependencies,verificationHandler));
   controllers.add(this.installJndiService(target,containerName,cacheName,defaultCache,jndiName,verificationHandler));
   log.debugf("Cache service for cache %s installed for container %s",cacheName,containerName);
-  if (config.clustering().cacheMode().isClustered()) {
+  if (this.mode.isClustered()) {
     for (    CacheServiceProvider provider : ServiceLoader.load(CacheServiceProvider.class,CacheServiceProvider.class.getClassLoader())) {
       log.debugf("Installing %s for cache %s/%s",provider.getClass().getSimpleName(),containerName,cacheName);
       controllers.addAll(provider.install(target,containerName,cacheName,defaultCache,moduleId));
