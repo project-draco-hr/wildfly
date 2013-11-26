@@ -1,16 +1,24 @@
 {
   final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
   if (address.isMultiTarget()) {
+    final FilteredData localFilteredData=filteredData == null ? new FilteredData(PathAddress.EMPTY_ADDRESS) : filteredData;
     final ModelNode result=context.getResult().setEmptyList();
-    context.addStep(new ModelNode(),FAKE_OPERATION.clone(),new ModelAddressResolver(operation,result,new OperationStepHandler(){
+    context.addStep(new ModelNode(),FAKE_OPERATION.clone(),new ModelAddressResolver(operation,result,localFilteredData,new OperationStepHandler(){
       @Override public void execute(      final OperationContext context,      final ModelNode operation) throws OperationFailedException {
-        doExecute(context,operation);
+        doExecute(context,operation,localFilteredData);
       }
     }
 ),OperationContext.Stage.MODEL,true);
-    context.stepCompleted();
+    context.completeStep(new OperationContext.ResultHandler(){
+      @Override public void handleResult(      OperationContext.ResultAction resultAction,      OperationContext context,      ModelNode operation){
+        if (resultAction == OperationContext.ResultAction.KEEP && localFilteredData.hasFilteredData()) {
+          context.getResponseHeaders().get(ACCESS_CONTROL).set(localFilteredData.toModelNode());
+        }
+      }
+    }
+);
   }
  else {
-    doExecute(context,operation);
+    doExecute(context,operation,filteredData);
   }
 }

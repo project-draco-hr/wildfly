@@ -1,0 +1,35 @@
+{
+  PathAddress wildcardAddress=PathAddress.pathAddress(PathElement.pathElement(SENSITIVE_CONSTRAINED_RESOURCE));
+  ModelNode operation=Util.createOperation(READ_RESOURCE_OPERATION,wildcardAddress);
+  ModelNode result=executeWithRole(operation,StandardRole.MONITOR);
+  assertEquals(SUCCESS,result.get(OUTCOME).asString());
+  assertEquals(ModelType.LIST,result.get(RESULT).getType());
+  assertEquals(0,result.get(RESULT).asInt());
+  assertTrue(result.hasDefined(RESPONSE_HEADERS));
+  assertTrue(result.get(RESPONSE_HEADERS).hasDefined(ACCESS_CONTROL));
+  assertEquals(1,result.get(RESPONSE_HEADERS,ACCESS_CONTROL).asInt());
+  ModelNode accessControl=result.get(RESPONSE_HEADERS,ACCESS_CONTROL).get(0);
+  assertTrue(accessControl.hasDefined(FILTERED_CHILDREN_TYPES));
+  ModelNode filteredTypes=accessControl.get(FILTERED_CHILDREN_TYPES);
+  assertEquals(1,filteredTypes.asInt());
+  assertEquals(SENSITIVE_CONSTRAINED_RESOURCE,filteredTypes.get(0).asString());
+  MY_SENSITIVITY.setConfiguredRequiresAccessPermission(false);
+  result=executeWithRole(operation,StandardRole.MONITOR);
+  assertEquals(SUCCESS,result.get(OUTCOME).asString());
+  assertEquals(ModelType.LIST,result.get(RESULT).getType());
+  assertEquals(0,result.get(RESULT).asInt());
+  assertTrue(result.hasDefined(RESPONSE_HEADERS));
+  assertTrue(result.get(RESPONSE_HEADERS).hasDefined(ACCESS_CONTROL));
+  assertEquals(1,result.get(RESPONSE_HEADERS,ACCESS_CONTROL).asInt());
+  accessControl=result.get(RESPONSE_HEADERS,ACCESS_CONTROL).get(0);
+  assertTrue(accessControl.hasDefined(UNREADABLE_CHILDREN));
+  ModelNode unreadable=accessControl.get(UNREADABLE_CHILDREN);
+  assertEquals(2,unreadable.asInt());
+  Set<String> children=new HashSet<String>(Arrays.asList(FOO,BAR));
+  for (  Property prop : unreadable.asPropertyList()) {
+    assertEquals(SENSITIVE_CONSTRAINED_RESOURCE,prop.getName());
+    String name=prop.getValue().asString();
+    assertTrue(name,children.remove(name));
+  }
+  assertEquals(0,children.size());
+}
