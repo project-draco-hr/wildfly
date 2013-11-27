@@ -1,0 +1,28 @@
+{
+  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT);
+  builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-connector:" + controllerVersion.getMavenGavVersion()).setExtensionClassName("org.jboss.as.connector.subsystems.resourceadapters.ResourceAdaptersExtension").addOperationValidationResolve("add",PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,mainSubsystemName),PathElement.pathElement("resource-adapter","*"),PathElement.pathElement("connection-definitions","*"))).excludeFromParent(SingleClassFilter.createFilter(ConnectorLogger.class));
+  KernelServices mainServices=builder.build();
+  org.junit.Assert.assertTrue(mainServices.isSuccessfulBoot());
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  org.junit.Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  org.junit.Assert.assertNotNull(legacyServices);
+  List<ModelNode> ops=builder.parseXmlResource(subsystemXml);
+  PathAddress subsystemAddress=PathAddress.pathAddress(ResourceAdaptersExtension.SUBSYSTEM_PATH);
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,modelVersion,ops,new FailedOperationTransformationConfig().addFailedAttribute(subsystemAddress.append(PathElement.pathElement(RESOURCEADAPTER_NAME)),new FailedOperationTransformationConfig.AttributesPathAddressConfig(WM_SECURITY.getName(),WM_SECURITY_MAPPING_REQUIRED.getName(),WM_SECURITY_DOMAIN.getName()){
+    @Override protected boolean isAttributeWritable(    String attributeName){
+      return false;
+    }
+    @Override protected boolean checkValue(    String attrName,    ModelNode attribute,    boolean isWriteAttribute){
+      if (attribute.isDefined()) {
+        return true;
+      }
+ else {
+        return false;
+      }
+    }
+    @Override protected ModelNode correctValue(    ModelNode toResolve,    boolean isWriteAttribute){
+      return new ModelNode();
+    }
+  }
+));
+}
