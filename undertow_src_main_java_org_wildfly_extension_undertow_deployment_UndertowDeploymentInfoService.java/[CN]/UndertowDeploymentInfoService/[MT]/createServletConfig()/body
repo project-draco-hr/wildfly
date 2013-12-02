@@ -83,7 +83,11 @@
         list.add(mapping);
       }
     }
-    if (mergedMetaData.getServlets() != null) {
+    final List<JBossServletMetaData> servlets=new ArrayList<JBossServletMetaData>();
+    for (    JBossServletMetaData servlet : mergedMetaData.getServlets()) {
+      servlets.add(servlet);
+    }
+    if (servlets != null) {
       for (      final JBossServletMetaData servlet : mergedMetaData.getServlets()) {
         final ServletInfo s;
         if (servlet.getJspFile() != null) {
@@ -111,20 +115,7 @@
         if (servlet.getExecutorName() != null) {
           s.setExecutor(executorsByName.get(servlet.getExecutorName()).getValue());
         }
-        List<ServletMappingMetaData> mappings=servletMappings.get(servlet.getName());
-        if (mappings != null) {
-          for (          ServletMappingMetaData mapping : mappings) {
-            for (            String pattern : mapping.getUrlPatterns()) {
-              if (is22OrOlder && !pattern.startsWith("*") && !pattern.startsWith("/")) {
-                pattern="/" + pattern;
-              }
-              if (!seenMappings.contains(pattern)) {
-                s.addMapping(pattern);
-                seenMappings.add(pattern);
-              }
-            }
-          }
-        }
+        handleServletMappings(is22OrOlder,seenMappings,servletMappings,s);
         if (servlet.getInitParam() != null) {
           for (          ParamValueMetaData initParam : servlet.getInitParam()) {
             if (!s.getInitParams().containsKey(initParam.getParamName())) {
@@ -153,6 +144,11 @@
         }
         d.addServlet(s);
       }
+    }
+    if (!mergedMetaData.getServlets().containsKey(ServletPathMatches.DEFAULT_SERVLET_NAME)) {
+      ServletInfo defaultServlet=Servlets.servlet("default",DefaultServlet.class);
+      handleServletMappings(is22OrOlder,seenMappings,servletMappings,defaultServlet);
+      d.addServlet(defaultServlet);
     }
     if (mergedMetaData.getFilters() != null) {
       for (      final FilterMetaData filter : mergedMetaData.getFilters()) {
@@ -281,12 +277,15 @@
     }
     final LoginConfigMetaData loginConfig=mergedMetaData.getLoginConfig();
     if (loginConfig != null) {
-      String authMethod=authMethod(loginConfig.getAuthMethod());
+      List<AuthMethodConfig> authMethod=authMethod(loginConfig.getAuthMethod());
       if (loginConfig.getFormLoginConfig() != null) {
-        d.setLoginConfig(new LoginConfig(authMethod,loginConfig.getRealmName(),loginConfig.getFormLoginConfig().getLoginPage(),loginConfig.getFormLoginConfig().getErrorPage()));
+        d.setLoginConfig(new LoginConfig(loginConfig.getRealmName(),loginConfig.getFormLoginConfig().getLoginPage(),loginConfig.getFormLoginConfig().getErrorPage()));
       }
  else {
-        d.setLoginConfig(new LoginConfig(authMethod,loginConfig.getRealmName()));
+        d.setLoginConfig(new LoginConfig(loginConfig.getRealmName()));
+      }
+      for (      AuthMethodConfig method : authMethod) {
+        d.getLoginConfig().addLastAuthMethod(method);
       }
     }
     d.addSecurityRoles(mergedMetaData.getSecurityRoleNames());

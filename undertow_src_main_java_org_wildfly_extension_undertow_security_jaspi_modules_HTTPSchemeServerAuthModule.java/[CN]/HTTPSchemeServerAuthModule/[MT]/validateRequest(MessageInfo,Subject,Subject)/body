@@ -1,17 +1,36 @@
 {
   HttpServerExchange exchange=(HttpServerExchange)messageInfo.getMap().get(JASPIAuthenticationMechanism.HTTP_SERVER_EXCHANGE_ATTACHMENT_KEY);
   SecurityContext securityContext=(SecurityContext)messageInfo.getMap().get(JASPIAuthenticationMechanism.SECURITY_CONTEXT_ATTACHMENT_KEY);
+  ServletRequestContext src=exchange.getAttachment(ServletRequestContext.ATTACHMENT_KEY);
+  List<AuthenticationMechanism> mechanisms=src.getDeployment().getAuthenticationMechanisms();
   try {
-    AuthenticationMechanism mechanism=getAuthenticationMechanism(exchange);
-    if (!AUTHENTICATED.equals(mechanism.authenticate(exchange,securityContext))) {
-      AuthenticationMechanism.ChallengeResult challengeResult=mechanism.sendChallenge(exchange,securityContext);
-      exchange.setResponseCode(challengeResult.getDesiredResponseCode());
+    boolean success=false;
+    for (    AuthenticationMechanism mechanism : mechanisms) {
+      AuthenticationMechanism.AuthenticationMechanismOutcome result=mechanism.authenticate(exchange,securityContext);
+      if (result == AUTHENTICATED) {
+        success=true;
+        break;
+      }
+ else       if (result == NOT_AUTHENTICATED) {
+        break;
+      }
+    }
+    if (!success) {
+      for (      AuthenticationMechanism mechanism : mechanisms) {
+        AuthenticationMechanism.ChallengeResult challengeResult=mechanism.sendChallenge(exchange,securityContext);
+        if (challengeResult.getDesiredResponseCode() != null) {
+          exchange.setResponseCode(challengeResult.getDesiredResponseCode());
+        }
+        if (exchange.isResponseComplete()) {
+          break;
+        }
+      }
       return SEND_CONTINUE;
     }
   }
  catch (  Exception e) {
     ROOT_LOGGER.debug(e);
-    throw new AuthException("Could not validateRequest using mechanism [" + BasicAuthenticationMechanism.class.getName() + "].");
+    throw new AuthException("Could not validateRequest using mechanisms [" + mechanisms + ".");
   }
   return SUCCESS;
 }
