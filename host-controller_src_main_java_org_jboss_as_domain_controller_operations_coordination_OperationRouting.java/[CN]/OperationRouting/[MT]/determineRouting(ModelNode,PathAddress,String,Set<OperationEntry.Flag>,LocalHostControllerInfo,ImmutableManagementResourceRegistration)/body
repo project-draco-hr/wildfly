@@ -1,0 +1,70 @@
+{
+  OperationRouting routing=null;
+  String targetHost=null;
+  boolean compositeOp=false;
+  if (address.size() > 0) {
+    PathElement first=address.getElement(0);
+    if (HOST.equals(first.getKey())) {
+      targetHost=first.getValue();
+    }
+  }
+ else {
+    compositeOp=COMPOSITE.equals(operationName);
+  }
+  if (targetHost != null) {
+    if (operationFlags.contains(OperationEntry.Flag.READ_ONLY) && !operationFlags.contains(OperationEntry.Flag.DOMAIN_PUSH_TO_SERVERS)) {
+      routing=new OperationRouting(targetHost,false);
+    }
+ else     if (address.size() > 1) {
+      PathElement first=address.getElement(1);
+      if (SERVER.equals(first.getKey())) {
+        routing=new OperationRouting(targetHost,false);
+      }
+    }
+    if (routing == null) {
+      if (operationFlags.contains(OperationEntry.Flag.HOST_CONTROLLER_ONLY)) {
+        routing=new OperationRouting(targetHost,false);
+      }
+ else {
+        routing=new OperationRouting(targetHost,true);
+      }
+    }
+  }
+ else   if (compositeOp) {
+    if (operation.hasDefined(STEPS)) {
+      Set<String> allHosts=new HashSet<String>();
+      boolean fwdToAllHosts=false;
+      for (      ModelNode step : operation.get(STEPS).asList()) {
+        OperationRouting stepRouting=determineRouting(step,localHostControllerInfo,rootRegistration);
+        if (stepRouting.isTwoStep()) {
+          fwdToAllHosts=fwdToAllHosts || stepRouting.getHosts().isEmpty();
+        }
+        allHosts.addAll(stepRouting.getHosts());
+      }
+      if (fwdToAllHosts) {
+        routing=new OperationRouting(true);
+      }
+ else {
+        routing=new OperationRouting(allHosts);
+      }
+    }
+ else {
+      routing=new OperationRouting(localHostControllerInfo.getLocalHostName(),false);
+    }
+  }
+ else {
+    if (operationFlags.contains(OperationEntry.Flag.READ_ONLY) && !operationFlags.contains(OperationEntry.Flag.DOMAIN_PUSH_TO_SERVERS)) {
+      routing=new OperationRouting(localHostControllerInfo.getLocalHostName(),false);
+    }
+ else     if (!localHostControllerInfo.isMasterDomainController()) {
+      routing=new OperationRouting();
+    }
+ else     if (operationFlags.contains(OperationEntry.Flag.MASTER_HOST_CONTROLLER_ONLY)) {
+      routing=new OperationRouting(localHostControllerInfo.getLocalHostName(),false);
+    }
+  }
+  if (routing == null) {
+    routing=new OperationRouting(true);
+  }
+  return routing;
+}
