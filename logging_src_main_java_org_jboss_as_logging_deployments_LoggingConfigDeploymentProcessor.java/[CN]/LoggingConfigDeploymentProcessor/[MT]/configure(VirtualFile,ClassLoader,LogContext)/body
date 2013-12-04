@@ -1,0 +1,48 @@
+{
+  boolean result=false;
+  InputStream configStream=null;
+  try {
+    LoggingLogger.ROOT_LOGGER.debugf("Found logging configuration file: %s",configFile);
+    final String fileName=configFile.getName();
+    configStream=configFile.openStream();
+    if (isLog4jConfiguration(fileName)) {
+      final ClassLoader current=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
+      final LogContext old=logContextSelector.getAndSet(CONTEXT_LOCK,logContext);
+      try {
+        WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(classLoader);
+        if (LOG4J_XML.equals(fileName) || JBOSS_LOG4J_XML.equals(fileName)) {
+          new DOMConfigurator().doConfigure(configStream,org.apache.log4j.JBossLogManagerFacade.getLoggerRepository(logContext));
+        }
+ else {
+          final Properties properties=new Properties();
+          properties.load(new InputStreamReader(configStream,ENCODING));
+          new org.apache.log4j.PropertyConfigurator().doConfigure(properties,org.apache.log4j.JBossLogManagerFacade.getLoggerRepository(logContext));
+        }
+      }
+  finally {
+        logContextSelector.getAndSet(CONTEXT_LOCK,old);
+        WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(current);
+      }
+      result=true;
+    }
+ else {
+      final Properties properties=new Properties();
+      properties.load(new InputStreamReader(configStream,ENCODING));
+      if (isJulConfiguration(properties)) {
+        LoggingLogger.ROOT_LOGGER.julConfigurationFileFound(configFile.getName());
+      }
+ else {
+        final PropertyConfigurator propertyConfigurator=new PropertyConfigurator(logContext);
+        propertyConfigurator.configure(properties);
+        result=true;
+      }
+    }
+  }
+ catch (  Exception e) {
+    throw LoggingMessages.MESSAGES.failedToConfigureLogging(e,configFile.getName());
+  }
+ finally {
+    safeClose(configStream);
+  }
+  return result;
+}
