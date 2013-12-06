@@ -1,0 +1,57 @@
+{
+  if (input.charAt(location) != '$') {
+    return;
+  }
+  final int inputLength=input.length();
+  if (inputLength - 1 > location && input.charAt(location + 1) == '{') {
+    if (!systemProperty) {
+      return;
+    }
+    final int endBrace=input.indexOf('}',location + 1);
+    if (endBrace - location - 2 <= 0) {
+      return;
+    }
+    final String prop=input.substring(location,endBrace + 1);
+    final String resolved=Util.resolveProperties(prop);
+    if (!resolved.equals(prop)) {
+      StringBuilder buf=new StringBuilder(input.length() - prop.length() + resolved.length());
+      buf.append(input.substring(0,location)).append(resolved);
+      if (endBrace < input.length() - 1) {
+        buf.append(input.substring(endBrace + 1));
+      }
+      variableCorrection+=resolved.length() - prop.length();
+      input=buf.toString();
+      ch=input.charAt(location);
+      return;
+    }
+ else     if (exceptionIfNotResolved) {
+      throw new UnresolvedExpressionException(prop);
+    }
+  }
+  int endIndex=location + 1;
+  if (endIndex >= input.length() || !Character.isJavaIdentifierStart(input.charAt(endIndex))) {
+    return;
+  }
+  while (++endIndex < input.length()) {
+    if (!Character.isJavaIdentifierPart(input.charAt(endIndex))) {
+      break;
+    }
+  }
+  final String name=input.substring(location + 1,endIndex);
+  final String value=cmdCtx == null ? null : cmdCtx.getVariable(name);
+  if (value == null) {
+    if (exceptionIfNotResolved) {
+      throw new UnresolvedExpressionException(name);
+    }
+  }
+ else {
+    StringBuilder buf=new StringBuilder(input.length() - name.length() + value.length());
+    buf.append(input.substring(0,location)).append(value);
+    if (endIndex < input.length()) {
+      buf.append(input.substring(endIndex));
+    }
+    variableCorrection+=value.length() - name.length() - 1;
+    input=buf.toString();
+    ch=input.charAt(location);
+  }
+}
