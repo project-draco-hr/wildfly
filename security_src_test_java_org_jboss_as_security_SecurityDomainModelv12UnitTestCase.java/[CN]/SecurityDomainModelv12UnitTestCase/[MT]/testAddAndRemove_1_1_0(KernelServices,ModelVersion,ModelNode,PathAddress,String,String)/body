@@ -12,25 +12,54 @@
     add.get(Constants.TYPE).set("role");
   }
   add.get("module-options","password-stacking").set("useFirstPass");
-  ModelTestUtils.checkOutcome(mainServices.executeOperation(add));
-  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,add)));
+  executeOpsInBothControllers(mainServices,modelVersion,add);
   List<ModelNode> attributes=getLegacyAttribute(legacyServices,parentAddress,attributeName);
   Assert.assertEquals(originalKeys.size() + 1,attributes.size());
   final ModelNode removeAdded=Util.createRemoveOperation(parentAddress.append(PathElement.pathElement(resourceType,"new-added-by-test")));
-  ModelTestUtils.checkOutcome(mainServices.executeOperation(removeAdded));
-  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,removeAdded)));
+  executeOpsInBothControllers(mainServices,modelVersion,removeAdded);
   attributes=getLegacyAttribute(legacyServices,parentAddress,attributeName);
   Assert.assertEquals(originalKeys.size(),attributes.size());
   checkSimilarEntries(attributes,parentModel.get(resourceType));
   int i=originalKeys.size();
   for (  String childName : originalKeys) {
-    if (i-- == 1) {
-      break;
-    }
     final ModelNode remove=Util.createRemoveOperation(parentAddress.append(PathElement.pathElement(resourceType,childName)));
     ModelTestUtils.checkOutcome(mainServices.executeOperation(remove));
     ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,remove)));
-    attributes=getLegacyAttribute(legacyServices,parentAddress,attributeName);
-    Assert.assertEquals(i,attributes.size());
+    if (--i > 0) {
+      legacyServices.executeForResult(Util.createOperation(ReadResourceHandler.DEFINITION,parentAddress));
+      attributes=getLegacyAttribute(legacyServices,parentAddress,attributeName);
+      Assert.assertEquals(i,attributes.size());
+    }
+ else {
+      legacyServices.executeForFailure(Util.createOperation(ReadResourceHandler.DEFINITION,parentAddress));
+      ModelTestUtils.checkOutcome(mainServices.executeOperation(Util.createRemoveOperation(parentAddress)));
+    }
   }
+  ModelNode addResource=parentModel.clone();
+  addResource.remove(resourceType);
+  addResource.get(OP).set(ADD);
+  addResource.get(OP_ADDR).set(parentAddress.toModelNode());
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(addResource));
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,addResource)));
+  executeOpsInBothControllers(mainServices,modelVersion,Util.createOperation(ReadResourceHandler.DEFINITION,parentAddress));
+  executeOpsInBothControllers(mainServices,modelVersion,Util.createRemoveOperation(parentAddress));
+  addResource=parentModel.clone();
+  addResource.remove(attributeName);
+  List<Property> children=parentModel.clone().remove(resourceType).asPropertyList();
+  addResource.get(OP).set(ADD);
+  addResource.get(OP_ADDR).set(parentAddress.toModelNode());
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(addResource));
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,addResource)));
+  for (  Property childProp : children) {
+    ModelNode addChild=Util.createAddOperation(parentAddress.append(resourceType,childProp.getName()));
+    for (    String key : childProp.getValue().keys()) {
+      addChild.get(key).set(childProp.getValue().get(key));
+    }
+    executeOpsInBothControllers(mainServices,modelVersion,addChild);
+  }
+  executeOpsInBothControllers(mainServices,modelVersion,Util.createOperation(ReadResourceHandler.DEFINITION,parentAddress));
+  attributes=getLegacyAttribute(legacyServices,parentAddress,attributeName);
+  Assert.assertEquals(originalKeys.size(),attributes.size());
+  checkSimilarEntries(attributes,parentModel.get(resourceType));
+  executeOpsInBothControllers(mainServices,modelVersion,Util.createRemoveOperation(parentAddress));
 }
