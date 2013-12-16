@@ -1,0 +1,66 @@
+{
+  DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (deploymentUnit.getParent() != null) {
+    return;
+  }
+  final List<DeploymentUnit> deploymentUnits=new ArrayList<DeploymentUnit>();
+  deploymentUnits.add(deploymentUnit);
+  deploymentUnits.addAll(deploymentUnit.getAttachmentList(Attachments.SUB_DEPLOYMENTS));
+  boolean found=false;
+  for (  DeploymentUnit unit : deploymentUnits) {
+    WarMetaData warMetaData=unit.getAttachment(WarMetaData.ATTACHMENT_KEY);
+    if (warMetaData == null) {
+      continue;
+    }
+    JBossWebMetaData md=warMetaData.getMergedJBossWebMetaData();
+    if (md == null) {
+      continue;
+    }
+    if (md.getContextParams() != null) {
+      boolean skip=false;
+      for (      ParamValueMetaData prop : md.getContextParams()) {
+        if (prop.getParamName().equals(DISABLE_PROPERTY) && "true".equals(prop.getParamValue())) {
+          skip=true;
+        }
+      }
+      if (skip) {
+        continue;
+      }
+    }
+    if (md.getListeners() != null) {
+      for (      ListenerMetaData listener : md.getListeners()) {
+        if (SPRING_LISTENER.equals(listener.getListenerClass())) {
+          found=true;
+          break;
+        }
+      }
+    }
+    if (md.getServlets() != null) {
+      for (      JBossServletMetaData servlet : md.getServlets()) {
+        if (SPRING_SERVLET.equals(servlet.getServletClass())) {
+          found=true;
+          break;
+        }
+      }
+    }
+    if (found) {
+      try {
+        URL url=this.getClass().getClassLoader().getResource(SPRING_INT_JAR);
+        if (url == null) {
+          throw JaxrsMessages.MESSAGES.noSpringIntegrationJar();
+        }
+        File file=new File(url.toURI());
+        VirtualFile vf=VFS.getChild(file.toURI());
+        final Closeable mountHandle=VFS.mountZip(file,vf,TempFileProviderService.provider());
+        MountHandle mh=new MountHandle(mountHandle);
+        ResourceRoot resourceRoot=new ResourceRoot(vf,mh);
+        ModuleRootMarker.mark(resourceRoot);
+        deploymentUnit.addToAttachmentList(Attachments.RESOURCE_ROOTS,resourceRoot);
+      }
+ catch (      Exception e) {
+        throw new DeploymentUnitProcessingException(e);
+      }
+      return;
+    }
+  }
+}
