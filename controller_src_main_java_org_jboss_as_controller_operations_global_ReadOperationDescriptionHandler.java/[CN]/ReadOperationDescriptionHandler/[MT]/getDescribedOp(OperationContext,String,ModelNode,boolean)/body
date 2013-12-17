@@ -1,0 +1,40 @@
+{
+  DescribedOp result=null;
+  ImmutableManagementResourceRegistration registry=context.getResourceRegistration();
+  if (registry != null) {
+    OperationEntry operationEntry=registry.getOperationEntry(PathAddress.EMPTY_ADDRESS,operationName);
+    if (operationEntry != null) {
+      Locale locale=GlobalOperationHandlers.getLocale(context,operation);
+      result=new DescribedOp(operationEntry,locale);
+    }
+  }
+ else   if (lenient) {
+    PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+    if (address.size() > 0) {
+      PathElement pe=address.getLastElement();
+      if (pe.isWildcard()) {
+        ImmutableManagementResourceRegistration rootRegistration=context.getRootResourceRegistration();
+        String type=pe.getKey();
+        PathAddress parent=address.subAddress(0,address.size() - 1);
+        Set<PathElement> children=rootRegistration.getChildAddresses(parent);
+        if (children != null) {
+          Locale locale=GlobalOperationHandlers.getLocale(context,operation);
+          DescribedOp found=null;
+          for (          PathElement child : children) {
+            if (type.equals(child.getKey())) {
+              OperationEntry oe=rootRegistration.getOperationEntry(parent.append(child),operationName);
+              DescribedOp describedOp=oe == null ? null : new DescribedOp(oe,locale);
+              if (describedOp == null || (found != null && !found.equals(describedOp))) {
+                found=null;
+                break;
+              }
+              found=describedOp;
+            }
+          }
+          result=found;
+        }
+      }
+    }
+  }
+  return result;
+}

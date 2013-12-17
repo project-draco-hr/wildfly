@@ -1,0 +1,39 @@
+{
+  final ModelNode result=context.getResult().setEmptyList();
+  context.addStep(new ModelNode(),GlobalOperationHandlers.AbstractMultiTargetHandler.FAKE_OPERATION.clone(),new GlobalOperationHandlers.RegistrationAddressResolver(operation,result,new OperationStepHandler(){
+    @Override public void execute(    final OperationContext context,    final ModelNode operation) throws OperationFailedException {
+      final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+      ReadResourceDescriptionAccessControlContext accessControlContext=getAccessControlContext() == null ? new ReadResourceDescriptionAccessControlContext(address,null) : getAccessControlContext();
+      doExecute(context,operation,accessControlContext);
+    }
+  }
+),OperationContext.Stage.MODEL,true);
+  context.completeStep(new OperationContext.RollbackHandler(){
+    @Override public void handleRollback(    OperationContext context,    ModelNode operation){
+      if (!context.hasFailureDescription()) {
+        String op=operation.require(OP).asString();
+        Map<PathAddress,ModelNode> failures=new HashMap<PathAddress,ModelNode>();
+        for (        ModelNode resultItem : result.asList()) {
+          if (resultItem.hasDefined(FAILURE_DESCRIPTION)) {
+            final PathAddress failedAddress=PathAddress.pathAddress(operation.require(OP_ADDR));
+            ModelNode failedDesc=resultItem.get(FAILURE_DESCRIPTION);
+            failures.put(failedAddress,failedDesc);
+          }
+        }
+        if (failures.size() == 1) {
+          Map.Entry<PathAddress,ModelNode> entry=failures.entrySet().iterator().next();
+          if (entry.getValue().getType() == ModelType.STRING) {
+            context.getFailureDescription().set(ControllerMessages.MESSAGES.wildcardOperationFailedAtSingleAddress(op,entry.getKey(),entry.getValue().asString()));
+          }
+ else {
+            context.getFailureDescription().set(ControllerMessages.MESSAGES.wildcardOperationFailedAtSingleAddressWithComplexFailure(op,entry.getKey()));
+          }
+        }
+ else         if (failures.size() > 1) {
+          context.getFailureDescription().set(ControllerMessages.MESSAGES.wildcardOperationFailedAtMultipleAddresses(op,failures.keySet()));
+        }
+      }
+    }
+  }
+);
+}
