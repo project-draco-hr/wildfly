@@ -1,0 +1,44 @@
+{
+  final String queueName="queue.standalone";
+  final ModelControllerClient client=managementClient.getControllerClient();
+  if (queueExists(queueName,sf)) {
+    throw new IllegalStateException();
+  }
+  ModelNode op=new ModelNode();
+  op.get("operation").set("add");
+  op.get("address").add("subsystem","messaging");
+  op.get("address").add("hornetq-server","default");
+  op.get("address").add("queue",queueName);
+  op.get("queue-address").set(queueName);
+  applyUpdate(op,client);
+  if (!queueExists(queueName,sf)) {
+    throw new IllegalStateException();
+  }
+  ClientSession session=null;
+  try {
+    session=sf.createSession("guest","guest",false,true,true,false,1);
+    ClientProducer producer=session.createProducer(queueName);
+    ClientMessage message=session.createMessage(false);
+    final String propName="myprop";
+    message.putStringProperty(propName,"Hello sent at " + new Date());
+    producer.send(message);
+    ClientConsumer messageConsumer=session.createConsumer(queueName);
+    session.start();
+    ClientMessage messageReceived=messageConsumer.receive(1000);
+    assertNotNull("a message MUST have been received",messageReceived);
+  }
+  finally {
+    if (session != null) {
+      session.close();
+    }
+  }
+  op=new ModelNode();
+  op.get("operation").set("remove");
+  op.get("address").add("subsystem","messaging");
+  op.get("address").add("hornetq-server","default");
+  op.get("address").add("queue",queueName);
+  applyUpdate(op,client);
+  if (queueExists(queueName,sf)) {
+    throw new IllegalStateException();
+  }
+}
