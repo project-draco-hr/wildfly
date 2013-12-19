@@ -5,20 +5,24 @@
   final String applicationIdentifier=buildApplicationIdentifier(requestContext);
   final JASPICallbackHandler cbh=new JASPICallbackHandler();
   ROOT_LOGGER.debugf("validateRequest for layer [%s] and applicationContextIdentifier [%s]",JASPI_HTTP_SERVLET_LAYER,applicationIdentifier);
-  if (sam.isValid(messageInfo,new Subject(),JASPI_HTTP_SERVLET_LAYER,applicationIdentifier,cbh)) {
-    Account account=securityContext.getAuthenticatedAccount();
-    if (account == null) {
-      ROOT_LOGGER.debug("Creating account with credentials from JASPI callbackhandler.");
-      account=createAccount(cbh);
-      securityContext.authenticationComplete(account,MECHANISM_NAME,false);
-    }
+  AuthenticationMechanismOutcome outcome=AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+  Account account=null;
+  boolean isValid=sam.isValid(messageInfo,new Subject(),JASPI_HTTP_SERVLET_LAYER,applicationIdentifier,cbh);
+  if (isValid) {
+    org.jboss.security.SecurityContext jbossSct=SecurityActions.getSecurityContext();
+    account=createAccount(jbossSct);
+  }
+  if (isValid && account != null) {
+    outcome=AuthenticationMechanismOutcome.AUTHENTICATED;
+    securityContext.authenticationComplete(account,MECHANISM_NAME,false);
+  }
+ else   if (isValid && account == null && !isMandatory(requestContext)) {
+    outcome=AuthenticationMechanismOutcome.NOT_ATTEMPTED;
+  }
  else {
-      ROOT_LOGGER.debug("Account already setup from JASPI modules.");
-    }
-    if (account == null) {
-      securityContext.authenticationFailed("JASPI authentication failed.",MECHANISM_NAME);
-    }
+    outcome=AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+    securityContext.authenticationFailed("JASPI authentication failed.",MECHANISM_NAME);
   }
   secureResponse(exchange,securityContext,sam,messageInfo,cbh);
-  return securityContext.getAuthenticatedAccount() != null ? AuthenticationMechanismOutcome.AUTHENTICATED : AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+  return outcome;
 }
