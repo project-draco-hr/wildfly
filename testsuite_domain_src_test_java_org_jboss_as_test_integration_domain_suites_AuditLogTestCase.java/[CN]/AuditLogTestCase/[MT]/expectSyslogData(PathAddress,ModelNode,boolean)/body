@@ -1,0 +1,23 @@
+{
+  byte[] data=server.receiveData(5 * ADJUSTED_SECOND,TimeUnit.MILLISECONDS);
+  Assert.assertNotNull(data);
+  String msg=new String(data,"utf-8");
+  msg=msg.substring(msg.indexOf('{')).replace("#012","\n");
+  ModelNode syslogData=ModelNode.fromJSONString(msg);
+  Assert.assertEquals(!masterOnlyOp,syslogData.hasDefined("domainUUID"));
+  Assert.assertEquals(AccessMechanism.NATIVE.toString(),syslogData.get(ACCESS).asString());
+  Assert.assertTrue(syslogData.hasDefined("remote-address") && syslogData.get("remote-address").asString().length() > 0);
+  Assert.assertFalse(syslogData.hasDefined("r/o") && syslogData.get("r/o").asBoolean());
+  Assert.assertFalse(syslogData.hasDefined("booting") && syslogData.get("booting").asBoolean());
+  Assert.assertEquals("$local",syslogData.get(USER).asString());
+  Assert.assertTrue(syslogData.hasDefined(SUCCESS) && syslogData.get(SUCCESS).asBoolean());
+  List<ModelNode> ops=syslogData.get("ops").asList();
+  Assert.assertEquals(1,ops.size());
+  ModelNode loggedOp=ops.get(0);
+  loggedOp.remove(OPERATION_HEADERS);
+  ModelNode expectedOperation=op.clone();
+  expectedOperation.get(OP_ADDR).set(pathAddress.toModelNode());
+  expectedOperation=ModelNode.fromJSONString(expectedOperation.toJSONString(true));
+  Assert.assertEquals(expectedOperation,loggedOp);
+  return syslogData;
+}

@@ -1,0 +1,38 @@
+{
+  KeyManager[] keyManagers;
+  final KeyManagerFactory kmf=KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+  final FileInputStream in=new FileInputStream(keystorePath);
+  try {
+    final KeyStore ks=KeyStore.getInstance("JKS");
+    ks.load(in,keystorePassword.toCharArray());
+    kmf.init(ks,keystorePassword.toCharArray());
+    keyManagers=kmf.getKeyManagers();
+  }
+  finally {
+    IoUtils.safeClose(in);
+  }
+  boolean requireClientAuth=false;
+  TrustManager[] trustManagers=null;
+  if (clientCertPath != null) {
+    requireClientAuth=true;
+    final TrustManagerFactory tmf=TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+    final FileInputStream clientIn=new FileInputStream(clientCertPath);
+    try {
+      final KeyStore ks=KeyStore.getInstance("JKS");
+      ks.load(clientIn,clientCertPwd.toCharArray());
+      tmf.init(ks);
+      trustManagers=tmf.getTrustManagers();
+    }
+  finally {
+      IoUtils.safeClose(in);
+    }
+  }
+  final SSLContext context=SSLContext.getInstance("TLS");
+  context.init(keyManagers,trustManagers,null);
+  SSLServerSocket socket=(SSLServerSocket)context.getServerSocketFactory().createServerSocket(port);
+  socket.setNeedClientAuth(requireClientAuth);
+  SimpleSyslogServer server=new Tcp(socket,octetCounting);
+  Thread t=new Thread(server);
+  t.start();
+  return server;
+}

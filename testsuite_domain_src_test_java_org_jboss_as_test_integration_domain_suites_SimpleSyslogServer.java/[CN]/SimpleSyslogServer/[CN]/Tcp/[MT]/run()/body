@@ -1,0 +1,74 @@
+{
+  try {
+    socket=accept(serverSocket);
+  }
+ catch (  IOException e) {
+    e.printStackTrace();
+    return;
+  }
+  try {
+    InputStream in=new BufferedInputStream(socket.getInputStream());
+    while (!closed.get()) {
+      ByteArrayOutputStream out=new ByteArrayOutputStream();
+      if (octetCounting) {
+        int i=in.read();
+        int length=-1;
+        int count=0;
+        while (i != -1 && (length == -1 || count++ <= length)) {
+          if (length == -1) {
+            if ((char)i == ' ') {
+              byte[] bytes=out.toByteArray();
+              length=0;
+              for (int j=0; j < bytes.length; j++) {
+                length=length * 10 + bytes[j] - (int)Character.valueOf('0');
+              }
+              out.reset();
+              continue;
+            }
+          }
+          out.write(i);
+          if (length != -1 && count > length) {
+            break;
+          }
+          i=in.read();
+        }
+      }
+ else {
+        int braceCount=0;
+        int i=in.read();
+        while (i != -1) {
+          out.write(i);
+          if (((char)i) == '{') {
+            braceCount++;
+            break;
+          }
+          i=in.read();
+        }
+        i=in.read();
+        while (i != -1) {
+          char c=(char)i;
+          if (c == '{') {
+            braceCount++;
+          }
+          if (c == '}') {
+            braceCount--;
+          }
+          out.write(i);
+          if (c == '\n' && braceCount == 0) {
+            break;
+          }
+          i=in.read();
+        }
+      }
+      if (out.toByteArray() != null && out.toByteArray().length > 0) {
+        receivedData.add(out.toByteArray());
+      }
+    }
+  }
+ catch (  IOException e) {
+    if (!closed.get()) {
+      e.printStackTrace();
+      close();
+    }
+  }
+}

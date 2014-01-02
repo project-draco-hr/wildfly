@@ -1,0 +1,99 @@
+{
+  final PathAddress handlerAddress=PathAddress.pathAddress(baseAddress.append(SYSLOG_HANDLER,"test-syslog"));
+  ModelNode op=Util.getWriteAttributeOperation(masterCoreLogggerAddress,ENABLED,new ModelNode(true));
+  masterLifecycleUtil.executeForResult(op);
+  op=Util.getWriteAttributeOperation(slaveCoreLogggerAddress,ENABLED,new ModelNode(true));
+  slaveLifecycleUtil.executeForResult(op);
+  op=Util.getWriteAttributeOperation(masterServerLoggerAddress,ENABLED,new ModelNode(true));
+  masterLifecycleUtil.executeForResult(op);
+  op=Util.getWriteAttributeOperation(slaveServerLoggerAddress,ENABLED,new ModelNode(true));
+  slaveLifecycleUtil.executeForResult(op);
+  final ModelNode compositeAdd=new ModelNode();
+  compositeAdd.get(OP).set(COMPOSITE);
+  ModelNode add=Util.createAddOperation(handlerAddress);
+  add.get(FORMATTER).set(JSON_FORMATTER);
+  compositeAdd.get(STEPS).add(add);
+  add=Util.createAddOperation(handlerAddress.append(PathElement.pathElement(PROTOCOL,UDP)));
+  add.get(HOST).set("localhost");
+  add.get(PORT).set(SYSLOG_PORT);
+  compositeAdd.get(STEPS).add(add);
+  masterLifecycleUtil.executeForResult(compositeAdd);
+  try {
+    expectNoSyslogData();
+    final PathElement testHandlerReference=PathElement.pathElement(HANDLER,"test-syslog");
+    final PathAddress serverLoggerHandlerReferenceAddress=baseAddress.append(AuditLogLoggerResourceDefinition.HOST_SERVER_PATH_ELEMENT).append(testHandlerReference);
+    final ModelNode addServerLoggerHandlerReference=Util.createAddOperation(serverLoggerHandlerReferenceAddress);
+    masterLifecycleUtil.executeForResult(addServerLoggerHandlerReference);
+    boolean removed=false;
+    try {
+      final List<String> servers=new ArrayList<String>();
+      if (baseAddress.getElement(0).getValue().equals("master")) {
+        servers.add("main-one");
+      }
+ else {
+        servers.add("main-three");
+        servers.add("other-two");
+      }
+      final PathAddress serverLoggerAddressOnServer=PathAddress.pathAddress(CoreManagementResourceDefinition.PATH_ELEMENT,AccessAuditResourceDefinition.PATH_ELEMENT,AuditLogLoggerResourceDefinition.PATH_ELEMENT);
+      for (int i=0; i < servers.size(); i++) {
+        expectSyslogData(serverLoggerAddressOnServer.append(testHandlerReference),addServerLoggerHandlerReference,false);
+      }
+      expectNoSyslogData();
+      PathAddress serverLoggerAddress=baseAddress.append(AuditLogLoggerResourceDefinition.HOST_SERVER_PATH_ELEMENT);
+      final ModelNode writeFalseEnabled=Util.getWriteAttributeOperation(serverLoggerAddress,ENABLED,new ModelNode(false));
+      masterLifecycleUtil.executeForResult(writeFalseEnabled);
+      for (int i=0; i < servers.size(); i++) {
+        expectSyslogData(serverLoggerAddressOnServer,writeFalseEnabled,false);
+      }
+      expectNoSyslogData();
+      final PathAddress serverAddress=PathAddress.pathAddress(baseAddress.getElement(0)).append(SERVER_CONFIG,servers.get(0));
+      final ModelNode restartOp=Util.createEmptyOperation("reload",serverAddress);
+      restartOp.get(BLOCKING).set(true);
+      expectNoSyslogData();
+      final ModelNode writeTrueEnabled=Util.getWriteAttributeOperation(serverLoggerAddress,ENABLED,new ModelNode(true));
+      masterLifecycleUtil.executeForResult(writeTrueEnabled);
+      for (int i=0; i < servers.size(); i++) {
+        expectSyslogData(serverLoggerAddressOnServer,writeTrueEnabled,false);
+      }
+      expectNoSyslogData();
+      final ModelNode removeServerLoggerHandlerReference=Util.createRemoveOperation(serverLoggerHandlerReferenceAddress);
+      masterLifecycleUtil.executeForResult(removeServerLoggerHandlerReference);
+      removed=true;
+      for (int i=0; i < servers.size(); i++) {
+        expectSyslogData(serverLoggerAddressOnServer.append(testHandlerReference),removeServerLoggerHandlerReference,false);
+      }
+      expectNoSyslogData();
+    }
+  finally {
+      if (!removed) {
+        masterLifecycleUtil.executeForResult(Util.createRemoveOperation(serverLoggerHandlerReferenceAddress));
+      }
+    }
+    final PathAddress hostLoggerHandlerReferenceAddress=baseAddress.append(AuditLogLoggerResourceDefinition.PATH_ELEMENT).append(PathElement.pathElement(HANDLER,"test-syslog"));
+    final ModelNode addHostLoggerHandlerReference=Util.createAddOperation(hostLoggerHandlerReferenceAddress);
+    masterLifecycleUtil.executeForResult(addHostLoggerHandlerReference);
+    removed=false;
+    try {
+      boolean master=baseAddress.getElement(0).getValue().equals("master");
+      expectSyslogData(hostLoggerHandlerReferenceAddress,addHostLoggerHandlerReference,master);
+      expectNoSyslogData();
+      final ModelNode removeHostLoggerHandlerReference=Util.createRemoveOperation(hostLoggerHandlerReferenceAddress);
+      masterLifecycleUtil.executeForResult(removeHostLoggerHandlerReference);
+      removed=true;
+      expectSyslogData(hostLoggerHandlerReferenceAddress,removeHostLoggerHandlerReference,master);
+      expectNoSyslogData();
+    }
+  finally {
+      if (!removed) {
+        masterLifecycleUtil.executeForResult(Util.createRemoveOperation(hostLoggerHandlerReferenceAddress));
+      }
+    }
+  }
+ catch (  Exception e) {
+    e.printStackTrace();
+    throw e;
+  }
+ finally {
+    masterLifecycleUtil.executeForResult(Util.createRemoveOperation(handlerAddress));
+  }
+}
