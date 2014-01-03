@@ -2,13 +2,13 @@
   final HeaderMap requestHeaders=exchange.getRequestHeaders();
   final HeaderMap responseHeaders=exchange.getResponseHeaders();
   String referrer=responseHeaders.getFirst(REFERER);
-  String protocol="http";
+  String protocol=exchange.getRequestScheme();
   String host=null;
   if (referrer != null) {
     try {
       URI uri=new URI(referrer);
       protocol=uri.getScheme();
-      host=uri.getHost() + (uri.getPort() == -1 ? "" : ":" + String.valueOf(uri.getPort()));
+      host=uri.getHost() + portPortion(protocol,uri.getPort());
     }
  catch (    URISyntaxException e) {
     }
@@ -25,33 +25,26 @@
   boolean win=!opera && userAgent != null && userAgent.contains("MSIE");
   String rawQuery=exchange.getQueryString();
   boolean exit=rawQuery != null && rawQuery.contains(EXIT);
-  boolean redirect=rawQuery != null && rawQuery.contains(REDIRECT);
   if (win) {
     responseHeaders.add(LOCATION,protocol + "://" + host+ "/");
     exchange.setResponseCode(StatusCodes.TEMPORARY_REDIRECT);
   }
  else {
-    if (!redirect && !exit) {
-      responseHeaders.add(LOCATION,protocol + "://" + host+ "/management?"+ CONTEXT);
-      exchange.setResponseCode(StatusCodes.TEMPORARY_REDIRECT);
-    }
- else {
-      String authorization=requestHeaders.getFirst(AUTHORIZATION);
-      if (authorization == null || !authorization.contains("enter-login-here")) {
-        if (!exit) {
-          responseHeaders.add(LOCATION,protocol + "://enter-login-here:blah@" + host+ "/logout?"+ EXIT);
-          exchange.setResponseCode(StatusCodes.TEMPORARY_REDIRECT);
-          return;
-        }
-        DigestAuthenticationMechanism mech=opera ? fakeRealmdigestMechanism : digestMechanism;
-        mech.sendChallenge(exchange,null);
-        String reply="<html><script type='text/javascript'>window.location=\"" + protocol + "://"+ host+ "/\";</script></html>";
-        exchange.setResponseCode(StatusCodes.UNAUTHORIZED);
-        exchange.getResponseSender().send(reply,IoCallback.END_EXCHANGE);
+    String authorization=requestHeaders.getFirst(AUTHORIZATION);
+    if (authorization == null || !authorization.contains("enter-login-here")) {
+      if (!exit) {
+        responseHeaders.add(LOCATION,protocol + "://enter-login-here:blah@" + host+ "/logout?"+ EXIT);
+        exchange.setResponseCode(StatusCodes.TEMPORARY_REDIRECT);
         return;
       }
-      responseHeaders.add(LOCATION,protocol + "://" + host+ "/");
-      exchange.setResponseCode(StatusCodes.TEMPORARY_REDIRECT);
+      DigestAuthenticationMechanism mech=opera ? fakeRealmdigestMechanism : digestMechanism;
+      mech.sendChallenge(exchange,null);
+      String reply="<html><script type='text/javascript'>window.location=\"" + protocol + "://"+ host+ "/\";</script></html>";
+      exchange.setResponseCode(StatusCodes.UNAUTHORIZED);
+      exchange.getResponseSender().send(reply,IoCallback.END_EXCHANGE);
+      return;
     }
+    responseHeaders.add(LOCATION,protocol + "://" + host+ "/");
+    exchange.setResponseCode(StatusCodes.TEMPORARY_REDIRECT);
   }
 }
