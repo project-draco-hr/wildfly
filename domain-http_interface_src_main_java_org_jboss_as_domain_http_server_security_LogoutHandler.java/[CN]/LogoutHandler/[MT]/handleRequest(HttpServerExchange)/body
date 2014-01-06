@@ -31,14 +31,23 @@
   }
  else {
     String authorization=requestHeaders.getFirst(AUTHORIZATION);
+    boolean digest=true;
+    Map<String,Deque<String>> parameters=exchange.getQueryParameters();
+    if (parameters.containsKey(MECHANISM)) {
+      digest=!BASIC.equals(parameters.get(MECHANISM).getFirst());
+    }
+    if (authorization != null && authorization.length() > BASIC.length() && BASIC.equalsIgnoreCase(authorization.substring(0,BASIC.length()))) {
+      digest=false;
+      ByteBuffer decode=FlexBase64.decode(authorization.substring(6));
+      authorization=new String(decode.array(),decode.arrayOffset(),decode.limit(),UTF_8);
+    }
     if (authorization == null || !authorization.contains("enter-login-here")) {
       if (!exit) {
-        responseHeaders.add(LOCATION,protocol + "://enter-login-here:blah@" + host+ "/logout?"+ EXIT);
+        responseHeaders.add(LOCATION,protocol + "://enter-login-here:blah@" + host+ "/logout?"+ EXIT+ "&"+ MECHANISM+ "="+ (digest ? DIGEST : BASIC));
         exchange.setResponseCode(StatusCodes.TEMPORARY_REDIRECT);
         return;
       }
-      DigestAuthenticationMechanism mech=opera ? fakeRealmdigestMechanism : digestMechanism;
-      mech.sendChallenge(exchange,null);
+      mechanism(opera,digest).sendChallenge(exchange,null);
       String reply="<html><script type='text/javascript'>window.location=\"" + protocol + "://"+ host+ "/\";</script></html>";
       exchange.setResponseCode(StatusCodes.UNAUTHORIZED);
       exchange.getResponseSender().send(reply,IoCallback.END_EXCHANGE);
