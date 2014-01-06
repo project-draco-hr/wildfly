@@ -1,13 +1,14 @@
 {
-  for (  BoottimeHandlerProvider handler : ServiceLoader.load(BoottimeHandlerProvider.class,BoottimeHandlerProvider.class.getClassLoader())) {
-    handler.performBoottime(context,operation,model,verificationHandler,newControllers);
-  }
   ServiceTarget target=context.getServiceTarget();
   final ModelNode fullModel=Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
   final ModelNode modelConfig=fullModel.get(ModClusterExtension.CONFIGURATION_PATH.getKeyValuePair());
   final ModClusterConfig config=getModClusterConfig(context,modelConfig);
   newControllers.add(target.addService(ContainerEventHandlerService.CONFIG_SERVICE_NAME,new ValueService<>(new ImmediateValue<>(config))).setInitialMode(Mode.ACTIVE).install());
-  final LoadBalanceFactorProvider loadProvider=getModClusterLoadProvider(context,modelConfig);
+  Set<LoadMetric> metrics=new HashSet<LoadMetric>();
+  final LoadBalanceFactorProvider loadProvider=getModClusterLoadProvider(metrics,context,modelConfig);
+  for (  BoottimeHandlerProvider handler : ServiceLoader.load(BoottimeHandlerProvider.class,BoottimeHandlerProvider.class.getClassLoader())) {
+    handler.performBoottime(metrics,context,operation,model,verificationHandler,newControllers);
+  }
   final String connector=CONNECTOR.resolveModelAttribute(context,modelConfig).asString();
   InjectedValue<SocketBindingManager> socketBindingManager=new InjectedValue<SocketBindingManager>();
   ContainerEventHandlerService service=new ContainerEventHandlerService(config,loadProvider,socketBindingManager);
