@@ -1,0 +1,28 @@
+{
+  final KernelServices kernelServices=boot();
+  final String asyncHandlerName="async";
+  final String consoleHandlerName="console";
+  final ModelNode asyncHandlerAddress=createAsyncHandlerAddress(profileName,asyncHandlerName).toModelNode();
+  final ModelNode consoleHandlerAddress=createConsoleHandlerAddress(profileName,consoleHandlerName).toModelNode();
+  final ModelNode loggerAddress=createLoggerAddress(profileName,FQCN).toModelNode();
+  final ModelNode addAsyncHandlerOp=SubsystemOperations.createAddOperation(asyncHandlerAddress);
+  addAsyncHandlerOp.get(AsyncHandlerResourceDefinition.QUEUE_LENGTH.getName()).set(10);
+  ModelNode op=SubsystemOperations.CompositeOperationBuilder.create().addStep(addAsyncHandlerOp).addStep(SubsystemOperations.createAddOperation(consoleHandlerAddress)).addStep(SubsystemOperations.createAddOperation(loggerAddress)).build().getOperation();
+  executeOperation(kernelServices,op);
+  op=SubsystemOperations.CompositeOperationBuilder.create().addStep(createAddHandlerOperation(asyncHandlerAddress,consoleHandlerName)).addStep(createAddHandlerOperation(loggerAddress,asyncHandlerName)).addStep(createAddHandlerOperation(loggerAddress,consoleHandlerName)).build().getOperation();
+  executeOperation(kernelServices,op);
+  op=SubsystemOperations.createReadResourceOperation(asyncHandlerAddress);
+  ModelNode result=executeOperation(kernelServices,op);
+  ModelNode resource=SubsystemOperations.readResult(result);
+  validateResourceAttributes(resource,Logging.join(AsyncHandlerResourceDefinition.ATTRIBUTES,CommonAttributes.NAME,CommonAttributes.FILTER));
+  op=SubsystemOperations.createReadResourceOperation(consoleHandlerAddress);
+  result=executeOperation(kernelServices,op);
+  resource=SubsystemOperations.readResult(result);
+  validateResourceAttributes(resource,Logging.join(ConsoleHandlerResourceDefinition.ATTRIBUTES,CommonAttributes.NAME,CommonAttributes.FILTER));
+  op=SubsystemOperations.createReadResourceOperation(loggerAddress);
+  result=executeOperation(kernelServices,op);
+  resource=SubsystemOperations.readResult(result);
+  validateResourceAttributes(resource,Logging.join(LoggerResourceDefinition.EXPRESSION_ATTRIBUTES,LoggerResourceDefinition.CATEGORY));
+  op=SubsystemOperations.CompositeOperationBuilder.create().addStep(SubsystemOperations.createRemoveOperation(loggerAddress)).addStep(SubsystemOperations.createRemoveOperation(asyncHandlerAddress)).addStep(SubsystemOperations.createRemoveOperation(consoleHandlerAddress)).build().getOperation();
+  executeOperation(kernelServices,op);
+}
