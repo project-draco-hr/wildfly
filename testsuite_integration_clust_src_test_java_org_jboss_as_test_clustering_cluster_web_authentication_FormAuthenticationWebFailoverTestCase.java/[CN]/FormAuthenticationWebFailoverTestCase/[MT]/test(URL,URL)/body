@@ -1,0 +1,59 @@
+{
+  DefaultHttpClient client=org.jboss.as.test.http.util.HttpClientUtils.relaxedCookieHttpClient();
+  URI uri1=SecureServlet.createURI(baseURL1);
+  URI uri2=SecureServlet.createURI(baseURL2);
+  try {
+    System.out.println(uri1);
+    HttpResponse response=client.execute(new HttpGet(uri1));
+    try {
+      Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+      Assert.assertNull(response.getFirstHeader(SecureServlet.SESSION_ID_HEADER));
+    }
+  finally {
+      HttpClientUtils.closeQuietly(response);
+    }
+    HttpPost login=new HttpPost(baseURL1.toURI().resolve("j_security_check"));
+    List<NameValuePair> pairs=new ArrayList<>(2);
+    pairs.add(new BasicNameValuePair("j_username","allowed"));
+    pairs.add(new BasicNameValuePair("j_password","password"));
+    login.setEntity(new UrlEncodedFormEntity(pairs,"UTF-8"));
+    response=client.execute(login);
+    try {
+      Assert.assertEquals(HttpServletResponse.SC_FOUND,response.getStatusLine().getStatusCode());
+    }
+  finally {
+      HttpClientUtils.closeQuietly(response);
+    }
+    String sessionId=null;
+    response=client.execute(new HttpGet(uri1));
+    try {
+      Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+      Assert.assertNotNull(response.getFirstHeader(SecureServlet.SESSION_ID_HEADER));
+      sessionId=response.getFirstHeader(SecureServlet.SESSION_ID_HEADER).getValue();
+    }
+  finally {
+      HttpClientUtils.closeQuietly(response);
+    }
+    undeploy(DEPLOYMENT_1);
+    response=client.execute(new HttpGet(uri2));
+    try {
+      Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+      Assert.assertEquals(sessionId,response.getFirstHeader(SecureServlet.SESSION_ID_HEADER).getValue());
+    }
+  finally {
+      HttpClientUtils.closeQuietly(response);
+    }
+    deploy(DEPLOYMENT_1);
+    response=client.execute(new HttpGet(uri1));
+    try {
+      Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+      Assert.assertEquals(sessionId,response.getFirstHeader(SecureServlet.SESSION_ID_HEADER).getValue());
+    }
+  finally {
+      HttpClientUtils.closeQuietly(response);
+    }
+  }
+  finally {
+    HttpClientUtils.closeQuietly(client);
+  }
+}
