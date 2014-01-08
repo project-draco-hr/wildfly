@@ -1,7 +1,8 @@
 {
+  final JASPISecurityContext jaspiSecurityContext=new JASPISecurityContext(sc);
   final ServletRequestContext requestContext=exchange.getAttachment(ServletRequestContext.ATTACHMENT_KEY);
   final JASPIServerAuthenticationManager sam=createJASPIAuthenticationManager();
-  final GenericMessageInfo messageInfo=createMessageInfo(exchange,securityContext);
+  final GenericMessageInfo messageInfo=createMessageInfo(exchange,jaspiSecurityContext);
   final String applicationIdentifier=buildApplicationIdentifier(requestContext);
   final JASPICallbackHandler cbh=new JASPICallbackHandler();
   ROOT_LOGGER.debugf("validateRequest for layer [%s] and applicationContextIdentifier [%s]",JASPI_HTTP_SERVLET_LAYER,applicationIdentifier);
@@ -14,15 +15,21 @@
   }
   if (isValid && account != null) {
     outcome=AuthenticationMechanismOutcome.AUTHENTICATED;
-    securityContext.authenticationComplete(account,MECHANISM_NAME,false);
+    String type=(String)messageInfo.getMap().get(JASPI_AUTH_TYPE);
+    Object registerObj=messageInfo.getMap().get(JASPI_REGISTER_SESSION);
+    boolean cache=jaspiSecurityContext.isCachingRequired();
+    if (registerObj != null && (registerObj instanceof String)) {
+      cache=Boolean.valueOf((String)registerObj);
+    }
+    sc.authenticationComplete(account,type != null ? type : jaspiSecurityContext.getAuthType(),cache);
   }
  else   if (isValid && account == null && !isMandatory(requestContext)) {
     outcome=AuthenticationMechanismOutcome.NOT_ATTEMPTED;
   }
  else {
     outcome=AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
-    securityContext.authenticationFailed("JASPI authentication failed.",MECHANISM_NAME);
+    sc.authenticationFailed("JASPI authentication failed.",MECHANISM_NAME);
   }
-  secureResponse(exchange,securityContext,sam,messageInfo,cbh);
+  secureResponse(exchange,sc,sam,messageInfo,cbh);
   return outcome;
 }
