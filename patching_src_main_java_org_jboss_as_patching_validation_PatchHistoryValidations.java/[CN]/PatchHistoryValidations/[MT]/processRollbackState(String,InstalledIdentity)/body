@@ -1,0 +1,38 @@
+{
+  final Set<String> validHistory=new HashSet<String>();
+  final PatchHistoryIterator.Builder builder=PatchHistoryIterator.Builder.create(identity);
+  final HistoryProcessor processor=new HistoryProcessor(){
+    boolean includeCurrent=true;
+    boolean proceed=true;
+    boolean found=false;
+    @Override protected boolean includeCurrent(){
+      return includeCurrent;
+    }
+    @Override protected boolean canProceed(){
+      return proceed;
+    }
+    @Override protected <P extends PatchingArtifact.ArtifactState,S extends PatchingArtifact.ArtifactState>boolean handleError(    PatchingArtifact<P,S> artifact,    S state){
+      if (artifact == PatchingArtifacts.HISTORY_DIR || artifact == PatchingArtifacts.PATCH_XML || artifact == PatchingArtifacts.ROLLBACK_XML || artifact == PatchingArtifacts.MISC_BACKUP) {
+        proceed=false;
+        return found;
+      }
+ else {
+        includeCurrent=false;
+        proceed=false;
+        return false;
+      }
+    }
+    @Override protected void processedPatch(    String patch){
+      validHistory.add(patch);
+      if (patch.equals(patchID)) {
+        found=true;
+      }
+ else       if (found) {
+        proceed=false;
+      }
+    }
+  }
+;
+  processor.process(builder.iterator());
+  return validHistory;
+}

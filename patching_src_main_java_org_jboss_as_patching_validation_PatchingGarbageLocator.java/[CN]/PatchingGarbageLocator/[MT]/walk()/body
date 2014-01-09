@@ -1,5 +1,50 @@
 {
-  activeHistory=new HashSet<String>();
-  activeOverlays=new HashSet<File>();
-  activeDirsHandler.handleAll(getContext(manager,false));
+  validHistory=new HashSet<String>();
+  referencedOverlayDirectories=new HashSet<File>();
+  final Set<String> activeHistory=new HashSet<String>();
+  try {
+    final PatchableTarget.TargetInfo info=installedIdentity.getIdentity().loadTargetInfo();
+    activeHistory.addAll(info.getPatchIDs());
+    activeHistory.add(info.getCumulativePatchID());
+  }
+ catch (  IOException e) {
+    throw new RuntimeException(e);
+  }
+  final PatchHistoryIterator.Builder builder=PatchHistoryIterator.Builder.create(installedIdentity);
+  builder.addStateHandler(PatchingArtifacts.MODULE_OVERLAY,new PatchingArtifactStateHandler<PatchingFileArtifact.DirectoryArtifactState>(){
+    @Override public void handleValidatedState(    PatchingFileArtifact.DirectoryArtifactState state){
+      referencedOverlayDirectories.add(state.getFile());
+    }
+  }
+);
+  builder.addStateHandler(PatchingArtifacts.BUNDLE_OVERLAY,new PatchingArtifactStateHandler<PatchingFileArtifact.DirectoryArtifactState>(){
+    @Override public void handleValidatedState(    PatchingFileArtifact.DirectoryArtifactState state){
+      referencedOverlayDirectories.add(state.getFile());
+    }
+  }
+);
+  final PatchHistoryValidations.HistoryProcessor processor=new PatchHistoryValidations.HistoryProcessor(){
+    boolean failed=false;
+    @Override protected boolean includeCurrent(){
+      return true;
+    }
+    @Override protected boolean canProceed(){
+      return !activeHistory.isEmpty() || !failed;
+    }
+    @Override protected <P extends PatchingArtifact.ArtifactState,S extends PatchingArtifact.ArtifactState>boolean handleError(    PatchingArtifact<P,S> artifact,    S state){
+      failed=true;
+      if (artifact == PatchingArtifacts.PATCH_XML || artifact == PatchingArtifacts.ROLLBACK_XML || artifact == PatchingArtifacts.MISC_BACKUP) {
+        return true;
+      }
+ else {
+        return false;
+      }
+    }
+    @Override protected void processedPatch(    String patch){
+      activeHistory.remove(patch);
+      validHistory.add(patch);
+    }
+  }
+;
+  processor.process(builder.iterator());
 }

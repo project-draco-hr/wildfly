@@ -1,0 +1,42 @@
+{
+  final InstalledIdentity identity=processor.getInstalledIdentity();
+  final Patch patch=parent.getPatch();
+  if (Constants.BASE.equals(patch.getPatchId())) {
+    return true;
+  }
+  final List<PatchElement> elements=patch.getElements();
+  boolean valid=true;
+  if (elements != null && !elements.isEmpty()) {
+    for (    final PatchElement element : elements) {
+      final String patchID=element.getId();
+      final PatchElementProvider provider=element.getProvider();
+      final String layerName=provider.getName();
+      final PatchableTarget target=provider.isAddOn() ? identity.getAddOn(layerName) : identity.getLayer(layerName);
+      boolean modules=false;
+      boolean bundles=false;
+      for (      final ContentModification modification : element.getModifications()) {
+        if (modules && bundles) {
+          break;
+        }
+        if (modification.getItem().getContentType() == ContentType.BUNDLE) {
+          bundles=true;
+        }
+ else         if (modification.getItem().getContentType() == ContentType.MODULE) {
+          modules=true;
+        }
+      }
+      final PatchableTargetState state=new PatchableTargetState(patchID,layerName,target,bundles,modules);
+      if (!processor.process(PatchingArtifacts.LAYER,state)) {
+        valid=false;
+      }
+    }
+  }
+  for (  final ContentModification modification : patch.getModifications()) {
+    if (modification.getType() != ModificationType.ADD && modification.getItem().getContentType() == ContentType.MISC) {
+      final PatchingHistoryDirArtifact.DirectoryArtifactState history=processor.getParentArtifact(PatchingArtifacts.HISTORY_DIR);
+      PatchingArtifacts.MISC_BACKUP.process(history,processor);
+      break;
+    }
+  }
+  return valid;
+}
