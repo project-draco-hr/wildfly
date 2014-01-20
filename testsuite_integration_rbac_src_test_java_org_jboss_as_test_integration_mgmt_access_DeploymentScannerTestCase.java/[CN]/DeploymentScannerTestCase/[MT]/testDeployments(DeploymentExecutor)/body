@@ -1,17 +1,23 @@
 {
-  final MBeanServerConnection mbeanServer=JMXConnectorFactory.connect(managementClient.getRemoteJMXURL()).getMBeanServerConnection();
-  final ObjectName name=new ObjectName("jboss.test:service=testdeployments");
-  deploymentExecutor.initialDeploy();
-  Assert.assertNotNull(mbeanServer.getMBeanInfo(name));
-  deploymentExecutor.undeploy();
+  final JMXConnector connector=JMXConnectorFactory.connect(managementClient.getRemoteJMXURL());
   try {
-    long start=System.currentTimeMillis();
-    while (System.currentTimeMillis() - start < 10000) {
-      mbeanServer.getMBeanInfo(name);
-      Thread.sleep(100);
+    final MBeanServerConnection mbeanServer=connector.getMBeanServerConnection();
+    final ObjectName name=new ObjectName("jboss.test:service=testdeployments");
+    deploymentExecutor.initialDeploy();
+    Assert.assertNotNull(mbeanServer.getMBeanInfo(name));
+    deploymentExecutor.undeploy();
+    try {
+      long start=System.currentTimeMillis();
+      while (System.currentTimeMillis() - start < 10000) {
+        mbeanServer.getMBeanInfo(name);
+        Thread.sleep(100);
+      }
+      Assert.fail("Should not have found MBean");
     }
-    Assert.fail("Should not have found MBean");
+ catch (    Exception expected) {
+    }
   }
- catch (  Exception expected) {
+  finally {
+    IoUtils.safeClose(connector);
   }
 }
