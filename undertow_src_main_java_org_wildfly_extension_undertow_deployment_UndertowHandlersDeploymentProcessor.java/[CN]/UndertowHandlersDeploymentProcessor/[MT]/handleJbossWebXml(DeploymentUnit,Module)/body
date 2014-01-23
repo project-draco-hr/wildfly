@@ -1,0 +1,34 @@
+{
+  WarMetaData warMetadata=deploymentUnit.getAttachment(WarMetaData.ATTACHMENT_KEY);
+  if (warMetadata == null) {
+    return;
+  }
+  JBossWebMetaData merged=warMetadata.getMergedJBossWebMetaData();
+  if (merged == null) {
+    return;
+  }
+  List<HttpHandlerMetaData> handlers=merged.getHandlers();
+  if (handlers == null) {
+    return;
+  }
+  for (  HttpHandlerMetaData hander : handlers) {
+    try {
+      ClassLoader cl=module.getClassLoader();
+      if (hander.getModule() != null) {
+        Module handlerModule=deploymentUnit.getAttachment(Attachments.SERVICE_MODULE_LOADER).loadModule(ModuleIdentifier.create(hander.getModule()));
+        cl=handlerModule.getClassLoader();
+      }
+      Class<?> handlerClass=cl.loadClass(hander.getHandlerClass());
+      Map<String,String> params=new HashMap<>();
+      if (hander.getParams() != null) {
+        for (        ParamValueMetaData param : hander.getParams()) {
+          params.put(param.getParamName(),param.getParamValue());
+        }
+      }
+      deploymentUnit.addToAttachmentList(UndertowAttachments.UNDERTOW_OUTER_HANDLER_CHAIN_WRAPPERS,new ConfiguredHandlerWrapper(handlerClass,params));
+    }
+ catch (    Exception e) {
+      throw UndertowMessages.MESSAGES.failedToConfigureHandlerClass(hander.getHandlerClass(),e);
+    }
+  }
+}
