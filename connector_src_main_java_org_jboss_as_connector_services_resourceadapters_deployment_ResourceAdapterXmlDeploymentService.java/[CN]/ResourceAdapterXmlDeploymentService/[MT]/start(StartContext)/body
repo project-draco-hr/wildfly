@@ -4,38 +4,34 @@
     File root=mdr.getValue().getRoot(deployment);
     ResourceAdapter localRaXml=getRaxml();
     cmd=(new Merger()).mergeConnectorWithCommonIronJacamar(localRaXml,cmd);
-    final AS7RaXmlDeployer raDeployer=new AS7RaXmlDeployer(context.getChildTarget(),connectorXmlDescriptor.getUrl(),raName,root,module.getClassLoader(),cmd,localRaXml,null,deploymentServiceName);
-    raDeployer.setConfiguration(config.getValue());
-    try {
-      WritableServiceBasedNamingStore.pushOwner(duServiceName);
-      ClassLoader old=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
-      try {
-        WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(module.getClassLoader());
-        raxmlDeployment=raDeployer.doDeploy();
-      }
-  finally {
-        WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(old);
-        WritableServiceBasedNamingStore.popOwner();
-      }
-    }
- catch (    Throwable t) {
-      cleanupStartAsync(context,raName,deploymentServiceName,t);
-      return;
-    }
     String id=((ModifiableResourceAdapter)raxml).getId();
     final ServiceName raServiceName;
     if (id == null || id.trim().isEmpty()) {
       raServiceName=ConnectorServices.getResourceAdapterServiceName(raName);
+      this.connectorServicesRegistrationName=raName;
     }
  else {
       raServiceName=ConnectorServices.getResourceAdapterServiceName(id);
+      this.connectorServicesRegistrationName=id;
+    }
+    final AS7RaXmlDeployer raDeployer=new AS7RaXmlDeployer(context.getChildTarget(),connectorXmlDescriptor.getUrl(),raName,root,module.getClassLoader(),cmd,localRaXml,null,deploymentServiceName);
+    raDeployer.setConfiguration(config.getValue());
+    WritableServiceBasedNamingStore.pushOwner(duServiceName);
+    ClassLoader old=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
+    try {
+      WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(module.getClassLoader());
+      raxmlDeployment=raDeployer.doDeploy();
+    }
+  finally {
+      WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(old);
+      WritableServiceBasedNamingStore.popOwner();
     }
     value=new ResourceAdapterDeployment(raxmlDeployment,raName,raServiceName);
     managementRepository.getValue().getConnectors().add(value.getDeployment().getConnector());
     registry.getValue().registerResourceAdapterDeployment(value);
     context.getChildTarget().addService(raServiceName,new ResourceAdapterService(raName,raServiceName,value.getDeployment().getResourceAdapter())).addDependency(deploymentServiceName).setInitialMode(ServiceController.Mode.ACTIVE).install();
   }
- catch (  Exception e) {
-    throw new StartException(e);
+ catch (  Throwable t) {
+    cleanupStartAsync(context,raName,deploymentServiceName,t);
   }
 }

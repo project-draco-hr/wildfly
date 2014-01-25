@@ -1,6 +1,7 @@
 {
   final URL url=connectorXmlDescriptor == null ? null : connectorXmlDescriptor.getUrl();
   deploymentName=connectorXmlDescriptor == null ? null : connectorXmlDescriptor.getDeploymentName();
+  connectorServicesRegistrationName=deploymentName;
   final File root=connectorXmlDescriptor == null ? null : connectorXmlDescriptor.getRoot();
   DEPLOYMENT_CONNECTOR_LOGGER.debugf("DEPLOYMENT name = %s",deploymentName);
   final boolean fromModule=duServiceName.getParent().equals(RaOperationUtil.RAR_MODULE);
@@ -8,28 +9,29 @@
   raDeployer.setConfiguration(config.getValue());
   ClassLoader old=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
   try {
-    WritableServiceBasedNamingStore.pushOwner(duServiceName);
-    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(classLoader);
-    raDeployment=raDeployer.doDeploy();
-    deploymentName=raDeployment.getDeploymentName();
+    try {
+      WritableServiceBasedNamingStore.pushOwner(duServiceName);
+      WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(classLoader);
+      raDeployment=raDeployer.doDeploy();
+      deploymentName=raDeployment.getDeploymentName();
+    }
+  finally {
+      WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(old);
+      WritableServiceBasedNamingStore.popOwner();
+    }
+    if (raDeployer.checkActivation(cmd,ijmd)) {
+      DEPLOYMENT_CONNECTOR_LOGGER.debugf("Activating: %s",deploymentName);
+      ServiceName raServiceName=ConnectorServices.getResourceAdapterServiceName(deploymentName);
+      value=new ResourceAdapterDeployment(raDeployment,deploymentName,raServiceName);
+      managementRepository.getValue().getConnectors().add(value.getDeployment().getConnector());
+      registry.getValue().registerResourceAdapterDeployment(value);
+      context.getChildTarget().addService(raServiceName,new ResourceAdapterService(deploymentName,raServiceName,value.getDeployment().getResourceAdapter())).setInitialMode(Mode.ACTIVE).install();
+    }
+ else {
+      DEPLOYMENT_CONNECTOR_LOGGER.debugf("Not activating: %s",deploymentName);
+    }
   }
  catch (  Throwable t) {
     cleanupStartAsync(context,deploymentName,t,duServiceName,classLoader);
-    return;
-  }
- finally {
-    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(old);
-    WritableServiceBasedNamingStore.popOwner();
-  }
-  if (raDeployer.checkActivation(cmd,ijmd)) {
-    DEPLOYMENT_CONNECTOR_LOGGER.debugf("Activating: %s",deploymentName);
-    ServiceName raServiceName=ConnectorServices.getResourceAdapterServiceName(deploymentName);
-    value=new ResourceAdapterDeployment(raDeployment,deploymentName,raServiceName);
-    managementRepository.getValue().getConnectors().add(value.getDeployment().getConnector());
-    registry.getValue().registerResourceAdapterDeployment(value);
-    context.getChildTarget().addService(raServiceName,new ResourceAdapterService(deploymentName,raServiceName,value.getDeployment().getResourceAdapter())).setInitialMode(Mode.ACTIVE).install();
-  }
- else {
-    DEPLOYMENT_CONNECTOR_LOGGER.debugf("Not activating: %s",deploymentName);
   }
 }
