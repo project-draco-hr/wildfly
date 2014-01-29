@@ -7,10 +7,10 @@
     assertNotNull(destination);
     conn=cf.createConnection("guest","guest");
     conn.start();
-    Session session=conn.createSession(false,AUTO_ACKNOWLEDGE);
+    Session consumerSession=conn.createSession(false,AUTO_ACKNOWLEDGE);
     final CountDownLatch latch=new CountDownLatch(10);
     final List<String> result=new ArrayList<String>();
-    MessageConsumer consumer=session.createConsumer(destination);
+    MessageConsumer consumer=consumerSession.createConsumer(destination);
     consumer.setMessageListener(new MessageListener(){
       @Override public void onMessage(      Message message){
         TextMessage msg=(TextMessage)message;
@@ -24,12 +24,16 @@
       }
     }
 );
-    MessageProducer producer=session.createProducer(destination);
+    final Session producerSession=conn.createSession(false,AUTO_ACKNOWLEDGE);
+    MessageProducer producer=producerSession.createProducer(destination);
+    producer.setDeliveryMode(DeliveryMode.NON_PERSISTENT);
     for (int i=0; i < 10; i++) {
       String s="Test" + i;
-      TextMessage msg=session.createTextMessage(s);
+      TextMessage msg=producerSession.createTextMessage(s);
+      System.out.println("sending " + s);
       producer.send(msg);
     }
+    producerSession.close();
     assertTrue(latch.await(3,SECONDS));
     assertEquals(10,result.size());
     for (int i=0; i < result.size(); i++) {
