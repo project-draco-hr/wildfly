@@ -1,14 +1,14 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
-  final DeploymentUnit topLevelDeployment=deploymentUnit.getParent() == null ? deploymentUnit : deploymentUnit.getParent();
-  if (!DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit)) {
+  final DeploymentUnit tl=deploymentUnit.getParent() == null ? deploymentUnit : deploymentUnit.getParent();
+  if (!DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit) && !DeploymentTypeMarker.isType(DeploymentType.EAR,deploymentUnit)) {
     return;
   }
-  if (JsfVersionMarker.getVersion(topLevelDeployment).equals(JsfVersionMarker.WAR_BUNDLES_JSF_IMPL)) {
+  String jsfVersion=JsfVersionMarker.getVersion(tl);
+  if (jsfVersion.equals(JsfVersionMarker.WAR_BUNDLES_JSF_IMPL)) {
     return;
   }
   String defaultJsfVersion=JSFModuleIdFactory.getInstance().getDefaultSlot();
-  String jsfVersion=JsfVersionMarker.getVersion(topLevelDeployment);
   if (!moduleIdFactory.isValidJSFSlot(jsfVersion)) {
     JSFLogger.ROOT_LOGGER.unknownJSFVersion(jsfVersion,defaultJsfVersion);
     jsfVersion=defaultJsfVersion;
@@ -20,14 +20,11 @@
   final ModuleLoader moduleLoader=Module.getBootModuleLoader();
   addJSFAPI(jsfVersion,moduleSpecification,moduleLoader);
   addJSFImpl(jsfVersion,moduleSpecification,moduleLoader);
-  if (deploymentUnit != topLevelDeployment) {
-    final ModuleSpecification topLevelModuleSpecification=topLevelDeployment.getAttachment(Attachments.MODULE_SPECIFICATION);
-    addJSFAPI(jsfVersion,topLevelModuleSpecification,moduleLoader);
-    addJSFImpl(jsfVersion,topLevelModuleSpecification,moduleLoader);
-  }
   moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,JSTL,false,false,false,false));
   moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,JSF_SUBSYSTEM,false,false,true,false));
   addJSFInjection(jsfVersion,moduleSpecification,moduleLoader);
   WarMetaData warMetaData=deploymentUnit.getAttachment(WarMetaData.ATTACHMENT_KEY);
-  addCDIFlag(warMetaData,topLevelDeployment);
+  if (warMetaData != null) {
+    addCDIFlag(warMetaData,deploymentUnit);
+  }
 }
