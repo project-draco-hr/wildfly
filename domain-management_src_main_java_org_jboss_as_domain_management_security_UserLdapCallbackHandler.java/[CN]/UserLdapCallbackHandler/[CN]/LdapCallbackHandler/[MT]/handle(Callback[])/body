@@ -44,51 +44,13 @@
   NamingEnumeration<SearchResult> searchEnumeration=null;
   try {
     searchContext=(DirContext)connectionManager.getConnection();
-    SearchControls searchControls=new SearchControls();
-    if (recursive) {
-      SECURITY_LOGGER.trace("Performing recursive search");
-      searchControls.setSearchScope(SearchControls.SUBTREE_SCOPE);
-    }
- else {
-      SECURITY_LOGGER.trace("Performing single level search");
-      searchControls.setSearchScope(SearchControls.ONELEVEL_SCOPE);
-    }
-    searchControls.setReturningAttributes(new String[]{userDn});
-    searchControls.setTimeLimit(searchTimeLimit);
-    Object[] filterArguments=new Object[]{username};
-    String filter=usernameAttribute != null ? "(" + usernameAttribute + "={0})" : advancedFilter;
-    SECURITY_LOGGER.tracef("Searching for user '%s' using filter '%s'.",username,filter);
-    searchEnumeration=searchContext.search(baseDn,filter,filterArguments,searchControls);
-    if (searchEnumeration.hasMore() == false) {
-      SECURITY_LOGGER.tracef("User '%s' not found in directory.",username);
-      throw MESSAGES.userNotFoundInDirectory(username);
-    }
-    String distinguishedUserDN=null;
-    SearchResult result=searchEnumeration.next();
-    Attributes attributes=result.getAttributes();
-    if (attributes != null) {
-      Attribute dn=attributes.get(userDn);
-      if (dn != null) {
-        distinguishedUserDN=(String)dn.get();
-      }
-    }
-    if (distinguishedUserDN == null) {
-      if (result.isRelative() == true) {
-        distinguishedUserDN=result.getName() + ("".equals(baseDn) ? "" : "," + baseDn);
-      }
- else {
-        String name=result.getName();
-        SECURITY_LOGGER.tracef("Can't follow referral for authentication: %s",name);
-        throw MESSAGES.nameNotFound(name);
-      }
-    }
-    SECURITY_LOGGER.tracef("DN '%s' found for user '%s'",distinguishedUserDN,username);
+    LdapEntry ldapEntry=userSearcherInjector.getValue().userSearch(searchContext,username);
     try {
-      userContext=(DirContext)connectionManager.getConnection(distinguishedUserDN,password);
+      userContext=(DirContext)connectionManager.getConnection(ldapEntry.getDistinguishedName(),password);
       if (userContext != null) {
         SECURITY_LOGGER.tracef("Password verified for user '%s'",username);
         verifyPasswordCallback.setVerified(true);
-        sharedState.put(LdapEntry.class.getName(),new LdapEntry(username,distinguishedUserDN));
+        sharedState.put(LdapEntry.class.getName(),ldapEntry);
       }
     }
  catch (    Exception e) {
