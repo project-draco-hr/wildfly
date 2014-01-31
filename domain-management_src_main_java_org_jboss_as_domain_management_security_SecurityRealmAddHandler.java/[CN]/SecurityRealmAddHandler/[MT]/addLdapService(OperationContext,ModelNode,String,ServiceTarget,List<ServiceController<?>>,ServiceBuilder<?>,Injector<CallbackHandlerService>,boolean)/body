@@ -9,20 +9,21 @@
   final boolean allowEmptyPasswords=LdapAuthenticationResourceDefinition.ALLOW_EMPTY_PASSWORDS.resolveModelAttribute(context,ldap).asBoolean();
   final String userDn=LdapAuthenticationResourceDefinition.USER_DN.resolveModelAttribute(context,ldap).asString();
   UserLdapCallbackHandler ldapCallbackHandler=new UserLdapCallbackHandler(allowEmptyPasswords,shareConnection);
-  final Service<LdapUserSearcher> userSearcherService;
+  final LdapSearcher<LdapEntry,String> userSearcher;
   if (usernameAttribute != null) {
-    userSearcherService=LdapUserSearcherService.createForUsernameFilter(baseDn,recursive,userDn,usernameAttribute);
+    userSearcher=LdapUserSearcherFactory.createForUsernameFilter(baseDn,recursive,userDn,usernameAttribute);
   }
  else {
-    userSearcherService=LdapUserSearcherService.createForAdvancedFilter(baseDn,recursive,userDn,advancedFilter);
+    userSearcher=LdapUserSearcherFactory.createForAdvancedFilter(baseDn,recursive,userDn,advancedFilter);
   }
-  ServiceName userSearcherName=LdapUserSearcher.ServiceUtil.createServiceName(true,realmName);
-  ServiceController<LdapUserSearcher> userSearcherController=serviceTarget.addService(userSearcherName,userSearcherService).setInitialMode(ON_DEMAND).install();
-  newControllers.add(userSearcherController);
+  final LdapCacheService<LdapEntry,String> cacheService=createCacheService(context,userSearcher,ldap.get(CACHE));
+  ServiceName userSearcherCacheName=LdapSearcherCache.ServiceUtil.createServiceName(true,true,realmName);
+  ServiceController<LdapSearcherCache<LdapEntry,String>> cacheServiceController=serviceTarget.addService(userSearcherCacheName,cacheService).setInitialMode(ON_DEMAND).install();
+  newControllers.add(cacheServiceController);
   ServiceBuilder<?> ldapBuilder=serviceTarget.addService(ldapServiceName,ldapCallbackHandler);
   String connectionManager=LdapAuthenticationResourceDefinition.CONNECTION.resolveModelAttribute(context,ldap).asString();
   LdapConnectionManagerService.ServiceUtil.addDependency(ldapBuilder,ldapCallbackHandler.getConnectionManagerInjector(),connectionManager,false);
-  LdapUserSearcher.ServiceUtil.addDependency(ldapBuilder,ldapCallbackHandler.getLdapUserSearcherInjector(),true,realmName);
+  LdapSearcherCache.ServiceUtil.addDependency(ldapBuilder,LdapSearcherCache.class,ldapCallbackHandler.getLdapUserSearcherInjector(),true,true,realmName);
   final ServiceController<?> serviceController=ldapBuilder.setInitialMode(ON_DEMAND).install();
   if (newControllers != null) {
     newControllers.add(serviceController);

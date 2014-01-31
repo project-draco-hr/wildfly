@@ -10,7 +10,7 @@
     acb.setAuthorized(authorized);
     return;
   }
-  ConnectionManager connectionManager=UserLdapCallbackHandler.this.connectionManager.getValue();
+  final ConnectionManager connectionManager=UserLdapCallbackHandler.this.connectionManager.getValue();
   VerifyPasswordCallback verifyPasswordCallback=null;
   String username=null;
   for (  Callback current : callbacks) {
@@ -39,23 +39,58 @@
     SECURITY_LOGGER.trace("No password or 0 length password supplied.");
     throw MESSAGES.noPassword();
   }
-  DirContext searchContext=null;
+  final VerifyPasswordCallback theVpc=verifyPasswordCallback;
+  DirContextFactory dcf=new DirContextFactory(){
+    private DirContext context;
+    @Override public DirContext getDirContext() throws IOException {
+      if (context != null) {
+        return context;
+      }
+      try {
+        return context=(DirContext)connectionManager.getConnection();
+      }
+ catch (      Exception e) {
+        if (e instanceof IOException) {
+          throw (IOException)e;
+        }
+        throw new IOException(e);
+      }
+    }
+    @Override public void close(){
+      safeClose(theVpc,context);
+    }
+  }
+;
   DirContext userContext=null;
-  NamingEnumeration<SearchResult> searchEnumeration=null;
   try {
-    searchContext=(DirContext)connectionManager.getConnection();
-    LdapEntry ldapEntry=userSearcherInjector.getValue().userSearch(searchContext,username);
-    try {
-      userContext=(DirContext)connectionManager.getConnection(ldapEntry.getDistinguishedName(),password);
-      if (userContext != null) {
-        SECURITY_LOGGER.tracef("Password verified for user '%s'",username);
+    SearchResult<LdapEntry> searchResult=userSearcherInjector.getValue().search(dcf,username);
+    LdapEntry ldapEntry=searchResult.getResult();
+    final PasswordCredential cachedCredential=searchResult.getAttachment(PASSWORD_KEY);
+    if (cachedCredential != null) {
+      if (cachedCredential.verify(password)) {
+        SECURITY_LOGGER.tracef("Password verified for user '%s' (using cached password)",username);
         verifyPasswordCallback.setVerified(true);
         sharedState.put(LdapEntry.class.getName(),ldapEntry);
       }
+ else {
+        SECURITY_LOGGER.tracef("Password verification failed for user (using cached password) '%s'",username);
+        verifyPasswordCallback.setVerified(false);
+      }
     }
- catch (    Exception e) {
-      SECURITY_LOGGER.tracef("Password verification failed for user '%s'",username);
-      verifyPasswordCallback.setVerified(false);
+ else {
+      try {
+        userContext=(DirContext)connectionManager.getConnection(ldapEntry.getDistinguishedName(),password);
+        if (userContext != null) {
+          SECURITY_LOGGER.tracef("Password verified for user '%s' (using connection attempt)",username);
+          verifyPasswordCallback.setVerified(true);
+          searchResult.attach(PASSWORD_KEY,new PasswordCredential(password));
+          sharedState.put(LdapEntry.class.getName(),ldapEntry);
+        }
+      }
+ catch (      Exception e) {
+        SECURITY_LOGGER.tracef("Password verification failed for user (using connection attempt) '%s'",username);
+        verifyPasswordCallback.setVerified(false);
+      }
     }
   }
  catch (  Exception e) {
@@ -63,8 +98,7 @@
     throw MESSAGES.cannotPerformVerification(e);
   }
  finally {
-    UserLdapCallbackHandler.this.safeClose(searchEnumeration);
-    safeClose(verifyPasswordCallback,searchContext);
+    dcf.close();
     UserLdapCallbackHandler.this.safeClose(userContext);
   }
 }
