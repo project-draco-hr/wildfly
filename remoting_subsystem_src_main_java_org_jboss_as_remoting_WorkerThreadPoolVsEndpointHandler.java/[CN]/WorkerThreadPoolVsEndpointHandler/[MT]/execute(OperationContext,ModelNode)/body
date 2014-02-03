@@ -1,0 +1,31 @@
+{
+  Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
+  ModelNode model=resource.getModel();
+  Set<String> configuredAttributes=new HashSet<String>();
+  for (  final AttributeDefinition attribute : RemotingSubsystemRootResource.ATTRIBUTES) {
+    String attrName=attribute.getName();
+    if (model.hasDefined(attrName)) {
+      configuredAttributes.add(attrName);
+    }
+  }
+  Resource endpointConfig=resource.getChild(RemotingEndpointResource.ENDPOINT_PATH);
+  if (configuredAttributes.size() > 0) {
+    if (context.getProcessType().isServer()) {
+      throw RemotingMessages.MESSAGES.workerConfigurationIgnored();
+    }
+ else     if (endpointConfig != null) {
+      ModelNode endpointModel=endpointConfig.getModel();
+      if (endpointModel.isDefined()) {
+        for (        Property prop : endpointModel.asPropertyList()) {
+          if (prop.getValue().isDefined()) {
+            throw new OperationFailedException(RemotingMessages.MESSAGES.workerThreadsEndpointConfigurationChoiceRequired(Element.WORKER_THREAD_POOL.getLocalName(),Element.ENDPOINT.getLocalName()));
+          }
+        }
+      }
+    }
+  }
+ else   if (endpointConfig == null) {
+    context.addResource(PathAddress.pathAddress(RemotingEndpointResource.ENDPOINT_PATH),Resource.Factory.create());
+  }
+  context.stepCompleted();
+}
