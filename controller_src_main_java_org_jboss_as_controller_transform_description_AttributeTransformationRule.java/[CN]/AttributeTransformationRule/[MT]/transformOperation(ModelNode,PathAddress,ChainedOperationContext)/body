@@ -3,8 +3,10 @@
   final RejectedAttributesLogContext rejectedAttributes=new RejectedAttributesLogContext(context,address,operation);
   doTransform(address,transformed,operation,context,rejectedAttributes);
   final OperationRejectionPolicy policy;
+  final OperationResultTransformer resultTransformer;
   if (!rejectedAttributes.hasRejections()) {
     policy=OperationTransformer.DEFAULT_REJECTION_POLICY;
+    resultTransformer=OperationResultTransformer.ORIGINAL_RESULT;
   }
  else {
     policy=new OperationRejectionPolicy(){
@@ -16,6 +18,18 @@
       }
     }
 ;
+    resultTransformer=new OperationResultTransformer(){
+      @Override public ModelNode transformResult(      ModelNode result){
+        ModelNode res=result;
+        if (!result.hasDefined(OUTCOME) || SUCCESS.equals(result.get(OUTCOME).asString())) {
+          res=result.clone();
+          res.get(OUTCOME).set(FAILED);
+          res.get(FAILURE_DESCRIPTION).set(policy.getFailureDescription());
+        }
+        return res;
+      }
+    }
+;
   }
-  context.invokeNext(new OperationTransformer.TransformedOperation(transformed,policy,OperationResultTransformer.ORIGINAL_RESULT));
+  context.invokeNext(new OperationTransformer.TransformedOperation(transformed,policy,resultTransformer));
 }
