@@ -1,0 +1,26 @@
+{
+  if (config == null) {
+    throw UndertowMessages.MESSAGES.couldNotFindSessionCookieConfig();
+  }
+  String id=config.findSessionId(exchange);
+  if (id != null) {
+    if (this.manager.containsSession(id)) {
+      throw UndertowMessages.MESSAGES.sessionAlreadyExists(id);
+    }
+  }
+ else {
+    id=this.manager.createSessionId();
+    config.setSessionId(exchange,id);
+  }
+  Batch batch=this.manager.getBatcher().startBatch();
+  try {
+    Session<LocalSessionContext> session=this.manager.createSession(id);
+    io.undertow.server.session.Session adapter=new DistributableSession(this,session,config,batch);
+    this.sessionListeners.sessionCreated(adapter,exchange);
+    return adapter;
+  }
+ catch (  RuntimeException|Error e) {
+    batch.discard();
+    throw e;
+  }
+}
