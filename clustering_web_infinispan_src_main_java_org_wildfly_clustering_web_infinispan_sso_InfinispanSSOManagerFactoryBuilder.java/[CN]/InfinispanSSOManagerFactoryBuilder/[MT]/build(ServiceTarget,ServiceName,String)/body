@@ -1,0 +1,21 @@
+{
+  String containerName=DEFAULT_CACHE_CONTAINER;
+  ServiceName containerServiceName=EmbeddedCacheManagerService.getServiceName(containerName);
+  String templateCacheName=CacheContainer.DEFAULT_CACHE_ALIAS;
+  String cacheName=host;
+  ServiceName cacheConfigurationServiceName=CacheConfigurationService.getServiceName(containerName,cacheName);
+  ServiceName cacheServiceName=CacheService.getServiceName(containerName,cacheName);
+  SSOCacheConfigurationService.build(target,containerName,cacheName,templateCacheName).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  final InjectedValue<EmbeddedCacheManager> cacheContainer=new InjectedValue<>();
+  CacheService.Dependencies dependencies=new CacheService.Dependencies(){
+    @Override public EmbeddedCacheManager getCacheContainer(){
+      return cacheContainer.getValue();
+    }
+    @Override public XAResourceRecoveryRegistry getRecoveryRegistry(){
+      return null;
+    }
+  }
+;
+  AsynchronousService.addService(target,cacheServiceName,new CacheService<>(cacheName,dependencies)).addDependency(cacheConfigurationServiceName).addDependency(containerServiceName,EmbeddedCacheManager.class,cacheContainer).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  return InfinispanSSOManagerFactory.build(target,name,containerName,cacheName);
+}
