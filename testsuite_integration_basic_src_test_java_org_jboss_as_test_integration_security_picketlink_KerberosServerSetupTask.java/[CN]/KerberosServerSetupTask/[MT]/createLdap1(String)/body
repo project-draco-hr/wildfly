@@ -1,0 +1,28 @@
+{
+  final Map<String,String> map=new HashMap<String,String>();
+  map.put("hostname",NetworkUtils.formatPossibleIpv6Address(hostname));
+  map.put("realm",KERBEROS_PRIMARY_REALM);
+  directoryService1=DSAnnotationProcessor.getDirectoryService();
+  final String ldifContent=StrSubstitutor.replace(IOUtils.toString(KerberosServerSetupTask.class.getResourceAsStream(KerberosServerSetupTask.class.getSimpleName() + ".ldif"),"UTF-8"),map);
+  LOGGER.debug(ldifContent);
+  final SchemaManager schemaManager=directoryService1.getSchemaManager();
+  try {
+    for (    LdifEntry ldifEntry : new LdifReader(IOUtils.toInputStream(ldifContent))) {
+      directoryService1.getAdminSession().add(new DefaultEntry(schemaManager,ldifEntry.getEntry()));
+    }
+  }
+ catch (  Exception e) {
+    e.printStackTrace();
+    throw e;
+  }
+  final ManagedCreateLdapServer createLdapServer=new ManagedCreateLdapServer((CreateLdapServer)AnnotationUtils.getInstance(CreateLdapServer.class));
+  FileOutputStream fos=new FileOutputStream(KEYSTORE_FILE);
+  IOUtils.copy(getClass().getResourceAsStream(KEYSTORE_FILENAME),fos);
+  fos.close();
+  createLdapServer.setKeyStore(KEYSTORE_FILE.getAbsolutePath());
+  fixTransportAddress(createLdapServer,hostname);
+  ldapServer1=ServerAnnotationProcessor.instantiateLdapServer(createLdapServer,directoryService1);
+  krbServer1=KDCServerAnnotationProcessor.getKdcServer(directoryService1,KERBEROS_PORT,hostname);
+  ldapServer1.start();
+  createKrb5Conf(hostname,KRB5_CONF_FILE,KERBEROS_PORT);
+}
