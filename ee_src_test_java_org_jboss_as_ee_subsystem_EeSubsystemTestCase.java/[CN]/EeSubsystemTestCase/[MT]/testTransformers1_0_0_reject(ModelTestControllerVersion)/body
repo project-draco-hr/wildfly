@@ -6,5 +6,13 @@
   builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-ee:" + controllerVersion.getMavenGavVersion());
   KernelServices mainServices=builder.build();
   Assert.assertTrue(mainServices.isSuccessfulBoot());
-  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,modelVersion,xmlOps,new FailedOperationTransformationConfig().addFailedAttribute(PathAddress.pathAddress(EeExtension.PATH_SUBSYSTEM),new GlobalModulesConfig()).addFailedAttribute(PathAddress.pathAddress(EeExtension.PATH_SUBSYSTEM,PathElement.pathElement(EESubsystemModel.CONTEXT_SERVICE)),REJECTED_RESOURCE).addFailedAttribute(PathAddress.pathAddress(EeExtension.PATH_SUBSYSTEM,PathElement.pathElement(EESubsystemModel.MANAGED_THREAD_FACTORY)),REJECTED_RESOURCE).addFailedAttribute(PathAddress.pathAddress(EeExtension.PATH_SUBSYSTEM,PathElement.pathElement(EESubsystemModel.MANAGED_EXECUTOR_SERVICE)),REJECTED_RESOURCE).addFailedAttribute(PathAddress.pathAddress(EeExtension.PATH_SUBSYSTEM,PathElement.pathElement(EESubsystemModel.MANAGED_SCHEDULED_EXECUTOR_SERVICE)),REJECTED_RESOURCE).addFailedAttribute(PathAddress.pathAddress(EeExtension.PATH_SUBSYSTEM,PathElement.pathElement(EESubsystemModel.ANNOTATION_PROPERTY_REPLACEMENT)),REJECTED_RESOURCE));
+  FailedOperationTransformationConfig.ChainedConfig chained=FailedOperationTransformationConfig.ChainedConfig.createBuilder(GlobalModulesDefinition.INSTANCE.getName(),EESubsystemModel.ANNOTATION_PROPERTY_REPLACEMENT).addConfig(new GlobalModulesConfig()).addConfig(new FailedOperationTransformationConfig.RejectExpressionsConfig(EESubsystemModel.ANNOTATION_PROPERTY_REPLACEMENT){
+    @Override protected ModelNode correctValue(    ModelNode toResolve,    boolean isWriteAttribute){
+      ModelNode resolved=super.correctValue(toResolve,isWriteAttribute);
+      return new ModelNode(resolved.asBoolean());
+    }
+  }
+).build();
+  FailedOperationTransformationConfig config=new FailedOperationTransformationConfig().addFailedAttribute(PathAddress.pathAddress(EeExtension.PATH_SUBSYSTEM),chained).addFailedAttribute(PathAddress.pathAddress(EeExtension.PATH_SUBSYSTEM,PathElement.pathElement(EESubsystemModel.CONTEXT_SERVICE)),REJECTED_RESOURCE).addFailedAttribute(PathAddress.pathAddress(EeExtension.PATH_SUBSYSTEM,PathElement.pathElement(EESubsystemModel.MANAGED_THREAD_FACTORY)),REJECTED_RESOURCE).addFailedAttribute(PathAddress.pathAddress(EeExtension.PATH_SUBSYSTEM,PathElement.pathElement(EESubsystemModel.MANAGED_EXECUTOR_SERVICE)),REJECTED_RESOURCE).addFailedAttribute(PathAddress.pathAddress(EeExtension.PATH_SUBSYSTEM,PathElement.pathElement(EESubsystemModel.MANAGED_SCHEDULED_EXECUTOR_SERVICE)),REJECTED_RESOURCE);
+  ModelTestUtils.checkFailedTransformedBootOperations(mainServices,modelVersion,xmlOps,config);
 }
