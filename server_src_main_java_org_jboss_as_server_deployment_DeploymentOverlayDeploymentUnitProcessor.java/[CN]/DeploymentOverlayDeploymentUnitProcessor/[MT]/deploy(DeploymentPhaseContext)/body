@@ -1,0 +1,37 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  Map<String,MountedDeploymentOverlay> mounts=new HashMap<String,MountedDeploymentOverlay>();
+  deploymentUnit.putAttachment(Attachments.DEPLOYMENT_OVERLAY_LOCATIONS,mounts);
+  final Map<String,ResourceRoot> resourceRootMap=new HashMap<String,ResourceRoot>();
+  final AttachmentList<ResourceRoot> rootList=deploymentUnit.getAttachment(Attachments.RESOURCE_ROOTS);
+  if (rootList != null) {
+    for (    ResourceRoot root : rootList) {
+      resourceRootMap.put(root.getRoot().getPathNameRelativeTo(deploymentRoot.getRoot()),root);
+    }
+  }
+  final boolean exploded=MountExplodedMarker.isMountExploded(deploymentUnit) && !ExplodedDeploymentMarker.isExplodedDeployment(deploymentUnit);
+  final Set<String> paths=new HashSet<String>();
+  for (  final DeploymentOverlayService deploymentOverlay : indexService.getOverrides(deploymentUnit.getName())) {
+    for (    final ContentService override : deploymentOverlay.getContentServices()) {
+      try {
+        if (!paths.contains(override.getPath())) {
+          VirtualFile mountPoint=deploymentRoot.getRoot().getChild(override.getPath());
+          paths.add(override.getPath());
+          if (exploded) {
+            copyFile(override.getContentHash().getPhysicalFile(),mountPoint.getPhysicalFile());
+          }
+ else {
+            Closeable handle=VFS.mountReal(override.getContentHash().getPhysicalFile(),mountPoint);
+            MountedDeploymentOverlay mounted=new MountedDeploymentOverlay(handle,override.getContentHash().getPhysicalFile(),mountPoint,TempFileProviderService.provider());
+            deploymentUnit.addToAttachmentList(MOUNTED_FILES,mounted);
+            mounts.put(override.getPath(),mounted);
+          }
+        }
+      }
+ catch (      IOException e) {
+        throw ServerMessages.MESSAGES.deploymentOverlayFailed(e,deploymentOverlay.getName(),override.getPath());
+      }
+    }
+  }
+}

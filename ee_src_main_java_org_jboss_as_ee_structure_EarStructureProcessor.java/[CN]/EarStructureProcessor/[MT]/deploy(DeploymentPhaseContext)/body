@@ -19,6 +19,7 @@
       libDirName=xmlLibDirName;
     }
   }
+  Map<String,MountedDeploymentOverlay> overlays=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_OVERLAY_LOCATIONS);
   try {
     final VirtualFile libDir;
     if (!libDirName.isEmpty()) {
@@ -26,8 +27,17 @@
       if (libDir.exists()) {
         List<VirtualFile> libArchives=libDir.getChildren(CHILD_ARCHIVE_FILTER);
         for (        final VirtualFile child : libArchives) {
-          final Closeable closable=child.isFile() ? mount(child,false) : null;
-          final MountHandle mountHandle=new MountHandle(closable);
+          String relativeName=child.getPathNameRelativeTo(deploymentRoot.getRoot());
+          MountedDeploymentOverlay overlay=overlays.get(relativeName);
+          final MountHandle mountHandle;
+          if (overlay != null) {
+            overlay.remountAsZip(false);
+            mountHandle=new MountHandle(null);
+          }
+ else {
+            final Closeable closable=child.isFile() ? mount(child,false) : null;
+            mountHandle=new MountHandle(closable);
+          }
           final ResourceRoot childResource=new ResourceRoot(child,mountHandle);
           if (child.getName().toLowerCase(Locale.ENGLISH).endsWith(JAR_EXTENSION)) {
             ModuleRootMarker.mark(childResource);
