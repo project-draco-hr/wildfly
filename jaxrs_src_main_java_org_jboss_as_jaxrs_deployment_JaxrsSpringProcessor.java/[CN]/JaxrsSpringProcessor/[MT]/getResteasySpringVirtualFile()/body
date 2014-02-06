@@ -1,0 +1,31 @@
+{
+  try {
+    if (resourceRoot == null) {
+      URL url=this.getClass().getClassLoader().getResource(SPRING_INT_JAR);
+      if (url == null) {
+        throw JaxrsMessages.MESSAGES.noSpringIntegrationJar();
+      }
+      File file=new File(url.toURI());
+      VirtualFile vf=VFS.getChild(file.toURI());
+      final Closeable mountHandle=VFS.mountZip(file,vf,TempFileProviderService.provider());
+      Service<Closeable> mountHandleService=new Service<Closeable>(){
+        public void start(        StartContext startContext) throws StartException {
+        }
+        public void stop(        StopContext stopContext){
+          VFSUtils.safeClose(mountHandle);
+        }
+        public Closeable getValue() throws IllegalStateException, IllegalArgumentException {
+          return mountHandle;
+        }
+      }
+;
+      ServiceBuilder<Closeable> builder=serviceTarget.addService(ServiceName.JBOSS.append(SERVICE_NAME),mountHandleService);
+      builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+      resourceRoot=vf;
+    }
+    return resourceRoot;
+  }
+ catch (  Exception e) {
+    throw new DeploymentUnitProcessingException(e);
+  }
+}
