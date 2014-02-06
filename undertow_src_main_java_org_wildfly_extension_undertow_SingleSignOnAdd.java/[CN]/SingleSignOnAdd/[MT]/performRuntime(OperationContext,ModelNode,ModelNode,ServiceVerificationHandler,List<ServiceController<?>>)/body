@@ -3,14 +3,18 @@
   final PathAddress hostAddress=address.subAddress(0,address.size() - 1);
   final PathAddress serverAddress=hostAddress.subAddress(0,hostAddress.size() - 1);
   final String domain=SingleSignOnDefinition.DOMAIN.resolveModelAttribute(context,model).asString();
-  final boolean reAuthenticate=SingleSignOnDefinition.RE_AUTHENTICATE.resolveModelAttribute(context,model).asBoolean();
   final String serverName=serverAddress.getLastElement().getValue();
   final String hostName=hostAddress.getLastElement().getValue();
   final ServiceName serviceName=UndertowService.ssoServiceName(serverName,hostName);
   final ServiceName virtualHostServiceName=UndertowService.virtualHostName(serverName,hostName);
-  final SingleSignOnService service=new SingleSignOnService(domain,reAuthenticate);
   final ServiceTarget target=context.getServiceTarget();
-  final ServiceController<?> sc=target.addService(serviceName,service).addDependency(virtualHostServiceName,Host.class,service.getHost()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  ServiceName managerServiceName=serviceName.append("manager");
+  ServiceController<?> factoryController=SingleSignOnManagerService.build(target,managerServiceName,virtualHostServiceName).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  if (newControllers != null) {
+    newControllers.add(factoryController);
+  }
+  final SingleSignOnService service=new SingleSignOnService(domain);
+  final ServiceController<?> sc=target.addService(serviceName,service).addDependency(virtualHostServiceName,Host.class,service.getHost()).addDependency(managerServiceName,SingleSignOnManager.class,service.getSingleSignOnSessionManager()).setInitialMode(ServiceController.Mode.ACTIVE).install();
   if (newControllers != null) {
     newControllers.add(sc);
   }
