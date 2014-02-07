@@ -10,7 +10,12 @@
       SECURITY_LOGGER.trace("Performing single level search");
       searchControls.setSearchScope(SearchControls.ONELEVEL_SCOPE);
     }
-    searchControls.setReturningAttributes(new String[]{userDnAttribute});
+    if (usernameLoad == null) {
+      searchControls.setReturningAttributes(new String[]{userDnAttribute});
+    }
+ else {
+      searchControls.setReturningAttributes(new String[]{userDnAttribute,usernameLoad});
+    }
     searchControls.setTimeLimit(searchTimeLimit);
     Object[] filterArguments=new Object[]{suppliedName};
     String filter=userNameAttribute != null ? "(" + userNameAttribute + "={0})" : advancedFilter;
@@ -21,12 +26,20 @@
       throw MESSAGES.userNotFoundInDirectory(suppliedName);
     }
     String distinguishedUserDN=null;
+    String username=usernameLoad == null ? suppliedName : null;
     SearchResult result=searchEnumeration.next();
     Attributes attributes=result.getAttributes();
     if (attributes != null) {
       Attribute dn=attributes.get(userDnAttribute);
       if (dn != null) {
         distinguishedUserDN=(String)dn.get();
+      }
+      if (usernameLoad != null) {
+        Attribute usernameAttr=attributes.get(usernameLoad);
+        if (usernameAttr != null) {
+          username=(String)usernameAttr.get();
+          SECURITY_LOGGER.tracef("Converted username '%s' to '%s'",suppliedName,username);
+        }
       }
     }
     if (distinguishedUserDN == null) {
@@ -39,8 +52,11 @@
         throw MESSAGES.nameNotFound(suppliedName);
       }
     }
-    SECURITY_LOGGER.tracef("DN '%s' found for user '%s'",distinguishedUserDN,suppliedName);
-    return new LdapEntry(suppliedName,distinguishedUserDN);
+    if (username == null) {
+      throw MESSAGES.usernameNotLoaded(suppliedName);
+    }
+    SECURITY_LOGGER.tracef("DN '%s' found for user '%s'",distinguishedUserDN,username);
+    return new LdapEntry(username,distinguishedUserDN);
   }
   finally {
     if (searchEnumeration != null) {
