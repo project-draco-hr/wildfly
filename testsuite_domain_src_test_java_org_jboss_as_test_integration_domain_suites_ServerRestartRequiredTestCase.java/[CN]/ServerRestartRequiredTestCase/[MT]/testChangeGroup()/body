@@ -1,5 +1,5 @@
 {
-  final ModelNode address=reloadTwoAddress;
+  final ModelNode address=reloadTwoConfigAddress;
   final DomainClient client=domainMasterLifecycleUtil.getDomainClient();
   final ModelNode stopOP=new ModelNode();
   stopOP.get(OP).set("stop");
@@ -15,4 +15,24 @@
   updateGroup.get(NAME).set("group");
   updateGroup.get(VALUE).set("reload-test-group");
   executeForResult(composite,client);
+  final ModelNode updateProfile=new ModelNode();
+  updateProfile.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
+  updateProfile.get(OP_ADDR).add(SERVER_GROUP,"reload-test-group");
+  updateProfile.get(NAME).set("profile");
+  updateProfile.get(VALUE).set("default");
+  try {
+    executeForResult(updateProfile,client);
+    assertServerState(reloadOneAddress,client,RELOAD_REQUIRED);
+  }
+  finally {
+    final ModelNode restore=updateProfile.clone();
+    restore.get(VALUE).set("minimal");
+    executeForResult(restore,client);
+  }
+  final ModelNode reloadIfRequired=new ModelNode();
+  reloadIfRequired.get(OP).set("reload-servers");
+  reloadIfRequired.get(OP_ADDR).add(SERVER_GROUP,"reload-test-group");
+  reloadIfRequired.get(BLOCKING).set(true);
+  executeForResult(reloadIfRequired,client);
+  assertServerState(reloadOneAddress,client,"running");
 }
