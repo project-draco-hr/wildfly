@@ -1,0 +1,43 @@
+{
+  CacheEntry entry=null;
+synchronized (theCache) {
+    entry=theCache.get(key);
+    if (entry == null) {
+      SECURITY_LOGGER.tracef("Entry for '%s' not found in cache.",key);
+      entry=new CacheEntry();
+      theCache.put(key,entry);
+      if (maxSize > 0 && theCache.size() > maxSize) {
+        boolean trace=SECURITY_LOGGER.isTraceEnabled();
+        Iterator<Entry<K,CacheEntry>> it=theCache.entrySet().iterator();
+        while (theCache.size() > maxSize) {
+          Entry<K,CacheEntry> current=it.next();
+          current.getValue().cancelFuture();
+          it.remove();
+          if (trace) {
+            SECURITY_LOGGER.tracef("Entry with key '%s' evicted from cache due to cache being above maximum size.",current.getKey());
+          }
+        }
+      }
+      if (evictionTime > 0) {
+        entry.setFuture(executorService.schedule(new Runnable(){
+          @Override public void run(){
+synchronized (theCache) {
+              CacheEntry entry=theCache.remove(key);
+              if (entry == null) {
+                SECURITY_LOGGER.tracef("Entry with key '%s' not in cache at time of timeout.",key);
+              }
+ else {
+                SECURITY_LOGGER.tracef("Evicted entry with key '%s' due to eviction timeout.",key);
+              }
+            }
+          }
+        }
+,evictionTime,TimeUnit.SECONDS));
+      }
+    }
+ else {
+      SECURITY_LOGGER.tracef("Cached entry for '%s' found in cache.",key);
+    }
+  }
+  return entry.getSearchResult(contextFactory,key);
+}
