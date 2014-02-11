@@ -1,0 +1,64 @@
+{
+  final FormDataParser parser=formParserFactory.createParser(exchange);
+  if (parser == null) {
+    Common.UNSUPPORTED_MEDIA_TYPE.handleRequest(exchange);
+    return;
+  }
+  final FormData data=parser.parseBlocking();
+  final OperationParameter.Builder operationParameterBuilder=new OperationParameter.Builder(false);
+  final FormData.FormValue op=data.getFirst(OPERATION);
+  final ModelNode operation;
+  try {
+    if (Common.APPLICATION_DMR_ENCODED.equals(op.getHeaders().getFirst(Headers.CONTENT_TYPE))) {
+      operation=ModelNode.fromBase64(new ByteArrayInputStream(op.getValue().getBytes()));
+      operationParameterBuilder.encode(true);
+    }
+ else {
+      operation=ModelNode.fromJSONString(op.getValue());
+    }
+  }
+ catch (  Exception e) {
+    ROOT_LOGGER.errorf("Unable to construct ModelNode '%s'",e.getMessage());
+    Common.sendError(exchange,false,e.getLocalizedMessage());
+    return;
+  }
+  final OperationBuilder builder=OperationBuilder.create(operation,true);
+  final Deque<FormData.FormValue> contents=data.get(INPUT_STREAMS);
+  if (contents != null && !contents.isEmpty()) {
+    for (    final FormData.FormValue value : contents) {
+      builder.addFileAsAttachment(value.getFile());
+    }
+  }
+  final OperationParameter opParam=operationParameterBuilder.build();
+  final ResponseCallback callback=new ResponseCallback(){
+    @Override void doSendResponse(    final ModelNode response){
+      if (response.hasDefined(OUTCOME) && FAILED.equals(response.get(OUTCOME).asString())) {
+        Common.sendError(exchange,opParam.isEncode(),response);
+        return;
+      }
+      writeResponse(exchange,200,response,opParam);
+    }
+  }
+;
+  final boolean sendPreparedResponse=sendPreparedResponse(operation);
+  final ModelController.OperationTransactionControl control=sendPreparedResponse ? new ModelController.OperationTransactionControl(){
+    @Override public void operationPrepared(    final ModelController.OperationTransaction transaction,    final ModelNode result){
+      transaction.commit();
+      result.get(OUTCOME).set(SUCCESS);
+      result.get(RESULT);
+      callback.sendResponse(result);
+    }
+  }
+ : ModelController.OperationTransactionControl.COMMIT;
+  ModelNode response;
+  try {
+    operation.get(OPERATION_HEADERS,ACCESS_MECHANISM).set(AccessMechanism.HTTP.toString());
+    response=modelController.execute(operation,OperationMessageHandler.DISCARD,control,builder.build());
+  }
+ catch (  Throwable t) {
+    ROOT_LOGGER.modelRequestError(t);
+    Common.sendError(exchange,opParam.isEncode(),t.getLocalizedMessage());
+    return;
+  }
+  callback.sendResponse(response);
+}
