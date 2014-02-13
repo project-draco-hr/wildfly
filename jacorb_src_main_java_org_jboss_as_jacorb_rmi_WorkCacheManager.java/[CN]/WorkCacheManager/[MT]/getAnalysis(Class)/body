@@ -1,19 +1,25 @@
 {
-  ContainerAnalysis ret;
+  ContainerAnalysis ret=null;
+  try {
 synchronized (this) {
-    ret=lookupDone(cls);
-    if (ret != null)     return ret;
-    final InProgress inProgress=(InProgress)workInProgress.get(cls);
-    if (inProgress != null) {
-      if (inProgress.thread == Thread.currentThread())       return inProgress.analysis;
+      ret=lookupDone(cls);
+      if (ret != null)       return ret;
+      final ContainerAnalysis inProgress=workInProgress.get(new InProgressKey(cls,Thread.currentThread()));
+      if (inProgress != null) {
+        return inProgress;
+      }
+      ret=createWorkInProgress(cls);
     }
-    ret=createWorkInProgress(cls);
+    doTheWork(cls,ret);
   }
-  doTheWork(cls,ret);
+  finally {
 synchronized (this) {
-    workInProgress.remove(cls);
-    workDone.put(cls,new SoftReference(ret));
-    notifyAll();
+      workInProgress.remove(new InProgressKey(cls,Thread.currentThread()));
+      if (ret != null) {
+        workDone.put(cls,new SoftReference<ContainerAnalysis>(ret));
+      }
+      notifyAll();
+    }
   }
   return ret;
 }
