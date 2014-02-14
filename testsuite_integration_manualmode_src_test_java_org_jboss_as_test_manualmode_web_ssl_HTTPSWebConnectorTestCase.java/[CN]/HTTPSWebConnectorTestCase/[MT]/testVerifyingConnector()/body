@@ -1,0 +1,35 @@
+{
+  final HttpClient httpClient=getHttpClient(CLIENT_KEYSTORE_FILE);
+  final HttpClient httpClientUntrusted=getHttpClient(UNTRUSTED_KEYSTORE_FILE);
+  try {
+    final URL printPrincipalUrl=getServletUrl(HTTPS_PORT_VERIFY_TRUE,PrincipalPrintingServlet.SERVLET_PATH);
+    final URL securedUrl=getServletUrl(HTTPS_PORT_VERIFY_TRUE,SECURED_SERVLET_WITH_SESSION);
+    final URL unsecuredUrl=getServletUrl(HTTPS_PORT_VERIFY_TRUE,SimpleServlet.SERVLET_PATH);
+    String principal=makeCallWithHttpClient(printPrincipalUrl,httpClient,HttpServletResponse.SC_OK);
+    assertEquals("Unexpected principal","cn=client",principal.toLowerCase());
+    String responseBody=makeCallWithHttpClient(securedUrl,httpClient,HttpServletResponse.SC_OK);
+    assertEquals("Secured page was not reached",SimpleSecuredServlet.RESPONSE_BODY,responseBody);
+    try {
+      makeCallWithHttpClient(unsecuredUrl,httpClientUntrusted,HttpServletResponse.SC_FORBIDDEN);
+      fail("Untrusted client should not be authenticated.");
+    }
+ catch (    SSLPeerUnverifiedException e) {
+    }
+    try {
+      makeCallWithHttpClient(printPrincipalUrl,httpClientUntrusted,HttpServletResponse.SC_FORBIDDEN);
+      fail("Untrusted client should not be authenticated.");
+    }
+ catch (    SSLPeerUnverifiedException e) {
+    }
+    try {
+      makeCallWithHttpClient(securedUrl,httpClientUntrusted,HttpServletResponse.SC_FORBIDDEN);
+      fail("Untrusted client should not be authenticated.");
+    }
+ catch (    SSLPeerUnverifiedException e) {
+    }
+  }
+  finally {
+    httpClient.getConnectionManager().shutdown();
+    httpClientUntrusted.getConnectionManager().shutdown();
+  }
+}
