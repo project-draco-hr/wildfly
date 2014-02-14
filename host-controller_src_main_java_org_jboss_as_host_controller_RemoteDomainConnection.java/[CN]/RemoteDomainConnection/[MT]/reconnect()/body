@@ -5,23 +5,30 @@
       final ReconnectPolicy reconnectPolicy=ReconnectPolicy.RECONNECT;
       int reconnectionCount=0;
       for (; ; ) {
-        String host=null;
-        int port=-1;
         reconnectPolicy.wait(reconnectionCount);
-        for (        DiscoveryOption discoveryOption : discoveryOptions) {
+        HostControllerLogger.ROOT_LOGGER.reconnectingToMaster();
+        for (Iterator<DiscoveryOption> i=discoveryOptions.iterator(); i.hasNext(); ) {
+          DiscoveryOption discoveryOption=i.next();
+          URI masterURI=null;
           try {
             discoveryOption.discover();
-            host=discoveryOption.getRemoteDomainControllerHost();
-            port=discoveryOption.getRemoteDomainControllerPort();
-            setUri(new URI("remote://" + NetworkUtils.formatPossibleIpv6Address(host) + ":"+ port));
-            HostControllerLogger.ROOT_LOGGER.debugf("trying to reconnect to remote host-controller");
-            return connectionManager.connect();
+            String host=discoveryOption.getRemoteDomainControllerHost();
+            int port=discoveryOption.getRemoteDomainControllerPort();
+            masterURI=new URI("remote://" + NetworkUtils.formatPossibleIpv6Address(host) + ":"+ port);
+            setUri(masterURI);
+            HostControllerLogger.ROOT_LOGGER.debugf("trying to reconnect to remote host-controller at %s",masterURI);
+            try {
+              Connection connection=connectionManager.connect();
+              HostControllerLogger.ROOT_LOGGER.connectedToMaster(masterURI);
+              return connection;
+            }
+ catch (            IOException ioe) {
+              RemoteDomainConnectionService.rethrowIrrecoverableConnectionFailures(ioe);
+              throw ioe;
+            }
           }
- catch (          IOException e) {
-            HostControllerLogger.ROOT_LOGGER.debugf(e,"failed to reconnect to the remote host-controller");
-          }
-catch (          IllegalStateException e) {
-            HostControllerLogger.ROOT_LOGGER.debugf(e,"failed to reconnect to the remote host-controller");
+ catch (          Exception e) {
+            RemoteDomainConnectionService.logConnectionException(masterURI,discoveryOption,i.hasNext(),e);
           }
         }
         reconnectionCount++;
