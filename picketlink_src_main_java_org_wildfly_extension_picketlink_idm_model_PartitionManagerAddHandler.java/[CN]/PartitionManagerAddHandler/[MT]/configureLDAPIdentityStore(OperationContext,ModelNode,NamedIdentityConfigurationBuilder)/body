@@ -1,0 +1,76 @@
+{
+  LDAPStoreConfigurationBuilder storeConfig=builder.stores().ldap();
+  ModelNode url=LDAPStoreResourceDefinition.URL.resolveModelAttribute(context,ldapIdentityStore);
+  ModelNode bindDn=LDAPStoreResourceDefinition.BIND_DN.resolveModelAttribute(context,ldapIdentityStore);
+  ModelNode bindCredential=LDAPStoreResourceDefinition.BIND_CREDENTIAL.resolveModelAttribute(context,ldapIdentityStore);
+  ModelNode baseDn=LDAPStoreResourceDefinition.BASE_DN_SUFFIX.resolveModelAttribute(context,ldapIdentityStore);
+  if (url.isDefined()) {
+    storeConfig.url(url.asString());
+  }
+  if (bindDn.isDefined()) {
+    storeConfig.bindDN(bindDn.asString());
+  }
+  if (bindCredential.isDefined()) {
+    storeConfig.bindCredential(bindCredential.asString());
+  }
+  if (baseDn.isDefined()) {
+    storeConfig.baseDN(baseDn.asString());
+  }
+  if (ldapIdentityStore.hasDefined(LDAP_STORE_MAPPING.getName())) {
+    for (    Property mappingNode : ldapIdentityStore.get(LDAP_STORE_MAPPING.getName()).asPropertyList()) {
+      ModelNode ldapMapping=mappingNode.getValue();
+      ModelNode classNameNode=LDAPStoreMappingResourceDefinition.CLASS_NAME.resolveModelAttribute(context,ldapMapping);
+      ModelNode codeNode=LDAPStoreMappingResourceDefinition.CODE.resolveModelAttribute(context,ldapMapping);
+      ModelNode moduleNode=LDAPStoreMappingResourceDefinition.MODULE.resolveModelAttribute(context,ldapMapping);
+      String typeName;
+      if (classNameNode.isDefined()) {
+        typeName=classNameNode.asString();
+      }
+ else       if (codeNode.isDefined()) {
+        typeName=AttributedTypeEnum.forType(codeNode.asString());
+      }
+ else {
+        throw MESSAGES.idmTypeNotProvided(LDAP_STORE_MAPPING.getName());
+      }
+      LDAPMappingConfigurationBuilder storeMapping=storeConfig.mapping(this.<AttributedType>loadClass(moduleNode,typeName));
+      ModelNode relatesToNode=LDAPStoreMappingResourceDefinition.RELATES_TO.resolveModelAttribute(context,ldapMapping);
+      if (relatesToNode.isDefined()) {
+        String relatesTo=AttributedTypeEnum.forType(relatesToNode.asString());
+        if (relatesTo == null) {
+          relatesTo=relatesToNode.asString();
+        }
+        storeMapping.forMapping(this.<AttributedType>loadClass(moduleNode,relatesTo));
+      }
+ else {
+        String baseDN=LDAPStoreMappingResourceDefinition.BASE_DN.resolveModelAttribute(context,ldapMapping).asString();
+        storeMapping.baseDN(baseDN);
+        String objectClasses=LDAPStoreMappingResourceDefinition.OBJECT_CLASSES.resolveModelAttribute(context,ldapMapping).asString();
+        for (        String objClass : objectClasses.split(",")) {
+          if (!objClass.trim().isEmpty()) {
+            storeMapping.objectClasses(objClass);
+          }
+        }
+        ModelNode parentAttributeName=LDAPStoreMappingResourceDefinition.PARENT_ATTRIBUTE.resolveModelAttribute(context,ldapMapping);
+        if (parentAttributeName.isDefined()) {
+          storeMapping.parentMembershipAttributeName(parentAttributeName.asString());
+        }
+      }
+      if (ldapMapping.hasDefined(LDAP_STORE_ATTRIBUTE.getName())) {
+        for (        Property attributeNode : ldapMapping.get(LDAP_STORE_ATTRIBUTE.getName()).asPropertyList()) {
+          ModelNode attribute=attributeNode.getValue();
+          String name=LDAPStoreAttributeResourceDefinition.NAME.resolveModelAttribute(context,attribute).asString();
+          String ldapName=LDAPStoreAttributeResourceDefinition.LDAP_NAME.resolveModelAttribute(context,attribute).asString();
+          boolean readOnly=LDAPStoreAttributeResourceDefinition.READ_ONLY.resolveModelAttribute(context,attribute).asBoolean();
+          if (readOnly) {
+            storeMapping.readOnlyAttribute(name,ldapName);
+          }
+ else {
+            boolean isIdentifier=LDAPStoreAttributeResourceDefinition.IS_IDENTIFIER.resolveModelAttribute(context,attribute).asBoolean();
+            storeMapping.attribute(name,ldapName,isIdentifier);
+          }
+        }
+      }
+    }
+  }
+  return storeConfig;
+}

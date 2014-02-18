@@ -1,0 +1,28 @@
+{
+  String jndiName=PartitionManagerResourceDefinition.IDENTITY_MANAGEMENT_JNDI_URL.resolveModelAttribute(context,partitionManager).asString();
+  IdentityConfigurationBuilder builder=new IdentityConfigurationBuilder();
+  PartitionManagerService partitionManagerService=new PartitionManagerService(federationName,jndiName,builder);
+  ServiceBuilder<PartitionManager> serviceBuilder=context.getServiceTarget().addService(PartitionManagerService.createServiceName(federationName),partitionManagerService);
+  ModelNode identityConfigurationNode=partitionManager.get(IDENTITY_CONFIGURATION.getName());
+  if (!identityConfigurationNode.isDefined()) {
+    throw MESSAGES.idmNoIdentityConfigurationProvided();
+  }
+  for (  Property identityConfiguration : identityConfigurationNode.asPropertyList()) {
+    String configurationName=identityConfiguration.getName();
+    NamedIdentityConfigurationBuilder namedIdentityConfigurationBuilder=builder.named(configurationName);
+    ModelNode value=identityConfiguration.getValue();
+    if (!value.isDefined()) {
+      throw MESSAGES.idmNoIdentityStoreProvided(configurationName);
+    }
+    for (    ModelNode store : value.asList()) {
+      configureIdentityStore(context,serviceBuilder,verificationHandler,newControllers,partitionManagerService,configurationName,namedIdentityConfigurationBuilder,store);
+    }
+  }
+  if (verificationHandler != null) {
+    serviceBuilder.addListener(verificationHandler);
+  }
+  ServiceController<PartitionManager> controller=serviceBuilder.setInitialMode(Mode.PASSIVE).install();
+  if (newControllers != null) {
+    newControllers.add(controller);
+  }
+}

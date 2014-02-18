@@ -1,0 +1,24 @@
+{
+  final Map<String,String> map=new HashMap<String,String>();
+  map.put("hostname",NetworkUtils.formatPossibleIpv6Address(hostname));
+  directoryService=DSAnnotationProcessor.getDirectoryService();
+  final String ldifContent=StrSubstitutor.replace(IOUtils.toString(LdapServerSetupTask.class.getResourceAsStream("picketlink-idm-tests.ldif"),"UTF-8"),map);
+  final SchemaManager schemaManager=directoryService.getSchemaManager();
+  try {
+    for (    LdifEntry ldifEntry : new LdifReader(IOUtils.toInputStream(ldifContent))) {
+      directoryService.getAdminSession().add(new DefaultEntry(schemaManager,ldifEntry.getEntry()));
+    }
+  }
+ catch (  Exception e) {
+    e.printStackTrace();
+    throw e;
+  }
+  final ManagedCreateLdapServer createLdapServer=new ManagedCreateLdapServer((CreateLdapServer)AnnotationUtils.getInstance(CreateLdapServer.class));
+  FileOutputStream fos=new FileOutputStream(KEYSTORE_FILE);
+  IOUtils.copy(getClass().getResourceAsStream(KEYSTORE_FILENAME),fos);
+  fos.close();
+  createLdapServer.setKeyStore(KEYSTORE_FILE.getAbsolutePath());
+  fixTransportAddress(createLdapServer,hostname);
+  ldapServer=ServerAnnotationProcessor.instantiateLdapServer(createLdapServer,directoryService);
+  ldapServer.start();
+}

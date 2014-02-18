@@ -1,0 +1,18 @@
+{
+  BindInfo bindInfo=createPartitionManagerBindInfo();
+  ServiceName serviceName=bindInfo.getBinderServiceName();
+  final BinderService binderService=new BinderService(serviceName.getCanonicalName());
+  final ServiceBuilder<ManagedReferenceFactory> builder=context.getController().getServiceContainer().addService(serviceName,binderService).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(this.jndiName));
+  builder.addDependency(ContextNames.JAVA_CONTEXT_SERVICE_NAME,ServiceBasedNamingStore.class,binderService.getNamingStoreInjector());
+  builder.addDependency(createServiceName(this.alias),PartitionManager.class,new Injector<PartitionManager>(){
+    @Override public void inject(    final PartitionManager value) throws InjectionException {
+      binderService.getManagedObjectInjector().inject(new ValueManagedReferenceFactory(new ImmediateValue<Object>(value)));
+    }
+    @Override public void uninject(){
+      binderService.getManagedObjectInjector().uninject();
+    }
+  }
+);
+  builder.setInitialMode(Mode.PASSIVE).install();
+  ROOT_LOGGER.boundToJndi("PartitionManager " + this.alias,bindInfo.getAbsoluteJndiName());
+}
