@@ -1,0 +1,40 @@
+{
+  String path=pathField.getText();
+  if (path.trim().isEmpty()) {
+    JOptionPane.showMessageDialog(this,"A file path must be selected.","Empty File Path",JOptionPane.ERROR_MESSAGE);
+    return;
+  }
+  File selectedFile=new File(path);
+  if (selectedFile.exists()) {
+    this.setVisible(false);
+    int option=JOptionPane.showConfirmDialog(cliGuiCtx.getMainWindow(),"Overwrite " + path,"Overwrite?",JOptionPane.YES_NO_OPTION);
+    if (option == JOptionPane.NO_OPTION) {
+      this.setVisible(true);
+      return;
+    }
+  }
+  this.dispose();
+  cliGuiCtx.getMainWindow().setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+  PrintStream out=null;
+  try {
+    String command="/subsystem=logging/:read-log-file(name=" + fileName + ",lines=-1,skip=0,tail=false)";
+    ModelNode result=cliGuiCtx.getExecutor().doCommand(command);
+    if (result.get("outcome").asString().equals("failed")) {
+      String error="Failure at server: " + result.get("failure-description").toString();
+      JOptionPane.showMessageDialog(cliGuiCtx.getMainWindow(),error,"Download Failed",JOptionPane.ERROR_MESSAGE);
+      return;
+    }
+    out=new PrintStream(new BufferedOutputStream(new FileOutputStream(selectedFile)));
+    for (    ModelNode line : result.get("result").asList()) {
+      out.println(line.asString());
+    }
+  }
+ catch (  IOException|CommandFormatException ex) {
+    throw new RuntimeException(ex);
+  }
+ finally {
+    if (out != null)     out.close();
+    cliGuiCtx.getMainWindow().setCursor(Cursor.getDefaultCursor());
+  }
+  JOptionPane.showMessageDialog(cliGuiCtx.getMainWindow(),"Download complete.");
+}
