@@ -17,17 +17,29 @@
   cliGuiCtx.getMainWindow().setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
   PrintStream out=null;
   try {
-    String command="/subsystem=logging/:read-log-file(name=" + fileName + ",lines=-1,skip=0,tail=false)";
-    ModelNode result=cliGuiCtx.getExecutor().doCommand(command);
-    if (result.get("outcome").asString().equals("failed")) {
-      String error="Failure at server: " + result.get("failure-description").toString();
-      JOptionPane.showMessageDialog(cliGuiCtx.getMainWindow(),error,"Download Failed",JOptionPane.ERROR_MESSAGE);
-      return;
-    }
     out=new PrintStream(new BufferedOutputStream(new FileOutputStream(selectedFile)));
-    for (    ModelNode line : result.get("result").asList()) {
-      out.println(line.asString());
+    int linesToRead=5000;
+    int skip=0;
+    List<ModelNode> dataLines=null;
+    long bytesRead=0;
+    int lineSepLength=System.getProperty("line.separator").length();
+    do {
+      String command="/subsystem=logging/:read-log-file(name=" + fileName + ",lines="+ linesToRead+ ",skip="+ skip+ ",tail=false)";
+      ModelNode result=cliGuiCtx.getExecutor().doCommand(command);
+      if (result.get("outcome").asString().equals("failed")) {
+        String error="Failure at server: " + result.get("failure-description").toString();
+        JOptionPane.showMessageDialog(cliGuiCtx.getMainWindow(),error,"Download Failed",JOptionPane.ERROR_MESSAGE);
+        return;
+      }
+      dataLines=result.get("result").asList();
+      for (      ModelNode line : dataLines) {
+        String strLine=line.asString();
+        bytesRead+=strLine.length() + lineSepLength;
+        out.println(strLine);
+      }
+      skip+=linesToRead;
     }
+ while (dataLines.size() == linesToRead);
   }
  catch (  IOException|CommandFormatException ex) {
     throw new RuntimeException(ex);
