@@ -14,39 +14,9 @@
     }
   }
   this.dispose();
-  cliGuiCtx.getMainWindow().setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-  PrintStream out=null;
-  try {
-    out=new PrintStream(new BufferedOutputStream(new FileOutputStream(selectedFile)));
-    int linesToRead=5000;
-    int skip=0;
-    List<ModelNode> dataLines=null;
-    long bytesRead=0;
-    int lineSepLength=System.getProperty("line.separator").length();
-    do {
-      String command="/subsystem=logging/:read-log-file(name=" + fileName + ",lines="+ linesToRead+ ",skip="+ skip+ ",tail=false)";
-      ModelNode result=cliGuiCtx.getExecutor().doCommand(command);
-      if (result.get("outcome").asString().equals("failed")) {
-        String error="Failure at server: " + result.get("failure-description").toString();
-        JOptionPane.showMessageDialog(cliGuiCtx.getMainWindow(),error,"Download Failed",JOptionPane.ERROR_MESSAGE);
-        return;
-      }
-      dataLines=result.get("result").asList();
-      for (      ModelNode line : dataLines) {
-        String strLine=line.asString();
-        bytesRead+=strLine.length() + lineSepLength;
-        out.println(strLine);
-      }
-      skip+=linesToRead;
-    }
- while (dataLines.size() == linesToRead);
-  }
- catch (  IOException|CommandFormatException ex) {
-    throw new RuntimeException(ex);
-  }
- finally {
-    if (out != null)     out.close();
-    cliGuiCtx.getMainWindow().setCursor(Cursor.getDefaultCursor());
-  }
-  JOptionPane.showMessageDialog(cliGuiCtx.getMainWindow(),"Download complete.");
+  progressMonitor=new ProgressMonitor(cliGuiCtx.getMainWindow(),"Downloading " + fileName,"",0,100);
+  progressMonitor.setProgress(0);
+  downloadTask=new DownloadLogTask(selectedFile);
+  downloadTask.addPropertyChangeListener(this);
+  downloadTask.execute();
 }
