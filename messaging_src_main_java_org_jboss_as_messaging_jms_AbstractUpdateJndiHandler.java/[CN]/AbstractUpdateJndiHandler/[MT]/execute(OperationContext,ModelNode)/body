@@ -1,0 +1,86 @@
+{
+  JNDI_BINDING.validateOperation(operation);
+  final String jndiName=JNDI_BINDING.resolveModelAttribute(context,operation).asString();
+  final ModelNode entries=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel().get(CommonAttributes.DESTINATION_ENTRIES.getName());
+  if (addOperation) {
+    for (    ModelNode entry : entries.asList()) {
+      if (jndiName.equals(entry.asString())) {
+        throw new OperationFailedException(new ModelNode().set(MESSAGES.jndiNameAlreadyRegistered(jndiName)));
+      }
+    }
+    entries.add(jndiName);
+  }
+ else {
+    ModelNode updatedEntries=new ModelNode();
+    boolean updated=false;
+    for (    ModelNode entry : entries.asList()) {
+      if (jndiName.equals(entry.asString())) {
+        if (entries.asList().size() == 1) {
+          throw new OperationFailedException(new ModelNode().set(MESSAGES.canNotRemoveLastJNDIName(jndiName)));
+        }
+        updated=true;
+      }
+ else {
+        updatedEntries.add(entry);
+      }
+    }
+    if (updated) {
+      context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel().get(CommonAttributes.DESTINATION_ENTRIES.getName()).set(updatedEntries);
+    }
+  }
+  if (context.isNormalServer()) {
+    if (rollbackOperationIfServerNotActive(context,operation)) {
+      return;
+    }
+    context.addStep(new OperationStepHandler(){
+      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
+        final String resourceName=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
+        final ServiceName hqServiceName=MessagingServices.getHornetQServiceName(PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)));
+        final ServiceName jmsManagerServiceName=JMSServices.getJmsManagerBaseServiceName(hqServiceName);
+        final ServiceController<?> jmsServerService=context.getServiceRegistry(false).getService(jmsManagerServiceName);
+        if (jmsServerService != null) {
+          JMSServerManager jmsServerManager=JMSServerManager.class.cast(jmsServerService.getValue());
+          if (jmsServerManager == null) {
+            ManagementUtil.rollbackOperationWithResourceNotFound(context,operation);
+            return;
+          }
+          try {
+            if (addOperation) {
+              addJndiName(jmsServerManager,resourceName,jndiName);
+            }
+ else {
+              removeJndiName(jmsServerManager,resourceName,jndiName);
+            }
+          }
+ catch (          Exception e) {
+            context.getFailureDescription().set(e.getLocalizedMessage());
+          }
+        }
+        if (!context.hasFailureDescription()) {
+          context.getResult();
+        }
+        context.completeStep(new OperationContext.RollbackHandler(){
+          @Override public void handleRollback(          OperationContext context,          ModelNode operation){
+            if (jmsServerService != null) {
+              JMSServerManager jmsServerManager=JMSServerManager.class.cast(jmsServerService.getValue());
+              try {
+                if (addOperation) {
+                  removeJndiName(jmsServerManager,resourceName,jndiName);
+                }
+ else {
+                  addJndiName(jmsServerManager,resourceName,jndiName);
+                }
+              }
+ catch (              Exception e) {
+                context.getFailureDescription().set(e.getLocalizedMessage());
+              }
+            }
+          }
+        }
+);
+      }
+    }
+,OperationContext.Stage.RUNTIME);
+  }
+  context.stepCompleted();
+}
