@@ -1,26 +1,27 @@
 {
-  final ServiceController<?> controller=serviceRegistry.getService(lookupName);
-  final Object object;
-  if (controller != null) {
-    try {
-      object=controller.getValue();
-    }
- catch (    IllegalStateException e) {
-      throw new NameNotFoundException("Error looking up " + name + ", service "+ lookupName+ " is not started");
-    }
-  }
+  try {
+    final ServiceController<?> controller=serviceRegistry.getService(lookupName);
+    if (controller != null) {
+      final Object object=controller.getValue();
+      if (dereference && object instanceof ManagedReferenceFactory) {
+        return ManagedReferenceFactory.class.cast(object).getReference().getInstance();
+      }
  else {
-    return null;
-  }
-  if (dereference && object instanceof ManagedReferenceFactory) {
-    try {
-      return ManagedReferenceFactory.class.cast(object).getReference().getInstance();
+        return object;
+      }
     }
- catch (    Exception e) {
-      NamingException n=new NamingException(e.getMessage());
-      n.initCause(e);
-      throw n;
+ else {
+      return null;
     }
   }
-  return object;
+ catch (  IllegalStateException e) {
+    NameNotFoundException n=new NameNotFoundException(name);
+    n.initCause(e);
+    throw n;
+  }
+catch (  Throwable t) {
+    NamingException n=MESSAGES.lookupError(name);
+    n.initCause(t);
+    throw n;
+  }
 }
