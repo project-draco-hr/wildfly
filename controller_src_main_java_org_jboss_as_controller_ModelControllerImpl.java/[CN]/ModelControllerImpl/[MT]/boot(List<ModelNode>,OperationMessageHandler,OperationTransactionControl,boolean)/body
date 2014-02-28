@@ -2,19 +2,27 @@
   final Integer operationID=new Random(new SecureRandom().nextLong()).nextInt();
   EnumSet<OperationContextImpl.ContextFlag> contextFlags=rollbackOnRuntimeFailure ? EnumSet.of(OperationContextImpl.ContextFlag.ROLLBACK_ON_FAIL) : EnumSet.noneOf(OperationContextImpl.ContextFlag.class);
   final OperationContextImpl context=new OperationContextImpl(this,processType,runningModeControl.getRunningMode(),contextFlags,handler,null,model,control,processState,auditLogger,bootingFlag.get(),operationID,hostServerGroupTracker);
-  List<ParsedBootOp> postExtensionOps=organizeBootOperations(bootList,context,operationID);
+  BootOperations bootOperations=organizeBootOperations(bootList,operationID);
+  for (  ParsedBootOp initialOp : bootOperations.initialOps) {
+    context.addBootStep(initialOp);
+  }
+  if (bootOperations.invalid) {
+    context.setRollbackOnly();
+  }
   OperationContext.ResultAction resultAction=context.executeOperation();
-  if (resultAction == OperationContext.ResultAction.KEEP && postExtensionOps != null) {
+  if (resultAction == OperationContext.ResultAction.KEEP && bootOperations.postExtensionOps != null) {
     final OperationContextImpl postExtContext=new OperationContextImpl(this,processType,runningModeControl.getRunningMode(),contextFlags,handler,null,model,control,processState,auditLogger,bootingFlag.get(),operationID,hostServerGroupTracker);
-    for (    ParsedBootOp parsedOp : postExtensionOps) {
-      final OperationStepHandler stepHandler=parsedOp.handler == null ? rootRegistration.getOperationHandler(parsedOp.address,parsedOp.operationName) : parsedOp.handler;
-      if (stepHandler == null) {
+    for (    ParsedBootOp parsedOp : bootOperations.postExtensionOps) {
+      if (parsedOp.handler == null) {
+        parsedOp=new ParsedBootOp(parsedOp,rootRegistration.getOperationHandler(parsedOp.address,parsedOp.operationName));
+      }
+      if (parsedOp.handler == null) {
         logNoHandler(parsedOp);
         postExtContext.setRollbackOnly();
         break;
       }
  else {
-        postExtContext.addStep(parsedOp.response,parsedOp.operation,stepHandler,OperationContext.Stage.MODEL);
+        postExtContext.addBootStep(parsedOp);
       }
     }
     resultAction=postExtContext.executeOperation();
