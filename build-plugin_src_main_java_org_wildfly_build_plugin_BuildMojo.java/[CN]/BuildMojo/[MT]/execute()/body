@@ -1,0 +1,34 @@
+{
+  buildArtifactMap();
+  FileInputStream configStream=null;
+  try {
+    templateTmpDir=Files.createTempDirectory("wildfly-templates");
+    cleanupTasks.add(new FileDeleteTask(templateTmpDir.toFile()));
+    configStream=new FileInputStream(new File(configDir,configFile));
+    final Build build=new BuildModelParser(project.getProperties()).parse(configStream);
+    for (    Server server : build.getServers()) {
+      extractServer(server);
+    }
+    copyServers(build);
+    copyModules(build);
+    makeDirectories(build);
+    copyArtifacts(build);
+    postProcessModuleDirectory(build.isExtractSchema(),build.isCopyModuleArtifacts());
+    generateConfigFiles(build);
+    postProcessBuild(build);
+  }
+ catch (  Exception e) {
+    throw new RuntimeException(e);
+  }
+ finally {
+    safeClose(configStream);
+    for (    Runnable task : cleanupTasks) {
+      try {
+        task.run();
+      }
+ catch (      Exception e) {
+        getLog().error("Failed to cleanup",e);
+      }
+    }
+  }
+}

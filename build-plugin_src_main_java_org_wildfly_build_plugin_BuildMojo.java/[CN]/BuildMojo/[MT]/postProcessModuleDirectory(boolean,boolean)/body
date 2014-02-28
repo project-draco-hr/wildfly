@@ -1,0 +1,73 @@
+{
+  final File baseDir=new File(buildName,serverName);
+  final File schemaTarget=new File(baseDir,"docs" + File.separator + "schema");
+  if (!schemaTarget.isDirectory()) {
+    if (!schemaTarget.mkdirs()) {
+      throw new RuntimeException("Could not create schema directory");
+    }
+  }
+  final Path modulesDir=Paths.get(new File(baseDir,"modules").getAbsolutePath());
+  Files.walkFileTree(modulesDir,new SimpleFileVisitor<Path>(){
+    @Override public FileVisitResult visitFile(    Path file,    BasicFileAttributes attrs) throws IOException {
+      if (!file.getFileName().toString().equals("module.xml")) {
+        return FileVisitResult.CONTINUE;
+      }
+      try {
+        String moduleXmlContents=null;
+        if (copyModuleArtifacts) {
+          moduleXmlContents=readFile(file.toFile());
+        }
+        ModuleParseResult result=ModuleParser.parse(modulesDir,file);
+        for (        String artifactName : result.getArtifacts()) {
+          Artifact artifact=artifactMap.get(artifactName);
+          if (artifact == null) {
+            throw new RuntimeException("Could not extract resources from artifact " + artifactName + " contents "+ artifactMap);
+          }
+          ZipFile zip=new ZipFile(artifact.getFile());
+          try {
+            if (extractSchema) {
+              extractSchemaFromZip(zip,schemaTarget);
+            }
+            extractTemplatesFromZip(zip);
+          }
+  finally {
+            safeClose(zip);
+          }
+          if (copyModuleArtifacts) {
+            String artifactFileName=artifact.getFile().getName();
+            copyFile(artifact.getFile(),new File(file.getParent().toFile(),artifactFileName));
+            moduleXmlContents=moduleXmlContents.replaceAll("<artifact\\s+name=\"" + artifactName + "\"\\s*/>","<resource-root path=\"" + artifactFileName + "\"/>");
+          }
+        }
+        if (copyModuleArtifacts) {
+          copyFile(new ByteArrayInputStream(moduleXmlContents.getBytes("UTF-8")),file.toFile());
+        }
+        for (        String rootName : result.getResourceRoots()) {
+          Path resourcePath=file.getParent().resolve(rootName);
+          if (!Files.exists(resourcePath)) {
+            getLog().warn("Could not find resource root " + resourcePath);
+            continue;
+          }
+          if (!Files.isRegularFile(resourcePath)) {
+            continue;
+          }
+          ZipFile zip=new ZipFile(resourcePath.toFile());
+          try {
+            if (extractSchema) {
+              extractSchemaFromZip(zip,schemaTarget);
+            }
+            extractTemplatesFromZip(zip);
+          }
+  finally {
+            safeClose(zip);
+          }
+        }
+      }
+ catch (      XMLStreamException e) {
+        throw new RuntimeException(e);
+      }
+      return FileVisitResult.CONTINUE;
+    }
+  }
+);
+}

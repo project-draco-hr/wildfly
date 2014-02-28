@@ -1,0 +1,49 @@
+{
+  if (server.getPath() != null) {
+    return;
+  }
+  String tempDir=System.getProperty("java.io.tmpdir");
+  String name="wf-server-build" + (folderCount++);
+  final File destDir=new File(tempDir,name);
+  deleteRecursive(destDir);
+  cleanupTasks.add(new FileDeleteTask(destDir));
+  destDir.mkdirs();
+  Artifact artifact=artifactMap.get(server.getArtifact());
+  if (artifact == null) {
+    throw new RuntimeException("Could not find server artifact " + server.getArtifact() + " make sure it is present as a dependency of the project");
+  }
+  getLog().info("Extracting server " + artifact.getFile());
+  JarFile jar=null;
+  try {
+    jar=new JarFile(artifact.getFile());
+    Enumeration<JarEntry> entries=jar.entries();
+    byte[] data=new byte[1024];
+    while (entries.hasMoreElements()) {
+      JarEntry jarEntry=entries.nextElement();
+      java.io.File f=new java.io.File(destDir + java.io.File.separator + jarEntry.getName());
+      if (jarEntry.isDirectory()) {
+        f.mkdir();
+        continue;
+      }
+      InputStream is=jar.getInputStream(jarEntry);
+      FileOutputStream fos=new java.io.FileOutputStream(f);
+      try {
+        int read;
+        while ((read=is.read(data)) > 0) {
+          fos.write(data,0,read);
+        }
+      }
+  finally {
+        safeClose(is,fos);
+      }
+    }
+  }
+ catch (  IOException e) {
+    throw new RuntimeException("Failed to extract " + artifact.getFile(),e);
+  }
+ finally {
+    safeClose(jar);
+  }
+  String[] files=destDir.list();
+  server.setPath(new File(destDir,files[0]).getAbsolutePath());
+}
