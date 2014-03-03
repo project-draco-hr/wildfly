@@ -1,0 +1,27 @@
+{
+  ModelNode address=operation.get(ModelDescriptionConstants.OP_ADDR);
+  ModelNode testOp=new ModelNode();
+  testOp.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.READ_RESOURCE_OPERATION);
+  testOp.get(ModelDescriptionConstants.OP_ADDR).set(address);
+  AuthorizationResult authResult=context.authorize(testOp,ADDRESS_EFFECT);
+  if (authResult.getDecision() == AuthorizationResult.Decision.PERMIT) {
+    return new AuthorizedAddress(address,false);
+  }
+  ModelNode partialAddress=new ModelNode().setEmptyList();
+  ModelNode elidedAddress=new ModelNode().setEmptyList();
+  for (  Property prop : address.asPropertyList()) {
+    partialAddress.add(prop);
+    testOp.get(ModelDescriptionConstants.OP_ADDR).set(address);
+    authResult=context.authorize(testOp,ADDRESS_EFFECT);
+    if (authResult.getDecision() == AuthorizationResult.Decision.DENY) {
+      elidedAddress.add(prop.getName(),HIDDEN);
+      return new AuthorizedAddress(elidedAddress,false);
+    }
+ else {
+      elidedAddress.add(prop);
+    }
+  }
+  ModelNode strange=new ModelNode();
+  strange.add(HIDDEN,HIDDEN);
+  return new AuthorizedAddress(strange,true);
+}
