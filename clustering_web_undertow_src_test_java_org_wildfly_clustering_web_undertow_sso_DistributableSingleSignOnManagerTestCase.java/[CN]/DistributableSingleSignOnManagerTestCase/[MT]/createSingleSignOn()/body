@@ -3,17 +3,18 @@
   Batcher batcher=mock(Batcher.class);
   Batch batch=mock(Batch.class);
   Account account=mock(Account.class);
-  SSO<Account,String,Void> sso=mock(SSO.class);
-  Authentication<Account> authentication=mock(Authentication.class);
-  String authenticationType=HttpServletRequest.BASIC_AUTH;
+  String mechanism=HttpServletRequest.BASIC_AUTH;
+  SSO<AuthenticatedSession,String,Void> sso=mock(SSO.class);
+  ArgumentCaptor<AuthenticatedSession> authenticationCaptor=ArgumentCaptor.forClass(AuthenticatedSession.class);
   when(this.manager.createIdentifier()).thenReturn(id);
   when(this.manager.getBatcher()).thenReturn(batcher);
   when(batcher.startBatch()).thenReturn(batch);
-  when(this.manager.createSSO(id)).thenReturn(sso);
-  when(sso.getAuthentication()).thenReturn(authentication);
-  SingleSignOn result=this.subject.createSingleSignOn(account,authenticationType);
+  when(this.manager.createSSO(same(id),authenticationCaptor.capture())).thenReturn(sso);
+  SingleSignOn result=this.subject.createSingleSignOn(account,mechanism);
   assertNotNull(result);
-  verify(authentication).setIdentity(account);
-  verify(authentication).setType(AuthenticationType.BASIC);
+  AuthenticatedSession capturedAuthentication=authenticationCaptor.getValue();
+  assertNotNull(capturedAuthentication);
+  assertSame(capturedAuthentication.getAccount(),account);
+  assertSame(capturedAuthentication.getMechanism(),mechanism);
   verifyNoMoreInteractions(batch);
 }
