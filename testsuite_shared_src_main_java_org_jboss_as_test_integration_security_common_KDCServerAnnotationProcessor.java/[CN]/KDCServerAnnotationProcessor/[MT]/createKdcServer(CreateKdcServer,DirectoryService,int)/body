@@ -1,0 +1,47 @@
+{
+  if (createKdcServer == null) {
+    return null;
+  }
+  KerberosConfig kdcConfig=new KerberosConfig();
+  kdcConfig.setServicePrincipal(createKdcServer.kdcPrincipal());
+  kdcConfig.setPrimaryRealm(createKdcServer.primaryRealm());
+  kdcConfig.setMaximumTicketLifetime(createKdcServer.maxTicketLifetime());
+  kdcConfig.setMaximumRenewableLifetime(createKdcServer.maxRenewableLifetime());
+  kdcConfig.setPaEncTimestampRequired(false);
+  KdcServer kdcServer=new NoReplayKdcServer(kdcConfig);
+  kdcServer.setSearchBaseDn(createKdcServer.searchBaseDn());
+  CreateTransport[] transportBuilders=createKdcServer.transports();
+  if (transportBuilders == null) {
+    UdpTransport defaultTransport=new UdpTransport(AvailablePortFinder.getNextAvailable(startPort));
+    kdcServer.addTransports(defaultTransport);
+  }
+ else   if (transportBuilders.length > 0) {
+    for (    CreateTransport transportBuilder : transportBuilders) {
+      Transport t=createTransport(transportBuilder,startPort);
+      startPort=t.getPort() + 1;
+      kdcServer.addTransports(t);
+    }
+  }
+  CreateChngPwdServer[] createChngPwdServers=createKdcServer.chngPwdServer();
+  if (createChngPwdServers.length > 0) {
+    CreateChngPwdServer createChngPwdServer=createChngPwdServers[0];
+    ChangePasswordConfig config=new ChangePasswordConfig(kdcConfig);
+    config.setServicePrincipal(createChngPwdServer.srvPrincipal());
+    ChangePasswordServer chngPwdServer=new ChangePasswordServer(config);
+    for (    CreateTransport transportBuilder : createChngPwdServer.transports()) {
+      Transport t=createTransport(transportBuilder,startPort);
+      startPort=t.getPort() + 1;
+      chngPwdServer.addTransports(t);
+    }
+    chngPwdServer.setDirectoryService(directoryService);
+    kdcServer.setChangePwdServer(chngPwdServer);
+  }
+  kdcServer.setDirectoryService(directoryService);
+  try {
+    kdcServer.start();
+  }
+ catch (  Exception e) {
+    e.printStackTrace();
+  }
+  return kdcServer;
+}
