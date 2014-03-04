@@ -1,0 +1,26 @@
+{
+  final List<ModelNode> updates=new LinkedList<ModelNode>();
+  LOGGER.info("Adding socket binding");
+  ModelNode socketBindingModelNode=Util.createAddOperation(ADDR_SOCKET_BINDING);
+  socketBindingModelNode.get(HOST).set(Utils.getHost(managementClient));
+  socketBindingModelNode.get(PORT).set(8080);
+  socketBindingModelNode.get(OPERATION_HEADERS,ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  updates.add(socketBindingModelNode);
+  final ModelNode compositeOp=new ModelNode();
+  compositeOp.get(OP).set(COMPOSITE);
+  compositeOp.get(OP_ADDR).setEmptyList();
+  ModelNode steps=compositeOp.get(STEPS);
+  final ModelNode remotingConnectorModelNode=Util.createAddOperation(ADDR_REMOTING_CONNECTOR);
+  remotingConnectorModelNode.get("outbound-socket-binding-ref").set(EJB_OUTBOUND_SOCKET_BINDING);
+  remotingConnectorModelNode.get("username").set(EJBUtil.CONNECTION_PASSWORD);
+  remotingConnectorModelNode.get("security-realm").set(EJB_OUTBOUND_REALM);
+  remotingConnectorModelNode.get("protocol").set("http-remoting");
+  remotingConnectorModelNode.get(OPERATION_HEADERS,ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  steps.add(remotingConnectorModelNode);
+  final ModelNode sslPropertyModelNode=Util.createAddOperation(ADDR_REMOTING_CONNECTOR.append("property","SSL_ENABLED"));
+  sslPropertyModelNode.get(VALUE).set(false);
+  sslPropertyModelNode.get(OPERATION_HEADERS,ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  steps.add(sslPropertyModelNode);
+  updates.add(compositeOp);
+  Utils.applyUpdates(updates,managementClient.getControllerClient());
+}

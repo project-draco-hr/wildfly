@@ -1,0 +1,38 @@
+{
+  Principal desiredUser=null;
+  UserPrincipal connectionUser=null;
+  Map<String,Object> contextData=invocationContext.getContextData();
+  if (contextData.containsKey(DELEGATED_USER_KEY)) {
+    desiredUser=new SimplePrincipal((String)contextData.get(DELEGATED_USER_KEY));
+    Collection<Principal> principals=ConnectionSecurityContext.getConnectionPrincipals();
+    if (principals != null) {
+      for (      Principal current : principals) {
+        if (current instanceof UserPrincipal) {
+          connectionUser=(UserPrincipal)current;
+          break;
+        }
+      }
+    }
+ else {
+      throw new IllegalStateException("Delegation user requested but no user on connection found.");
+    }
+  }
+  ContextStateCache stateCache=null;
+  try {
+    if (desiredUser != null && connectionUser != null && (desiredUser.getName().equals(connectionUser.getName()) == false)) {
+      try {
+        stateCache=ConnectionSecurityContext.pushIdentity(desiredUser,new CurrentUserCredential(connectionUser.getName()));
+      }
+ catch (      Exception e) {
+        LOGGER.error("Failed to switch security context for user",e);
+        throw new EJBAccessException("Unable to attempt switching of user.");
+      }
+    }
+    return invocationContext.proceed();
+  }
+  finally {
+    if (stateCache != null) {
+      ConnectionSecurityContext.popIdentity(stateCache);
+    }
+  }
+}
