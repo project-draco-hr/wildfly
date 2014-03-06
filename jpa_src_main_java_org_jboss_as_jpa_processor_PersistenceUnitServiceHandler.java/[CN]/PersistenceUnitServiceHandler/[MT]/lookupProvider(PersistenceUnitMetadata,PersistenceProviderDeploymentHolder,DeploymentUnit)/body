@@ -1,37 +1,43 @@
 {
-  PersistenceProvider provider=null;
-  if (persistenceProviderDeploymentHolder != null && persistenceProviderDeploymentHolder.getProvider() != null) {
-    List<PersistenceProvider> providerList=persistenceProviderDeploymentHolder.getProvider();
+  List<PersistenceProvider> providerList=persistenceProviderDeploymentHolder != null ? persistenceProviderDeploymentHolder.getProviders() : null;
+  if (providerList != null) {
     for (    PersistenceProvider persistenceProvider : providerList) {
       if (persistenceProvider.getClass().getName().equals(pu.getPersistenceProviderClassName())) {
-        provider=persistenceProvider;
-        JPA_LOGGER.tracef("deployment %s is using its own copy of %s",deploymentUnit.getName(),pu.getPersistenceProviderClassName());
-        break;
+        JPA_LOGGER.tracef("deployment %s is using %s",deploymentUnit.getName(),pu.getPersistenceProviderClassName());
+        return persistenceProvider;
       }
     }
   }
-  if (provider == null) {
-    String persistenceProviderModule=pu.getProperties().getProperty(Configuration.PROVIDER_MODULE);
-    String persistenceProviderClassName=pu.getPersistenceProviderClassName();
-    if (persistenceProviderClassName == null) {
-      persistenceProviderClassName=Configuration.PROVIDER_CLASS_DEFAULT;
-    }
-    if (persistenceProviderModule == null) {
-      persistenceProviderModule=Configuration.getProviderModuleNameFromProviderClassName(persistenceProviderClassName);
-    }
-    provider=getProviderByName(pu,persistenceProviderModule);
-    if (provider == null) {
-      if (persistenceProviderModule != null) {
-        try {
-          PersistenceProviderLoader.loadProviderModuleByName(persistenceProviderModule);
-          provider=getProviderByName(pu,persistenceProviderModule);
-        }
- catch (        ModuleLoadException e) {
-          throw JpaMessages.MESSAGES.cannotLoadPersistenceProviderModule(e,persistenceProviderModule,persistenceProviderClassName);
-        }
+  String configuredPersistenceProviderModule=pu.getProperties().getProperty(Configuration.PROVIDER_MODULE);
+  String persistenceProviderClassName=pu.getPersistenceProviderClassName();
+  if (persistenceProviderClassName == null) {
+    persistenceProviderClassName=Configuration.PROVIDER_CLASS_DEFAULT;
+  }
+  if (configuredPersistenceProviderModule != null) {
+    try {
+      List<PersistenceProvider> providers=PersistenceProviderLoader.loadProviderModuleByName(configuredPersistenceProviderModule);
+      PersistenceProviderDeploymentHolder.savePersistenceProviderInDeploymentUnit(deploymentUnit,providers,null);
+      PersistenceProvider provider=getProviderByName(pu,providers);
+      if (provider != null) {
+        return provider;
       }
     }
-    if (provider == null)     throw JpaMessages.MESSAGES.persistenceProviderNotFound(persistenceProviderClassName);
+ catch (    ModuleLoadException e) {
+      throw JpaMessages.MESSAGES.cannotLoadPersistenceProviderModule(e,configuredPersistenceProviderModule,persistenceProviderClassName);
+    }
   }
+  String providerNameDerivedFromClassName=Configuration.getProviderModuleNameFromProviderClassName(persistenceProviderClassName);
+  PersistenceProvider provider=getProviderByName(pu);
+  if (provider == null && providerNameDerivedFromClassName != null) {
+    try {
+      List<PersistenceProvider> providers=PersistenceProviderLoader.loadProviderModuleByName(providerNameDerivedFromClassName);
+      PersistenceProviderDeploymentHolder.savePersistenceProviderInDeploymentUnit(deploymentUnit,providers,null);
+      provider=getProviderByName(pu,providers);
+    }
+ catch (    ModuleLoadException e) {
+      throw JpaMessages.MESSAGES.cannotLoadPersistenceProviderModule(e,providerNameDerivedFromClassName,persistenceProviderClassName);
+    }
+  }
+  if (provider == null)   throw JpaMessages.MESSAGES.persistenceProviderNotFound(persistenceProviderClassName);
   return provider;
 }
