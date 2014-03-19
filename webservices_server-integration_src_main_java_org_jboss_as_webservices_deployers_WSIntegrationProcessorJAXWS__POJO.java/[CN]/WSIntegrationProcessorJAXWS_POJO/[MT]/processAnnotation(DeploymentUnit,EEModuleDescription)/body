@@ -1,0 +1,61 @@
+{
+  final Map<String,EEModuleClassDescription> classDescriptionMap=new HashMap<String,EEModuleClassDescription>();
+  final CompositeIndex index=unit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
+  for (  EEModuleClassDescription classDescritpion : moduleDescription.getClassDescriptions()) {
+    if (isJaxwsEndpoint(classDescritpion,index) && !exclude(unit,classDescritpion)) {
+      classDescriptionMap.put(classDescritpion.getClassName(),classDescritpion);
+    }
+  }
+  final JBossWebMetaData jbossWebMD=getJBossWebMetaData(unit);
+  final JAXWSDeployment jaxwsDeployment=getJaxwsDeployment(unit);
+  if (jbossWebMD != null) {
+    for (    final ServletMetaData servletMD : getServlets(jbossWebMD)) {
+      final String endpointClassName=getEndpointClassName(servletMD);
+      final String endpointName=getEndpointName(servletMD);
+      if (classDescriptionMap.containsKey(endpointClassName)) {
+        final ComponentDescription pojoComponent=createComponentDescription(unit,endpointName,endpointClassName,endpointName);
+        final ServiceName pojoViewName=registerView(pojoComponent,endpointClassName);
+        final String urlPattern=getUrlPattern(endpointName,unit);
+        jaxwsDeployment.addEndpoint(new POJOEndpoint(endpointName,endpointClassName,pojoViewName,urlPattern));
+        classDescriptionMap.remove(endpointClassName);
+      }
+ else {
+        if (unit.getParent() != null && DeploymentTypeMarker.isType(DeploymentType.EAR,unit.getParent())) {
+          final EEModuleDescription eeModuleDescription=unit.getParent().getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
+          final CompositeIndex parentIndex=unit.getParent().getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
+          for (          EEModuleClassDescription classDescription : eeModuleDescription.getClassDescriptions()) {
+            if (classDescription.getClassName().equals(endpointClassName) && isJaxwsEndpoint(classDescription,parentIndex)) {
+              final ComponentDescription pojoComponent=createComponentDescription(unit,endpointName,endpointClassName,endpointName);
+              final ServiceName pojoViewName=registerView(pojoComponent,endpointClassName);
+              final String urlPattern=getUrlPattern(endpointName,unit);
+              jaxwsDeployment.addEndpoint(new POJOEndpoint(endpointName,endpointClassName,pojoViewName,urlPattern));
+            }
+          }
+        }
+      }
+    }
+  }
+  for (  EEModuleClassDescription classDescription : classDescriptionMap.values()) {
+    ClassInfo classInfo=null;
+    String serviceName=null;
+    final ClassAnnotationInformation<WebService,WebServiceAnnotationInfo> annotationInfo=classDescription.getAnnotationInformation(WebService.class);
+    if (annotationInfo != null) {
+      WebServiceAnnotationInfo wsInfo=annotationInfo.getClassLevelAnnotations().get(0);
+      serviceName=wsInfo.getServiceName();
+      classInfo=(ClassInfo)wsInfo.getTarget();
+    }
+    final ClassAnnotationInformation<WebServiceProvider,WebServiceProviderAnnotationInfo> annotationProviderInfo=classDescription.getAnnotationInformation(WebServiceProvider.class);
+    if (annotationProviderInfo != null) {
+      WebServiceProviderAnnotationInfo wsInfo=annotationProviderInfo.getClassLevelAnnotations().get(0);
+      serviceName=wsInfo.getServiceName();
+      classInfo=(ClassInfo)wsInfo.getTarget();
+    }
+    if (classInfo != null) {
+      final String endpointClassName=classDescription.getClassName();
+      final ComponentDescription pojoComponent=createComponentDescription(unit,endpointClassName,endpointClassName,endpointClassName);
+      final ServiceName pojoViewName=registerView(pojoComponent,endpointClassName);
+      final String urlPattern=getUrlPattern(classInfo,serviceName);
+      jaxwsDeployment.addEndpoint(new POJOEndpoint(endpointClassName,pojoViewName,urlPattern));
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  final EEModuleDescription moduleDescription=getRequiredAttachment(unit,EE_MODULE_DESCRIPTION);
+  final JAXWSDeployment jaxwsDeployment=getJaxwsDeployment(unit);
+  for (  EEModuleClassDescription description : moduleDescription.getClassDescriptions()) {
+    @SuppressWarnings("unchecked") ClassAnnotationInformation classAnnotationInfo=description.getAnnotationInformation(annotationType);
+    if (classAnnotationInfo != null && !classAnnotationInfo.getClassLevelAnnotations().isEmpty()) {
+      Object obj=classAnnotationInfo.getClassLevelAnnotations().get(0);
+      AnnotationTarget target=null;
+      if (obj instanceof WebServiceAnnotationInfo) {
+        target=((WebServiceAnnotationInfo)obj).getTarget();
+      }
+ else       if (obj instanceof WebServiceProviderAnnotationInfo) {
+        target=((WebServiceProviderAnnotationInfo)obj).getTarget();
+      }
+ else {
+        return;
+      }
+      final ClassInfo webServiceClassInfo=(ClassInfo)target;
+      final String webServiceClassName=webServiceClassInfo.name().toString();
+      final List<ComponentDescription> componentDescriptions=moduleDescription.getComponentsByClassName(webServiceClassName);
+      final List<SessionBeanComponentDescription> sessionBeans=getSessionBeans(componentDescriptions);
+      final Set<String> securityRoles=getDeclaredSecurityRoles(unit,webServiceClassInfo);
+      final WebContextAnnotationWrapper webCtx=getWebContextWrapper(webServiceClassInfo);
+      final String authMethod=webCtx.getAuthMethod();
+      final boolean isSecureWsdlAccess=webCtx.isSecureWsdlAccess();
+      final String transportGuarantee=webCtx.getTransportGuarantee();
+      for (      final SessionBeanComponentDescription sessionBean : sessionBeans) {
+        if (sessionBean.isStateless() || sessionBean.isSingleton()) {
+          final EJBViewDescription ejbViewDescription=sessionBean.addWebserviceEndpointView();
+          final ServiceName ejbViewName=ejbViewDescription.getServiceName();
+          jaxwsDeployment.addEndpoint(new EJBEndpoint(sessionBean,ejbViewName,securityRoles,authMethod,isSecureWsdlAccess,transportGuarantee));
+        }
+      }
+    }
+  }
+}
