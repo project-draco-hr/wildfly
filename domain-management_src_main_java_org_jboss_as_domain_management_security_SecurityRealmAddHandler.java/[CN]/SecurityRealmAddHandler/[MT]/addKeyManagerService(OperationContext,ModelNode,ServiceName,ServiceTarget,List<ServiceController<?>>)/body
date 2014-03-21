@@ -1,0 +1,32 @@
+{
+  char[] keystorePassword=KeystoreAttributes.KEYSTORE_PASSWORD.resolveModelAttribute(context,ssl).asString().toCharArray();
+  final ServiceBuilder<KeyManager[]> serviceBuilder;
+  String provider=KeystoreAttributes.KEYSTORE_PROVIDER.resolveModelAttribute(context,ssl).asString();
+  if (JKS.equals(provider) == false) {
+    ProviderKeyManagerService keyManagerService=new ProviderKeyManagerService(provider,keystorePassword);
+    serviceBuilder=serviceTarget.addService(serviceName,keyManagerService);
+  }
+ else {
+    String path=KeystoreAttributes.KEYSTORE_PATH.resolveModelAttribute(context,ssl).asString();
+    final char[] keyPassword;
+    ModelNode pwordNode=KeystoreAttributes.KEY_PASSWORD.resolveModelAttribute(context,ssl);
+    if (pwordNode.isDefined()) {
+      keyPassword=pwordNode.asString().toCharArray();
+    }
+ else {
+      keyPassword=null;
+    }
+    ModelNode aliasNode=KeystoreAttributes.ALIAS.resolveModelAttribute(context,ssl);
+    String alias=aliasNode.isDefined() ? aliasNode.asString() : null;
+    JKSKeyManagerService keyManagerService=new JKSKeyManagerService(path,keystorePassword,keyPassword,alias);
+    serviceBuilder=serviceTarget.addService(serviceName,keyManagerService);
+    ModelNode relativeTo=KeystoreAttributes.KEYSTORE_RELATIVE_TO.resolveModelAttribute(context,ssl);
+    if (relativeTo.isDefined()) {
+      serviceBuilder.addDependency(pathName(relativeTo.asString()),String.class,keyManagerService.getRelativeToInjector());
+    }
+  }
+  final ServiceController<?> serviceController=serviceBuilder.setInitialMode(ON_DEMAND).install();
+  if (controllers != null) {
+    controllers.add(serviceController);
+  }
+}

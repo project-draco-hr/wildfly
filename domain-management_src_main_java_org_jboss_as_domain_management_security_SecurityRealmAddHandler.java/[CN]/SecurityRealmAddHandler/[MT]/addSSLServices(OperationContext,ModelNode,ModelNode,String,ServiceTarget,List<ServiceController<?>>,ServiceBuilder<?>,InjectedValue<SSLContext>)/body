@@ -1,0 +1,38 @@
+{
+  ssl=(ssl == null) ? new ModelNode() : ssl;
+  ServiceName keyManagerServiceName=null;
+  String provider=KeystoreAttributes.KEYSTORE_PROVIDER.resolveModelAttribute(context,ssl).asString();
+  if (ssl.hasDefined(KEYSTORE_PATH) || (JKS.equals(provider) == false)) {
+    keyManagerServiceName=AbstractKeyManagerService.ServiceUtil.createServiceName(SecurityRealm.ServiceUtil.createServiceName(realmName));
+    addKeyManagerService(context,ssl,keyManagerServiceName,serviceTarget,controllers);
+  }
+  ServiceName trustManagerServiceName=null;
+  if (trustStore != null) {
+    trustManagerServiceName=AbstractTrustManagerService.ServiceUtil.createServiceName(SecurityRealm.ServiceUtil.createServiceName(realmName));
+    addTrustManagerService(context,trustStore,trustManagerServiceName,serviceTarget,controllers);
+  }
+  String protocol=SSLServerIdentityResourceDefinition.PROTOCOL.resolveModelAttribute(context,ssl).asString();
+  ServiceName fullServiceName=SSLContextService.ServiceUtil.createServiceName(SecurityRealm.ServiceUtil.createServiceName(realmName),false);
+  ServiceName trustOnlyServiceName=SSLContextService.ServiceUtil.createServiceName(SecurityRealm.ServiceUtil.createServiceName(realmName),true);
+  if (keyManagerServiceName != null) {
+    SSLContextService fullSSLContextService=new SSLContextService(protocol);
+    ServiceBuilder<SSLContext> fullBuilder=serviceTarget.addService(fullServiceName,fullSSLContextService);
+    AbstractKeyManagerService.ServiceUtil.addDependency(fullBuilder,fullSSLContextService.getKeyManagerInjector(),SecurityRealm.ServiceUtil.createServiceName(realmName));
+    if (trustManagerServiceName != null) {
+      AbstractTrustManagerService.ServiceUtil.addDependency(fullBuilder,fullSSLContextService.getTrustManagerInjector(),SecurityRealm.ServiceUtil.createServiceName(realmName));
+    }
+    ServiceController<SSLContext> fullController=fullBuilder.setInitialMode(ON_DEMAND).install();
+    controllers.add(fullController);
+  }
+  SSLContextService trustOnlySSLContextService=new SSLContextService(protocol);
+  ServiceBuilder<SSLContext> trustBuilder=serviceTarget.addService(trustOnlyServiceName,trustOnlySSLContextService);
+  if (keyManagerServiceName == null) {
+    trustBuilder.addAliases(fullServiceName);
+  }
+  if (trustManagerServiceName != null) {
+    AbstractTrustManagerService.ServiceUtil.addDependency(trustBuilder,trustOnlySSLContextService.getTrustManagerInjector(),SecurityRealm.ServiceUtil.createServiceName(realmName));
+  }
+  ServiceController<SSLContext> trustController=trustBuilder.setInitialMode(ON_DEMAND).install();
+  controllers.add(trustController);
+  SSLContextService.ServiceUtil.addDependency(realmBuilder,injector,SecurityRealm.ServiceUtil.createServiceName(realmName),false);
+}
