@@ -1,0 +1,15 @@
+{
+  ServiceName name=getServiceName(containerName,cacheName);
+  ContextNames.BindInfo bindInfo=createBinding(containerName,cacheName);
+  logger.debugf("Installing %s service, bound to ",name.getCanonicalName(),bindInfo.getAbsoluteJndiName());
+  ServiceBuilder<ServiceProviderRegistrationFactory> builder=mode.isClustered() ? CacheServiceProviderRegistrationFactoryService.build(target,name,containerName,cacheName) : LocalServiceProviderRegistrationFactoryService.build(target,name,containerName,cacheName);
+  BinderService binder=new BinderService(bindInfo.getBindName());
+  ServiceBuilder<?> binderBuilder=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(bindInfo.getBindName())).addDependency(name,ServiceProviderRegistrationFactory.class,new ManagedReferenceInjector<ServiceProviderRegistrationFactory>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(ServiceController.Mode.PASSIVE);
+  if (defaultCache) {
+    ContextNames.BindInfo info=createBinding(containerName,CacheContainer.DEFAULT_CACHE_ALIAS);
+    binderBuilder.addAliases(info.getBinderServiceName(),ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(info.getBindName()));
+    builder.addAliases(getServiceName(containerName,CacheContainer.DEFAULT_CACHE_ALIAS));
+  }
+  ServiceController<ServiceProviderRegistrationFactory> controller=builder.setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  return Arrays.asList(controller,binderBuilder.install());
+}

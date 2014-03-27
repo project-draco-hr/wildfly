@@ -1,0 +1,10 @@
+{
+  ServiceName name=getServiceName(cluster);
+  ContextNames.BindInfo bindInfo=createBinding(cluster);
+  logger.debugf("Installing %s service, bound to ",name.getCanonicalName(),bindInfo.getAbsoluteJndiName());
+  ServiceBuilder<CommandDispatcherFactory> builder=clustered ? ChannelCommandDispatcherFactoryService.build(target,name,cluster,moduleId) : LocalCommandDispatcherFactoryService.build(target,name,cluster);
+  ServiceController<CommandDispatcherFactory> controller=builder.setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  BinderService binder=new BinderService(bindInfo.getBindName());
+  ServiceBuilder<?> binderBuilder=target.addService(bindInfo.getBinderServiceName(),binder).addAliases(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(bindInfo.getBindName())).addDependency(name,CommandDispatcherFactory.class,new ManagedReferenceInjector<CommandDispatcherFactory>(binder.getManagedObjectInjector())).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binder.getNamingStoreInjector()).setInitialMode(ServiceController.Mode.PASSIVE);
+  return Arrays.asList(controller,binderBuilder.install());
+}

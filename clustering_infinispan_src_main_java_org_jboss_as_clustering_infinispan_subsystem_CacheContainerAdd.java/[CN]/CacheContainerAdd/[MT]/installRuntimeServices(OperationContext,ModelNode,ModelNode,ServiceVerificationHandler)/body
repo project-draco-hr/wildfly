@@ -23,20 +23,28 @@
   String stack=null;
   String transportExecutor=null;
   Collection<ServiceController<?>> controllers=new LinkedList<>();
-  if (transportConfig != null) {
+  boolean clustered=(transportConfig != null);
+  String clusterName=name;
+  if (clustered) {
     ModelNode transport=containerModel.get(ModelKeys.TRANSPORT,ModelKeys.TRANSPORT_NAME);
-    stack=(resolvedValue=TransportResourceDefinition.STACK.resolveModelAttribute(context,transport)).isDefined() ? resolvedValue.asString() : null;
-    final String cluster=(resolvedValue=TransportResourceDefinition.CLUSTER.resolveModelAttribute(context,transport)).isDefined() ? resolvedValue.asString() : name;
-    long lockTimeout=TransportResourceDefinition.LOCK_TIMEOUT.resolveModelAttribute(context,transport).asLong();
-    transportExecutor=(resolvedValue=TransportResourceDefinition.EXECUTOR.resolveModelAttribute(context,transport)).isDefined() ? resolvedValue.asString() : null;
-    transportConfig.setClusterName(cluster);
-    transportConfig.setLockTimeout(lockTimeout);
-    controllers.addAll(this.installChannelServices(target,name,cluster,stack,verificationHandler));
-    ChannelInstanceResourceDefinition.addChannelProtocolMetricsRegistrationStep(context,cluster,stack);
-    for (    ChannelServiceProvider provider : ServiceLoader.load(ChannelServiceProvider.class,ChannelServiceProvider.class.getClassLoader())) {
-      log.debugf("Installing %s for channel %s",provider.getClass().getSimpleName(),cluster);
-      controllers.addAll(provider.install(target,name,moduleId));
+    if ((resolvedValue=TransportResourceDefinition.STACK.resolveModelAttribute(context,transport)).isDefined()) {
+      stack=resolvedValue.asString();
     }
+    if ((resolvedValue=TransportResourceDefinition.CLUSTER.resolveModelAttribute(context,transport)).isDefined()) {
+      clusterName=resolvedValue.asString();
+    }
+    long lockTimeout=TransportResourceDefinition.LOCK_TIMEOUT.resolveModelAttribute(context,transport).asLong();
+    if ((resolvedValue=TransportResourceDefinition.EXECUTOR.resolveModelAttribute(context,transport)).isDefined()) {
+      transportExecutor=resolvedValue.asString();
+    }
+    transportConfig.setClusterName(clusterName);
+    transportConfig.setLockTimeout(lockTimeout);
+    controllers.addAll(this.installChannelServices(target,name,clusterName,stack,verificationHandler));
+    ChannelInstanceResourceDefinition.addChannelProtocolMetricsRegistrationStep(context,clusterName,stack);
+  }
+  for (  ChannelServiceProvider provider : ServiceLoader.load(ChannelServiceProvider.class,ChannelServiceProvider.class.getClassLoader())) {
+    log.debugf("Installing %s for channel %s",provider.getClass().getSimpleName(),clusterName);
+    controllers.addAll(provider.install(target,name,clustered,moduleId));
   }
   controllers.add(this.installContainerConfigurationService(target,name,defaultCache,statistics,moduleId,stack,transportConfig,transportExecutor,listenerExecutor,evictionExecutor,replicationQueueExecutor,verificationHandler));
   controllers.add(this.installContainerService(target,name,aliases,transportConfig,initialMode,verificationHandler));
