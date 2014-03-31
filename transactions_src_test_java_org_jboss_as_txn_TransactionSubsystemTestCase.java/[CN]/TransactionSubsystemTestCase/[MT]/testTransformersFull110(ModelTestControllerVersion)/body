@@ -2,7 +2,14 @@
   String subsystemXml=readResource("full.xml");
   ModelVersion modelVersion=ModelVersion.create(1,1,0);
   KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT).setSubsystemXml(subsystemXml);
-  builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-transactions:" + controllerVersion.getMavenGavVersion()).configureReverseControllerCheck(AdditionalInitialization.MANAGEMENT,ADD_REMOVED_HORNETQ_STORE_ENABLE_ASYNC_IO).excludeFromParent(SingleClassFilter.createFilter(TransactionLogger.class));
+  final PathAddress subsystemAddress=PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,getMainSubsystemName()));
+  LegacyKernelServicesInitializer init=builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-transactions:" + controllerVersion.getMavenGavVersion()).configureReverseControllerCheck(AdditionalInitialization.MANAGEMENT,ADD_REMOVED_HORNETQ_STORE_ENABLE_ASYNC_IO,RemoveProcessUUIDOperationFixer.INSTANCE).excludeFromParent(SingleClassFilter.createFilter(TransactionLogger.class));
+  if (controllerVersion == ModelTestControllerVersion.EAP_6_0_0) {
+    init.addOperationValidationExclude(ADD,subsystemAddress);
+  }
+ else {
+    init.addOperationValidationFixer(ADD,subsystemAddress,RemoveProcessUUIDOperationFixer.INSTANCE).addSingleChildFirstClass(RemoveProcessUUIDOperationFixer.class);
+  }
   KernelServices mainServices=builder.build();
   KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
   Assert.assertNotNull(legacyServices);
