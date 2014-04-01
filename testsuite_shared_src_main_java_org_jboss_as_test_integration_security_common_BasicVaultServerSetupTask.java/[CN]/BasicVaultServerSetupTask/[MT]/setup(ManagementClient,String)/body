@@ -1,0 +1,31 @@
+{
+  clean();
+  vaultHandler=new VaultHandler("myVault.keystore",VAULT_PASSWORD,null,RESOURCE_LOCATION,128,VAULT_ALIAS,"87654321",20);
+  ModelNode op=new ModelNode();
+  LOGGER.info("Saving original vault setting");
+  op=Util.getReadAttributeOperation(VAULT_PATH,VAULT_OPTIONS);
+  originalVault=(managementClient.getControllerClient().execute(new OperationBuilder(op).build())).get(RESULT);
+  if (originalVault.get("KEYSTORE_URL") != null && originalVault.hasDefined("KEYSTORE_URL")) {
+    op=Util.createRemoveOperation(VAULT_PATH);
+    Utils.applyUpdate(op,managementClient.getControllerClient());
+  }
+  LOGGER.info("Creating new vault");
+  String keystoreURL=vaultHandler.getKeyStore();
+  String encryptionDirectory=new File(RESOURCE_LOCATION).getAbsolutePath();
+  String salt="87654321";
+  int iterationCount=20;
+  nonInteractiveSession=new VaultSession(keystoreURL,VAULT_PASSWORD,encryptionDirectory,salt,iterationCount);
+  nonInteractiveSession.startVaultSession(VAULT_ALIAS);
+  LOGGER.info("Inserting attribute " + VAULT_ATTRIBUTE + " to vault");
+  nonInteractiveSession.addSecuredAttribute(VAULT_BLOCK,ATTRIBUTE_NAME,VAULT_ATTRIBUTE.toCharArray());
+  op=Util.createAddOperation(VAULT_PATH);
+  ModelNode vaultOption=op.get(VAULT_OPTIONS);
+  vaultOption.get("KEYSTORE_URL").set(keystoreURL);
+  vaultOption.get("KEYSTORE_PASSWORD").set(nonInteractiveSession.getKeystoreMaskedPassword());
+  vaultOption.get("KEYSTORE_ALIAS").set(VAULT_ALIAS);
+  vaultOption.get("SALT").set(salt);
+  vaultOption.get("ITERATION_COUNT").set(Integer.toString(iterationCount));
+  vaultOption.get("ENC_FILE_DIR").set(encryptionDirectory);
+  Utils.applyUpdate(op,managementClient.getControllerClient());
+  LOGGER.debug("Vault created in server configuration");
+}
