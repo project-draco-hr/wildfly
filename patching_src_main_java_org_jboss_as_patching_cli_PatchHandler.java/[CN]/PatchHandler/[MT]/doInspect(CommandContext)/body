@@ -1,0 +1,55 @@
+{
+  final ParsedCommandLine parsedLine=ctx.getParsedCommandLine();
+  final String patchPath=path.getValue(parsedLine,true);
+  final File patchFile=new File(patchPath);
+  if (!patchFile.exists()) {
+    throw new CommandLineException("Failed to locate " + patchFile.getAbsolutePath());
+  }
+  ZipFile patchZip=null;
+  InputStream is=null;
+  Patch patch;
+  try {
+    patchZip=new ZipFile(patchFile);
+    final ZipEntry patchXmlEntry=patchZip.getEntry("patch.xml");
+    if (patchXmlEntry == null) {
+      throw new CommandLineException("Failed to locate patch.xml inside " + patchFile.getAbsolutePath());
+    }
+    is=patchZip.getInputStream(patchXmlEntry);
+    patch=PatchXml.parse(is).resolvePatch(null,null);
+  }
+ catch (  ZipException e) {
+    throw new CommandLineException("Failed to open " + patchFile.getAbsolutePath(),e);
+  }
+catch (  IOException e) {
+    throw new CommandLineException("Failed to open " + patchFile.getAbsolutePath(),e);
+  }
+catch (  PatchingException e) {
+    throw new CommandLineException("Failed to resolve parsed patch",e);
+  }
+catch (  XMLStreamException e) {
+    throw new CommandLineException("Failed to parse patch.xml",e);
+  }
+ finally {
+    if (is != null) {
+      try {
+        is.close();
+      }
+ catch (      IOException e) {
+      }
+    }
+    if (patchZip != null) {
+      try {
+        patchZip.close();
+      }
+ catch (      IOException e) {
+      }
+    }
+  }
+  final Identity identity=patch.getIdentity();
+  final SimpleTable table=new SimpleTable(2);
+  table.addLine(new String[]{"Patch ID:",patch.getPatchId()});
+  table.addLine(new String[]{"Type:",identity.getPatchType().getName()});
+  table.addLine(new String[]{"Target:",identity.getName() + ' ' + identity.getVersion()});
+  table.addLine(new String[]{"Description:",patch.getDescription() == null ? "n/a" : patch.getDescription()});
+  ctx.printLine(table.toString(false));
+}
