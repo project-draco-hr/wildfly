@@ -1,0 +1,22 @@
+{
+  masterWorkingDir=createWorkingDir(masterWorkingDir,"master");
+  DirectoryServiceFactory dsf=new DefaultDirectoryServiceFactory();
+  dsf.init(MASTER_DIRECTORY_NAME);
+  masterDirectoryService=dsf.getDirectoryService();
+  masterDirectoryService.getChangeLog().setEnabled(false);
+  SchemaManager schemaManager=masterDirectoryService.getSchemaManager();
+  createPartition(dsf,schemaManager,"simple","dc=simple,dc=wildfly,dc=org",masterDirectoryService,masterWorkingDir);
+  createPartition(dsf,schemaManager,"group-to-principal","dc=group-to-principal,dc=wildfly,dc=org",masterDirectoryService,masterWorkingDir);
+  createPartition(dsf,schemaManager,"principal-to-group","dc=principal-to-group,dc=wildfly,dc=org",masterDirectoryService,masterWorkingDir);
+  CoreSession adminSession=masterDirectoryService.getAdminSession();
+  processLdif(schemaManager,adminSession,"memberOf-schema.ldif");
+  processLdif(schemaManager,adminSession,"simple-partition.ldif");
+  processLdif(schemaManager,adminSession,"group-to-principal.ldif");
+  processLdif(schemaManager,adminSession,"principal-to-group.ldif");
+  masterLdapServer=new LdapServer();
+  masterLdapServer.setServiceName("DefaultLDAP");
+  Transport ldap=new TcpTransport("0.0.0.0",MASTER_LDAP_PORT,3,5);
+  masterLdapServer.addTransports(ldap);
+  masterLdapServer.setDirectoryService(masterDirectoryService);
+  masterLdapServer.start();
+}

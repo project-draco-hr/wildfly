@@ -1,0 +1,18 @@
+{
+  slaveWorkingDir=createWorkingDir(slaveWorkingDir,"slave");
+  DirectoryServiceFactory dsf=new DefaultDirectoryServiceFactory();
+  dsf.init(SLAVE_DIRECTORY_NAME);
+  slaveDirectoryService=dsf.getDirectoryService();
+  slaveDirectoryService.getChangeLog().setEnabled(false);
+  SchemaManager schemaManager=slaveDirectoryService.getSchemaManager();
+  createPartition(dsf,schemaManager,"simple","dc=simple,dc=wildfly,dc=org",slaveDirectoryService,slaveWorkingDir);
+  CoreSession adminSession=slaveDirectoryService.getAdminSession();
+  processLdif(schemaManager,adminSession,"memberOf-schema.ldif");
+  processLdif(schemaManager,adminSession,"simple-partition-slave.ldif");
+  slaveLdapServer=new LdapServer();
+  slaveLdapServer.setServiceName("DefaultLDAP");
+  Transport ldap=new TcpTransport("0.0.0.0",SLAVE_LDAP_PORT,3,5);
+  slaveLdapServer.addTransports(ldap);
+  slaveLdapServer.setDirectoryService(slaveDirectoryService);
+  slaveLdapServer.start();
+}
