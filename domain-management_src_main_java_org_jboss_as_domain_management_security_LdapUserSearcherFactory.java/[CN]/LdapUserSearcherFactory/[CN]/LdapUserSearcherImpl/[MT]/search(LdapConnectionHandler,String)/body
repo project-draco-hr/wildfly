@@ -20,6 +20,10 @@
     Object[] filterArguments=new Object[]{suppliedName};
     String filter=userNameAttribute != null ? "(" + userNameAttribute + "={0})" : advancedFilter;
     SECURITY_LOGGER.tracef("Searching for user '%s' using filter '%s'.",suppliedName,filter);
+    String distinguishedUserDN=null;
+    String username=usernameLoad == null ? suppliedName : null;
+    URI referralAddress=null;
+    Attributes attributes=null;
     LdapConnectionHandler currentConnectionHandler=connectionHandler;
     searchEnumeration=currentConnectionHandler.getConnection().search(baseDn,filter,filterArguments,searchControls);
     try {
@@ -29,29 +33,43 @@
       }
     }
  catch (    LdapReferralException e) {
-      Object into=e.getReferralInfo();
-      Object resolved=e.getResolvedObj();
-      Context context=e.getReferralContext();
-      System.out.println("Had a referral.");
-    }
-    String distinguishedUserDN=null;
-    String username=usernameLoad == null ? suppliedName : null;
-    URI referralAddress=null;
-    SearchResult result=searchEnumeration.next();
-    if (result.isRelative() == false) {
-      String name=result.getName();
+      Object info=e.getReferralInfo();
       try {
-        URI fullUri=new URI(name);
+        URI fullUri=new URI(info.toString());
         referralAddress=new URI(fullUri.getScheme(),null,fullUri.getHost(),fullUri.getPort(),null,null,null);
         distinguishedUserDN=fullUri.getPath().substring(1);
         SECURITY_LOGGER.tracef("Received referral with address '%s' for dn '%s'",referralAddress.toString(),distinguishedUserDN);
+        currentConnectionHandler=currentConnectionHandler.findForReferral(referralAddress);
+        if (currentConnectionHandler == null) {
+          SECURITY_LOGGER.tracef("Unable to follow referral to '%s' for user '%s'",fullUri,suppliedName);
+          throw MESSAGES.userNotFoundInDirectory(suppliedName);
+        }
       }
- catch (      URISyntaxException usi) {
-        SECURITY_LOGGER.tracef("Unable to construct URI from referral name: %s",name);
+ catch (      URISyntaxException ue) {
+        SECURITY_LOGGER.tracef("Unable to construct URI from referral: %s",info);
         throw MESSAGES.nameNotFound(suppliedName);
       }
+      DirContext context=currentConnectionHandler.getConnection();
+      attributes=context.getAttributes(distinguishedUserDN,searchControls.getReturningAttributes());
     }
-    Attributes attributes=result.getAttributes();
+    SearchResult result=null;
+    if (attributes == null) {
+      result=searchEnumeration.next();
+      if (result.isRelative() == false) {
+        String name=result.getName();
+        try {
+          URI fullUri=new URI(name);
+          referralAddress=new URI(fullUri.getScheme(),null,fullUri.getHost(),fullUri.getPort(),null,null,null);
+          distinguishedUserDN=fullUri.getPath().substring(1);
+          SECURITY_LOGGER.tracef("Received referral with address '%s' for dn '%s'",referralAddress.toString(),distinguishedUserDN);
+        }
+ catch (        URISyntaxException usi) {
+          SECURITY_LOGGER.tracef("Unable to construct URI from referral name: %s",name);
+          throw MESSAGES.nameNotFound(suppliedName);
+        }
+      }
+      attributes=result.getAttributes();
+    }
     if (attributes != null) {
       if (distinguishedUserDN == null) {
         Attribute dn=attributes.get(userDnAttribute);
@@ -67,7 +85,7 @@
         }
       }
     }
-    if (distinguishedUserDN == null) {
+    if (distinguishedUserDN == null && result != null) {
       distinguishedUserDN=result.getName() + ("".equals(baseDn) ? "" : "," + baseDn);
     }
     if (username == null) {
