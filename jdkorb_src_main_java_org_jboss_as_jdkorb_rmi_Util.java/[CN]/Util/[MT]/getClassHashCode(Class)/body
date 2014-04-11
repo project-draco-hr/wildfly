@@ -1,0 +1,73 @@
+{
+  if (cls.isInterface())   return 0;
+  if (!Serializable.class.isAssignableFrom(cls))   return 0;
+  if (Externalizable.class.isAssignableFrom(cls))   return 1;
+  Long l=(Long)classHashCodeCache.get(cls);
+  if (l != null)   return l.longValue();
+  ByteArrayOutputStream baos=new ByteArrayOutputStream(256);
+  DataOutputStream dos=new DataOutputStream(baos);
+  Class superClass=cls.getSuperclass();
+  if (superClass != null && superClass != Object.class) {
+    try {
+      dos.writeLong(getClassHashCode(superClass));
+    }
+ catch (    IOException ex) {
+      throw ORBMessages.MESSAGES.unexpectedException(ex);
+    }
+  }
+  boolean hasWriteObject=false;
+  try {
+    Method m;
+    int mods;
+    m=cls.getDeclaredMethod("writeObject",new Class[]{ObjectOutputStream.class});
+    mods=m.getModifiers();
+    if (!Modifier.isPrivate(mods) && !Modifier.isStatic(mods))     hasWriteObject=true;
+  }
+ catch (  NoSuchMethodException ex) {
+  }
+  try {
+    dos.writeInt(hasWriteObject ? 2 : 1);
+  }
+ catch (  IOException ex) {
+    throw ORBMessages.MESSAGES.unexpectedException(ex);
+  }
+  Field[] fields=cls.getDeclaredFields();
+  SortedSet set=new TreeSet(new FieldComparator());
+  for (int i=0; i < fields.length; ++i) {
+    int mods=fields[i].getModifiers();
+    if (!Modifier.isStatic(mods) && !Modifier.isTransient(mods))     set.add(fields[i]);
+  }
+  Iterator iter=set.iterator();
+  try {
+    while (iter.hasNext()) {
+      Field f=(Field)iter.next();
+      dos.writeUTF(f.getName());
+      dos.writeUTF(getSignature(f.getType()));
+    }
+  }
+ catch (  IOException ex) {
+    throw ORBMessages.MESSAGES.unexpectedException(ex);
+  }
+  try {
+    dos.flush();
+  }
+ catch (  IOException ex) {
+    throw ORBMessages.MESSAGES.unexpectedException(ex);
+  }
+  byte[] bytes=baos.toByteArray();
+  MessageDigest digest;
+  try {
+    digest=MessageDigest.getInstance("SHA");
+  }
+ catch (  NoSuchAlgorithmException ex) {
+    throw ORBMessages.MESSAGES.unavailableSHADigest(ex);
+  }
+  digest.update(bytes);
+  byte[] sha=digest.digest();
+  long hash=0;
+  for (int i=0; i < Math.min(8,sha.length); i++) {
+    hash+=(long)(sha[i] & 255) << (i * 8);
+  }
+  classHashCodeCache.put(cls,new Long(hash));
+  return hash;
+}

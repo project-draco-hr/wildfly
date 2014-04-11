@@ -1,0 +1,37 @@
+{
+  ORBLogger.ROOT_LOGGER.debugServiceStartup(context.getController().getName().getCanonicalName());
+  try {
+    properties.setProperty(ORBSubsystemConstants.ORB_CLASS,ORBImpl.class.getName());
+    properties.setProperty(ORBSubsystemConstants.ORB_SINGLETON_CLASS,ORBSingleton.class.getName());
+    SecurityActions.setSystemProperty(ORBSubsystemConstants.ORB_CLASS,ORBImpl.class.getName());
+    SecurityActions.setSystemProperty(ORBSubsystemConstants.ORB_SINGLETON_CLASS,ORBSingleton.class.getName());
+    if (this.jacORBSocketBindingInjector.getValue() != null) {
+      InetSocketAddress address=this.jacORBSocketBindingInjector.getValue().getSocketAddress();
+      properties.setProperty(ORBConstants.SERVER_HOST_PROPERTY,address.getAddress().getHostAddress());
+      properties.setProperty(ORBConstants.SERVER_PORT_PROPERTY,String.valueOf(address.getPort()));
+      properties.setProperty(ORBConstants.INITIAL_HOST_PROPERTY,address.getAddress().getHostAddress());
+      properties.setProperty(ORBConstants.INITIAL_PORT_PROPERTY,String.valueOf(address.getPort()));
+      properties.setProperty(ORBConstants.PERSISTENT_NAME_SERVICE_NAME,address.getAddress().getHostAddress());
+      properties.setProperty(ORBConstants.PERSISTENT_SERVER_PORT_PROPERTY,String.valueOf(address.getPort()));
+      properties.setProperty(ORBConstants.ORB_SERVER_ID_PROPERTY,"1");
+    }
+    ClassLoader loader=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
+    try {
+      WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(WildFlySecurityManager.getClassLoaderPrivileged(this.getClass()));
+      this.orb=ORB.init(new String[0],properties);
+      ORB.init();
+    }
+  finally {
+      WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(loader);
+    }
+    Thread orbThread=SecurityActions.createThread(new ORBRunner(this.orb),"ORB Run Thread");
+    orbThread.start();
+    ServiceTarget target=context.getChildTarget();
+    CorbaServiceUtil.bindObject(target,"ORB",this.orb);
+  }
+ catch (  Exception e) {
+    throw new StartException(e);
+  }
+  CorbaUtils.setOrbProperties(properties);
+  ORBLogger.ROOT_LOGGER.corbaORBServiceStarted();
+}

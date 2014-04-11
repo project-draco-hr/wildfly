@@ -1,0 +1,89 @@
+{
+  if (!cls.isArray())   throw ORBMessages.MESSAGES.classIsNotArray(cls.getName());
+  ValueBoxDefImpl vbDef;
+  vbDef=(ValueBoxDefImpl)arrayMap.get(cls);
+  if (vbDef != null)   return vbDef;
+  int dimensions=0;
+  Class compType=cls;
+  do {
+    compType=compType.getComponentType();
+    ++dimensions;
+  }
+ while (compType.isArray());
+  String typeName;
+  String moduleName;
+  TypeCode typeCode;
+  if (compType.isPrimitive()) {
+    if (compType == Boolean.TYPE) {
+      typeName="boolean";
+      typeCode=orb.get_primitive_tc(TCKind.tk_boolean);
+    }
+ else     if (compType == Character.TYPE) {
+      typeName="wchar";
+      typeCode=orb.get_primitive_tc(TCKind.tk_wchar);
+    }
+ else     if (compType == Byte.TYPE) {
+      typeName="octet";
+      typeCode=orb.get_primitive_tc(TCKind.tk_octet);
+    }
+ else     if (compType == Short.TYPE) {
+      typeName="short";
+      typeCode=orb.get_primitive_tc(TCKind.tk_short);
+    }
+ else     if (compType == Integer.TYPE) {
+      typeName="long";
+      typeCode=orb.get_primitive_tc(TCKind.tk_long);
+    }
+ else     if (compType == Long.TYPE) {
+      typeName="long_long";
+      typeCode=orb.get_primitive_tc(TCKind.tk_longlong);
+    }
+ else     if (compType == Float.TYPE) {
+      typeName="float";
+      typeCode=orb.get_primitive_tc(TCKind.tk_float);
+    }
+ else     if (compType == Double.TYPE) {
+      typeName="double";
+      typeCode=orb.get_primitive_tc(TCKind.tk_double);
+    }
+ else {
+      throw ORBMessages.MESSAGES.unknownPrimitiveType(compType.getName());
+    }
+    moduleName="org.omg.boxedRMI";
+  }
+ else {
+    typeCode=getTypeCode(compType);
+    if (compType == java.lang.String.class)     typeName=getJavaLangString().name();
+ else     if (compType == java.lang.Object.class)     typeName=getJavaLang_Object().name();
+ else     if (compType == java.lang.Class.class)     typeName=getJavaxRmiCORBAClassDesc().name();
+ else     if (compType == java.io.Serializable.class)     typeName=getJavaIoSerializable().name();
+ else     if (compType == java.io.Externalizable.class)     typeName=getJavaIoExternalizable().name();
+ else     if (compType.isInterface() && !RmiIdlUtil.isAbstractValueType(compType))     typeName=((InterfaceDefImpl)interfaceMap.get(compType)).name();
+ else     if (Exception.class.isAssignableFrom(compType))     typeName=((ExceptionDefImpl)exceptionMap.get(compType)).name();
+ else     typeName=((ValueDefImpl)valueMap.get(compType)).name();
+    moduleName="org.omg.boxedRMI." + compType.getPackage().getName();
+  }
+  ModuleDefImpl m=ensurePackageExists(moduleName);
+  Class[] types=new Class[dimensions];
+  types[dimensions - 1]=cls;
+  for (int i=dimensions - 2; i >= 0; --i)   types[i]=types[i + 1].getComponentType();
+  for (int i=0; i < dimensions; ++i) {
+    Class type=types[i];
+    typeCode=orb.create_sequence_tc(0,typeCode);
+    vbDef=(ValueBoxDefImpl)arrayMap.get(type);
+    if (vbDef == null) {
+      String id=Util.getIRIdentifierOfClass(type);
+      SequenceDefImpl sdi=new SequenceDefImpl(typeCode,impl);
+      String name="seq" + (i + 1) + "_"+ typeName;
+      TypeCode boxTypeCode=orb.create_value_box_tc(id,name,typeCode);
+      vbDef=new ValueBoxDefImpl(id,name,"1.0",m,boxTypeCode,impl);
+      addTypeCode(type,vbDef.type());
+      m.add(name,vbDef);
+      impl.putSequenceImpl(id,typeCode,sdi,vbDef);
+      arrayMap.put(type,vbDef);
+      typeCode=boxTypeCode;
+    }
+ else     typeCode=vbDef.type();
+  }
+  return vbDef;
+}

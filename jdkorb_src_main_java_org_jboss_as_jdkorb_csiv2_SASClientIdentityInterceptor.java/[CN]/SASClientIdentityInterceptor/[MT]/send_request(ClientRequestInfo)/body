@@ -1,0 +1,67 @@
+{
+  try {
+    CompoundSecMech secMech=CSIv2Util.getMatchingSecurityMech(ri,codec,(short)(EstablishTrustInClient.value + IdentityAssertion.value),(short)0);
+    if (secMech == null) {
+      return;
+    }
+    if (ORBLogger.ROOT_LOGGER.isTraceEnabled()) {
+      StringBuilder tmp=new StringBuilder();
+      CSIv2Util.toString(secMech,tmp);
+      ORBLogger.ROOT_LOGGER.trace(tmp);
+    }
+    IdentityToken identityToken=absentIdentityToken;
+    byte[] encodedAuthenticationToken=noAuthenticationToken;
+    if ((secMech.sas_context_mech.target_supports & IdentityAssertion.value) != 0) {
+      RunAs runAs=SecurityActions.peekRunAsIdentity();
+      Principal p=(runAs != null) ? runAs : SecurityActions.getPrincipal();
+      if (p != null) {
+        String name=p.getName();
+        if (name.indexOf('@') < 0) {
+          name+="@default";
+        }
+        byte[] principalName=name.getBytes(StandardCharsets.UTF_8);
+        byte[] encodedName=CSIv2Util.encodeGssExportedName(principalName);
+        Any any=ORB.init().create_any();
+        byte[] encapsulatedEncodedName;
+        GSS_NT_ExportedNameHelper.insert(any,encodedName);
+        try {
+          encapsulatedEncodedName=codec.encode_value(any);
+        }
+ catch (        InvalidTypeForEncoding e) {
+          throw ORBMessages.MESSAGES.unexpectedException(e);
+        }
+        identityToken=new IdentityToken();
+        identityToken.principal_name(encapsulatedEncodedName);
+      }
+ else       if ((secMech.sas_context_mech.supported_identity_types & ITTAnonymous.value) != 0) {
+        identityToken=new IdentityToken();
+        identityToken.anonymous(true);
+      }
+    }
+    if ((secMech.as_context_mech.target_requires & EstablishTrustInClient.value) != 0) {
+      byte[] encodedTargetName=secMech.as_context_mech.target_name;
+      String name=serverUsername;
+      if (name.indexOf('@') < 0) {
+        byte[] decodedTargetName=CSIv2Util.decodeGssExportedName(encodedTargetName);
+        String targetName=new String(decodedTargetName,StandardCharsets.UTF_8);
+        name+="@" + targetName;
+      }
+      byte[] username=name.getBytes(StandardCharsets.UTF_8);
+      byte[] password=serverPassword.getBytes(StandardCharsets.UTF_8);
+      InitialContextToken authenticationToken=new InitialContextToken(username,password,encodedTargetName);
+      encodedAuthenticationToken=CSIv2Util.encodeInitialContextToken(authenticationToken,codec);
+    }
+    if (identityToken != absentIdentityToken || encodedAuthenticationToken != noAuthenticationToken) {
+      EstablishContext message=new EstablishContext(0,noAuthorizationToken,identityToken,encodedAuthenticationToken);
+      SASContextBody contextBody=new SASContextBody();
+      contextBody.establish_msg(message);
+      Any any=ORB.init().create_any();
+      SASContextBodyHelper.insert(any,contextBody);
+      ServiceContext sc=new ServiceContext(sasContextId,codec.encode_value(any));
+      ri.add_request_service_context(sc,true);
+    }
+  }
+ catch (  InvalidTypeForEncoding e) {
+    throw ORBMessages.MESSAGES.unexpectedException(e);
+  }
+}
