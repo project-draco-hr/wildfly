@@ -1,21 +1,19 @@
 {
   final Resource resource=context.createResource(PathAddress.EMPTY_ADDRESS);
   ModelNode newModel=resource.getModel();
+  ModelNode correctedOperation=operation.clone();
   for (  AttributeDefinition def : DOMAIN_ADD_ATTRIBUTES) {
-    if (!def.getName().equals(CONTENT_ALL.getName())) {
-      def.validateAndSet(operation,newModel);
-    }
- else {
-      def.validateOperation(operation);
-    }
+    def.validateAndSet(correctedOperation,newModel);
+    correctedOperation.get(def.getName()).set(newModel.get(def.getName()));
   }
-  ModelNode content=operation.require(CONTENT_ALL.getName());
+  ModelNode content=newModel.require(CONTENT_ALL.getName());
   ModelNode contentItemNode=content.require(0);
-  final ModelNode opAddr=operation.get(OP_ADDR);
+  final ModelNode opAddr=correctedOperation.get(OP_ADDR);
   PathAddress address=PathAddress.pathAddress(opAddr);
   final String name=address.getLastElement().getValue();
-  final String runtimeName=operation.hasDefined(RUNTIME_NAME.getName()) ? operation.get(RUNTIME_NAME.getName()).asString() : name;
-  newModel.get(RUNTIME_NAME.getName()).set(runtimeName);
+  if (!newModel.hasDefined(RUNTIME_NAME.getName())) {
+    newModel.get(RUNTIME_NAME.getName()).set(name);
+  }
   byte[] hash=null;
   if (contentItemNode.hasDefined(CONTENT_HASH.getName())) {
     hash=contentItemNode.require(CONTENT_HASH.getName()).asBytes();
@@ -38,7 +36,7 @@
       throw createFailureException(MESSAGES.slaveCannotAcceptUploads());
     }
     try {
-      hash=DeploymentUploadUtil.storeContentAndTransformOperation(context,operation,contentRepository);
+      hash=DeploymentUploadUtil.storeContentAndTransformOperation(context,correctedOperation,contentRepository);
     }
  catch (    IOException e) {
       throw createFailureException(e.toString());
@@ -47,10 +45,8 @@
     contentItemNode.get(CONTENT_HASH.getName()).set(hash);
     content=new ModelNode();
     content.add(contentItemNode);
+    newModel.get(CONTENT_ALL.getName()).set(content);
   }
- else {
-  }
-  newModel.get(CONTENT_ALL.getName()).set(content);
   if (contentRepository != null && hash != null) {
     final byte[] contentHash=hash;
     context.completeStep(new OperationContext.ResultHandler(){
