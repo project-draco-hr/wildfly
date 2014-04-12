@@ -1,0 +1,28 @@
+{
+  this.factory=this.config.getNodeFactory();
+  this.group=this.config.getGroup();
+  ModuleLoader loader=this.config.getModuleLoader();
+  MarshallingConfiguration config=MarshallingConfigurationFactory.createMarshallingConfiguration(loader);
+  try {
+    Module module=loader.loadModule(this.config.getModuleIdentifier());
+    config.setClassTable(new DynamicClassTable(module.getClassLoader()));
+    this.configurations.put(CURRENT_VERSION,config);
+    this.marshallingContext=new SimpleMarshallingContextFactory().createMarshallingContext(this,module.getClassLoader());
+  }
+ catch (  ModuleLoadException e) {
+    throw new StartException(e);
+  }
+  Channel channel=this.config.getChannel();
+  final RpcDispatcher.Marshaller marshaller=new CommandResponseMarshaller(this.marshallingContext,CURRENT_VERSION);
+  this.dispatcher=new MuxMessageDispatcher(SCOPE_ID){
+    @Override protected RequestCorrelator createRequestCorrelator(    Protocol transport,    RequestHandler handler,    Address localAddr){
+      RequestCorrelator correlator=super.createRequestCorrelator(transport,handler,localAddr);
+      correlator.setMarshaller(marshaller);
+      return correlator;
+    }
+  }
+;
+  this.dispatcher.setChannel(channel);
+  this.dispatcher.setRequestHandler(this);
+  this.dispatcher.start();
+}
