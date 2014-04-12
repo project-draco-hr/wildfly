@@ -14,7 +14,27 @@
   final MethodInterfaceType methodIntfType=this.getMethodInterfaceType(componentView.getPrivateData(MethodIntf.class));
   final String previousContextID=setContextID(this.contextID);
   try {
-    if (!securityManager.authorize(ejbComponent.getComponentName(),componentView.getProxyClass().getProtectionDomain().getCodeSource(),methodIntfType.name(),this.viewMethod,this.getMethodRolesAsPrincipals(),this.contextID))     throw MESSAGES.invocationOfMethodNotAllowed(invokedMethod,ejbComponent.getComponentName());
+    if (WildFlySecurityManager.isChecking()) {
+      try {
+        AccessController.doPrivileged(new PrivilegedExceptionAction<Object>(){
+          @Override public ProtectionDomain run(){
+            if (!securityManager.authorize(ejbComponent.getComponentName(),componentView.getProxyClass().getProtectionDomain().getCodeSource(),methodIntfType.name(),AuthorizationInterceptor.this.viewMethod,AuthorizationInterceptor.this.getMethodRolesAsPrincipals(),AuthorizationInterceptor.this.contextID)) {
+              throw MESSAGES.invocationOfMethodNotAllowed(invokedMethod,ejbComponent.getComponentName());
+            }
+            return null;
+          }
+        }
+);
+      }
+ catch (      PrivilegedActionException e) {
+        throw e.getException();
+      }
+    }
+ else {
+      if (!securityManager.authorize(ejbComponent.getComponentName(),componentView.getProxyClass().getProtectionDomain().getCodeSource(),methodIntfType.name(),this.viewMethod,this.getMethodRolesAsPrincipals(),this.contextID)) {
+        throw MESSAGES.invocationOfMethodNotAllowed(invokedMethod,ejbComponent.getComponentName());
+      }
+    }
   }
   finally {
     setContextID(previousContextID);
