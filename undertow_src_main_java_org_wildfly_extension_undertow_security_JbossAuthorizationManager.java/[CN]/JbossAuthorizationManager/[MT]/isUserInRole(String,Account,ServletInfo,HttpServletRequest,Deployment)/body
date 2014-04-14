@@ -1,0 +1,31 @@
+{
+  boolean authzDecision=true;
+  boolean baseDecision=delegate.isUserInRole(role,account,servletInfo,request,deployment);
+  if (baseDecision) {
+    String servletName=servletInfo.getName();
+    String roleName=role;
+    List<SecurityRoleRef> roleRefs=servletInfo.getSecurityRoleRefs();
+    if (roleRefs != null) {
+      for (      SecurityRoleRef ref : roleRefs) {
+        if (ref.getLinkedRole().equals(role)) {
+          roleName=ref.getRole();
+          break;
+        }
+      }
+    }
+    SecurityContext sc=SecurityActions.getSecurityContext();
+    AbstractWebAuthorizationHelper helper=null;
+    try {
+      helper=SecurityHelperFactory.getWebAuthorizationHelper(sc);
+    }
+ catch (    Exception e) {
+      UndertowLogger.ROOT_LOGGER.noAuthorizationHelper(e);
+      return false;
+    }
+    Subject callerSubject=sc.getUtil().getSubject();
+    authzDecision=helper.hasRole(roleName,account.getPrincipal(),servletName,getPrincipalRoles(account),PolicyContext.getContextID(),callerSubject,new ArrayList<String>(account.getRoles()));
+  }
+  boolean finalDecision=baseDecision && authzDecision;
+  UndertowLogger.ROOT_LOGGER.tracef("hasRole:RealmBase says: %s ::Authz framework says: %s :final= %s",baseDecision,authzDecision,finalDecision);
+  return finalDecision;
+}
