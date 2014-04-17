@@ -1,24 +1,31 @@
 {
+  String cacheName="cache";
   String evictedSessionId="evicted";
   String activeSessionId="active";
   ImmutableSession evictedSession=mock(ImmutableSession.class);
   ImmutableSession activeSession=mock(ImmutableSession.class);
+  CommandDispatcherFactory dispatcherFactory=mock(CommandDispatcherFactory.class);
+  CommandDispatcher<SessionEvictionContext> dispatcher=mock(CommandDispatcher.class);
   Batcher batcher=mock(Batcher.class);
   Batch batch=mock(Batch.class);
   Evictor<String> evictor=mock(Evictor.class);
-  ExecutorService executor=mock(ExecutorService.class);
-  ArgumentCaptor<Runnable> capturedTask=ArgumentCaptor.forClass(Runnable.class);
-  try (Scheduler<ImmutableSession> scheduler=new SessionEvictionScheduler(batcher,evictor,1,executor)){
+  ArgumentCaptor<Command> capturedCommand=ArgumentCaptor.forClass(Command.class);
+  ArgumentCaptor<SessionEvictionContext> capturedContext=ArgumentCaptor.forClass(SessionEvictionContext.class);
+  when(dispatcherFactory.createCommandDispatcher(same(cacheName),capturedContext.capture())).thenReturn(dispatcher);
+  try (Scheduler<ImmutableSession> scheduler=new SessionEvictionScheduler(cacheName,batcher,evictor,dispatcherFactory,1)){
+    SessionEvictionContext context=capturedContext.getValue();
+    assertSame(scheduler,context);
     when(evictedSession.getId()).thenReturn(evictedSessionId);
     when(activeSession.getId()).thenReturn(activeSessionId);
     scheduler.schedule(evictedSession);
-    verifyZeroInteractions(executor);
+    verifyZeroInteractions(dispatcher);
     scheduler.schedule(activeSession);
-    verify(executor).submit(capturedTask.capture());
+    verify(dispatcher).submitOnCluster(capturedCommand.capture());
     when(batcher.startBatch()).thenReturn(batch);
-    capturedTask.getValue().run();
+    capturedCommand.getValue().execute(context);
     verify(evictor).evict(evictedSessionId);
     verify(evictor,never()).evict(activeSessionId);
     verify(batch).close();
   }
- }
+   verify(dispatcher).close();
+}

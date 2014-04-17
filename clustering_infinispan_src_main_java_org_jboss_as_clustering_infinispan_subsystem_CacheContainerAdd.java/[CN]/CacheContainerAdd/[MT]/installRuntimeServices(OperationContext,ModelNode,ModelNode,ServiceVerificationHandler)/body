@@ -1,11 +1,17 @@
 {
   final PathAddress address=getCacheContainerAddressFromOperation(operation);
   final String name=address.getLastElement().getValue();
-  if (!context.isBooting() && name.equals("ejb")) {
+  if (context.getProcessType().isServer() && !context.isBooting() && name.equals("ejb")) {
     Resource rootResource=context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS);
     PathElement ejbPath=PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,"ejb3");
     if (rootResource.hasChild(ejbPath) && rootResource.getChild(ejbPath).hasChild(PathElement.pathElement("service","remote"))) {
-      context.restartRequired();
+      context.addStep(new OperationStepHandler(){
+        @Override public void execute(        final OperationContext context,        final ModelNode operation) throws OperationFailedException {
+          context.reloadRequired();
+          context.completeStep(OperationContext.RollbackHandler.REVERT_RELOAD_REQUIRED_ROLLBACK_HANDLER);
+        }
+      }
+,OperationContext.Stage.RUNTIME);
       return Collections.emptyList();
     }
   }
