@@ -1,0 +1,90 @@
+{
+  LoadableElements loadableElements=new LoadableElements();
+  CalendarTimer.Builder builder=CalendarTimer.builder();
+  builder.setAutoTimer(false);
+  final Set<String> required=new HashSet<>(Arrays.asList(new String[]{TIMED_OBJECT_ID,TIMER_ID,NEXT_DATE,TIMER_STATE,SCHEDULE_EXPR_SECOND,SCHEDULE_EXPR_MINUTE,SCHEDULE_EXPR_HOUR,SCHEDULE_EXPR_DAY_OF_WEEK,SCHEDULE_EXPR_DAY_OF_MONTH,SCHEDULE_EXPR_MONTH,SCHEDULE_EXPR_YEAR}));
+  for (int i=0; i < reader.getAttributeCount(); ++i) {
+    String attr=reader.getAttributeValue(i);
+    String attrName=reader.getAttributeLocalName(i);
+    required.remove(attrName);
+    boolean handled=handleCommonAttributes(builder,reader,i);
+    if (!handled) {
+switch (attrName) {
+case SCHEDULE_EXPR_SECOND:
+        builder.setScheduleExprSecond(attr);
+      break;
+case SCHEDULE_EXPR_MINUTE:
+    builder.setScheduleExprMinute(attr);
+  break;
+case SCHEDULE_EXPR_HOUR:
+builder.setScheduleExprHour(attr);
+break;
+case SCHEDULE_EXPR_DAY_OF_WEEK:
+builder.setScheduleExprDayOfWeek(attr);
+break;
+case SCHEDULE_EXPR_DAY_OF_MONTH:
+builder.setScheduleExprDayOfMonth(attr);
+break;
+case SCHEDULE_EXPR_MONTH:
+builder.setScheduleExprMonth(attr);
+break;
+case SCHEDULE_EXPR_YEAR:
+builder.setScheduleExprYear(attr);
+break;
+case SCHEDULE_EXPR_START_DATE:
+builder.setScheduleExprStartDate(new Date(Long.parseLong(attr)));
+break;
+case SCHEDULE_EXPR_END_DATE:
+builder.setScheduleExprEndDate(new Date(Long.parseLong(attr)));
+break;
+case SCHEDULE_EXPR_TIMEZONE:
+builder.setScheduleExprTimezone(attr);
+break;
+default :
+throw ParseUtils.unexpectedAttribute(reader,i);
+}
+}
+}
+if (!required.isEmpty()) {
+throw ParseUtils.missingRequired(reader,required);
+}
+while (reader.hasNext()) {
+switch (reader.nextTag()) {
+case END_ELEMENT:
+{
+try {
+if (loadableElements.info != null) {
+builder.setInfo((Serializable)deserialize(loadableElements.info));
+}
+if (loadableElements.primaryKey != null) {
+builder.setPrimaryKey(deserialize(loadableElements.primaryKey));
+}
+if (loadableElements.className != null) {
+builder.setTimeoutMethod(CalendarTimer.getTimeoutMethod(new TimeoutMethod(loadableElements.className,loadableElements.methodName,loadableElements.params.toArray(new String[loadableElements.params.size()])),classLoader));
+}
+timers.add(builder.build(timerService));
+}
+ catch (Exception e) {
+EjbLogger.ROOT_LOGGER.timerReinstatementFailed(builder.getTimedObjectId(),builder.getId(),e);
+}
+return;
+}
+case START_ELEMENT:
+{
+boolean handled=handleCommonElements(reader,loadableElements);
+if (!handled) {
+switch (reader.getName().getLocalPart()) {
+case TIMEOUT_METHOD:
+{
+builder.setAutoTimer(true);
+parseTimeoutMethod(reader,loadableElements);
+break;
+}
+default :
+throw ParseUtils.unexpectedElement(reader);
+}
+}
+}
+}
+}
+}
