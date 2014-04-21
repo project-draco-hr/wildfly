@@ -1,0 +1,30 @@
+{
+  if (!affectsRuntime) {
+    takeWriteLock();
+    affectsRuntime=true;
+    if (containerMonitorStep == null) {
+      if (currentStage == Stage.DONE) {
+        throw ControllerLogger.ROOT_LOGGER.invalidModificationAfterCompletedStep();
+      }
+      containerMonitorStep=activeStep;
+      int timeout=getBlockingTimeout().getBlockingTimeout();
+      try {
+        modelController.awaitContainerStability(timeout,TimeUnit.MILLISECONDS,respectInterruption);
+      }
+ catch (      InterruptedException e) {
+        if (resultAction != ResultAction.ROLLBACK) {
+          cancelled=true;
+        }
+        Thread.currentThread().interrupt();
+        throw ControllerLogger.ROOT_LOGGER.operationCancelledAsynchronously();
+      }
+catch (      TimeoutException te) {
+        getBlockingTimeout().timeoutDetected();
+        processState.setRestartRequired();
+        MGMT_OP_LOGGER.timeoutAwaitingInitialStability(timeout / 1000,activeStep.operationId.name,activeStep.operationId.address);
+        setRollbackOnly();
+        throw new OperationFailedRuntimeException(ControllerLogger.ROOT_LOGGER.timeoutAwaitingInitialStability());
+      }
+    }
+  }
+}
