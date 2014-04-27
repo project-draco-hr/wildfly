@@ -1,0 +1,106 @@
+{
+  NamingEnumeration<SearchResult> searchEnumeration=null;
+  try {
+    SearchControls searchControls=new SearchControls();
+    if (recursive) {
+      SECURITY_LOGGER.trace("Performing recursive search");
+      searchControls.setSearchScope(SearchControls.SUBTREE_SCOPE);
+    }
+ else {
+      SECURITY_LOGGER.trace("Performing single level search");
+      searchControls.setSearchScope(SearchControls.ONELEVEL_SCOPE);
+    }
+    if (usernameLoad == null) {
+      searchControls.setReturningAttributes(new String[]{userDnAttribute});
+    }
+ else {
+      searchControls.setReturningAttributes(new String[]{userDnAttribute,usernameLoad});
+    }
+    searchControls.setTimeLimit(searchTimeLimit);
+    Object[] filterArguments=new Object[]{suppliedName};
+    String filter=userNameAttribute != null ? "(" + userNameAttribute + "={0})" : advancedFilter;
+    SECURITY_LOGGER.tracef("Searching for user '%s' using filter '%s'.",suppliedName,filter);
+    String distinguishedUserDN=null;
+    String username=usernameLoad == null ? suppliedName : null;
+    URI referralAddress=null;
+    Attributes attributes=null;
+    LdapConnectionHandler currentConnectionHandler=connectionHandler;
+    searchEnumeration=currentConnectionHandler.getConnection().search(baseDn,filter,filterArguments,searchControls);
+    try {
+      if (searchEnumeration.hasMore() == false) {
+        SECURITY_LOGGER.tracef("User '%s' not found in directory.",suppliedName);
+        throw MESSAGES.userNotFoundInDirectory(suppliedName);
+      }
+    }
+ catch (    LdapReferralException e) {
+      Object info=e.getReferralInfo();
+      try {
+        URI fullUri=new URI(info.toString());
+        referralAddress=new URI(fullUri.getScheme(),null,fullUri.getHost(),fullUri.getPort(),null,null,null);
+        distinguishedUserDN=fullUri.getPath().substring(1);
+        SECURITY_LOGGER.tracef("Received referral with address '%s' for dn '%s'",referralAddress.toString(),distinguishedUserDN);
+        currentConnectionHandler=currentConnectionHandler.findForReferral(referralAddress);
+        if (currentConnectionHandler == null) {
+          SECURITY_LOGGER.tracef("Unable to follow referral to '%s' for user '%s'",fullUri,suppliedName);
+          throw MESSAGES.userNotFoundInDirectory(suppliedName);
+        }
+      }
+ catch (      URISyntaxException ue) {
+        SECURITY_LOGGER.tracef("Unable to construct URI from referral: %s",info);
+        throw MESSAGES.nameNotFound(suppliedName);
+      }
+      DirContext context=currentConnectionHandler.getConnection();
+      attributes=context.getAttributes(distinguishedUserDN,searchControls.getReturningAttributes());
+    }
+    SearchResult result=null;
+    if (attributes == null) {
+      result=searchEnumeration.next();
+      if (result.isRelative() == false) {
+        String name=result.getName();
+        try {
+          URI fullUri=new URI(name);
+          referralAddress=new URI(fullUri.getScheme(),null,fullUri.getHost(),fullUri.getPort(),null,null,null);
+          distinguishedUserDN=fullUri.getPath().substring(1);
+          SECURITY_LOGGER.tracef("Received referral with address '%s' for dn '%s'",referralAddress.toString(),distinguishedUserDN);
+        }
+ catch (        URISyntaxException usi) {
+          SECURITY_LOGGER.tracef("Unable to construct URI from referral name: %s",name);
+          throw MESSAGES.nameNotFound(suppliedName);
+        }
+      }
+      attributes=result.getAttributes();
+    }
+    if (attributes != null) {
+      if (distinguishedUserDN == null) {
+        Attribute dn=attributes.get(userDnAttribute);
+        if (dn != null) {
+          distinguishedUserDN=(String)dn.get();
+        }
+      }
+      if (usernameLoad != null) {
+        Attribute usernameAttr=attributes.get(usernameLoad);
+        if (usernameAttr != null) {
+          username=(String)usernameAttr.get();
+          SECURITY_LOGGER.tracef("Converted username '%s' to '%s'",suppliedName,username);
+        }
+      }
+    }
+    if (distinguishedUserDN == null && result != null) {
+      distinguishedUserDN=result.getName() + ("".equals(baseDn) ? "" : "," + baseDn);
+    }
+    if (username == null) {
+      throw MESSAGES.usernameNotLoaded(suppliedName);
+    }
+    SECURITY_LOGGER.tracef("DN '%s' found for user '%s'",distinguishedUserDN,username);
+    return new LdapEntry(username,distinguishedUserDN,referralAddress);
+  }
+  finally {
+    if (searchEnumeration != null) {
+      try {
+        searchEnumeration.close();
+      }
+ catch (      Exception ignored) {
+      }
+    }
+  }
+}

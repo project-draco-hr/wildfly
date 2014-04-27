@@ -10,7 +10,6 @@
     acb.setAuthorized(authorized);
     return;
   }
-  final ConnectionManager connectionManager=UserLdapCallbackHandler.this.connectionManager.getValue();
   VerifyPasswordCallback verifyPasswordCallback=null;
   String username=null;
   for (  Callback current : callbacks) {
@@ -40,30 +39,9 @@
     throw MESSAGES.noPassword();
   }
   final VerifyPasswordCallback theVpc=verifyPasswordCallback;
-  DirContextFactory dcf=new DirContextFactory(){
-    private DirContext context;
-    @Override public DirContext getDirContext() throws IOException {
-      if (context != null) {
-        return context;
-      }
-      try {
-        return context=(DirContext)connectionManager.getConnection();
-      }
- catch (      Exception e) {
-        if (e instanceof IOException) {
-          throw (IOException)e;
-        }
-        throw new IOException(e);
-      }
-    }
-    @Override public void close(){
-      safeClose(theVpc,context);
-    }
-  }
-;
-  DirContext userContext=null;
+  LdapConnectionHandler lch=createLdapConnectionHandler();
   try {
-    SearchResult<LdapEntry> searchResult=userSearcherInjector.getValue().search(dcf,username);
+    SearchResult<LdapEntry> searchResult=userSearcherInjector.getValue().search(lch,username);
     LdapEntry ldapEntry=searchResult.getResult();
     final PasswordCredential cachedCredential=searchResult.getAttachment(PASSWORD_KEY);
     if (cachedCredential != null) {
@@ -82,8 +60,13 @@
     }
  else {
       try {
-        userContext=(DirContext)connectionManager.getConnection(ldapEntry.getDistinguishedName(),password);
-        if (userContext != null) {
+        LdapConnectionHandler verificationHandler=lch;
+        URI referralUri=ldapEntry.getReferralUri();
+        if (referralUri != null) {
+          verificationHandler=verificationHandler.findForReferral(referralUri);
+        }
+        if (verificationHandler != null) {
+          verificationHandler.verifyIdentity(ldapEntry.getDistinguishedName(),password);
           SECURITY_LOGGER.tracef("Password verified for user '%s' (using connection attempt)",username);
           verifyPasswordCallback.setVerified(true);
           searchResult.attach(PASSWORD_KEY,new PasswordCredential(password));
@@ -91,6 +74,10 @@
           if (username.equals(ldapEntry.getSimpleName()) == false) {
             sharedState.put(SecurityRealmService.LOADED_USERNAME_KEY,ldapEntry.getSimpleName());
           }
+        }
+ else {
+          SECURITY_LOGGER.tracef("Password verification failed for user '%s', no connection for referral '%s'",username,referralUri.toString());
+          verifyPasswordCallback.setVerified(false);
         }
       }
  catch (      Exception e) {
@@ -104,7 +91,11 @@
     throw MESSAGES.cannotPerformVerification(e);
   }
  finally {
-    dcf.close();
-    UserLdapCallbackHandler.this.safeClose(userContext);
+    if (shareConnection && lch != null && theVpc != null && theVpc.isVerified()) {
+      sharedState.put(LdapConnectionHandler.class.getName(),lch);
+    }
+ else {
+      lch.close();
+    }
   }
 }

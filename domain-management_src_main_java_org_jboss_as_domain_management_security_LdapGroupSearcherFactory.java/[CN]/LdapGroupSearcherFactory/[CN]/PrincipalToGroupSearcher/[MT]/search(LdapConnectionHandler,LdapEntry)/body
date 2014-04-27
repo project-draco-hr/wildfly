@@ -1,0 +1,68 @@
+{
+  Set<LdapEntry> foundEntries=new HashSet<LdapEntry>();
+  LdapConnectionHandler connectionHandler=originalConnectionHandler;
+  URI originalReferralAddress=null;
+  if ((originalReferralAddress=entry.getReferralUri()) != null) {
+    connectionHandler=connectionHandler.findForReferral(originalReferralAddress);
+    if (connectionHandler == null) {
+      SECURITY_LOGGER.tracef("Unable to obtain connection handler for referral URI %s",originalReferralAddress);
+      return foundEntries.toArray(new LdapEntry[foundEntries.size()]);
+    }
+  }
+  DirContext dirContext=connectionHandler.getConnection();
+  Attributes groups=dirContext.getAttributes(entry.getDistinguishedName(),new String[]{groupAttribute});
+  Attribute groupRef=groups.get(groupAttribute);
+  if (preferOriginalConnection) {
+    connectionHandler=originalConnectionHandler;
+    originalReferralAddress=null;
+  }
+  if (groupRef != null && groupRef.size() > 0) {
+    NamingEnumeration<String> groupRefValues=(NamingEnumeration<String>)groupRef.getAll();
+    while (groupRefValues.hasMore()) {
+      String distingushedName=groupRefValues.next().replace("\\","\\\\").replace("/","\\/");
+      SECURITY_LOGGER.tracef("Group found with distinguishedName=%s",distingushedName);
+      LdapConnectionHandler groupLoadHandler=connectionHandler;
+      URI groupReferralAddress=originalReferralAddress;
+      boolean retry=false;
+      String simpleName=null;
+      do {
+        retry=false;
+        try {
+          dirContext=groupLoadHandler.getConnection();
+          Attributes groupNameAttrs=dirContext.getAttributes(distingushedName,groupNameAttribute != null ? new String[]{groupNameAttribute} : new String[]{});
+          if (groupNameAttribute != null) {
+            Attribute groupNameAttr=groupNameAttrs.get(groupNameAttribute);
+            simpleName=(String)groupNameAttr.get();
+            SECURITY_LOGGER.tracef("simpleName %s loaded for group with distinguishedName=%s",simpleName,distingushedName);
+          }
+ else {
+            SECURITY_LOGGER.trace("No groupNameAttribute to load simpleName");
+          }
+          foundEntries.add(new LdapEntry(simpleName,distingushedName,groupReferralAddress));
+        }
+ catch (        LdapReferralException e) {
+          Object info=e.getReferralInfo();
+          try {
+            URI fullUri=new URI(info.toString());
+            groupReferralAddress=new URI(fullUri.getScheme(),null,fullUri.getHost(),fullUri.getPort(),null,null,null);
+            distingushedName=fullUri.getPath().substring(1);
+            SECURITY_LOGGER.tracef("Received referral with address '%s' for dn '%s'",groupReferralAddress.toString(),distingushedName);
+            groupLoadHandler=groupLoadHandler.findForReferral(groupReferralAddress);
+            if (groupLoadHandler == null) {
+              SECURITY_LOGGER.tracef("Unable to follow referral to '%s'",fullUri);
+            }
+            retry=true;
+          }
+ catch (          URISyntaxException ue) {
+            SECURITY_LOGGER.tracef("Unable to construct URI from referral: %s",info);
+          }
+        }
+      }
+ while (retry);
+    }
+  }
+ else {
+    SECURITY_LOGGER.tracef("No groups found for %s",entry);
+  }
+  return foundEntries.toArray(new LdapEntry[foundEntries.size()]);
+}

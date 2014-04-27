@@ -1,10 +1,19 @@
 {
   Set<RealmUser> users=subject.getPrincipals(RealmUser.class);
   Set<Principal> principals=subject.getPrincipals();
+  final LdapConnectionHandler connectionHandler;
+  if (sharedState.containsKey(LdapConnectionHandler.class.getName())) {
+    SECURITY_LOGGER.trace("Using existing LdapConnectionHandler from shared state.");
+    connectionHandler=(LdapConnectionHandler)sharedState.remove(LdapConnectionHandler.class.getName());
+  }
+ else {
+    SECURITY_LOGGER.trace("Creating new LdapConnectionHandler.");
+    connectionHandler=LdapConnectionHandler.newInstance(connectionManager.getValue());
+  }
   try {
     for (    RealmUser current : users) {
       SECURITY_LOGGER.tracef("Loading groups for '%s'",current);
-      principals.addAll(loadGroups(current));
+      principals.addAll(loadGroups(current,connectionHandler));
     }
   }
  catch (  Exception e) {
@@ -15,6 +24,6 @@
     throw new IOException(e);
   }
  finally {
-    dcf.close();
+    connectionHandler.close();
   }
 }
