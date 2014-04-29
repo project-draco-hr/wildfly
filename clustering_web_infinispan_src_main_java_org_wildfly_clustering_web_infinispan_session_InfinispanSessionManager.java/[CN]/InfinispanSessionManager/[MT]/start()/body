@@ -1,8 +1,28 @@
 {
-  this.cache.addListener(this,this);
   this.identifierFactory.start();
-  this.schedulers.add(new SessionExpirationScheduler(this.batcher,new ExpiredSessionRemover<>(this.factory)));
+  final List<Scheduler<ImmutableSession>> schedulers=new ArrayList<>(2);
+  schedulers.add(new SessionExpirationScheduler(this.batcher,new ExpiredSessionRemover<>(this.factory)));
   if (this.maxActiveSessions >= 0) {
-    this.schedulers.add(new SessionEvictionScheduler(this.cache.getName(),this.batcher,this.factory,this.dispatcherFactory,this.maxActiveSessions));
+    schedulers.add(new SessionEvictionScheduler(this.cache.getName() + ".eviction",this.batcher,this.factory,this.dispatcherFactory,this.maxActiveSessions));
   }
+  this.schedulerContext=new SchedulerContext(){
+    @Override public void schedule(    ImmutableSession session){
+      for (      Scheduler<ImmutableSession> scheduler : schedulers) {
+        scheduler.schedule(session);
+      }
+    }
+    @Override public void cancel(    ImmutableSession session){
+      for (      Scheduler<ImmutableSession> scheduler : schedulers) {
+        scheduler.cancel(session);
+      }
+    }
+    @Override public void close(){
+      for (      Scheduler<?> scheduler : schedulers) {
+        scheduler.close();
+      }
+    }
+  }
+;
+  this.dispatcher=this.dispatcherFactory.createCommandDispatcher(this.cache.getName() + ".schedulers",this.schedulerContext);
+  this.cache.addListener(this,this);
 }
