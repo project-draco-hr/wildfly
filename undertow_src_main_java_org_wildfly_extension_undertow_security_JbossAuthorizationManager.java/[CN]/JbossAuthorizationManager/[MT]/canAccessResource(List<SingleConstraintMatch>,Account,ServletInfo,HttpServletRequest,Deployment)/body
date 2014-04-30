@@ -1,0 +1,24 @@
+{
+  ServletRequestContext src=ServletRequestContext.current();
+  boolean baseDecision=delegate.canAccessResource(mappedConstraints,account,servletInfo,request,deployment);
+  boolean authzDecision=false;
+  if (baseDecision) {
+    SecurityContext sc=SecurityActions.getSecurityContext();
+    Subject caller=sc.getUtil().getSubject();
+    Map<String,Object> contextMap=new HashMap<String,Object>();
+    contextMap.put(ResourceKeys.RESOURCE_PERM_CHECK,Boolean.TRUE);
+    contextMap.put("securityConstraints",mappedConstraints);
+    AbstractWebAuthorizationHelper helper=null;
+    try {
+      helper=SecurityHelperFactory.getWebAuthorizationHelper(sc);
+    }
+ catch (    Exception e) {
+      UndertowLogger.ROOT_LOGGER.noAuthorizationHelper(e);
+      return false;
+    }
+    authzDecision=helper.checkResourcePermission(contextMap,request,src.getServletResponse(),caller,PolicyContext.getContextID(),requestURI(src.getExchange()),new ArrayList<String>(account.getRoles()));
+  }
+  boolean finalDecision=baseDecision && authzDecision && hasUserDataPermission(request,src.getOriginalResponse(),account,mappedConstraints);
+  UndertowLogger.ROOT_LOGGER.tracef("hasResourcePermission:RealmBase says: %s ::Authz framework says: %s :final= %s",baseDecision,authzDecision,finalDecision);
+  return finalDecision;
+}
