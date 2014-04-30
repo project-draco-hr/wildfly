@@ -1,8 +1,9 @@
 {
   final PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
   final PathAddress serverAddress=address.subAddress(0,address.size() - 1);
-  final PathAddress subsystemAddress=serverAddress.subAddress(0,address.size() - 1);
-  final ModelNode subsystemModel=Resource.Tools.readModel(context.readResourceFromRoot(subsystemAddress));
+  final PathAddress subsystemAddress=serverAddress.subAddress(0,address.size() - 2);
+  final ModelNode subsystemModel=Resource.Tools.readModel(context.readResourceFromRoot(subsystemAddress,false),1);
+  final ModelNode serverModel=Resource.Tools.readModel(context.readResourceFromRoot(serverAddress,false),1);
   final ModelNode fullModel=Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
   final String name=address.getLastElement().getValue();
   final List<String> aliases=HostDefinition.ALIAS.unwrap(context,model);
@@ -10,8 +11,9 @@
   final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
   final Resource accessLog=resource.getChild(UndertowExtension.PATH_ACCESS_LOG);
   final String defaultServerName=UndertowRootDefinition.DEFAULT_SERVER.resolveModelAttribute(context,subsystemModel).asString();
+  final String defaultHostName=ServerDefinition.DEFAULT_HOST.resolveModelAttribute(context,serverModel).asString();
   final String serverName=serverAddress.getLastElement().getValue();
-  boolean installCommonHost=defaultServerName.equals(serverName);
+  boolean isDefaultHost=defaultServerName.equals(serverName) && name.equals(defaultHostName);
   final ServiceName virtualHostServiceName=UndertowService.virtualHostName(serverName,name);
   final ServiceName accessLogServiceName=UndertowService.accessLogServiceName(serverName,name);
   final Host service=new Host(name,aliases == null ? new LinkedList<String>() : aliases,defaultWebModule);
@@ -20,8 +22,9 @@
   builder.setInitialMode(Mode.ON_DEMAND);
   configureFilterRef(fullModel,builder,service,address);
   ServiceController<WebHost> commonController=null;
-  if (installCommonHost) {
+  if (isDefaultHost) {
     commonController=addCommonHost(context,verificationHandler,name,aliases,serverName,virtualHostServiceName);
+    builder.addAliases(UndertowService.DEFAULT_HOST);
   }
   final ServiceController<Host> serviceController=builder.install();
   final ServiceName consoleRedirectName=UndertowService.consoleRedirectServiceName(serverName,name);
@@ -39,7 +42,7 @@
   if (newControllers != null) {
     newControllers.add(serviceController);
     newControllers.add(consoleServiceServiceController);
-    if (installCommonHost) {
+    if (isDefaultHost) {
       newControllers.add(commonController);
     }
   }
