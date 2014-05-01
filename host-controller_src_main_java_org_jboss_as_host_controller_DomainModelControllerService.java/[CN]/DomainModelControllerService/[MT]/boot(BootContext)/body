@@ -18,24 +18,36 @@
       runPerformControllerInitialization(context);
       if (!hostControllerInfo.isMasterDomainController() && !environment.isUseCachedDc()) {
         establishServerInventory(inventoryFuture);
-        if ((discoveryOptions != null) && !discoveryOptions.isEmpty()) {
-          connectToDomainMaster(serviceTarget,currentRunningMode);
-        }
- else         if (currentRunningMode != RunningMode.ADMIN_ONLY) {
-          ROOT_LOGGER.noDomainControllerConfigurationProvided(currentRunningMode,CommandLineConstants.ADMIN_ONLY,RunningMode.ADMIN_ONLY);
-          System.exit(ExitCodes.HOST_CONTROLLER_ABORT_EXIT_CODE);
+        boolean discoveryConfigured=(discoveryOptions != null) && !discoveryOptions.isEmpty();
+        if (currentRunningMode != RunningMode.ADMIN_ONLY) {
+          if (discoveryConfigured) {
+            connectToDomainMaster(serviceTarget,currentRunningMode);
+          }
+ else {
+            ROOT_LOGGER.noDomainControllerConfigurationProvided(currentRunningMode,CommandLineConstants.ADMIN_ONLY,RunningMode.ADMIN_ONLY);
+            System.exit(ExitCodes.HOST_CONTROLLER_ABORT_EXIT_CODE);
+          }
         }
  else {
 switch (hostControllerInfo.getAdminOnlyDomainConfigPolicy()) {
 case ALLOW_NO_CONFIG:
             break;
 case FETCH_FROM_MASTER:
-          connectToDomainMaster(serviceTarget,currentRunningMode);
+          if (discoveryConfigured) {
+            connectToDomainMaster(serviceTarget,currentRunningMode);
+          }
+ else {
+            ROOT_LOGGER.noDomainControllerConfigurationProvidedForAdminOnly(ModelDescriptionConstants.ADMIN_ONLY_POLICY,AdminOnlyDomainConfigPolicy.REQUIRE_LOCAL_CONFIG,CommandLineConstants.CACHED_DC,RunningMode.ADMIN_ONLY);
+            System.exit(ExitCodes.HOST_CONTROLLER_ABORT_EXIT_CODE);
+            break;
+          }
         break;
-default :
-      ROOT_LOGGER.noAccessControlConfigurationAvailable(currentRunningMode,ModelDescriptionConstants.ADMIN_ONLY_POLICY,AdminOnlyDomainConfigPolicy.REQUIRE_LOCAL_CONFIG,CommandLineConstants.ADMIN_ONLY,currentRunningMode);
+case REQUIRE_LOCAL_CONFIG:
+      ROOT_LOGGER.noAccessControlConfigurationAvailable(currentRunningMode,ModelDescriptionConstants.ADMIN_ONLY_POLICY,AdminOnlyDomainConfigPolicy.REQUIRE_LOCAL_CONFIG,CommandLineConstants.CACHED_DC,currentRunningMode);
     System.exit(ExitCodes.HOST_CONTROLLER_ABORT_EXIT_CODE);
   break;
+default :
+throw new IllegalStateException(hostControllerInfo.getAdminOnlyDomainConfigPolicy().toString());
 }
 }
 }
@@ -44,7 +56,7 @@ if (environment.isUseCachedDc()) {
 ROOT_LOGGER.usingCachedDC(CommandLineConstants.CACHED_DC,ConfigurationPersisterFactory.CACHED_DOMAIN_XML);
 remoteFileRepository.setRemoteFileRepositoryExecutor(new RemoteDomainConnectionService.RemoteFileRepositoryExecutor(){
 @Override public File getFile(String relativePath,byte repoId,HostFileRepository localFileRepository){
-  return localFileRepository.getFile(relativePath);
+return localFileRepository.getFile(relativePath);
 }
 }
 );

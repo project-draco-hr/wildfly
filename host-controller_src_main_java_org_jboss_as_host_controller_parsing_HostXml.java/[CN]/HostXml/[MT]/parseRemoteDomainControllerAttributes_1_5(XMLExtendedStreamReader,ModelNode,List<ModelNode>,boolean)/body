@@ -2,6 +2,7 @@
   final ModelNode update=new ModelNode();
   update.get(OP_ADDR).set(address);
   update.get(OP).set("write-remote-domain-controller");
+  AdminOnlyDomainConfigPolicy adminOnlyPolicy=AdminOnlyDomainConfigPolicy.DEFAULT;
   boolean requireDiscoveryOptions=false;
   final int count=reader.getAttributeCount();
   for (int i=0; i < count; i++) {
@@ -40,6 +41,10 @@ case IGNORE_UNUSED_CONFIG:
 case ADMIN_ONLY_POLICY:
 {
 RemoteDomainControllerAddHandler.ADMIN_ONLY_POLICY.parseAndSetParameter(value,update,reader);
+ModelNode nodeValue=update.get(RemoteDomainControllerAddHandler.ADMIN_ONLY_POLICY.getName());
+if (nodeValue.getType() != ModelType.EXPRESSION) {
+  adminOnlyPolicy=AdminOnlyDomainConfigPolicy.getPolicy(nodeValue.asString());
+}
 break;
 }
 default :
@@ -49,7 +54,7 @@ throw unexpectedAttribute(reader,i);
 }
 if (!update.hasDefined(RemoteDomainControllerAddHandler.HOST.getName())) {
 if (allowDiscoveryOptions) {
-requireDiscoveryOptions=true;
+requireDiscoveryOptions=isRequireDiscoveryOptions(adminOnlyPolicy);
 }
  else {
 throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.HOST.getLocalName()));
@@ -57,7 +62,7 @@ throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.HOST.get
 }
 if (!update.hasDefined(RemoteDomainControllerAddHandler.PORT.getName())) {
 if (allowDiscoveryOptions) {
-requireDiscoveryOptions=true;
+requireDiscoveryOptions=requireDiscoveryOptions || isRequireDiscoveryOptions(adminOnlyPolicy);
 }
  else {
 throw ParseUtils.missingRequired(reader,Collections.singleton(Attribute.PORT.getLocalName()));
