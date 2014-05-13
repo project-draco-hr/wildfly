@@ -1,0 +1,46 @@
+{
+  File moduleDirectory=getModuleDirectory();
+  if (moduleDirectory.exists()) {
+    if (!deleteFirst) {
+      throw new IllegalArgumentException(moduleDirectory + " already exists.");
+    }
+    remove();
+  }
+  File mainDirectory=new File(moduleDirectory,"main");
+  if (!mainDirectory.mkdirs()) {
+    throw new IllegalArgumentException("Could not create " + mainDirectory);
+  }
+  try {
+    copyFile(new File(mainDirectory,"module.xml"),new FileInputStream(this.moduleXml));
+  }
+ catch (  IOException e) {
+    throw new RuntimeException("Could not create module definition.",e);
+  }
+  for (  JavaArchive resourceRoot : this.resources) {
+    FileOutputStream jarFile=null;
+    try {
+      Indexer indexer=new Indexer();
+      for (      Node content : resourceRoot.getContent().values()) {
+        if (content.getPath().get().endsWith(".class")) {
+          indexer.index(content.getAsset().openStream());
+        }
+      }
+      Index index=indexer.complete();
+      ByteArrayOutputStream data=new ByteArrayOutputStream();
+      IndexWriter writer=new IndexWriter(data);
+      writer.write(index);
+      resourceRoot.addAsManifestResource(new ByteArrayAsset(data.toByteArray()),"jandex.idx");
+      jarFile=new FileOutputStream(new File(mainDirectory,resourceRoot.getName()));
+      resourceRoot.as(ZipExporter.class).exportTo(jarFile);
+    }
+ catch (    Exception e) {
+      throw new RuntimeException("Could not create module resource [" + resourceRoot.getName() + ".",e);
+    }
+ finally {
+      if (jarFile != null) {
+        jarFile.flush();
+        jarFile.close();
+      }
+    }
+  }
+}

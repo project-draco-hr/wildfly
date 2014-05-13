@@ -1,0 +1,34 @@
+{
+  if (identityStore.hasDefined(SUPPORTED_TYPES.getName())) {
+    ModelNode featuresSetNode=identityStore.get(SUPPORTED_TYPES.getName()).asProperty().getValue();
+    ModelNode supportsAllNode=SupportedTypesResourceDefinition.SUPPORTS_ALL.resolveModelAttribute(context,featuresSetNode);
+    if (supportsAllNode.asBoolean()) {
+      storeConfig.supportAllFeatures();
+    }
+    if (featuresSetNode.hasDefined(SUPPORTED_TYPE.getName())) {
+      for (      Property supportedTypeNode : featuresSetNode.get(SUPPORTED_TYPE.getName()).asPropertyList()) {
+        ModelNode supportedType=supportedTypeNode.getValue();
+        ModelNode classNameNode=SupportedTypeResourceDefinition.CLASS_NAME.resolveModelAttribute(context,supportedType);
+        ModelNode codeNode=SupportedTypeResourceDefinition.CODE.resolveModelAttribute(context,supportedType);
+        String typeName;
+        if (classNameNode.isDefined()) {
+          typeName=classNameNode.asString();
+        }
+ else         if (codeNode.isDefined()) {
+          typeName=AttributedTypeEnum.forType(codeNode.asString());
+        }
+ else {
+          throw MESSAGES.typeNotProvided(SUPPORTED_TYPE.getName());
+        }
+        ModelNode moduleNode=SupportedTypeResourceDefinition.MODULE.resolveModelAttribute(context,supportedType);
+        Class<? extends AttributedType> attributedTypeClass=loadClass(moduleNode,typeName);
+        if (Relationship.class.isAssignableFrom(attributedTypeClass)) {
+          storeConfig.supportGlobalRelationship((Class<? extends Relationship>)attributedTypeClass);
+        }
+ else {
+          storeConfig.supportType(attributedTypeClass);
+        }
+      }
+    }
+  }
+}

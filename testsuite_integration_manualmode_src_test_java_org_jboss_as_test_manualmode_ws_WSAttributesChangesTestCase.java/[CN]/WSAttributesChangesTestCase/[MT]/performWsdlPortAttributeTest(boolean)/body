@@ -1,0 +1,41 @@
+{
+  Assert.assertTrue(containerController.isStarted(DEFAULT_JBOSSAS));
+  ManagementClient managementClient=new ManagementClient(TestSuiteEnvironment.getModelControllerClient(),TestSuiteEnvironment.getServerAddress(),TestSuiteEnvironment.getServerPort(),"http-remoting");
+  ModelControllerClient client=managementClient.getControllerClient();
+  try {
+    final String portA="55667";
+    ModelNode op=createOpNode("subsystem=webservices/",WRITE_ATTRIBUTE_OPERATION);
+    op.get(NAME).set("wsdl-port");
+    op.get(VALUE).set(portA);
+    applyUpdate(client,op,false);
+    deployer.deploy(DEP_2);
+    URL wsdlURL=new URL(managementClient.getWebUri().toURL(),'/' + DEP_2 + "/POJOService?wsdl");
+    checkWsdl(wsdlURL,portA);
+    if (checkUpdateWithDeployedEndpoint) {
+      final String portB="55668";
+      ModelNode opB=createOpNode("subsystem=webservices/",WRITE_ATTRIBUTE_OPERATION);
+      opB.get(NAME).set("wsdl-port");
+      opB.get(VALUE).set(portB);
+      applyUpdate(client,opB,true);
+      checkWsdl(wsdlURL,portA);
+      deployer.undeploy(DEP_2);
+      deployer.deploy(DEP_2);
+      checkWsdl(wsdlURL,portA);
+    }
+  }
+  finally {
+    try {
+      deployer.undeploy(DEP_2);
+    }
+ catch (    Throwable t) {
+    }
+    try {
+      ModelNode op=createOpNode("subsystem=webservices/",UNDEFINE_ATTRIBUTE_OPERATION);
+      op.get(NAME).set("wsdl-port");
+      applyUpdate(client,op,checkUpdateWithDeployedEndpoint);
+    }
+  finally {
+      managementClient.close();
+    }
+  }
+}
