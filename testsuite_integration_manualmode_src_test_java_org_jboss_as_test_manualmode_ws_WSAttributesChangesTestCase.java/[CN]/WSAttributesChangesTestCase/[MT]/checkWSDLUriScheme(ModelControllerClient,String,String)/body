@@ -1,0 +1,40 @@
+{
+  final ModelNode address=new ModelNode();
+  address.add(DEPLOYMENT,deploymentName);
+  address.add(SUBSYSTEM,"webservices");
+  address.add("endpoint","*");
+  final ModelNode operation=new ModelNode();
+  operation.get(OP).set(READ_RESOURCE_OPERATION);
+  operation.get(OP_ADDR).set(address);
+  operation.get(INCLUDE_RUNTIME).set(true);
+  operation.get(RECURSIVE).set(true);
+  ModelNode result=managementClient.execute(operation);
+  Assert.assertEquals(SUCCESS,result.get(OUTCOME).asString());
+  for (  final ModelNode endpointResult : result.get("result").asList()) {
+    final ModelNode endpoint=endpointResult.get("result");
+    final URL wsdlURL=new URL(endpoint.get("wsdl-url").asString());
+    HttpURLConnection connection=(HttpURLConnection)wsdlURL.openConnection();
+    try {
+      connection.connect();
+      Assert.assertEquals(200,connection.getResponseCode());
+      BufferedReader in=new BufferedReader(new InputStreamReader(connection.getInputStream()));
+      String line;
+      while ((line=in.readLine()) != null) {
+        if (line.contains("address location")) {
+          if ("https".equals(expectedScheme)) {
+            Assert.assertTrue(line,line.contains("https"));
+            return;
+          }
+ else {
+            Assert.assertTrue(line,line.contains("http") && !line.contains("https"));
+            return;
+          }
+        }
+      }
+      fail(line + " Could not check soap:address!");
+    }
+  finally {
+      connection.disconnect();
+    }
+  }
+}

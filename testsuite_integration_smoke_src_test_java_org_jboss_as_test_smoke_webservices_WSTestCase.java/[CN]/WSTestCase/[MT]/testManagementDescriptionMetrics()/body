@@ -1,4 +1,5 @@
 {
+  setStatisticsEnabled(true);
   final ModelNode address=new ModelNode();
   address.add(ModelDescriptionConstants.DEPLOYMENT,"ws-example.war");
   address.add(ModelDescriptionConstants.SUBSYSTEM,WSExtension.SUBSYSTEM_NAME);
@@ -6,8 +7,9 @@
   final ModelNode operation=new ModelNode();
   operation.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.READ_RESOURCE_OPERATION);
   operation.get(ModelDescriptionConstants.OP_ADDR).set(address);
+  operation.get(ModelDescriptionConstants.INCLUDE_RUNTIME).set(true);
   operation.get(ModelDescriptionConstants.RECURSIVE).set(true);
-  final ModelNode result=managementClient.getControllerClient().execute(operation);
+  ModelNode result=managementClient.getControllerClient().execute(operation);
   Assert.assertEquals(ModelDescriptionConstants.SUCCESS,result.get(ModelDescriptionConstants.OUTCOME).asString());
   for (  final ModelNode endpointResult : result.get("result").asList()) {
     final ModelNode endpoint=endpointResult.get("result");
@@ -15,5 +17,13 @@
     HttpRequest.get(url.toExternalForm(),30,TimeUnit.SECONDS);
     checkCountMetric(endpointResult,managementClient.getControllerClient(),"request-count");
     checkCountMetric(endpointResult,managementClient.getControllerClient(),"response-count");
+  }
+  setStatisticsEnabled(false);
+  result=managementClient.getControllerClient().execute(operation);
+  Assert.assertEquals(ModelDescriptionConstants.SUCCESS,result.get(ModelDescriptionConstants.OUTCOME).asString());
+  for (  final ModelNode endpointResult : result.get("result").asList()) {
+    final ModelNode endpoint=endpointResult.get("result");
+    Assert.assertTrue(endpoint.hasDefined("request-count"));
+    Assert.assertTrue(endpoint.get("request-count").asString().contains("No metrics available"));
   }
 }

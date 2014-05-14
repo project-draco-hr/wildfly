@@ -1,7 +1,9 @@
 {
   try {
     onBeforeInvocation(wsInvocation);
-    if (wsInvocation.getInvocationContext().getTargetBean() != null && endpoint.getProperty("SpringBus") != null) {
+    final ComponentView componentView=getComponentView();
+    Component component=componentView.getComponent();
+    if (wsInvocation.getInvocationContext().getTargetBean() != null && (endpoint.getProperty("SpringBus") != null) || wsInvocation.getInvocationContext().getProperty("forceTargetBean") != null) {
       this.reference=new ManagedReference(){
         public void release(){
         }
@@ -10,11 +12,9 @@
         }
       }
 ;
-    }
-    final ComponentView componentView=getComponentView();
-    Component component=componentView.getComponent();
-    if (component instanceof WSComponent && endpoint.getProperty("SpringBus") != null) {
-      ((WSComponent)component).setReference(reference);
+      if (component instanceof WSComponent) {
+        ((WSComponent)component).setReference(reference);
+      }
     }
     final Method method=getComponentViewMethod(wsInvocation.getJavaMethod(),componentView.getViewMethods());
     final InterceptorContext context=new InterceptorContext();
@@ -23,6 +23,9 @@
     context.setParameters(wsInvocation.getArgs());
     context.putPrivateData(Component.class,component);
     context.putPrivateData(ComponentView.class,componentView);
+    if (wsInvocation.getInvocationContext().getProperty("forceTargetBean") != null) {
+      context.putPrivateData(ManagedReference.class,reference);
+    }
     final Object retObj=componentView.invoke(context);
     wsInvocation.setReturnValue(retObj);
   }
