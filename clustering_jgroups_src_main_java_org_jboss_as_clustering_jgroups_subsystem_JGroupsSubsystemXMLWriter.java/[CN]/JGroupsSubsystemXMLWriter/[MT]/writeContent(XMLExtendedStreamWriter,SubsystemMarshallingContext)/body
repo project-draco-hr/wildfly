@@ -2,25 +2,45 @@
   context.startSubsystemElement(Namespace.CURRENT.getUri(),false);
   ModelNode model=context.getModelNode();
   if (model.isDefined()) {
-    this.writeOptional(writer,Attribute.DEFAULT_STACK,model,ModelKeys.DEFAULT_STACK);
-    for (    Property property : model.get(ModelKeys.STACK).asPropertyList()) {
-      writer.writeStartElement(Element.STACK.getLocalName());
-      writer.writeAttribute(Attribute.NAME.getLocalName(),property.getName());
-      ModelNode stack=property.getValue();
-      if (stack.hasDefined(ModelKeys.TRANSPORT)) {
-        ModelNode transport=stack.get(ModelKeys.TRANSPORT,ModelKeys.TRANSPORT_NAME);
-        this.writeProtocol(writer,transport,Element.TRANSPORT);
-      }
-      if (stack.hasDefined(ModelKeys.PROTOCOL)) {
-        for (        Property protocol : ProtocolStackAdd.getOrderedProtocolPropertyList(stack)) {
-          this.writeProtocol(writer,protocol.getValue(),Element.PROTOCOL);
+    JGroupsSubsystemResourceDefinition.DEFAULT_STACK.marshallAsAttribute(model,writer);
+    if (model.hasDefined(StackResourceDefinition.WILDCARD_PATH.getKey())) {
+      for (      Property property : model.get(StackResourceDefinition.WILDCARD_PATH.getKey()).asPropertyList()) {
+        writer.writeStartElement(Element.STACK.getLocalName());
+        writer.writeAttribute(Attribute.NAME.getLocalName(),property.getName());
+        ModelNode stack=property.getValue();
+        if (stack.get(TransportResourceDefinition.PATH.getKeyValuePair()).isDefined()) {
+          ModelNode transport=stack.get(TransportResourceDefinition.PATH.getKeyValuePair());
+          writer.writeStartElement(Element.TRANSPORT.getLocalName());
+          TransportResourceDefinition.TYPE.marshallAsAttribute(transport,writer);
+          TransportResourceDefinition.SOCKET_BINDING.marshallAsAttribute(transport,writer);
+          TransportResourceDefinition.SHARED.marshallAsAttribute(transport,writer);
+          TransportResourceDefinition.DIAGNOSTICS_SOCKET_BINDING.marshallAsAttribute(transport,writer);
+          TransportResourceDefinition.DEFAULT_EXECUTOR.marshallAsAttribute(transport,writer);
+          TransportResourceDefinition.OOB_EXECUTOR.marshallAsAttribute(transport,writer);
+          TransportResourceDefinition.TIMER_EXECUTOR.marshallAsAttribute(transport,writer);
+          TransportResourceDefinition.THREAD_FACTORY.marshallAsAttribute(transport,writer);
+          TransportResourceDefinition.MACHINE.marshallAsAttribute(transport,writer);
+          TransportResourceDefinition.RACK.marshallAsAttribute(transport,writer);
+          TransportResourceDefinition.SITE.marshallAsAttribute(transport,writer);
+          writeProtocolProperties(writer,transport);
+          writer.writeEndElement();
         }
+        if (stack.hasDefined(ProtocolResourceDefinition.WILDCARD_PATH.getKey())) {
+          for (          Property protocolProperty : StackAddHandler.getOrderedProtocolPropertyList(stack)) {
+            ModelNode protocol=protocolProperty.getValue();
+            writer.writeStartElement(Element.PROTOCOL.getLocalName());
+            ProtocolResourceDefinition.TYPE.marshallAsAttribute(protocol,writer);
+            ProtocolResourceDefinition.SOCKET_BINDING.marshallAsAttribute(protocol,writer);
+            writeProtocolProperties(writer,protocol);
+            writer.writeEndElement();
+          }
+        }
+        if (stack.get(RelayResourceDefinition.PATH.getKeyValuePair()).isDefined()) {
+          ModelNode relay=stack.get(RelayResourceDefinition.PATH.getKeyValuePair());
+          writeRelay(writer,relay);
+        }
+        writer.writeEndElement();
       }
-      if (stack.hasDefined(ModelKeys.RELAY)) {
-        ModelNode relay=stack.get(ModelKeys.RELAY,ModelKeys.RELAY_NAME);
-        this.writeRelay(writer,relay,Element.RELAY);
-      }
-      writer.writeEndElement();
     }
   }
   writer.writeEndElement();
