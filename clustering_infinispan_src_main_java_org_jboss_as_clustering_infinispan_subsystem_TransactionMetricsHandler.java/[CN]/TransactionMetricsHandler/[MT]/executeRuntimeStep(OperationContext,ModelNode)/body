@@ -1,0 +1,18 @@
+{
+  PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  String containerName=address.getElement(1).getValue();
+  String cacheName=address.getElement(2).getValue();
+  String name=operation.require(ModelDescriptionConstants.NAME).asString();
+  TransactionMetric metric=TransactionMetric.forName(name);
+  if (metric == null) {
+    context.getFailureDescription().set(InfinispanLogger.ROOT_LOGGER.unknownMetric(name));
+  }
+ else {
+    Cache<?,?> cache=ServiceContainerHelper.findValue(context.getServiceRegistry(false),CacheService.getServiceName(containerName,cacheName));
+    if (cache != null) {
+      TxInterceptor interceptor=CacheMetric.findInterceptor(cache,TxInterceptor.class);
+      context.getResult().set((interceptor != null) ? metric.getValue(interceptor) : new ModelNode(0));
+    }
+  }
+  context.completeStep(OperationContext.ResultHandler.NOOP_RESULT_HANDLER);
+}

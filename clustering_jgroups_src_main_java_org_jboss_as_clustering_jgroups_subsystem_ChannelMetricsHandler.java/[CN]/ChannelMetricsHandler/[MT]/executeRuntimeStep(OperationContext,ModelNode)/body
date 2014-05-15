@@ -1,61 +1,16 @@
 {
   PathAddress pathAddress=PathAddress.pathAddress(operation.require(OP_ADDR));
-  String channelName=pathAddress.getElement(pathAddress.size() - 1).getValue();
-  String attrName=operation.require(NAME).asString();
-  ChannelMetrics metric=ChannelMetrics.getStat(attrName);
-  ServiceName channelServiceName=ChannelInstanceResource.CHANNEL_PARENT.append(channelName);
-  ServiceController<?> controller=context.getServiceRegistry(false).getService(channelServiceName);
-  boolean started=controller != null && controller.getValue() != null;
-  ModelNode result=new ModelNode();
+  String channelName=pathAddress.getLastElement().getValue();
+  String name=operation.require(NAME).asString();
+  ChannelMetric metric=ChannelMetric.forName(name);
   if (metric == null) {
-    context.getFailureDescription().set(JGroupsLogger.ROOT_LOGGER.unknownMetric(attrName));
-  }
- else   if (!started) {
+    context.getFailureDescription().set(JGroupsLogger.ROOT_LOGGER.unknownMetric(name));
   }
  else {
-    JChannel channel=(JChannel)controller.getValue();
-switch (metric) {
-case ADDRESS:
-      result.set(channel.getAddressAsString());
-    break;
-case ADDRESS_AS_UUID:
-  result.set(channel.getAddressAsUUID());
-break;
-case DISCARD_OWN_MESSAGES:
-result.set(channel.getDiscardOwnMessages());
-break;
-case NUM_TASKS_IN_TIMER:
-result.set(channel.getNumberOfTasksInTimer());
-break;
-case NUM_TIMER_THREADS:
-result.set(channel.getTimerThreads());
-break;
-case RECEIVED_BYTES:
-result.set(channel.getReceivedBytes());
-break;
-case RECEIVED_MESSAGES:
-result.set(channel.getReceivedMessages());
-break;
-case SENT_BYTES:
-result.set(channel.getSentBytes());
-break;
-case SENT_MESSAGES:
-result.set(channel.getSentMessages());
-break;
-case STATE:
-result.set(channel.getState());
-break;
-case STATS_ENABLED:
-result.set(channel.statsEnabled());
-break;
-case VERSION:
-result.set(JChannel.getVersion());
-break;
-case VIEW:
-result.set(channel.getViewAsString());
-break;
-}
-context.getResult().set(result);
-}
-context.completeStep(OperationContext.ResultHandler.NOOP_RESULT_HANDLER);
+    JChannel channel=ServiceContainerHelper.findValue(context.getServiceRegistry(false),ChannelService.getServiceName(channelName));
+    if (channel != null) {
+      context.getResult().set(metric.getValue(channel));
+    }
+  }
+  context.completeStep(OperationContext.ResultHandler.NOOP_RESULT_HANDLER);
 }
