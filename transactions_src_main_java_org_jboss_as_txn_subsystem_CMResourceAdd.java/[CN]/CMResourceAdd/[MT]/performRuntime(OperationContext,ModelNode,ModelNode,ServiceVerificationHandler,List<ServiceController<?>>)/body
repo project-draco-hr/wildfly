@@ -5,17 +5,11 @@
   final int batchSize=CMResourceResourceDefinition.CM_TABLE_BATCH_SIZE.resolveModelAttribute(context,model).asInt();
   final boolean immediateCleanup=CMResourceResourceDefinition.CM_TABLE_IMMEDIATE_CLEANUP.resolveModelAttribute(context,model).asBoolean();
   ROOT_LOGGER.debugf("adding commit-markable-resource: jndi-name=%s, table-name=%s, batch-size=%d, immediate-cleanup=%b",jndiName,tableName,batchSize,immediateCleanup);
-  JTAEnvironmentBean jTAEnvironmentBean=BeanPopulator.getDefaultInstance(JTAEnvironmentBean.class);
-  List<String> connectableResourceJNDINames=jTAEnvironmentBean.getCommitMarkableResourceJNDINames();
-  Map<String,String> connectableResourceTableNameMap=jTAEnvironmentBean.getCommitMarkableResourceTableNameMap();
-  Map<String,Boolean> performImmediateCleanupOfConnectableResourceBranchesMap=jTAEnvironmentBean.getPerformImmediateCleanupOfCommitMarkableResourceBranchesMap();
-  Map<String,Integer> connectableResourceRecordDeleteBatchSizeMap=jTAEnvironmentBean.getCommitMarkableResourceRecordDeleteBatchSizeMap();
-  connectableResourceJNDINames.add(jndiName);
-  connectableResourceTableNameMap.put(jndiName,tableName);
-  performImmediateCleanupOfConnectableResourceBranchesMap.put(jndiName,immediateCleanup);
-  connectableResourceRecordDeleteBatchSizeMap.put(jndiName,batchSize);
-  jTAEnvironmentBean.setCommitMarkableResourceJNDINames(connectableResourceJNDINames);
-  jTAEnvironmentBean.setCommitMarkableResourceTableNameMap(connectableResourceTableNameMap);
-  jTAEnvironmentBean.setPerformImmediateCleanupOfCommitMarkableResourceBranchesMap(performImmediateCleanupOfConnectableResourceBranchesMap);
-  jTAEnvironmentBean.setCommitMarkableResourceRecordDeleteBatchSizeMap(connectableResourceRecordDeleteBatchSizeMap);
+  CMResourceService service=new CMResourceService(jndiName,tableName,immediateCleanup,batchSize);
+  final ServiceBuilder<?> builder=context.getServiceTarget().addService(TxnServices.JBOSS_TXN_CMR.append(jndiName),service);
+  builder.addDependency(TxnServices.JBOSS_TXN_JTA_ENVIRONMENT,JTAEnvironmentBean.class,service.getJTAEnvironmentBeanInjector());
+  newControllers.add(builder.setInitialMode(ServiceController.Mode.ACTIVE).install());
+  if (!context.isBooting()) {
+    context.reloadRequired();
+  }
 }
