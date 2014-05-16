@@ -1,18 +1,24 @@
 {
-  writer.writeStartElement(Element.AUTHORIZATION.getLocalName());
-  SecurityRealmResourceDefinition.MAP_GROUPS_TO_ROLES.marshallAsAttribute(realm,writer);
-  ModelNode authorization=realm.require(AUTHORIZATION);
-  if (authorization.hasDefined(PROPERTIES)) {
-    ModelNode properties=authorization.require(PROPERTIES);
-    writer.writeEmptyElement(Element.PROPERTIES.getLocalName());
-    PropertiesAuthorizationResourceDefinition.PATH.marshallAsAttribute(properties,writer);
-    PropertiesAuthorizationResourceDefinition.RELATIVE_TO.marshallAsAttribute(properties,writer);
+  String defaultMapGroupsToRoles=Boolean.toString(SecurityRealmResourceDefinition.MAP_GROUPS_TO_ROLES.getDefaultValue().asBoolean());
+  String mapGroupsToRoles=realm.hasDefined(MAP_GROUPS_TO_ROLES) ? realm.require(MAP_GROUPS_TO_ROLES).asString() : defaultMapGroupsToRoles;
+  if (realm.hasDefined(AUTHORIZATION) || defaultMapGroupsToRoles.equals(mapGroupsToRoles) == false) {
+    writer.writeStartElement(Element.AUTHORIZATION.getLocalName());
+    SecurityRealmResourceDefinition.MAP_GROUPS_TO_ROLES.marshallAsAttribute(realm,writer);
+    if (realm.hasDefined(AUTHORIZATION)) {
+      ModelNode authorization=realm.require(AUTHORIZATION);
+      if (authorization.hasDefined(PROPERTIES)) {
+        ModelNode properties=authorization.require(PROPERTIES);
+        writer.writeEmptyElement(Element.PROPERTIES.getLocalName());
+        PropertiesAuthorizationResourceDefinition.PATH.marshallAsAttribute(properties,writer);
+        PropertiesAuthorizationResourceDefinition.RELATIVE_TO.marshallAsAttribute(properties,writer);
+      }
+ else       if (authorization.hasDefined(PLUG_IN)) {
+        writePlugIn_Authorization(writer,authorization.get(PLUG_IN));
+      }
+ else       if (authorization.hasDefined(LDAP)) {
+        writeLdapAuthorization(writer,authorization.get(LDAP));
+      }
+    }
+    writer.writeEndElement();
   }
- else   if (authorization.hasDefined(PLUG_IN)) {
-    writePlugIn_Authorization(writer,authorization.get(PLUG_IN));
-  }
- else   if (authorization.hasDefined(LDAP)) {
-    writeLdapAuthorization(writer,authorization.get(LDAP));
-  }
-  writer.writeEndElement();
 }
