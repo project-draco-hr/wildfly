@@ -1,50 +1,54 @@
 {
-  final Map<String,TimerImpl> timers=new HashMap<String,TimerImpl>();
-  try {
-    final File file=new File(getDirectory(timedObjectId));
-    if (!file.exists()) {
-      return timers;
-    }
- else     if (!file.isDirectory()) {
-      ROOT_LOGGER.failToRestoreTimers(file);
-      return timers;
-    }
-    Unmarshaller unmarshaller=factory.createUnmarshaller(configuration);
-    for (    File timerFile : file.listFiles()) {
-      FileInputStream in=null;
-      try {
-        in=new FileInputStream(timerFile);
-        unmarshaller.start(new InputStreamByteInput(in));
-        final TimerEntity entity=unmarshaller.readObject(TimerEntity.class);
-        TimerImpl.Builder builder;
-        if (entity instanceof CalendarTimerEntity) {
-          CalendarTimerEntity c=(CalendarTimerEntity)entity;
-          builder=CalendarTimer.builder().setScheduleExprSecond(c.getSecond()).setScheduleExprMinute(c.getMinute()).setScheduleExprHour(c.getHour()).setScheduleExprDayOfWeek(c.getDayOfWeek()).setScheduleExprDayOfMonth(c.getDayOfMonth()).setScheduleExprMonth(c.getMonth()).setScheduleExprYear(c.getYear()).setScheduleExprStartDate(c.getStartDate()).setScheduleExprEndDate(c.getEndDate()).setScheduleExprTimezone(c.getTimezone()).setAutoTimer(c.isAutoTimer()).setTimeoutMethod(CalendarTimer.getTimeoutMethod(c.getTimeoutMethod(),timerService.getTimedObjectInvoker().getValue()));
-        }
- else {
-          builder=TimerImpl.builder();
-        }
-        builder.setId(entity.getId()).setTimedObjectId(entity.getTimedObjectId()).setInitialDate(entity.getInitialDate()).setRepeatInterval(entity.getInterval()).setNextDate(entity.getNextDate()).setPreviousRun(entity.getPreviousRun()).setInfo(entity.getInfo()).setPrimaryKey(entity.getPrimaryKey()).setTimerState(entity.getTimerState()).setPersistent(true);
-        timers.put(entity.getId(),builder.build(timerService));
-        unmarshaller.finish();
-      }
- catch (      Exception e) {
-        ROOT_LOGGER.failToRestoreTimersFromFile(timerFile,e);
-      }
- finally {
-        if (in != null) {
-          try {
-            in.close();
-          }
- catch (          IOException e) {
-            ROOT_LOGGER.failToCloseFile(e);
-          }
-        }
-      }
-    }
+  Map<String,TimerImpl> timers=new HashMap<>();
+  String directory=getDirectory(timedObjectId);
+  timers.putAll(LegacyFileStore.loadTimersFromFile(timedObjectId,timerService,directory,factory,configuration));
+  for (  Map.Entry<String,TimerImpl> entry : timers.entrySet()) {
+    writeFile(entry.getValue());
   }
- catch (  Exception e) {
-    ROOT_LOGGER.failToRestoreTimersForObjectId(timedObjectId,e);
+  final File file=new File(directory);
+  if (!file.exists()) {
+    return timers;
+  }
+ else   if (!file.isDirectory()) {
+    ROOT_LOGGER.failToRestoreTimers(file);
+    return timers;
+  }
+  final XMLMapper mapper=createMapper(timerService);
+  for (  File timerFile : file.listFiles()) {
+    if (!timerFile.getName().endsWith(".xml")) {
+      continue;
+    }
+    FileInputStream in=null;
+    try {
+      in=new FileInputStream(timerFile);
+      final XMLInputFactory inputFactory=INPUT_FACTORY;
+      setIfSupported(inputFactory,XMLInputFactory.IS_VALIDATING,Boolean.FALSE);
+      setIfSupported(inputFactory,XMLInputFactory.SUPPORT_DTD,Boolean.FALSE);
+      final XMLStreamReader streamReader=inputFactory.createXMLStreamReader(in);
+      try {
+        List<TimerImpl> timerList=new ArrayList<>();
+        mapper.parseDocument(timerList,streamReader);
+        for (        TimerImpl timer : timerList) {
+          timers.put(timer.getId(),timer);
+        }
+      }
+  finally {
+        safeClose(in);
+      }
+    }
+ catch (    Exception e) {
+      ROOT_LOGGER.failToRestoreTimersFromFile(timerFile,e);
+    }
+ finally {
+      if (in != null) {
+        try {
+          in.close();
+        }
+ catch (        IOException e) {
+          ROOT_LOGGER.failToCloseFile(e);
+        }
+      }
+    }
   }
   return timers;
 }
