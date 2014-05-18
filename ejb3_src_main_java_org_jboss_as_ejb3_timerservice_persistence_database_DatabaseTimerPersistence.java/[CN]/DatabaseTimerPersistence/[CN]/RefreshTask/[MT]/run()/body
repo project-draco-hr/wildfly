@@ -1,0 +1,60 @@
+{
+  if (running.compareAndSet(false,true)) {
+    try {
+      Set<String> timedObjects;
+synchronized (DatabaseTimerPersistence.this) {
+        timedObjects=new HashSet<>(knownTimerIds.keySet());
+      }
+      for (      String timedObjectId : timedObjects) {
+        TimerChangeListener listener=changeListeners.get(timedObjectId);
+        if (listener == null) {
+          continue;
+        }
+        final Set<String> existing;
+synchronized (DatabaseTimerPersistence.this) {
+          existing=new HashSet<>(knownTimerIds.get(timedObjectId));
+        }
+        String loadTimer=sql(LOAD_ALL_TIMERS);
+        Connection connection=null;
+        PreparedStatement statement=null;
+        ResultSet resultSet=null;
+        try {
+          connection=dataSource.getConnection();
+          statement=connection.prepareStatement(loadTimer);
+          statement.setString(1,timedObjectId);
+          statement.setString(2,partition);
+          resultSet=statement.executeQuery();
+          while (resultSet.next()) {
+            try {
+              String id=resultSet.getString(1);
+              if (!existing.remove(id)) {
+synchronized (DatabaseTimerPersistence.this) {
+                  knownTimerIds.get(timedObjectId).add(id);
+                }
+                final TimerImpl timerImpl=timerFromResult(resultSet,listener.getTimerService());
+                listener.timerAdded(timerImpl);
+              }
+            }
+ catch (            Exception e) {
+              EjbLogger.ROOT_LOGGER.timerReinstatementFailed(resultSet.getString(2),resultSet.getString(1),e);
+            }
+          }
+          for (          String timer : existing) {
+            listener.timerRemoved(timer);
+          }
+        }
+ catch (        SQLException e) {
+          EjbLogger.ROOT_LOGGER.failedToRefreshTimers(timedObjectId);
+        }
+ finally {
+          safeClose(resultSet);
+          safeClose(statement);
+          safeClose(connection);
+        }
+      }
+    }
+  finally {
+      running.set(false);
+    }
+  }
+}
