@@ -1,8 +1,10 @@
 {
+  boolean interrupted=false;
   boolean completeRollback=domainOperationContext.isCompleteRollback();
   final String localHostName=domainOperationContext.getLocalHostInfo().getLocalHostName();
   for (  final ServerTaskExecutor.ServerPreparedResponse preparedResult : preparedResults) {
     boolean rollback=completeRollback || domainOperationContext.isServerGroupRollback(preparedResult.getServerGroupName());
+    interrupted=Thread.interrupted() || interrupted;
     if (!preparedResult.finalizeTransaction(!rollback)) {
       final ServerIdentity identity=preparedResult.getServerIdentity();
       try {
@@ -26,22 +28,29 @@
       }
     }
   }
-  boolean interrupted=false;
   try {
+    boolean patient=!interrupted;
     for (    Map.Entry<ServerIdentity,ServerTaskExecutor.ExecutedServerRequest> entry : submittedTasks.entrySet()) {
       final ServerTaskExecutor.ExecutedServerRequest request=entry.getValue();
       final Future<ModelNode> future=request.getFinalResult();
       try {
-        final ModelNode finalResult=future.isCancelled() ? getCancelledResult() : future.get();
+        final ModelNode finalResult=future.isCancelled() ? getCancelledResult() : patient ? future.get() : future.get(0,TimeUnit.MILLISECONDS);
         final ModelNode transformedResult=request.transformResult(finalResult);
         domainOperationContext.addServerResult(entry.getKey(),transformedResult);
       }
  catch (      InterruptedException e) {
+        future.cancel(true);
         interrupted=true;
+        patient=false;
         HOST_CONTROLLER_LOGGER.interruptedAwaitingFinalResponse(entry.getKey().getServerName(),entry.getKey().getHostName());
       }
 catch (      ExecutionException e) {
+        future.cancel(true);
         HOST_CONTROLLER_LOGGER.caughtExceptionAwaitingFinalResponse(e.getCause(),entry.getKey().getServerName(),entry.getKey().getHostName());
+      }
+catch (      TimeoutException e) {
+        future.cancel(true);
+        CONTROLLER_LOGGER.interruptedAwaitingFinalResponse(entry.getKey().getServerName(),entry.getKey().getHostName());
       }
     }
   }

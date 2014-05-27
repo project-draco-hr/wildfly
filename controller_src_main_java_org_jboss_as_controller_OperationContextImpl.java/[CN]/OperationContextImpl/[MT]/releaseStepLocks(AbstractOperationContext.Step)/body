@@ -1,23 +1,37 @@
 {
+  boolean interrupted=false;
   try {
-    if (this.lockStep == step) {
-      modelController.releaseLock(operationId);
-      lockStep=null;
-    }
     if (this.containerMonitorStep == step) {
+      long timeout=getBlockingTimeout().getBlockingTimeout();
       try {
-        modelController.awaitContainerMonitor(true);
+        modelController.awaitContainerStability(timeout,TimeUnit.MILLISECONDS,true);
       }
  catch (      InterruptedException e) {
-        Thread.currentThread().interrupt();
+        interrupted=true;
         MGMT_OP_LOGGER.interruptedWaitingStability();
       }
+catch (      TimeoutException te) {
+        processState.setRestartRequired();
+        MGMT_OP_LOGGER.timeoutCompletingOperation(timeout,activeStep.operationId.name,activeStep.operationId.address);
+      }
+    }
+    if (this.lockStep == step) {
+      modelController.releaseLock(operationId);
+      exclusiveStartTime=-1;
+      lockStep=null;
     }
   }
   finally {
-    if (this.containerMonitorStep == step) {
-      modelController.releaseContainerMonitor();
-      containerMonitorStep=null;
+    try {
+      if (this.containerMonitorStep == step) {
+        modelController.logContainerStateChangesAndReset();
+        containerMonitorStep=null;
+      }
+    }
+  finally {
+      if (interrupted) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 }
