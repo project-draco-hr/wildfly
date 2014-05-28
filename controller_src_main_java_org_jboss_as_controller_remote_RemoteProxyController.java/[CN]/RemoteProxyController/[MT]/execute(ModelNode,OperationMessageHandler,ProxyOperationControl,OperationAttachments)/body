@@ -28,14 +28,12 @@
   Future<ModelNode> futureResult=null;
   try {
     final ModelNode translated=translateOperationForProxy(original);
-    ControllerLogger.MGMT_OP_LOGGER.tracef("Executing %s for %s",translated.get(OP).asString(),getProxyNodeAddress());
     futureResult=client.execute(operationListener,translated,messageHandler,attachments);
     final TransactionalProtocolClient.PreparedOperation<TransactionalProtocolClient.Operation> prepared=queue.take();
     if (prepared.isFailed()) {
       control.operationFailed(prepared.getPreparedResult());
       return;
     }
-    final Future cancellable=futureResult;
     control.operationPrepared(new ModelController.OperationTransaction(){
       @Override public void commit(){
         prepared.commit();
@@ -43,8 +41,6 @@
           completed.await();
         }
  catch (        InterruptedException e) {
-          cancellable.cancel(true);
-          ControllerLogger.MGMT_OP_LOGGER.interruptedAwaitingFinalResponse(translated.get(OP).asString(),getProxyNodeAddress());
           Thread.currentThread().interrupt();
         }
 catch (        Exception e) {
@@ -56,8 +52,6 @@ catch (        Exception e) {
           completed.await();
         }
  catch (        InterruptedException e) {
-          cancellable.cancel(true);
-          ControllerLogger.MGMT_OP_LOGGER.interruptedAwaitingFinalResponse(translated.get(OP).asString(),getProxyNodeAddress());
           Thread.currentThread().interrupt();
         }
 catch (        Exception e) {
@@ -68,10 +62,8 @@ catch (        Exception e) {
   }
  catch (  InterruptedException e) {
     if (futureResult != null) {
-      ControllerLogger.MGMT_OP_LOGGER.interruptedAwaitingInitialResponse(original.get(OP).asString(),getProxyNodeAddress());
-      futureResult.cancel(true);
+      futureResult.cancel(false);
     }
-    control.operationFailed(getCancelledResponse());
     Thread.currentThread().interrupt();
   }
 catch (  IOException e) {

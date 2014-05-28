@@ -1,9 +1,8 @@
 {
-  boolean interruptThread=Thread.interrupted() || interrupted;
+  boolean interruptThread=interrupted;
   try {
     boolean rollback=domainOperationContext.isCompleteRollback();
     for (    final TransactionalProtocolClient.PreparedOperation<HostControllerUpdateTask.ProxyOperation> prepared : results) {
-      interruptThread=Thread.interrupted() || interruptThread;
       if (prepared.isDone()) {
         continue;
       }
@@ -14,29 +13,23 @@
         prepared.rollback();
       }
     }
-    boolean patient=!interruptThread;
     for (    final TransactionalProtocolClient.PreparedOperation<HostControllerUpdateTask.ProxyOperation> prepared : results) {
       final String hostName=prepared.getOperation().getName();
-      final HostControllerUpdateTask.ExecutedHostRequest request=finalResults.get(hostName);
-      final Future<ModelNode> future=prepared.getFinalResult();
       try {
-        final ModelNode finalResult=patient ? future.get() : future.get(0,TimeUnit.MILLISECONDS);
+        final HostControllerUpdateTask.ExecutedHostRequest request=finalResults.get(hostName);
+        final ModelNode finalResult=prepared.getFinalResult().get();
         final ModelNode transformedResult=request.transformResult(finalResult);
         domainOperationContext.addHostControllerResult(hostName,transformedResult);
-        HOST_CONTROLLER_LOGGER.tracef("Final result for remote host %s is %s",hostName,finalResult);
+        if (HOST_CONTROLLER_LOGGER.isTraceEnabled()) {
+          HOST_CONTROLLER_LOGGER.tracef("Final result for remote host %s is %s",hostName,finalResult);
+        }
       }
  catch (      InterruptedException e) {
         interruptThread=true;
-        future.cancel(true);
-        patient=false;
         CONTROLLER_LOGGER.interruptedAwaitingFinalResponse(hostName);
       }
 catch (      ExecutionException e) {
         CONTROLLER_LOGGER.caughtExceptionAwaitingFinalResponse(e.getCause(),hostName);
-      }
-catch (      TimeoutException e) {
-        future.cancel(true);
-        CONTROLLER_LOGGER.interruptedAwaitingFinalResponse(hostName);
       }
     }
     if (!rollback) {

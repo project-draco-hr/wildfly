@@ -3,40 +3,20 @@
     return;
   }
   completed=true;
-  final CountDownLatch latch=new CountDownLatch(1);
-  final IOExceptionHolder exceptionHolder=new IOExceptionHolder();
-  responseContext.executeAsync(new ManagementRequestContext.AsyncTask<Void>(){
-    @Override public void execute(    final ManagementRequestContext<Void> context) throws Exception {
-      MGMT_OP_LOGGER.tracef("Transmitting response for %d",context.getOperationId());
-      try {
-        final FlushableDataOutput output=responseContext.writeMessage(response);
-        try {
-          output.write(ModelControllerProtocol.PARAM_RESPONSE);
-          result.writeExternal(output);
-          output.writeByte(ManagementProtocol.RESPONSE_END);
-          output.close();
-        }
-  finally {
-          StreamUtils.safeClose(output);
-          latch.countDown();
-        }
-      }
- catch (      IOException e) {
-        exceptionHolder.exception=e;
-      }
-    }
-  }
-,false);
   try {
-    latch.await();
-  }
- catch (  InterruptedException e) {
-    Thread.currentThread().interrupt();
-  }
-  if (exceptionHolder.exception != null) {
-    resultHandler.failed(exceptionHolder.exception);
-  }
- else {
+    final FlushableDataOutput output=responseContext.writeMessage(response);
+    try {
+      output.write(ModelControllerProtocol.PARAM_RESPONSE);
+      result.writeExternal(output);
+      output.writeByte(ManagementProtocol.RESPONSE_END);
+      output.close();
+    }
+  finally {
+      StreamUtils.safeClose(output);
+    }
     resultHandler.done(result);
+  }
+ catch (  IOException e) {
+    resultHandler.failed(e);
   }
 }

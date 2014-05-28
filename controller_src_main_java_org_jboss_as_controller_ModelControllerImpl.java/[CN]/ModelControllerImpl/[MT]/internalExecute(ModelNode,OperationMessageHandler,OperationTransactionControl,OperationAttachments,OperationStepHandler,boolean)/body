@@ -10,7 +10,6 @@
   if (restartResourceServices) {
     contextFlags.add(OperationContextImpl.ContextFlag.ALLOW_RESOURCE_SERVICE_RESTART);
   }
-  final ModelNode blockingTimeoutConfig=headers != null && headers.hasDefined(BLOCKING_TIMEOUT) ? headers.get(BLOCKING_TIMEOUT) : null;
   final ModelNode response=new ModelNode();
   final OperationTransactionControl originalResultTxControl=control == null ? null : new OperationTransactionControl(){
     @Override public void operationPrepared(    OperationTransaction transaction,    ModelNode result){
@@ -18,7 +17,6 @@
     }
   }
 ;
-  AccessMechanism accessMechanism=null;
   AccessAuditContext accessContext=SecurityActions.currentAccessAuditContext();
   if (accessContext != null) {
     if (operation.hasDefined(OPERATION_HEADERS)) {
@@ -30,11 +28,10 @@
         accessContext.setAccessMechanism(AccessMechanism.valueOf(operationHeaders.get(ACCESS_MECHANISM).asString()));
       }
     }
-    accessMechanism=accessContext.getAccessMechanism();
   }
   for (; ; ) {
     final Integer operationID=new Random(new SecureRandom().nextLong()).nextInt();
-    final OperationContextImpl context=new OperationContextImpl(operationID,operation.get(OP).asString(),operation.get(OP_ADDR),this,processType,runningModeControl.getRunningMode(),contextFlags,handler,attachments,model,originalResultTxControl,processState,auditLogger,bootingFlag.get(),hostServerGroupTracker,blockingTimeoutConfig,accessMechanism);
+    final OperationContextImpl context=new OperationContextImpl(this,processType,runningModeControl.getRunningMode(),contextFlags,handler,attachments,model,originalResultTxControl,processState,auditLogger,bootingFlag.get(),operationID,hostServerGroupTracker);
     if (activeOperations.putIfAbsent(operationID,context) == null) {
       CurrentOperationIdHolder.setCurrentOperationID(operationID);
       boolean shouldUnlock=false;
@@ -51,24 +48,24 @@
         context.executeOperation();
       }
   finally {
-        if (!response.hasDefined(RESPONSE_HEADERS) || !response.get(RESPONSE_HEADERS).hasDefined(PROCESS_STATE)) {
-          ControlledProcessState.State state=processState.getState();
+        if (shouldUnlock) {
+          controllerLock.unlock(operationID);
+        }
+        activeOperations.remove(operationID);
+        CurrentOperationIdHolder.setCurrentOperationID(null);
+      }
+      break;
+    }
+  }
+  if (!response.hasDefined(RESPONSE_HEADERS) || !response.get(RESPONSE_HEADERS).hasDefined(PROCESS_STATE)) {
+    ControlledProcessState.State state=processState.getState();
 switch (state) {
 case RELOAD_REQUIRED:
 case RESTART_REQUIRED:
-            response.get(RESPONSE_HEADERS,PROCESS_STATE).set(state.toString());
-          break;
+      response.get(RESPONSE_HEADERS,PROCESS_STATE).set(state.toString());
+    break;
 default :
-        break;
-    }
-  }
-  if (shouldUnlock) {
-    controllerLock.unlock(operationID);
-  }
-  activeOperations.remove(operationID);
-  CurrentOperationIdHolder.setCurrentOperationID(null);
-}
-break;
+  break;
 }
 }
 return response;
