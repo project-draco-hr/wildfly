@@ -1,0 +1,32 @@
+{
+  final long timeout=TimeUnit.SECONDS.toNanos(STABILITY_TIMEOUT.resolveModelAttribute(context,operation).asLong());
+  DomainManagementLogger.ROOT_LOGGER.debugf("Cancel of operation not progressing after [%d] ns requested",timeout);
+  final Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
+  String blockingId=null;
+  for (  Resource.ResourceEntry child : resource.getChildren(ModelDescriptionConstants.ACTIVE_OPERATION)) {
+    ModelNode model=child.getModel();
+    if (model.get(EXCLUSIVE_RUNNING_TIME).asLong() > timeout) {
+      blockingId=child.getName();
+      break;
+    }
+  }
+  if (blockingId != null) {
+    final String toCancel=blockingId;
+    PathAddress pa=PathAddress.pathAddress(operation.get(OP_ADDR));
+    ModelNode op=Util.createEmptyOperation(CancelActiveOperationHandler.DEFINITION.getName(),pa.append(PathElement.pathElement(ACTIVE_OPERATION,toCancel)));
+    final ModelNode response=new ModelNode();
+    context.addStep(response,op,CancelActiveOperationHandler.INSTANCE,OperationContext.Stage.MODEL,true);
+    context.completeStep(new OperationContext.ResultHandler(){
+      @Override public void handleResult(      OperationContext.ResultAction resultAction,      OperationContext context,      ModelNode operation){
+        if (response.hasDefined(RESULT) && response.get(RESULT).asBoolean()) {
+          context.getResult().set(toCancel);
+        }
+      }
+    }
+);
+  }
+ else {
+    context.getFailureDescription().set(DomainManagementLogger.ROOT_LOGGER.noNonProgressingOperationFound(TimeUnit.NANOSECONDS.toSeconds(timeout)));
+    context.stepCompleted();
+  }
+}

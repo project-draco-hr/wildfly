@@ -9,18 +9,33 @@
     }
 ));
   }
+  boolean patient=true;
   for (int i=0; i < futures.size(); i++) {
     Future<?> future=futures.get(i);
     try {
-      future.get();
+      if (patient) {
+        future.get();
+      }
+ else {
+        future.get(0,TimeUnit.MILLISECONDS);
+      }
     }
  catch (    InterruptedException e) {
-      DOMAIN_DEPLOYMENT_LOGGER.caughtExceptionWaitingForTaskReturning(ConcurrentUpdateTask.class.getSimpleName(),e.getClass().getSimpleName(),concurrentTasks.get(i).toString());
-      Thread.currentThread().interrupt();
-      return;
+      DOMAIN_DEPLOYMENT_LOGGER.caughtExceptionWaitingForTask(ConcurrentUpdateTask.class.getSimpleName(),e.getClass().getSimpleName(),concurrentTasks.get(i).toString());
+      patient=false;
+      future.cancel(true);
     }
 catch (    ExecutionException e) {
       DOMAIN_DEPLOYMENT_LOGGER.caughtExceptionWaitingForTask(ConcurrentUpdateTask.class.getSimpleName(),e.getClass().getSimpleName(),concurrentTasks.get(i).toString());
+      future.cancel(true);
     }
+catch (    TimeoutException e) {
+      DOMAIN_DEPLOYMENT_LOGGER.caughtExceptionWaitingForTask(ConcurrentUpdateTask.class.getSimpleName(),e.getClass().getSimpleName(),concurrentTasks.get(i).toString());
+      patient=false;
+      future.cancel(true);
+    }
+  }
+  if (!patient) {
+    Thread.currentThread().interrupt();
   }
 }

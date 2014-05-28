@@ -1,8 +1,17 @@
 {
   if (affectsRuntime && !cancelled) {
 synchronized (realRemovingControllers) {
-      while (!realRemovingControllers.isEmpty() && !cancelled) {
-        realRemovingControllers.wait();
+      long waitTime=getBlockingTimeout().getBlockingTimeout();
+      long end=System.currentTimeMillis() + waitTime;
+      boolean wait=!realRemovingControllers.isEmpty() && !cancelled;
+      while (wait && waitTime > 0) {
+        realRemovingControllers.wait(waitTime);
+        wait=!realRemovingControllers.isEmpty() && !cancelled;
+        waitTime=end - System.currentTimeMillis();
+      }
+      if (wait) {
+        getBlockingTimeout().timeoutDetected();
+        throw new TimeoutException();
       }
     }
   }
