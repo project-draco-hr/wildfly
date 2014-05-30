@@ -4,11 +4,23 @@
     final FileChannel channel=raf.getChannel();
     try {
       long pos=channel.size() - ENDLEN;
+      final ScanContext context;
+      if (newSig == CRIPPLED_ENDSIG) {
+        context=new ScanContext(GOOD_ENDSIG_PATTERN,CRIPPLED_ENDSIG_PATTERN);
+      }
+ else       if (newSig == GOOD_ENDSIG) {
+        context=new ScanContext(CRIPPLED_ENDSIG_PATTERN,GOOD_ENDSIG_PATTERN);
+      }
+ else {
+        context=null;
+      }
       if (!validateEndRecord(file,channel,pos,endSig)) {
-        pos=scanForEndSig(file,channel,searchPattern,badSkipBytes,endSig);
+        pos=scanForEndSig(file,channel,context);
       }
       if (pos == -1) {
-        PatchLogger.ROOT_LOGGER.cannotInvalidateZip(file.getAbsolutePath());
+        if (context.state == State.NOT_FOUND) {
+          PatchLogger.ROOT_LOGGER.cannotInvalidateZip(file.getAbsolutePath());
+        }
         return;
       }
       channel.position(pos);
