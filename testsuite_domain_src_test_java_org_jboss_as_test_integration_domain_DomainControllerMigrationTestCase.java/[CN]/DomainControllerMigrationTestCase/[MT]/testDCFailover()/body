@@ -8,6 +8,8 @@
   addSystemProp.get(ModelDescriptionConstants.OP).set("add");
   addSystemProp.get(ModelDescriptionConstants.VALUE).set("test-a");
   hostUtils[0].executeForResult(addSystemProp);
+  Operation addDeployOp=buildDeploymentAddOperation();
+  hostUtils[0].executeForResult(addDeployOp);
   log.info("Stopping the domain controller on failover-h1.");
   hostUtils[0].stop();
   log.info("Domain controller on failover-h1 stopped.");
@@ -54,19 +56,18 @@
   readSysPropOp.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.READ_ATTRIBUTE_OPERATION);
   readSysPropOp.get(ModelDescriptionConstants.NAME).set(ModelDescriptionConstants.VALUE);
   Assert.assertEquals("test-b",hostUtils[2].executeForResult(readSysPropOp).asString());
-  Operation deployOp=buildDeployOperation();
-  hostUtils[1].executeForResult(deployOp);
   hosts=getHosts(hostUtils[1]);
   Assert.assertTrue(hosts.contains(HOSTS[1]));
   Assert.assertTrue(hosts.contains(HOSTS[2]));
   Assert.assertEquals(hosts.size(),2);
-  String testUrl=new URL("http",slaveAddress,8080 + SERVER_PORT_OFFSETS[2],"/SimpleServlet/SimpleServlet").toString();
-  Assert.assertTrue(WebUtil.testHttpURL(testUrl));
+  Operation mapDeployOp=buildDeploymentMappingOperation();
+  hostUtils[1].executeForResult(mapDeployOp);
+  checkProperty(hostUtils[1].getDomainClient(),HOSTS[1],SERVERS[1]);
+  checkProperty(hostUtils[1].getDomainClient(),HOSTS[2],SERVERS[2]);
   ModelNode stopOp=new ModelNode();
   stopOp.get(ModelDescriptionConstants.ADDRESS).add(ModelDescriptionConstants.HOST,HOSTS[2]);
   stopOp.get(ModelDescriptionConstants.ADDRESS).add(ModelDescriptionConstants.SERVER_CONFIG,SERVERS[2]);
   stopOp.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.STOP);
   hostUtils[1].executeForResult(stopOp);
   DomainTestUtils.waitUntilState(hostUtils[1].getDomainClient(),HOSTS[2],SERVERS[2],"STOPPED");
-  Assert.assertFalse(WebUtil.testHttpURL(testUrl));
 }
