@@ -19,24 +19,36 @@
       }
     }
   }
-  Set<String> descriptorRoles=new HashSet<String>();
+  Set<String> securityRoles=new HashSet<String>();
   SecurityRolesMetaData secRolesMetaData=ejbComponentDescription.getSecurityRoles();
   if (secRolesMetaData != null) {
     for (    SecurityRoleMetaData secRoleMetaData : secRolesMetaData) {
-      descriptorRoles.add(secRoleMetaData.getRoleName());
+      securityRoles.add(secRoleMetaData.getRoleName());
     }
   }
-  descriptorRoles.add(ANY_AUTHENTICATED_USER_ROLE);
-  Map<String,Collection<String>> securityRoles=ejbComponentDescription.getSecurityRoleLinks();
-  for (  Map.Entry<String,Collection<String>> entry : securityRoles.entrySet()) {
+  List<Map.Entry<String,Permission>> processedRoles=ejbJaccConfig.getRoles();
+  for (  Map.Entry<String,Permission> entry : processedRoles) {
+    securityRoles.add(entry.getKey());
+  }
+  securityRoles.add(ANY_AUTHENTICATED_USER_ROLE);
+  Map<String,Collection<String>> securityRoleRefs=ejbComponentDescription.getSecurityRoleLinks();
+  for (  Map.Entry<String,Collection<String>> entry : securityRoleRefs.entrySet()) {
     String roleName=entry.getKey();
     for (    String roleLink : entry.getValue()) {
       EJBRoleRefPermission p=new EJBRoleRefPermission(ejbComponentDescription.getEJBName(),roleName);
       ejbJaccConfig.addRole(roleLink,p);
     }
-    descriptorRoles.remove(roleName);
+    securityRoles.remove(roleName);
   }
-  for (  String role : descriptorRoles) {
+  Set<String> declaredRoles=ejbComponentDescription.getDeclaredRoles();
+  for (  String role : declaredRoles) {
+    if (!securityRoleRefs.containsKey(role)) {
+      EJBRoleRefPermission p=new EJBRoleRefPermission(ejbComponentDescription.getEJBName(),role);
+      ejbJaccConfig.addRole(role,p);
+    }
+    securityRoles.remove(role);
+  }
+  for (  String role : securityRoles) {
     EJBRoleRefPermission p=new EJBRoleRefPermission(ejbComponentDescription.getEJBName(),role);
     ejbJaccConfig.addRole(role,p);
   }
