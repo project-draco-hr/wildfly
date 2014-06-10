@@ -1,30 +1,37 @@
 {
   try {
-    if (resourceRoot == null) {
-      Properties props=new Properties();
-      props.load(getClass().getClassLoader().getResourceAsStream(VERSION_PROPERTIES));
-      URL url=this.getClass().getClassLoader().getResource(SPRING_INT_JAR_BASE + props.get(VERSION_KEY) + ".jar");
-      if (url == null) {
-        throw JaxrsLogger.JAXRS_LOGGER.noSpringIntegrationJar();
-      }
-      File file=new File(url.toURI());
-      VirtualFile vf=VFS.getChild(file.toURI());
-      final Closeable mountHandle=VFS.mountZip(file,vf,TempFileProviderService.provider());
-      Service<Closeable> mountHandleService=new Service<Closeable>(){
-        public void start(        StartContext startContext) throws StartException {
-        }
-        public void stop(        StopContext stopContext){
-          VFSUtils.safeClose(mountHandle);
-        }
-        public Closeable getValue() throws IllegalStateException, IllegalArgumentException {
-          return mountHandle;
-        }
-      }
-;
-      ServiceBuilder<Closeable> builder=serviceTarget.addService(ServiceName.JBOSS.append(SERVICE_NAME),mountHandleService);
-      builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
-      resourceRoot=vf;
+    Module module=Module.getBootModuleLoader().loadModule(MODULE);
+    URL fileUrl=module.getClassLoader().getResource(JAR_LOCATION);
+    if (fileUrl == null) {
+      throw JaxrsLogger.JAXRS_LOGGER.noSpringIntegrationJar();
     }
+    File dir=new File(fileUrl.getFile());
+    File file=null;
+    for (    String jar : dir.list()) {
+      if (jar.endsWith(".jar")) {
+        file=new File(dir,jar);
+        break;
+      }
+    }
+    if (file == null) {
+      throw JaxrsLogger.JAXRS_LOGGER.noSpringIntegrationJar();
+    }
+    VirtualFile vf=VFS.getChild(file.toURI());
+    final Closeable mountHandle=VFS.mountZip(file,vf,TempFileProviderService.provider());
+    Service<Closeable> mountHandleService=new Service<Closeable>(){
+      public void start(      StartContext startContext) throws StartException {
+      }
+      public void stop(      StopContext stopContext){
+        VFSUtils.safeClose(mountHandle);
+      }
+      public Closeable getValue() throws IllegalStateException, IllegalArgumentException {
+        return mountHandle;
+      }
+    }
+;
+    ServiceBuilder<Closeable> builder=serviceTarget.addService(ServiceName.JBOSS.append(SERVICE_NAME),mountHandleService);
+    builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+    resourceRoot=vf;
     return resourceRoot;
   }
  catch (  Exception e) {
