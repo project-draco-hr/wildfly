@@ -35,14 +35,26 @@
       actualRoles.addAll(mapped);
     }
   }
-  if (!Collections.disjoint(requiredRoles,actualRoles)) {
-    return true;
+  if (isJaccEnabled(securityContext.getSecurityDomain())) {
+    Set<Principal> rolesPrincipals=new HashSet<Principal>();
+    for (    String role : actualRoles)     rolesPrincipals.add(new SimplePrincipal(role));
+    for (    String roleName : requiredRoles) {
+      EJBRoleRefPermission permission=new EJBRoleRefPermission(ejbName,roleName);
+      ProtectionDomain pd=new ProtectionDomain(null,null,null,rolesPrincipals.toArray(new Principal[rolesPrincipals.size()]));
+      if (Policy.getPolicy().implies(pd,permission))       return true;
+    }
+    return false;
   }
-  if (roleLinks != null) {
-    for (    final String actualRole : actualRoles) {
-      final Set<String> aliases=this.getRoleAliases(actualRole,roleLinks);
-      if (!Collections.disjoint(requiredRoles,aliases)) {
-        return true;
+ else {
+    if (!Collections.disjoint(requiredRoles,actualRoles)) {
+      return true;
+    }
+    if (roleLinks != null) {
+      for (      final String actualRole : actualRoles) {
+        final Set<String> aliases=this.getRoleAliases(actualRole,roleLinks);
+        if (!Collections.disjoint(requiredRoles,aliases)) {
+          return true;
+        }
       }
     }
   }
