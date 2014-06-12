@@ -1,5 +1,6 @@
 {
-  SubsystemRegistration subsystem=context.registerSubsystem(SUBSYSTEM_NAME,MANAGEMENT_API_MAJOR_VERSION,MANAGEMENT_API_MINOR_VERSION,MANAGEMENT_API_MICRO_VERSION);
+  ModelVersion current=InfinispanModel.CURRENT.getVersion();
+  SubsystemRegistration registration=context.registerSubsystem(SUBSYSTEM_NAME,current.getMajor(),current.getMinor(),current.getMicro());
   final ResolvePathHandler resolvePathHandler;
   if (context.getProcessType().isServer()) {
     resolvePathHandler=ResolvePathHandler.Builder.of(context.getPathManager()).setPathAttribute(FileStoreResourceDefinition.RELATIVE_PATH).setRelativeToAttribute(FileStoreResourceDefinition.RELATIVE_TO).build();
@@ -7,9 +8,12 @@
  else {
     resolvePathHandler=null;
   }
-  subsystem.registerSubsystemModel(new InfinispanSubsystemResourceDefinition(resolvePathHandler,context.isRuntimeOnlyRegistrationValid()));
-  subsystem.registerXMLElementWriter(new InfinispanSubsystemXMLWriter());
+  registration.registerSubsystemModel(new InfinispanSubsystemResourceDefinition(resolvePathHandler,context.isRuntimeOnlyRegistrationValid()));
+  registration.registerXMLElementWriter(new InfinispanSubsystemXMLWriter());
   if (context.isRegisterTransformers()) {
-    InfinispanTransformers.registerTransformers(subsystem);
+    for (    InfinispanModel model : EnumSet.complementOf(EnumSet.of(InfinispanModel.CURRENT))) {
+      ModelVersion version=model.getVersion();
+      TransformationDescription.Tools.register(InfinispanSubsystemResourceDefinition.buildTransformation(version),registration,version);
+    }
   }
 }
