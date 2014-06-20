@@ -1,0 +1,97 @@
+{
+  try {
+    File jbossHomeDir=new File(JBOSS_HOME).getCanonicalFile();
+    if (!jbossHomeDir.isDirectory()) {
+      throw new IllegalStateException("Cannot find: " + jbossHomeDir);
+    }
+    String modulesPath=MODULE_PATH;
+    if (modulesPath == null || modulesPath.isEmpty()) {
+      modulesPath=JBOSS_HOME + File.separatorChar + "modules";
+    }
+    File modulesJar=new File(JBOSS_HOME + File.separatorChar + "jboss-modules.jar");
+    if (!modulesJar.exists()) {
+      throw new IllegalStateException("Cannot find: " + modulesJar);
+    }
+    List<String> cmd=new ArrayList<String>();
+    String javaExec=JAVA_HOME + File.separatorChar + "bin"+ File.separatorChar+ "java";
+    if (JAVA_HOME.contains(" ")) {
+      javaExec="\"" + javaExec + "\"";
+    }
+    cmd.add(javaExec);
+    if (JVM_ARGS != null) {
+      for (      String opt : JVM_ARGS.split("\\s+")) {
+        cmd.add(opt);
+      }
+    }
+    cmd.add("-ea");
+    String serverBaseDir=getSystemPropertyValue(cmd,"jboss.server.base.dir",JBOSS_HOME + File.separatorChar + SERVER_BASE_DIR);
+    final String bootLogFileDefaultValue=serverBaseDir + File.separatorChar + LOG_DIR+ File.separatorChar+ "server.log";
+    final String loggingConfigurationDefaultValue=serverBaseDir + File.separatorChar + CONFIG_DIR+ File.separatorChar+ "logging.properties";
+    cmd.add("-Djboss.home.dir=" + JBOSS_HOME);
+    cmd.add("-Dorg.jboss.boot.log.file=" + getSystemPropertyValue(cmd,"org.jboss.boot.log.file",getFile(bootLogFileDefaultValue,JBOSS_HOME).getAbsolutePath()));
+    cmd.add("-Dlogging.configuration=" + getSystemPropertyValue(cmd,"logging.configuration",getFile(loggingConfigurationDefaultValue,JBOSS_HOME).toURI().toString()));
+    cmd.add("-jar");
+    cmd.add(modulesJar.getAbsolutePath());
+    cmd.add("-mp");
+    cmd.add(modulesPath);
+    cmd.add("org.jboss.as.standalone");
+    cmd.add("-server-config");
+    cmd.add(SERVER_CONFIG);
+    if (JBOSS_ARGS != null) {
+      for (      String opt : JBOSS_ARGS.split("\\s+")) {
+        cmd.add(opt);
+      }
+    }
+    log.info("Starting container with: " + cmd.toString());
+    ProcessBuilder processBuilder=new ProcessBuilder(cmd);
+    processBuilder.redirectErrorStream(true);
+    process=processBuilder.start();
+    new Thread(new ConsoleConsumer()).start();
+    final Process proc=process;
+    shutdownThread=new Thread(new Runnable(){
+      @Override public void run(){
+        if (proc != null) {
+          proc.destroy();
+          try {
+            proc.waitFor();
+          }
+ catch (          InterruptedException e) {
+            throw new RuntimeException(e);
+          }
+        }
+      }
+    }
+);
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
+    ModelControllerClient modelControllerClient=null;
+    try {
+      modelControllerClient=ModelControllerClient.Factory.create(MANAGEMENT_PROTOCOL,MANAGEMENT_ADDRESS,MANAGEMENT_PORT,Authentication.getCallbackHandler());
+    }
+ catch (    UnknownHostException e) {
+      throw new RuntimeException(e);
+    }
+    client=new ManagementClient(modelControllerClient,MANAGEMENT_ADDRESS,MANAGEMENT_PORT,MANAGEMENT_PROTOCOL);
+    long startupTimeout=30;
+    long timeout=startupTimeout * 1000;
+    boolean serverAvailable=false;
+    long sleep=1000;
+    while (timeout > 0 && !serverAvailable) {
+      long before=System.currentTimeMillis();
+      serverAvailable=client.isServerInRunningState();
+      timeout-=(System.currentTimeMillis() - before);
+      if (!serverAvailable) {
+        if (processHasDied(proc))         break;
+        Thread.sleep(sleep);
+        timeout-=sleep;
+        sleep=Math.max(sleep / 2,100);
+      }
+    }
+    if (!serverAvailable) {
+      destroyProcess();
+      throw new RuntimeException("Managed server was not started within 30s");
+    }
+  }
+ catch (  Exception e) {
+    throw new RuntimeException("Could not start container",e);
+  }
+}
