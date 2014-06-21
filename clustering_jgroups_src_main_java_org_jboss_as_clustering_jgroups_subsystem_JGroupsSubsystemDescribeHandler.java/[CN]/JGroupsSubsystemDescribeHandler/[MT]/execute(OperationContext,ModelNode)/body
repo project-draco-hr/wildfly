@@ -1,0 +1,45 @@
+{
+  final ModelNode result=new ModelNode();
+  PathAddress opAddress=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR));
+  AuthorizationResult authResult=context.authorize(operation,GenericSubsystemDescribeHandler.DESCRIBE_EFFECTS);
+  if (authResult.getDecision() != AuthorizationResult.Decision.PERMIT) {
+    throw ControllerLogger.ROOT_LOGGER.unauthorized(operation.require(OP).asString(),opAddress,authResult.getExplanation());
+  }
+  final PathAddress rootAddress=PathAddress.pathAddress(opAddress.getLastElement());
+  final ModelNode model=Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
+  result.add(createOperation(rootAddress,model,JGroupsSubsystemResourceDefinition.ATTRIBUTES));
+  if (model.hasDefined(StackResourceDefinition.WILDCARD_PATH.getKey())) {
+    for (    Property property : model.get(StackResourceDefinition.WILDCARD_PATH.getKey()).asPropertyList()) {
+      PathAddress stackAddress=rootAddress.append(StackResourceDefinition.pathElement(property.getName()));
+      ModelNode stack=property.getValue();
+      result.add(createOperation(stackAddress,stack));
+      if (stack.get(TransportResourceDefinition.PATH.getKeyValuePair()).isDefined()) {
+        ModelNode transport=stack.get(TransportResourceDefinition.PATH.getKeyValuePair());
+        PathAddress transportAddress=stackAddress.append(TransportResourceDefinition.PATH);
+        result.add(createOperation(transportAddress,transport,TransportResourceDefinition.ATTRIBUTES));
+        addProtocolPropertyCommands(transportAddress,transport,result);
+      }
+      if (stack.get(ProtocolResourceDefinition.WILDCARD_PATH.getKey()).isDefined()) {
+        for (        Property protocol : StackAddHandler.getOrderedProtocolPropertyList(stack)) {
+          result.add(createProtocolOperation(stackAddress,protocol.getValue(),ProtocolResourceDefinition.ATTRIBUTES));
+          PathAddress protocolAddress=stackAddress.append(ProtocolResourceDefinition.pathElement(protocol.getName()));
+          addProtocolPropertyCommands(protocolAddress,protocol.getValue(),result);
+        }
+      }
+      if (stack.get(RelayResourceDefinition.PATH.getKeyValuePair()).isDefined()) {
+        ModelNode relay=stack.get(RelayResourceDefinition.PATH.getKeyValuePair());
+        PathAddress relayAddress=stackAddress.append(RelayResourceDefinition.PATH);
+        result.add(createOperation(relayAddress,relay,RelayResourceDefinition.ATTRIBUTES));
+        addProtocolPropertyCommands(relayAddress,relay,result);
+        if (relay.get(RemoteSiteResourceDefinition.WILDCARD_PATH.getKey()).isDefined()) {
+          for (          Property remoteSite : relay.get(RemoteSiteResourceDefinition.WILDCARD_PATH.getKey()).asPropertyList()) {
+            PathAddress remoteSiteAddress=relayAddress.append(RemoteSiteResourceDefinition.pathElement(remoteSite.getName()));
+            result.add(createOperation(remoteSiteAddress,remoteSite.getValue(),RemoteSiteResourceDefinition.ATTRIBUTES));
+          }
+        }
+      }
+    }
+  }
+  context.getResult().set(result);
+  context.stepCompleted();
+}

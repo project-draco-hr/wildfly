@@ -1,35 +1,17 @@
 {
-  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
-  final String cacheContainerName=address.getLastElement().getValue();
-  final String attrName=operation.require(ModelDescriptionConstants.NAME).asString();
-  final ServiceController<?> controller=context.getServiceRegistry(false).getService(EmbeddedCacheManagerService.getServiceName(cacheContainerName));
-  boolean started=controller != null && controller.getValue() != null;
-  CacheManagerMetrics metric=CacheManagerMetrics.getStat(attrName);
-  ModelNode result=new ModelNode();
+  PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  String containerName=address.getLastElement().getValue();
+  String name=operation.require(ModelDescriptionConstants.NAME).asString();
+  CacheContainerMetric metric=CacheContainerMetric.forName(name);
   if (metric == null) {
-    context.getFailureDescription().set(InfinispanLogger.ROOT_LOGGER.unknownMetric(attrName));
-  }
- else   if (!started) {
+    context.getFailureDescription().set(InfinispanLogger.ROOT_LOGGER.unknownMetric(name));
   }
  else {
-    CacheContainer cacheManager=(CacheContainer)controller.getValue();
-switch (metric) {
-case CACHE_MANAGER_STATUS:
-      result.set(cacheManager.getStatus().toString());
-    break;
-case IS_COORDINATOR:
-  result.set(cacheManager.isCoordinator());
-break;
-case LOCAL_ADDRESS:
-result.set(cacheManager.getAddress() != null ? cacheManager.getAddress().toString() : "N/A");
-break;
-case COORDINATOR_ADDRESS:
-result.set(cacheManager.getCoordinator() != null ? cacheManager.getCoordinator().toString() : "N/A");
-break;
-case CLUSTER_NAME:
-result.set(cacheManager.getClusterName() != null ? cacheManager.getClusterName() : "N/A");
-}
-context.getResult().set(result);
-}
-context.completeStep(OperationContext.ResultHandler.NOOP_RESULT_HANDLER);
+    CacheContainer container=ServiceContainerHelper.findValue(context.getServiceRegistry(false),EmbeddedCacheManagerService.getServiceName(containerName));
+    if (container != null) {
+      ModelNode result=metric.getValue(container);
+      context.getResult().set((result != null) && result.isDefined() ? result : new ModelNode("N/A"));
+    }
+  }
+  context.completeStep(OperationContext.ResultHandler.NOOP_RESULT_HANDLER);
 }
