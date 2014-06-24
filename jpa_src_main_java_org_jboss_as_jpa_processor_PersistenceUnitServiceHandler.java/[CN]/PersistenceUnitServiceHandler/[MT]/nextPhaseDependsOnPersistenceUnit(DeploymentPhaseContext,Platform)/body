@@ -1,0 +1,20 @@
+{
+  final DeploymentUnit topDeploymentUnit=DeploymentUtils.getTopDeploymentUnit(phaseContext.getDeploymentUnit());
+  final PersistenceUnitsInApplication persistenceUnitsInApplication=topDeploymentUnit.getAttachment(PersistenceUnitsInApplication.PERSISTENCE_UNITS_IN_APPLICATION);
+  for (  final PersistenceUnitMetadataHolder holder : persistenceUnitsInApplication.getPersistenceUnitHolders()) {
+    for (    final PersistenceUnitMetadata pu : holder.getPersistenceUnits()) {
+      String jpaContainerManaged=pu.getProperties().getProperty(Configuration.JPA_CONTAINER_MANAGED);
+      boolean deployPU=(jpaContainerManaged == null ? true : Boolean.parseBoolean(jpaContainerManaged));
+      if (deployPU) {
+        final ServiceName puServiceName=PersistenceUnitServiceImpl.getPUServiceName(pu);
+        final PersistenceProviderDeploymentHolder persistenceProviderDeploymentHolder=getPersistenceProviderDeploymentHolder(phaseContext.getDeploymentUnit());
+        final PersistenceProvider provider=lookupProvider(pu,persistenceProviderDeploymentHolder,phaseContext.getDeploymentUnit());
+        final PersistenceProviderAdaptor adaptor=getPersistenceProviderAdaptor(pu,persistenceProviderDeploymentHolder,phaseContext.getDeploymentUnit(),provider,platform);
+        final boolean twoPhaseBootStrapCapable=(adaptor instanceof TwoPhaseBootstrapCapable) && Configuration.allowTwoPhaseBootstrap(pu);
+        if (Configuration.needClassFileTransformer(pu)) {
+          phaseContext.addToAttachmentList(Attachments.NEXT_PHASE_DEPS,twoPhaseBootStrapCapable ? puServiceName.append(FIRST_PHASE) : puServiceName);
+        }
+      }
+    }
+  }
+}
