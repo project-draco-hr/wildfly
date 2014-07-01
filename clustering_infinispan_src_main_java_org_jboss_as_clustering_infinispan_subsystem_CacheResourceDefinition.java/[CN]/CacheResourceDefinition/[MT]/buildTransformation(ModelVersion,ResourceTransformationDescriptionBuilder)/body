@@ -1,4 +1,26 @@
 {
+  if (InfinispanModel.VERSION_3_0_0.requiresTransformation(version)) {
+    AttributeConverter batchingConverter=new AttributeConverter(){
+      @Override public void convertOperationParameter(      PathAddress address,      String name,      ModelNode value,      ModelNode operation,      TransformationContext context){
+      }
+      @Override public void convertResourceAttribute(      PathAddress address,      String name,      ModelNode value,      TransformationContext context){
+        PathAddress transactionAddress=address.append(TransactionResourceDefinition.PATH);
+        try {
+          ModelNode transaction=context.readResourceFromRoot(transactionAddress).getModel();
+          if (transaction.hasDefined(TransactionResourceDefinition.MODE.getName())) {
+            TransactionMode mode=TransactionMode.valueOf(transaction.get(TransactionResourceDefinition.MODE.getName()).asString());
+            if (mode == TransactionMode.BATCH) {
+              value.set(true);
+            }
+          }
+        }
+ catch (        NoSuchElementException e) {
+        }
+      }
+    }
+;
+    builder.getAttributeBuilder().setValueConverter(batchingConverter,BATCHING);
+  }
   if (InfinispanModel.VERSION_2_0_0.requiresTransformation(version)) {
     builder.getAttributeBuilder().setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(false,false,new ModelNode(true)),STATISTICS_ENABLED).addRejectCheck(RejectAttributeChecker.UNDEFINED,STATISTICS_ENABLED).addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,STATISTICS_ENABLED).addRejectCheck(new RejectAttributeChecker.SimpleRejectAttributeChecker(new ModelNode(false)),STATISTICS_ENABLED);
   }

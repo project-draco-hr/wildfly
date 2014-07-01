@@ -6,7 +6,6 @@
     builder.jmxStatistics().enabled(CacheContainerResourceDefinition.STATISTICS_ENABLED.resolveModelAttribute(context,containerModel).asBoolean());
   }
   final Indexing indexing=Indexing.valueOf(CacheResourceDefinition.INDEXING.resolveModelAttribute(context,cache).asString());
-  final boolean batching=CacheResourceDefinition.BATCHING.resolveModelAttribute(context,cache).asBoolean();
   builder.clustering().cacheMode(this.mode);
   final ModelNode indexingPropertiesModel=CacheResourceDefinition.INDEXING_PROPERTIES.resolveModelAttribute(context,cache);
   Properties indexingProperties=new Properties();
@@ -32,27 +31,29 @@
     long stopTimeout=TransactionResourceDefinition.STOP_TIMEOUT.resolveModelAttribute(context,transaction).asLong();
     TransactionMode txMode=TransactionMode.valueOf(TransactionResourceDefinition.MODE.resolveModelAttribute(context,transaction).asString());
     lockingMode=LockingMode.valueOf(TransactionResourceDefinition.LOCKING.resolveModelAttribute(context,transaction).asString());
-    builder.transaction().cacheStopTimeout(stopTimeout).transactionMode(txMode.getMode()).lockingMode(lockingMode).useSynchronization(!txMode.isXAEnabled()).recovery().enabled(txMode.isRecoveryEnabled());
-    if (txMode.getMode().isTransactional()) {
-      dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,cacheConfigurationDependencies.getTransactionManagerInjector()));
-      if (!txMode.isXAEnabled()) {
-        dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_SYNCHRONIZATION_REGISTRY,TransactionSynchronizationRegistry.class,cacheConfigurationDependencies.getTransactionSynchronizationRegistryInjector()));
+    boolean transactional=(txMode != TransactionMode.NONE);
+    boolean batching=(txMode == TransactionMode.BATCH);
+    boolean useSynchronization=(txMode == TransactionMode.NON_XA);
+    boolean recoveryEnabled=(txMode == TransactionMode.FULL_XA);
+    builder.transaction().cacheStopTimeout(stopTimeout).transactionMode(transactional ? org.infinispan.transaction.TransactionMode.TRANSACTIONAL : org.infinispan.transaction.TransactionMode.TRANSACTIONAL).lockingMode(lockingMode).useSynchronization(useSynchronization).recovery().enabled(recoveryEnabled).invocationBatching().enable(transactional);
+    if (transactional) {
+      if (batching) {
+        cacheConfigurationDependencies.getTransactionManagerInjector().inject(BatchModeTransactionManager.getInstance());
       }
-    }
-    if (txMode.isRecoveryEnabled()) {
-      dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_ARJUNA_RECOVERY_MANAGER,XAResourceRecoveryRegistry.class,cacheDependencies.getRecoveryRegistryInjector()));
+ else {
+        dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,cacheConfigurationDependencies.getTransactionManagerInjector()));
+        if (useSynchronization) {
+          dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_SYNCHRONIZATION_REGISTRY,TransactionSynchronizationRegistry.class,cacheConfigurationDependencies.getTransactionSynchronizationRegistryInjector()));
+        }
+ else         if (recoveryEnabled) {
+          dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_ARJUNA_RECOVERY_MANAGER,XAResourceRecoveryRegistry.class,cacheDependencies.getRecoveryRegistryInjector()));
+        }
+      }
     }
   }
   if ((lockingMode == LockingMode.OPTIMISTIC) && (isolationLevel == IsolationLevel.REPEATABLE_READ) && this.mode.isSynchronous()&& !this.mode.isInvalidation()) {
     builder.locking().writeSkewCheck(true);
     builder.versioning().enable().scheme(VersioningScheme.SIMPLE);
-  }
-  if (batching) {
-    builder.transaction().transactionMode(org.infinispan.transaction.TransactionMode.TRANSACTIONAL).invocationBatching().enable();
-    cacheConfigurationDependencies.getTransactionManagerInjector().inject(BatchModeTransactionManager.getInstance());
-  }
- else {
-    builder.transaction().invocationBatching().disable();
   }
   if (cache.hasDefined(ModelKeys.EVICTION) && cache.get(ModelKeys.EVICTION,ModelKeys.EVICTION_NAME).isDefined()) {
     ModelNode eviction=cache.get(ModelKeys.EVICTION,ModelKeys.EVICTION_NAME);
