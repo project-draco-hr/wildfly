@@ -1,0 +1,29 @@
+{
+  CacheEntry<K,V> entry=cache.get(key);
+  V old=null;
+  if (entry == null) {
+    entry=new CacheEntry<>(key,newValue);
+    CacheEntry<K,V> result=cache.putIfAbsent(key,entry);
+    if (result != null) {
+      return this.put(key,newValue);
+    }
+    bumpAccess(entry);
+  }
+ else {
+    old=entry.getValue();
+    if (ifAbsent) {
+      return old;
+    }
+    entry.setValue(newValue);
+    if (entry.hit() % SAMPLE_INTERVAL == 0) {
+      bumpAccess(entry);
+    }
+  }
+  if (cache.size() > maxEntries) {
+    CacheEntry<K,V> oldest=accessQueue.poll();
+    if (oldest != entry) {
+      this.remove(oldest.key());
+    }
+  }
+  return old;
+}
