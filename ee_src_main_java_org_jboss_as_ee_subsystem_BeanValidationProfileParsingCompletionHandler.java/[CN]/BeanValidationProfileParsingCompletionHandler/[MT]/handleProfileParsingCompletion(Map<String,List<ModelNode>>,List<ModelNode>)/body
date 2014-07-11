@@ -1,0 +1,43 @@
+{
+  List<ModelNode> legacyEEOps=null;
+  for (  Namespace namespace : EnumSet.allOf(Namespace.class)) {
+    if (namespace.isBeanValidationIncluded()) {
+      legacyEEOps=profileBootOperations.get(namespace.getUriString());
+      if (legacyEEOps != null) {
+        break;
+      }
+    }
+  }
+  if (legacyEEOps != null) {
+    boolean hasBeanValidationOp=false;
+    for (    String namespace : profileBootOperations.keySet()) {
+      if (namespace.startsWith(BEAN_VALIDATION_NAMESPACE_PREFIX)) {
+        hasBeanValidationOp=true;
+        break;
+      }
+    }
+    if (!hasBeanValidationOp) {
+      boolean hasBeanValidationExtension=false;
+      for (      ModelNode op : otherBootOperations) {
+        PathAddress pa=PathAddress.pathAddress(op.get(OP_ADDR));
+        if (pa.size() == 1 && EXTENSION.equals(pa.getElement(0).getKey()) && BEAN_VALIDATION_MODULE.equals(pa.getElement(0).getValue())) {
+          hasBeanValidationExtension=true;
+          break;
+        }
+      }
+      if (!hasBeanValidationExtension) {
+        final ModelNode addBeanValidationExtensionOp=new ModelNode();
+        addBeanValidationExtensionOp.get(OP).set(ADD);
+        PathAddress beanValidationExtensionAddress=PathAddress.pathAddress(PathElement.pathElement(EXTENSION,BEAN_VALIDATION_MODULE));
+        addBeanValidationExtensionOp.get(OP_ADDR).set(beanValidationExtensionAddress.toModelNode());
+        addBeanValidationExtensionOp.get(MODULE).set(BEAN_VALIDATION_MODULE);
+        otherBootOperations.add(addBeanValidationExtensionOp);
+      }
+      final ModelNode addBeanValidationSubsystemOp=new ModelNode();
+      addBeanValidationSubsystemOp.get(OP).set(ADD);
+      PathAddress beanValidationSubsystemAddress=PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM,BEAN_VALIDATION_SUBSYSTEM));
+      addBeanValidationSubsystemOp.get(OP_ADDR).set(beanValidationSubsystemAddress.toModelNode());
+      legacyEEOps.add(addBeanValidationSubsystemOp);
+    }
+  }
+}
