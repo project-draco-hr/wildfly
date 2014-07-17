@@ -1,6 +1,8 @@
 {
   AdvancedCache<Object,Object> defaultCache=mock(AdvancedCache.class);
   AdvancedCache<Object,Object> otherCache=mock(AdvancedCache.class);
+  when(defaultCache.getCacheConfiguration()).thenReturn(this.batchingDisabledConfiguration);
+  when(otherCache.getCacheConfiguration()).thenReturn(this.batchingEnabledConfiguration);
   when(this.manager.<Object,Object>getCache("default",true)).thenReturn(defaultCache);
   when(this.manager.<Object,Object>getCache("other",true)).thenReturn(otherCache);
   when(defaultCache.getAdvancedCache()).thenReturn(defaultCache);
@@ -9,10 +11,20 @@
   assertNotSame(defaultCache,result);
   assertEquals(result,defaultCache);
   assertSame(this.subject,result.getCacheManager());
+  boolean started=result.startBatch();
+  assertFalse(started);
+  verify(defaultCache,never()).startBatch();
+  result.endBatch(false);
+  verify(defaultCache,never()).endBatch(false);
   result=this.subject.getCache("other");
   assertNotSame(otherCache,result);
   assertEquals(result,otherCache);
   assertSame(this.subject,result.getCacheManager());
+  when(otherCache.startBatch()).thenReturn(true);
+  started=result.startBatch();
+  assertTrue(started);
+  result.endBatch(true);
+  verify(otherCache).endBatch(true);
   result=this.subject.getCache(CacheContainer.DEFAULT_CACHE_ALIAS);
   assertNotSame(defaultCache,result);
   assertEquals(result,defaultCache);
