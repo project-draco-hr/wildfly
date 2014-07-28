@@ -5,11 +5,18 @@
         ServiceController<?> controller=context.getServiceRegistry(false).getService(ContainerEventHandlerService.SERVICE_NAME);
         final ModClusterServiceMBean service=(ModClusterServiceMBean)controller.getValue();
         ROOT_LOGGER.debugf("add-proxy: %s",operation);
-        final Proxy proxy=new Proxy(operation);
-        service.addProxy(proxy.host,proxy.port);
+        final String host=HOST.resolveModelAttribute(context,operation).asString();
+        final int port=PORT.resolveModelAttribute(context,operation).asInt();
+        try {
+          InetAddress.getByName(host);
+        }
+ catch (        UnknownHostException e) {
+          throw new OperationFailedException(ModClusterLogger.ROOT_LOGGER.couldNotResolveProxyIpAddress(),e);
+        }
+        service.addProxy(host,port);
         context.completeStep(new OperationContext.RollbackHandler(){
           @Override public void handleRollback(          OperationContext context,          ModelNode operation){
-            service.removeProxy(proxy.host,proxy.port);
+            service.removeProxy(host,port);
           }
         }
 );
