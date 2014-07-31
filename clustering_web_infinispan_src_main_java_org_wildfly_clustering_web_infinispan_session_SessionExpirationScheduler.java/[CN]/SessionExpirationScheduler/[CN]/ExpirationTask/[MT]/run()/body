@@ -1,18 +1,27 @@
 {
-  SessionExpirationScheduler.this.expirationFutures.remove(this.id);
   InfinispanWebLogger.ROOT_LOGGER.tracef("Expiring session %s",this.id);
-  Batch batch=SessionExpirationScheduler.this.batcher.startBatch();
-  boolean success=false;
   try {
-    SessionExpirationScheduler.this.remover.remove(this.id);
-    success=true;
+    Batch batch=SessionExpirationScheduler.this.batcher.startBatch();
+    boolean success=false;
+    try {
+      SessionExpirationScheduler.this.remover.remove(this.id);
+      success=true;
+    }
+ catch (    Throwable e) {
+      InfinispanWebLogger.ROOT_LOGGER.failedToExpireSession(e,this.id);
+    }
+ finally {
+      if (success) {
+        batch.close();
+      }
+ else {
+        batch.discard();
+      }
+    }
   }
   finally {
-    if (success) {
-      batch.close();
-    }
- else {
-      batch.discard();
+synchronized (this) {
+      SessionExpirationScheduler.this.expirationFutures.remove(this.id);
     }
   }
 }
