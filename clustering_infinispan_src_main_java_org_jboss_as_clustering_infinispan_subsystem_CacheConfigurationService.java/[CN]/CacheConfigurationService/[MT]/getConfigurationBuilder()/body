@@ -1,10 +1,12 @@
 {
-  if (this.moduleId != null) {
+  ConfigurationBuilder builder=this.dependencies.getConfigurationBuilder();
+  ModuleIdentifier moduleId=this.dependencies.getModuleIdentifier();
+  if (moduleId != null) {
     try {
-      Module module=this.dependencies.getModuleLoader().loadModule(this.moduleId);
+      Module module=this.dependencies.getModuleLoader().loadModule(moduleId);
       ClassLoader loader=module.getClassLoader();
-      this.builder.classLoader(loader);
-      GroupsConfigurationBuilder groupsBuilder=this.builder.clustering().hash().groups();
+      builder.classLoader(loader);
+      GroupsConfigurationBuilder groupsBuilder=builder.clustering().hash().groups();
       for (      Grouper<?> grouper : ServiceLoader.load(Grouper.class,loader)) {
         groupsBuilder.addGrouper(grouper);
       }
@@ -15,11 +17,13 @@
   }
   TransactionManager tm=this.dependencies.getTransactionManager();
   if (tm != null) {
-    this.builder.transaction().transactionManagerLookup(new TransactionManagerProvider(tm));
+    builder.transaction().transactionManagerLookup(new TransactionManagerProvider(tm));
   }
   TransactionSynchronizationRegistry tsr=this.dependencies.getTransactionSynchronizationRegistry();
   if (tsr != null) {
-    this.builder.transaction().transactionSynchronizationRegistryLookup(new TransactionSynchronizationRegistryProvider(tsr));
+    builder.transaction().transactionSynchronizationRegistryLookup(new TransactionSynchronizationRegistryProvider(tsr));
   }
-  return this.builder;
+  boolean topologyAware=this.dependencies.getCacheContainer().getCacheManagerConfiguration().transport().hasTopologyInfo();
+  this.dependencies.getConsistentHashStrategy().buildHashConfiguration(builder.clustering().hash(),this.dependencies.getCacheMode(),topologyAware);
+  return builder;
 }
