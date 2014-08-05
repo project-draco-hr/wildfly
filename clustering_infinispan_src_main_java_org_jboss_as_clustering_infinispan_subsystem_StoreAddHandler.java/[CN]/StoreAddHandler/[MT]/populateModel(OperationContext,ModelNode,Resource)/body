@@ -1,16 +1,20 @@
 {
-  final ModelNode model=resource.getModel();
-  if (isCacheStoreDefined(context,operation)) {
-    String storeName=getDefinedCacheStore(context,operation);
-    throw InfinispanLogger.ROOT_LOGGER.cacheStoreAlreadyDefined(storeName);
+  PathAddress storeAddress=PathAddress.pathAddress(operation.get(OP_ADDR));
+  PathAddress cacheAddress=storeAddress.subAddress(0,storeAddress.size() - 1);
+  ModelNode cache=Resource.Tools.readModel(context.readResourceFromRoot(cacheAddress));
+  for (  StoreType type : StoreType.values()) {
+    if (cache.hasDefined(type.pathElement().getKey()) && cache.get(type.pathElement().getKeyValuePair()).isDefined()) {
+      throw InfinispanLogger.ROOT_LOGGER.cacheStoreAlreadyDefined(type.pathElement().getKey());
+    }
   }
+  ModelNode model=resource.getModel();
   for (  AttributeDefinition attribute : StoreResourceDefinition.PARAMETERS) {
     if (attribute.getName().equals(StoreResourceDefinition.PROPERTIES.getName()))     continue;
     attribute.validateAndSet(operation,model);
   }
   if (operation.hasDefined(ModelKeys.PROPERTIES)) {
     for (    Property property : operation.get(ModelKeys.PROPERTIES).asPropertyList()) {
-      Resource param=context.createResource(PathAddress.pathAddress(PathElement.pathElement(ModelKeys.PROPERTY,property.getName())));
+      Resource param=context.createResource(PathAddress.pathAddress(StorePropertyResourceDefinition.pathElement(property.getName())));
       ModelNode value=property.getValue();
       if (!value.isDefined()) {
         throw InfinispanLogger.ROOT_LOGGER.propertyValueNotDefined(property.getName());

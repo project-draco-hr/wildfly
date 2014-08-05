@@ -1,15 +1,19 @@
 {
-  PathAddress address=containerAddress.append(ModelKeys.TRANSPORT,ModelKeys.TRANSPORT_NAME);
+  PathAddress address=containerAddress.append(TransportResourceDefinition.PATH);
   ModelNode operation=Util.createAddOperation(address);
   operations.put(address,operation);
+  String stack=null;
+  String cluster=null;
   for (int i=0; i < reader.getAttributeCount(); i++) {
     String value=reader.getAttributeValue(i);
     Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
 switch (attribute) {
 case STACK:
 {
-        TransportResourceDefinition.STACK.parseAndSetParameter(value,operation,reader);
-        break;
+        if (!this.schema.since(InfinispanSchema.VERSION_3_0)) {
+          stack=value;
+          break;
+        }
       }
 case EXECUTOR:
 {
@@ -44,8 +48,15 @@ break;
 }
 case CLUSTER:
 {
-if (this.schema.since(InfinispanSchema.VERSION_1_2)) {
-TransportResourceDefinition.CLUSTER.parseAndSetParameter(value,operation,reader);
+if (this.schema.since(InfinispanSchema.VERSION_1_2) && !this.schema.since(InfinispanSchema.VERSION_3_0)) {
+cluster=value;
+break;
+}
+}
+case CHANNEL:
+{
+if (this.schema.since(InfinispanSchema.VERSION_3_0)) {
+TransportResourceDefinition.CHANNEL.parseAndSetParameter(value,operation,reader);
 break;
 }
 }
@@ -54,6 +65,16 @@ default :
 throw ParseUtils.unexpectedAttribute(reader,i);
 }
 }
+}
+if (!this.schema.since(InfinispanSchema.VERSION_3_0)) {
+String channel=(cluster != null) ? cluster : containerAddress.getLastElement().getValue();
+TransportResourceDefinition.CHANNEL.parseAndSetParameter(channel,operation,reader);
+PathAddress channelAddress=PathAddress.pathAddress(JGroupsSubsystemResourceDefinition.PATH,ChannelResourceDefinition.pathElement(channel));
+ModelNode channelOperation=Util.createAddOperation(channelAddress);
+if (stack != null) {
+ChannelResourceDefinition.STACK.parseAndSetParameter(stack,channelOperation,reader);
+}
+operations.put(channelAddress,channelOperation);
 }
 ParseUtils.requireNoContent(reader);
 }

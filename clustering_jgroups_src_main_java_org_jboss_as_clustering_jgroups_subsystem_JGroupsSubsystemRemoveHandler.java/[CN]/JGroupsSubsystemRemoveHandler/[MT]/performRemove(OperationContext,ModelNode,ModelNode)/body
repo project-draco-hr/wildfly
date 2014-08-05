@@ -1,14 +1,22 @@
 {
-  final PathAddress opAddress=PathAddress.pathAddress(operation.require(OP_ADDR));
-  ModelNode removeSubsystem=Util.createOperation(REMOVE,opAddress);
-  context.addStep(removeSubsystem,new OriginalSubsystemRemoveHandler(),OperationContext.Stage.MODEL,true);
-  if (model.hasDefined(ModelKeys.STACK)) {
-    List<Property> stacks=model.get(ModelKeys.STACK).asPropertyList();
-    for (    Property stack : stacks) {
-      PathAddress address=opAddress.append(ModelKeys.STACK,stack.getName());
-      ModelNode removeStack=Util.createOperation(REMOVE,address);
-      context.addStep(removeStack,StackRemoveHandler.INSTANCE,OperationContext.Stage.MODEL,true);
+  PathAddress subsystemAddress=PathAddress.pathAddress(operation.require(OP_ADDR));
+  if (model.hasDefined(ChannelResourceDefinition.WILDCARD_PATH.getKey())) {
+    ModelNode channels=model.get(ChannelResourceDefinition.WILDCARD_PATH.getKey());
+    if (channels.isDefined()) {
+      for (      Property channel : channels.asPropertyList()) {
+        PathAddress address=subsystemAddress.append(ChannelResourceDefinition.pathElement(channel.getName()));
+        context.addStep(Util.createRemoveOperation(address),new ChannelRemoveHandler(),OperationContext.Stage.MODEL);
+      }
     }
   }
-  context.stepCompleted();
+  if (model.hasDefined(StackResourceDefinition.WILDCARD_PATH.getKey())) {
+    ModelNode stacks=model.get(StackResourceDefinition.WILDCARD_PATH.getKey());
+    if (stacks.isDefined()) {
+      for (      Property stack : stacks.asPropertyList()) {
+        PathAddress address=subsystemAddress.append(StackResourceDefinition.pathElement(stack.getName()));
+        context.addStep(Util.createRemoveOperation(address),new StackRemoveHandler(),OperationContext.Stage.MODEL);
+      }
+    }
+  }
+  super.performRemove(context,operation,model);
 }
