@@ -12,11 +12,19 @@
     try {
       return this.invoker.invoke(cache,operation,retry ? attemptFlags : allFlags);
     }
- catch (    TimeoutException e) {
+ catch (    TimeoutException|SuspectException e) {
       exception=e;
-    }
-catch (    SuspectException e) {
-      exception=e;
+      if (cache.getCacheConfiguration().transaction().transactionMode().isTransactional()) {
+        try {
+          int status=cache.getAdvancedCache().getTransactionManager().getStatus();
+          if (!ALLOWED_RETRY_STATUS.contains(status)) {
+            throw e;
+          }
+        }
+ catch (        SystemException se) {
+          throw e;
+        }
+      }
     }
     if (retry) {
       int delay=this.backOffIntervals[i];
