@@ -1,17 +1,20 @@
 {
-  if (AUTHENTICATED_SESSION_ATTRIBUTE_NAME.equals(name)) {
-    Account account=(Account)this.getSession().getAttributes().removeAttribute(name);
-    if (account != null) {
-      return new AuthenticatedSession(account,HttpServletRequest.FORM_AUTH);
+  Session<LocalSessionContext> session=this.entry.getKey();
+  try (BatchContext context=this.manager.getSessionManager().getBatcher().resumeBatch(this.batch)){
+    if (AUTHENTICATED_SESSION_ATTRIBUTE_NAME.equals(name)) {
+      Account account=(Account)session.getAttributes().removeAttribute(name);
+      if (account != null) {
+        return new AuthenticatedSession(account,HttpServletRequest.FORM_AUTH);
+      }
+      LocalSessionContext localContext=session.getLocalContext();
+      AuthenticatedSession old=localContext.getAuthenticatedSession();
+      localContext.setAuthenticatedSession(null);
+      return old;
     }
-    LocalSessionContext context=this.getSession().getLocalContext();
-    AuthenticatedSession old=context.getAuthenticatedSession();
-    context.setAuthenticatedSession(null);
+    Object old=session.getAttributes().removeAttribute(name);
+    if (old != null) {
+      this.manager.getSessionListeners().attributeRemoved(this,name,old);
+    }
     return old;
   }
-  Object old=this.getSession().getAttributes().removeAttribute(name);
-  if (old != null) {
-    this.manager.getSessionListeners().attributeRemoved(this,name,old);
-  }
-  return old;
-}
+ }

@@ -2,26 +2,29 @@
   if (value == null) {
     return this.removeAttribute(name);
   }
-  if (AUTHENTICATED_SESSION_ATTRIBUTE_NAME.equals(name)) {
-    AuthenticatedSession session=(AuthenticatedSession)value;
-    if (session.getMechanism().equals(HttpServletRequest.FORM_AUTH)) {
-      Account account=(Account)this.getSession().getAttributes().setAttribute(name,session.getAccount());
-      return (account != null) ? new AuthenticatedSession(account,HttpServletRequest.FORM_AUTH) : null;
+  Session<LocalSessionContext> session=this.entry.getKey();
+  try (BatchContext context=this.manager.getSessionManager().getBatcher().resumeBatch(this.batch)){
+    if (AUTHENTICATED_SESSION_ATTRIBUTE_NAME.equals(name)) {
+      AuthenticatedSession authSession=(AuthenticatedSession)value;
+      if (authSession.getMechanism().equals(HttpServletRequest.FORM_AUTH)) {
+        Account account=(Account)session.getAttributes().setAttribute(name,authSession.getAccount());
+        return (account != null) ? new AuthenticatedSession(account,HttpServletRequest.FORM_AUTH) : null;
+      }
+      LocalSessionContext localContext=session.getLocalContext();
+      AuthenticatedSession old=localContext.getAuthenticatedSession();
+      localContext.setAuthenticatedSession(authSession);
+      return old;
     }
-    LocalSessionContext context=this.getSession().getLocalContext();
-    AuthenticatedSession old=context.getAuthenticatedSession();
-    context.setAuthenticatedSession(session);
+    if (!(value instanceof Serializable)) {
+      throw new IllegalArgumentException(new NotSerializableException(value.getClass().getName()));
+    }
+    Object old=session.getAttributes().setAttribute(name,value);
+    if (old == null) {
+      this.manager.getSessionListeners().attributeAdded(this,name,value);
+    }
+ else     if (old != value) {
+      this.manager.getSessionListeners().attributeUpdated(this,name,value,old);
+    }
     return old;
   }
-  if (!(value instanceof Serializable)) {
-    throw new IllegalArgumentException(new NotSerializableException(value.getClass().getName()));
-  }
-  Object old=this.getSession().getAttributes().setAttribute(name,value);
-  if (old == null) {
-    this.manager.getSessionListeners().attributeAdded(this,name,value);
-  }
- else   if (old != value) {
-    this.manager.getSessionListeners().attributeUpdated(this,name,value,old);
-  }
-  return old;
-}
+ }
