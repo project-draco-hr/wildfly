@@ -19,31 +19,40 @@
   }
   if (loaded) {
     Field field=null;
-    boolean fieldFound=false;
+    Method method=null;
+    boolean found=false;
     try {
-      field=getField(protocolClass,attrName);
-      fieldFound=true;
+      if (isField) {
+        field=getField(protocolClass,attrName);
+      }
+ else {
+        method=getMethod(protocolClass,attrName);
+      }
+      found=true;
     }
- catch (    NoSuchFieldException e) {
+ catch (    NoSuchFieldException|NoSuchMethodException e) {
       context.getFailureDescription().set(JGroupsLogger.ROOT_LOGGER.unknownMetric(attrName));
     }
-    if (fieldFound && started) {
+    if (found && started) {
       Channel channel=(Channel)controller.getValue();
       int index=protocolName.lastIndexOf('.');
-      if (index > 0)       protocolName=protocolName.substring(index + 1);
+      if (index > 0) {
+        protocolName=protocolName.substring(index + 1);
+      }
       Protocol protocol=channel.getProtocolStack().findProtocol(protocolName);
       if (protocol == null) {
         context.getFailureDescription().set(JGroupsLogger.ROOT_LOGGER.protocolNotFoundInStack(protocolName));
       }
-      FieldTypes type=null;
-      if (ChannelInstanceResourceDefinition.isEquivalentModelTypeAvailable(field.getType())) {
-        type=FieldTypes.getStat(field.getType().toString());
+      FieldTypes type;
+      Class forType=isField ? field.getType() : method.getReturnType();
+      if (ChannelInstanceResourceDefinition.isEquivalentModelTypeAvailable(forType)) {
+        type=FieldTypes.getStat(forType.toString());
       }
  else {
         type=FieldTypes.NON_PRIMITIVE;
       }
       try {
-        result=getProtocolFieldValue(protocol,field,type);
+        result=isField ? getProtocolFieldValue(protocol,field,type) : getProtocolMethodValue(protocol,method,type);
       }
  catch (      PrivilegedActionException pae) {
         context.getFailureDescription().set(JGroupsLogger.ROOT_LOGGER.privilegedAccessExceptionForAttribute(attrName));
