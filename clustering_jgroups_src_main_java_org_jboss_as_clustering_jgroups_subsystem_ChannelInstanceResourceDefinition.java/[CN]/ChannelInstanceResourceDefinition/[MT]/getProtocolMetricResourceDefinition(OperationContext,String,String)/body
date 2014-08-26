@@ -8,28 +8,35 @@
     throw JGroupsLogger.ROOT_LOGGER.unableToLoadProtocolClass(className);
   }
   Field[] fields=getProtocolFields(protocolClass);
-  List<AttributeDefinition> attributes=new ArrayList<AttributeDefinition>();
+  Map<String,AttributeDefinition> attributesByField=new HashMap<>();
   Map<String,String> attributeDescriptionMap=new HashMap<String,String>();
   attributeDescriptionMap.put(protocolName,"The " + protocolName + " protocol");
   for (  Field field : fields) {
     boolean equivalentTypeAvailable=isEquivalentModelTypeAvailable(field.getType());
     ManagedAttribute managed=field.getAnnotation(ManagedAttribute.class);
-    if (managed != null && equivalentTypeAvailable) {
-      addAttributeDefinition(attributes,attributeDescriptionMap,protocolName,field.getName(),getEquivalentModelType(field.getType()),managed.description());
+    if (managed != null) {
+      addAttributeDefinition(attributesByField,attributeDescriptionMap,protocolName,field.getName(),equivalentTypeAvailable ? getEquivalentModelType(field.getType()) : ModelType.STRING,managed.description());
+      continue;
     }
     Property property=field.getAnnotation(Property.class);
     if (property != null) {
-      if (equivalentTypeAvailable) {
-        addAttributeDefinition(attributes,attributeDescriptionMap,protocolName,field.getName(),getEquivalentModelType(field.getType()),property.description());
-      }
- else {
-        addAttributeDefinition(attributes,attributeDescriptionMap,protocolName,field.getName(),ModelType.STRING,property.description());
-      }
+      addAttributeDefinition(attributesByField,attributeDescriptionMap,protocolName,field.getName(),equivalentTypeAvailable ? getEquivalentModelType(field.getType()) : ModelType.STRING,property.description());
+    }
+  }
+  Map<String,AttributeDefinition> attributesByMethod=new HashMap<>();
+  for (  Method method : getProtocolMethods(protocolClass)) {
+    ManagedAttribute managed=method.getAnnotation(ManagedAttribute.class);
+    if (managed != null && !attributesByField.containsKey(method.getName())) {
+      boolean equivalentTypeAvailable=isEquivalentModelTypeAvailable(method.getReturnType());
+      addAttributeDefinition(attributesByMethod,attributeDescriptionMap,protocolName,method.getName(),equivalentTypeAvailable ? getEquivalentModelType(method.getReturnType()) : ModelType.STRING,managed.description());
     }
   }
   ResourceBuilder protocolBuilder=ResourceBuilder.Factory.create(PathElement.pathElement(ModelKeys.PROTOCOL,protocolName),new StandardResourceDescriptionResolver(protocolName,"org.jboss.as.clustering.jgroups.subsystem.ChannelInstanceResourceDefinition$ProtocolResources",ChannelInstanceResourceDefinition.class.getClassLoader()));
-  for (  AttributeDefinition def : attributes) {
-    protocolBuilder.addMetric(def,new ProtocolMetricsHandler());
+  for (  AttributeDefinition def : attributesByField.values()) {
+    protocolBuilder.addMetric(def,new ProtocolMetricsHandler(true));
+  }
+  for (  AttributeDefinition def : attributesByMethod.values()) {
+    protocolBuilder.addMetric(def,new ProtocolMetricsHandler(false));
   }
   ProtocolResources.addProtocolMapEntries(attributeDescriptionMap);
   return protocolBuilder.build();
