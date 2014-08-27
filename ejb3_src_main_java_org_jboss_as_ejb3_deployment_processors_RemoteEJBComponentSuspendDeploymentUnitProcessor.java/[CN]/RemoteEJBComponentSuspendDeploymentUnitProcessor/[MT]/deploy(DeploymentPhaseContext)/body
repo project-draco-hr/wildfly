@@ -5,7 +5,6 @@
     return;
   }
   if (deploymentUnit.getParent() == null) {
-    ControlPointService.install(context.getServiceTarget(),deploymentUnit.getName(),ENTRY_POINT_NAME);
     topLevelName=deploymentUnit.getName();
   }
  else {
@@ -13,13 +12,15 @@
   }
   for (  ComponentDescription component : deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION).getComponentDescriptions()) {
     if (component instanceof EJBComponentDescription) {
+      final String entryPoint=ENTRY_POINT_NAME + deploymentUnit.getName() + "."+ component.getComponentName();
+      ControlPointService.install(context.getServiceTarget(),topLevelName,entryPoint);
       component.getConfigurators().add(new ComponentConfigurator(){
-        @Override public void configure(        DeploymentPhaseContext context,        ComponentDescription description,        ComponentConfiguration configuration) throws DeploymentUnitProcessingException {
+        @Override public void configure(        DeploymentPhaseContext context,        ComponentDescription description,        ComponentConfiguration configuration){
           EjbRemoteSuspendInterceptor interceptor=null;
           ImmediateInterceptorFactory factory=null;
           for (          ViewConfiguration view : configuration.getViews()) {
             EJBViewConfiguration ejbView=(EJBViewConfiguration)view;
-            if (ejbView.getMethodIntf() == MethodIntf.REMOTE || ejbView.getMethodIntf() == MethodIntf.HOME) {
+            if (INTERFACES.contains(ejbView.getMethodIntf())) {
               if (factory == null) {
                 interceptor=new EjbRemoteSuspendInterceptor();
                 factory=new ImmediateInterceptorFactory(interceptor);
@@ -28,10 +29,9 @@
             }
           }
           if (interceptor != null) {
-            final EjbRemoteSuspendInterceptor finalIntercepor=interceptor;
-            configuration.getCreateDependencies().add(new DependencyConfigurator<Service<Component>>(){
-              @Override public void configureDependency(              ServiceBuilder<?> serviceBuilder,              Service<Component> service) throws DeploymentUnitProcessingException {
-                serviceBuilder.addDependency(ControlPointService.serviceName(topLevelName,ENTRY_POINT_NAME),ControlPoint.class,finalIntercepor.getControlPointInjectedValue());
+            configuration.getCreateDependencies().add(new DependencyConfigurator<EJBComponentCreateService>(){
+              @Override public void configureDependency(              ServiceBuilder<?> serviceBuilder,              EJBComponentCreateService service){
+                serviceBuilder.addDependency(ControlPointService.serviceName(topLevelName,entryPoint),ControlPoint.class,service.getControlPointInjector());
               }
             }
 );
