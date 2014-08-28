@@ -8,21 +8,17 @@
   for (  Address address : addresses) {
     nodes.add(this.factory.createNode(address));
   }
-  Operation<Map<K,V>> operation=new Operation<Map<K,V>>(){
-    @Override public Map<K,V> invoke(    Cache<Node,Entry<K,V>> cache){
-      Map<K,V> removed=new HashMap<>();
-      for (      Node node : nodes) {
-        Map.Entry<K,V> old=cache.remove(node);
-        if (old != null) {
-          removed.put(old.getKey(),old.getValue());
-        }
+  Cache<Node,Map.Entry<K,V>> cache=this.cache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS);
+  Map<K,V> removed=new HashMap<>();
+  try (Batch batch=this.batcher.createBatch()){
+    for (    Node node : nodes) {
+      Map.Entry<K,V> old=cache.remove(node);
+      if (old != null) {
+        removed.put(old.getKey(),old.getValue());
       }
-      return removed;
     }
   }
-;
-  Map<K,V> removed=this.invoker.invoke(this.cache,operation,Flag.FORCE_SYNCHRONOUS);
-  if (!removed.isEmpty()) {
+   if (!removed.isEmpty()) {
     for (    Listener<K,V> listener : this.listeners) {
       listener.removedEntries(removed);
     }
