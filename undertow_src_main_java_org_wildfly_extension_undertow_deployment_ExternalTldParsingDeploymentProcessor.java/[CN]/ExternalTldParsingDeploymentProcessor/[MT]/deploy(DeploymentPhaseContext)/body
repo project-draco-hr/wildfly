@@ -1,0 +1,50 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  if (!DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit)) {
+    return;
+  }
+  final WarMetaData warMetaData=deploymentUnit.getAttachment(WarMetaData.ATTACHMENT_KEY);
+  if (warMetaData == null || warMetaData.getMergedJBossWebMetaData() == null) {
+    return;
+  }
+  TldsMetaData tldsMetaData=deploymentUnit.getAttachment(TldsMetaData.ATTACHMENT_KEY);
+  Map<String,TldMetaData> tlds=tldsMetaData.getTlds();
+  Set<String> sharedTldUris=new HashSet<>();
+  for (  TldMetaData shared : tldsMetaData.getSharedTlds(deploymentUnit)) {
+    sharedTldUris.add(shared.getUri());
+  }
+  Module module=deploymentUnit.getAttachment(Attachments.MODULE);
+  try {
+    Iterator<Resource> resources=module.globResources("**.tld");
+    while (resources.hasNext()) {
+      final Resource resource=resources.next();
+      if (resource.getURL().toString().contains("com/sun/jsf-impl/main")) {
+        continue;
+      }
+      if (resource.getName().startsWith("META-INF/")) {
+        if (tlds.containsKey(resource.getName())) {
+          continue;
+        }
+        final TldMetaData value=parseTLD(resource);
+        if (sharedTldUris.contains(value.getUri())) {
+          continue;
+        }
+        String key="/" + resource.getName();
+        if (!tlds.containsKey(key)) {
+          tlds.put(key,value);
+        }
+        if (!tlds.containsKey(value.getUri())) {
+          tlds.put(value.getUri(),value);
+        }
+        if (value.getListeners() != null) {
+          for (          ListenerMetaData l : value.getListeners()) {
+            warMetaData.getMergedJBossWebMetaData().getListeners().add(l);
+          }
+        }
+      }
+    }
+  }
+ catch (  ModuleLoadException e) {
+    throw new DeploymentUnitProcessingException(e);
+  }
+}
