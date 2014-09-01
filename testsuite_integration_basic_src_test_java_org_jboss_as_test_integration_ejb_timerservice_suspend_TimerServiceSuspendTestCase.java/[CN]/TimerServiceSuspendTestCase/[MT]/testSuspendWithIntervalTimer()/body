@@ -1,0 +1,30 @@
+{
+  SuspendTimerServiceBean.resetTimerServiceCalled();
+  InitialContext ctx=new InitialContext();
+  SuspendTimerServiceBean bean=(SuspendTimerServiceBean)ctx.lookup("java:module/" + SuspendTimerServiceBean.class.getSimpleName());
+  ModelNode op=new ModelNode();
+  Timer timer=null;
+  try {
+    try {
+      timer=bean.getTimerService().createIntervalTimer(100,100,new TimerConfig("",false));
+      Assert.assertTrue(SuspendTimerServiceBean.awaitTimerServiceCount() > 0);
+      op.get(ModelDescriptionConstants.OP).set("suspend");
+      managementClient.getControllerClient().execute(op);
+      SuspendTimerServiceBean.resetTimerServiceCalled();
+      Thread.sleep(200);
+      Assert.assertEquals(0,SuspendTimerServiceBean.getTimerServiceCount());
+    }
+  finally {
+      op=new ModelNode();
+      op.get(ModelDescriptionConstants.OP).set("resume");
+      managementClient.getControllerClient().execute(op);
+    }
+    Assert.assertTrue(SuspendTimerServiceBean.awaitTimerServiceCount() > 0);
+  }
+  finally {
+    if (timer != null) {
+      timer.cancel();
+      Thread.sleep(100);
+    }
+  }
+}
