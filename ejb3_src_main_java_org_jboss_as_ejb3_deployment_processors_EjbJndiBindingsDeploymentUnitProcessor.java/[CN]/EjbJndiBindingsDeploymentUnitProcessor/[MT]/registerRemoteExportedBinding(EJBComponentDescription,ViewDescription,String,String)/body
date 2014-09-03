@@ -1,0 +1,47 @@
+{
+  final EEModuleDescription moduleDescription=componentDescription.getModuleDescription();
+  final InjectedValue<ClassLoader> viewClassLoader=new InjectedValue<ClassLoader>();
+  final InjectedValue<ControlPoint> controlPointInjectedValue=new InjectedValue<>();
+  final RemoteViewInjectionSource delegate=new RemoteViewInjectionSource(null,moduleDescription.getEarApplicationName(),moduleDescription.getModuleName(),moduleDescription.getDistinctName(),componentDescription.getComponentName(),viewDescription.getViewClassName(),componentDescription.isStateful(),viewClassLoader);
+  componentDescription.getConfigurators().add(new ComponentConfigurator(){
+    public void configure(    DeploymentPhaseContext context,    ComponentDescription description,    final ComponentConfiguration configuration) throws DeploymentUnitProcessingException {
+      viewClassLoader.setValue(Values.immediateValue(configuration.getModuleClassLoader()));
+      configuration.getCreateDependencies().add(new DependencyConfigurator<Service<Component>>(){
+        @Override public void configureDependency(        ServiceBuilder<?> serviceBuilder,        Service<Component> service) throws DeploymentUnitProcessingException {
+          serviceBuilder.addDependency(ControlPointService.serviceName(topLevelDeploymentName,RemoteEJBComponentSuspendDeploymentUnitProcessor.ENTRY_POINT_NAME),ControlPoint.class,controlPointInjectedValue);
+        }
+      }
+);
+    }
+  }
+);
+  final InjectionSource is=new InjectionSource(){
+    @Override public void getResourceValue(    ResolutionContext resolutionContext,    ServiceBuilder<?> serviceBuilder,    DeploymentPhaseContext phaseContext,    Injector<ManagedReferenceFactory> injector) throws DeploymentUnitProcessingException {
+      final InjectedValue<ManagedReferenceFactory> delegateInjection=new InjectedValue<>();
+      delegate.getResourceValue(resolutionContext,serviceBuilder,phaseContext,delegateInjection);
+      injector.inject(new ManagedReferenceFactory(){
+        @Override public ManagedReference getReference(){
+          ControlPoint cp=controlPointInjectedValue.getValue();
+          try {
+            RunResult res=cp.beginRequest();
+            if (res != RunResult.RUN) {
+              throw EjbLogger.ROOT_LOGGER.containerSuspended();
+            }
+            try {
+              return delegateInjection.getValue().getReference();
+            }
+  finally {
+              cp.requestComplete();
+            }
+          }
+ catch (          Exception e) {
+            throw new RuntimeException(e);
+          }
+        }
+      }
+);
+    }
+  }
+;
+  moduleDescription.getBindingConfigurations().add(new BindingConfiguration(jndiName,is));
+}
