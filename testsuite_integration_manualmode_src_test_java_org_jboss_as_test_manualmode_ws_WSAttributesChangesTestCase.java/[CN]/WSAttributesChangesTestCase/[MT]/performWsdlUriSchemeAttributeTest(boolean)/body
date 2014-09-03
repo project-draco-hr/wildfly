@@ -1,0 +1,55 @@
+{
+  Assert.assertTrue(containerController.isStarted(DEFAULT_JBOSSAS));
+  ManagementClient managementClient=new ManagementClient(TestSuiteEnvironment.getModelControllerClient(),TestSuiteEnvironment.getServerAddress(),TestSuiteEnvironment.getServerPort(),"http-remoting");
+  ModelControllerClient client=managementClient.getControllerClient();
+  String initialWsdlUriScheme=null;
+  try {
+    initialWsdlUriScheme=getAttribute("wsdl-uri-scheme",client,false);
+    ModelNode op=createOpNode("subsystem=webservices/",WRITE_ATTRIBUTE_OPERATION);
+    op.get(NAME).set("wsdl-uri-scheme");
+    op.get(VALUE).set("https");
+    applyUpdate(client,op,false);
+    deployer.deploy(DEP_1);
+    checkWSDLUriScheme(client,DEP_1 + ".war","https");
+    deployer.undeploy(DEP_1);
+    ModelNode op2=createOpNode("subsystem=webservices/",WRITE_ATTRIBUTE_OPERATION);
+    op2.get(NAME).set("wsdl-uri-scheme");
+    op2.get(VALUE).set("http");
+    applyUpdate(client,op2,false);
+    deployer.deploy(DEP_1);
+    checkWSDLUriScheme(client,DEP_1 + ".war","http");
+    if (checkUpdateWithDeployedEndpoint) {
+      ModelNode opB=createOpNode("subsystem=webservices/",WRITE_ATTRIBUTE_OPERATION);
+      opB.get(NAME).set("wsdl-uri-scheme");
+      opB.get(VALUE).set("https");
+      applyUpdate(client,opB,true);
+      checkWSDLUriScheme(client,DEP_1 + ".war","http");
+      deployer.undeploy(DEP_1);
+      deployer.deploy(DEP_1);
+      checkWSDLUriScheme(client,DEP_1 + ".war","http");
+    }
+  }
+  finally {
+    try {
+      deployer.undeploy(DEP_1);
+    }
+ catch (    Throwable t) {
+    }
+    try {
+      ModelNode op=null;
+      if ("undefined".equals(initialWsdlUriScheme)) {
+        op=createOpNode("subsystem=webservices/",UNDEFINE_ATTRIBUTE_OPERATION);
+        op.get(NAME).set("wsdl-uri-scheme");
+      }
+ else {
+        op=createOpNode("subsystem=webservices/",WRITE_ATTRIBUTE_OPERATION);
+        op.get(NAME).set("wsdl-uri-scheme");
+        op.get(VALUE).set(initialWsdlUriScheme);
+      }
+      applyUpdate(client,op,checkUpdateWithDeployedEndpoint);
+    }
+  finally {
+      managementClient.close();
+    }
+  }
+}

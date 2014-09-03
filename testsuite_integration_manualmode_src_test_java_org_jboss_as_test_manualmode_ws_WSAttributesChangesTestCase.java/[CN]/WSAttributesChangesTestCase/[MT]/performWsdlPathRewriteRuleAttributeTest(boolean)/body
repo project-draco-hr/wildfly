@@ -1,0 +1,42 @@
+{
+  Assert.assertTrue(containerController.isStarted(DEFAULT_JBOSSAS));
+  ManagementClient managementClient=new ManagementClient(TestSuiteEnvironment.getModelControllerClient(),TestSuiteEnvironment.getServerAddress(),TestSuiteEnvironment.getServerPort(),"http-remoting");
+  ModelControllerClient client=managementClient.getControllerClient();
+  try {
+    final String expectedContext="xx/jaxws-manual-pojo-1";
+    final String sedCmdA="s/jaxws-manual-pojo-1/xx\\/jaxws-manual-pojo-1/g";
+    ModelNode op=createOpNode("subsystem=webservices/",WRITE_ATTRIBUTE_OPERATION);
+    op.get(NAME).set("wsdl-path-rewrite-rule");
+    op.get(VALUE).set(sedCmdA);
+    applyUpdate(client,op,false);
+    deployer.deploy(DEP_1);
+    URL wsdlURL=new URL(managementClient.getWebUri().toURL(),'/' + DEP_1 + "/POJOService?wsdl");
+    checkWsdl(wsdlURL,expectedContext);
+    if (checkUpdateWithDeployedEndpoint) {
+      final String sedCmdB="s/jaxws-manual-pojo-1/FOO\\/jaxws-manual-pojo-1/g";
+      ModelNode opB=createOpNode("subsystem=webservices/",WRITE_ATTRIBUTE_OPERATION);
+      opB.get(NAME).set("wsdl-path-rewrite-rule");
+      opB.get(VALUE).set(sedCmdB);
+      applyUpdate(client,opB,true);
+      checkWsdl(wsdlURL,expectedContext);
+      deployer.undeploy(DEP_1);
+      deployer.deploy(DEP_1);
+      checkWsdl(wsdlURL,expectedContext);
+    }
+  }
+  finally {
+    try {
+      deployer.undeploy(DEP_1);
+    }
+ catch (    Throwable t) {
+    }
+    try {
+      ModelNode op=createOpNode("subsystem=webservices/",UNDEFINE_ATTRIBUTE_OPERATION);
+      op.get(NAME).set("wsdl-path-rewrite-rule");
+      applyUpdate(client,op,checkUpdateWithDeployedEndpoint);
+    }
+  finally {
+      managementClient.close();
+    }
+  }
+}
