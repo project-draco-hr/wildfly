@@ -1,0 +1,62 @@
+{
+  File moduleDirectory=getModuleDirectory();
+  if (moduleDirectory.exists()) {
+    if (!deleteFirst) {
+      throw new IllegalArgumentException(moduleDirectory + " already exists.");
+    }
+    remove();
+  }
+  File mainDirectory=new File(moduleDirectory,"main");
+  if (!mainDirectory.mkdirs()) {
+    throw new IllegalArgumentException("Could not create " + mainDirectory);
+  }
+  try {
+    if (moduleXml != null) {
+      copyFile(new File(mainDirectory,"module.xml"),new FileInputStream(this.moduleXml));
+    }
+ else {
+      generateModuleXml(mainDirectory);
+    }
+  }
+ catch (  IOException e) {
+    throw new RuntimeException("Could not create module definition.",e);
+  }
+  for (  JavaArchive resourceRoot : this.resources) {
+    FileOutputStream jarFile=null;
+    try {
+      Indexer indexer=new Indexer();
+      List<Class<?>> classes=new ArrayList<Class<?>>();
+      for (      Node content : resourceRoot.getContent().values()) {
+        final String path=content.getPath().get();
+        if (path.endsWith(".class")) {
+          indexer.index(content.getAsset().openStream());
+          if (classCallbacks.size() > 0) {
+            String usePath=path.startsWith("/") ? path.substring(1,path.length() - 6) : path.substring(0,path.length() - 6);
+            usePath=usePath.replaceAll("/",".");
+            Class<?> clazz=Class.forName(usePath);
+            classes.add(clazz);
+          }
+        }
+      }
+      for (      ClassCallback callback : classCallbacks) {
+        callback.classesAdded(resourceRoot,classes);
+      }
+      Index index=indexer.complete();
+      ByteArrayOutputStream data=new ByteArrayOutputStream();
+      IndexWriter writer=new IndexWriter(data);
+      writer.write(index);
+      resourceRoot.addAsManifestResource(new ByteArrayAsset(data.toByteArray()),"jandex.idx");
+      jarFile=new FileOutputStream(new File(mainDirectory,resourceRoot.getName()));
+      resourceRoot.as(ZipExporter.class).exportTo(jarFile);
+    }
+ catch (    Exception e) {
+      throw new RuntimeException("Could not create module resource [" + resourceRoot.getName() + ".",e);
+    }
+ finally {
+      if (jarFile != null) {
+        jarFile.flush();
+        jarFile.close();
+      }
+    }
+  }
+}
