@@ -2,14 +2,27 @@
   ROOT_LOGGER.debugf("Starting mod_cluster extension");
   boolean isMulticast=isMulticastEnabled(bindingManager.getValue().getDefaultInterfaceBinding().getNetworkInterfaces());
   if (outboundSocketBindings.size() > 0) {
-    List<InetSocketAddress> proxies=new LinkedList<>();
-    for (    OutboundSocketBinding binding : outboundSocketBindings.values()) {
-      InetSocketAddress proxyAddress=new InetSocketAddress(binding.getUnresolvedDestinationAddress(),binding.getDestinationPort());
-      proxies.add(proxyAddress);
+    List<ProxyConfiguration> proxies=new LinkedList<>();
+    for (    final OutboundSocketBinding binding : outboundSocketBindings.values()) {
+      proxies.add(new ProxyConfiguration(){
+        @Override public InetSocketAddress getRemoteAddress(){
+          return new InetSocketAddress(binding.getUnresolvedDestinationAddress(),binding.getDestinationPort());
+        }
+        @Override public InetSocketAddress getLocalAddress(){
+          if (binding.getOptionalSourceAddress() != null) {
+            return new InetSocketAddress(binding.getOptionalSourceAddress(),binding.getAbsoluteSourcePort() == null ? 0 : binding.getAbsoluteSourcePort());
+          }
+ else           if (binding.getAbsoluteSourcePort() != null) {
+            return new InetSocketAddress(binding.getAbsoluteSourcePort());
+          }
+          return null;
+        }
+      }
+);
     }
-    config.setProxies(proxies);
+    config.setProxyConfigurations(proxies);
   }
-  if (config.getProxies().isEmpty()) {
+  if (config.getProxyConfigurations().isEmpty()) {
     config.setAdvertise(isMulticast);
   }
   if (config.getAdvertise()) {
