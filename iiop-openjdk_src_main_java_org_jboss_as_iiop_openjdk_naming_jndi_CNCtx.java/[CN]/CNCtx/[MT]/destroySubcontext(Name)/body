@@ -1,0 +1,32 @@
+{
+  if (_nc == null)   throw IIOPMessages.MESSAGES.notANamingContext(name.toString());
+  NamingContext the_nc=_nc;
+  NameComponent[] path=org.jboss.as.iiop.openjdk.naming.jndi.CNNameParser.nameToCosName(name);
+  if (name.size() > 0) {
+    try {
+      javax.naming.Context ctx=(javax.naming.Context)callResolve(path);
+      CNCtx cnc=(CNCtx)ctx;
+      the_nc=cnc._nc;
+      cnc.close();
+    }
+ catch (    ClassCastException e) {
+      throw new NotContextException(name.toString());
+    }
+catch (    CannotProceedException e) {
+      javax.naming.Context cctx=getContinuationContext(e);
+      cctx.destroySubcontext(e.getRemainingName());
+      return;
+    }
+catch (    NameNotFoundException e) {
+      if (e.getRootCause() instanceof NotFound && leafNotFound((NotFound)e.getRootCause(),path[path.length - 1])) {
+        return;
+      }
+      throw e;
+    }
+catch (    NamingException e) {
+      throw e;
+    }
+  }
+  callDestroy(the_nc);
+  callUnbind(path);
+}
