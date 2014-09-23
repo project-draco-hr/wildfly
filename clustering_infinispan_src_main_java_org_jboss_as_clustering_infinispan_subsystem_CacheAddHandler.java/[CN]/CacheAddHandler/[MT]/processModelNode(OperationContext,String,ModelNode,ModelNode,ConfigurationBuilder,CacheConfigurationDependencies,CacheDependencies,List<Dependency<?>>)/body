@@ -1,5 +1,5 @@
 {
-  if (cache.hasDefined(ModelKeys.STATISTICS_ENABLED)) {
+  if (cache.hasDefined(CacheResourceDefinition.STATISTICS_ENABLED.getName())) {
     builder.jmxStatistics().enabled(CacheResourceDefinition.STATISTICS_ENABLED.resolveModelAttribute(context,cache).asBoolean());
   }
  else {
@@ -17,92 +17,91 @@
   }
   builder.indexing().enabled(indexing.isEnabled()).indexLocalOnly(indexing.isLocalOnly()).withProperties(indexingProperties);
   IsolationLevel isolationLevel=getDefaultConfiguration(this.mode).locking().isolationLevel();
-  if (cache.hasDefined(ModelKeys.LOCKING) && cache.get(ModelKeys.LOCKING,ModelKeys.LOCKING_NAME).isDefined()) {
-    ModelNode locking=cache.get(ModelKeys.LOCKING,ModelKeys.LOCKING_NAME);
+  if (cache.hasDefined(LockingResourceDefinition.PATH.getKey()) && cache.get(LockingResourceDefinition.PATH.getKeyValuePair()).isDefined()) {
+    ModelNode locking=cache.get(LockingResourceDefinition.PATH.getKeyValuePair());
     isolationLevel=IsolationLevel.valueOf(LockingResourceDefinition.ISOLATION.resolveModelAttribute(context,locking).asString());
     final boolean striping=LockingResourceDefinition.STRIPING.resolveModelAttribute(context,locking).asBoolean();
     final long acquireTimeout=LockingResourceDefinition.ACQUIRE_TIMEOUT.resolveModelAttribute(context,locking).asLong();
     final int concurrencyLevel=LockingResourceDefinition.CONCURRENCY_LEVEL.resolveModelAttribute(context,locking).asInt();
     builder.locking().isolationLevel(isolationLevel).useLockStriping(striping).lockAcquisitionTimeout(acquireTimeout).concurrencyLevel(concurrencyLevel);
   }
-  LockingMode lockingMode=getDefaultConfiguration(this.mode).transaction().lockingMode();
-  if (cache.hasDefined(ModelKeys.TRANSACTION) && cache.get(ModelKeys.TRANSACTION,ModelKeys.TRANSACTION_NAME).isDefined()) {
-    ModelNode transaction=cache.get(ModelKeys.TRANSACTION,ModelKeys.TRANSACTION_NAME);
-    long stopTimeout=TransactionResourceDefinition.STOP_TIMEOUT.resolveModelAttribute(context,transaction).asLong();
-    TransactionMode txMode=TransactionMode.valueOf(TransactionResourceDefinition.MODE.resolveModelAttribute(context,transaction).asString());
-    lockingMode=LockingMode.valueOf(TransactionResourceDefinition.LOCKING.resolveModelAttribute(context,transaction).asString());
-    boolean transactional=(txMode != TransactionMode.NONE);
-    boolean batching=(txMode == TransactionMode.BATCH);
-    boolean useSynchronization=(txMode == TransactionMode.NON_XA);
-    boolean recoveryEnabled=(txMode == TransactionMode.FULL_XA);
-    builder.transaction().cacheStopTimeout(stopTimeout).transactionMode(transactional ? org.infinispan.transaction.TransactionMode.TRANSACTIONAL : org.infinispan.transaction.TransactionMode.NON_TRANSACTIONAL).lockingMode(lockingMode).useSynchronization(useSynchronization).recovery().enabled(recoveryEnabled).invocationBatching().disable();
-    if (transactional) {
-      if (batching) {
-        cacheConfigurationDependencies.getTransactionManagerInjector().inject(BatchModeTransactionManager.getInstance());
+  if (cache.hasDefined(TransactionResourceDefinition.PATH.getKey())) {
+    ModelNode transaction=cache.get(TransactionResourceDefinition.PATH.getKeyValuePair());
+    if (transaction.isDefined()) {
+      long stopTimeout=TransactionResourceDefinition.STOP_TIMEOUT.resolveModelAttribute(context,transaction).asLong();
+      TransactionMode txMode=TransactionMode.valueOf(TransactionResourceDefinition.MODE.resolveModelAttribute(context,transaction).asString());
+      LockingMode lockingMode=LockingMode.valueOf(TransactionResourceDefinition.LOCKING.resolveModelAttribute(context,transaction).asString());
+      boolean transactional=(txMode != TransactionMode.NONE);
+      boolean batching=(txMode == TransactionMode.BATCH);
+      boolean useSynchronization=(txMode == TransactionMode.NON_XA);
+      boolean recoveryEnabled=(txMode == TransactionMode.FULL_XA);
+      builder.transaction().cacheStopTimeout(stopTimeout).transactionMode(transactional ? org.infinispan.transaction.TransactionMode.TRANSACTIONAL : org.infinispan.transaction.TransactionMode.NON_TRANSACTIONAL).lockingMode(lockingMode).useSynchronization(useSynchronization).recovery().enabled(recoveryEnabled).invocationBatching().disable();
+      if (transactional) {
+        if (batching) {
+          cacheConfigurationDependencies.getTransactionManagerInjector().inject(DummyTransactionManager.getInstance());
+        }
+ else {
+          dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,cacheConfigurationDependencies.getTransactionManagerInjector()));
+          if (useSynchronization) {
+            dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_SYNCHRONIZATION_REGISTRY,TransactionSynchronizationRegistry.class,cacheConfigurationDependencies.getTransactionSynchronizationRegistryInjector()));
+          }
+ else           if (recoveryEnabled) {
+            dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_ARJUNA_RECOVERY_MANAGER,XAResourceRecoveryRegistry.class,cacheDependencies.getRecoveryRegistryInjector()));
+          }
+        }
+      }
+      if ((lockingMode == LockingMode.OPTIMISTIC) && (isolationLevel == IsolationLevel.REPEATABLE_READ) && this.mode.isSynchronous()&& !this.mode.isInvalidation()) {
+        builder.locking().writeSkewCheck(true);
+        builder.versioning().enable().scheme(VersioningScheme.SIMPLE);
+      }
+    }
+  }
+  if (cache.hasDefined(EvictionResourceDefinition.PATH.getKey())) {
+    ModelNode eviction=cache.get(EvictionResourceDefinition.PATH.getKeyValuePair());
+    if (eviction.isDefined()) {
+      final EvictionStrategy strategy=EvictionStrategy.valueOf(EvictionResourceDefinition.STRATEGY.resolveModelAttribute(context,eviction).asString());
+      builder.eviction().strategy(strategy);
+      if (strategy.isEnabled()) {
+        final int maxEntries=EvictionResourceDefinition.MAX_ENTRIES.resolveModelAttribute(context,eviction).asInt();
+        builder.eviction().maxEntries(maxEntries);
+      }
+    }
+  }
+  if (cache.hasDefined(ExpirationResourceDefinition.PATH.getKey())) {
+    ModelNode expiration=cache.get(ExpirationResourceDefinition.PATH.getKeyValuePair());
+    if (expiration.isDefined()) {
+      final long maxIdle=ExpirationResourceDefinition.MAX_IDLE.resolveModelAttribute(context,expiration).asLong();
+      final long lifespan=ExpirationResourceDefinition.LIFESPAN.resolveModelAttribute(context,expiration).asLong();
+      final long interval=ExpirationResourceDefinition.INTERVAL.resolveModelAttribute(context,expiration).asLong();
+      builder.expiration().maxIdle(maxIdle).lifespan(lifespan).wakeUpInterval(interval);
+      if ((maxIdle > 0) || (lifespan > 0)) {
+        builder.expiration().enableReaper();
       }
  else {
-        dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,cacheConfigurationDependencies.getTransactionManagerInjector()));
-        if (useSynchronization) {
-          dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_SYNCHRONIZATION_REGISTRY,TransactionSynchronizationRegistry.class,cacheConfigurationDependencies.getTransactionSynchronizationRegistryInjector()));
-        }
- else         if (recoveryEnabled) {
-          dependencies.add(new Dependency<>(TxnServices.JBOSS_TXN_ARJUNA_RECOVERY_MANAGER,XAResourceRecoveryRegistry.class,cacheDependencies.getRecoveryRegistryInjector()));
-        }
+        builder.expiration().disableReaper();
       }
     }
   }
-  if ((lockingMode == LockingMode.OPTIMISTIC) && (isolationLevel == IsolationLevel.REPEATABLE_READ) && this.mode.isSynchronous()&& !this.mode.isInvalidation()) {
-    builder.locking().writeSkewCheck(true);
-    builder.versioning().enable().scheme(VersioningScheme.SIMPLE);
-  }
-  if (cache.hasDefined(ModelKeys.EVICTION) && cache.get(ModelKeys.EVICTION,ModelKeys.EVICTION_NAME).isDefined()) {
-    ModelNode eviction=cache.get(ModelKeys.EVICTION,ModelKeys.EVICTION_NAME);
-    final EvictionStrategy strategy=EvictionStrategy.valueOf(EvictionResourceDefinition.STRATEGY.resolveModelAttribute(context,eviction).asString());
-    builder.eviction().strategy(strategy);
-    if (strategy.isEnabled()) {
-      final int maxEntries=EvictionResourceDefinition.MAX_ENTRIES.resolveModelAttribute(context,eviction).asInt();
-      builder.eviction().maxEntries(maxEntries);
-    }
-  }
-  if (cache.hasDefined(ModelKeys.EXPIRATION) && cache.get(ModelKeys.EXPIRATION,ModelKeys.EXPIRATION_NAME).isDefined()) {
-    ModelNode expiration=cache.get(ModelKeys.EXPIRATION,ModelKeys.EXPIRATION_NAME);
-    final long maxIdle=ExpirationResourceDefinition.MAX_IDLE.resolveModelAttribute(context,expiration).asLong();
-    final long lifespan=ExpirationResourceDefinition.LIFESPAN.resolveModelAttribute(context,expiration).asLong();
-    final long interval=ExpirationResourceDefinition.INTERVAL.resolveModelAttribute(context,expiration).asLong();
-    builder.expiration().maxIdle(maxIdle).lifespan(lifespan).wakeUpInterval(interval);
-    if ((maxIdle > 0) || (lifespan > 0)) {
-      builder.expiration().enableReaper();
-    }
- else {
-      builder.expiration().disableReaper();
-    }
-  }
-  String storeKey=findStoreKey(cache);
-  if (storeKey != null) {
-    ModelNode store=getStoreModelNode(cache);
-    final boolean shared=StoreResourceDefinition.SHARED.resolveModelAttribute(context,store).asBoolean();
-    final boolean preload=StoreResourceDefinition.PRELOAD.resolveModelAttribute(context,store).asBoolean();
-    final boolean passivation=StoreResourceDefinition.PASSIVATION.resolveModelAttribute(context,store).asBoolean();
-    final boolean fetchState=StoreResourceDefinition.FETCH_STATE.resolveModelAttribute(context,store).asBoolean();
-    final boolean purge=StoreResourceDefinition.PURGE.resolveModelAttribute(context,store).asBoolean();
-    final boolean singleton=StoreResourceDefinition.SINGLETON.resolveModelAttribute(context,store).asBoolean();
-    final boolean async=store.hasDefined(ModelKeys.WRITE_BEHIND) && store.get(ModelKeys.WRITE_BEHIND,ModelKeys.WRITE_BEHIND_NAME).isDefined();
-    PersistenceConfigurationBuilder persistenceBuilder=builder.persistence().passivation(passivation);
-    StoreConfigurationBuilder<?,?> storeBuilder=this.buildCacheStore(context,persistenceBuilder,containerName,store,storeKey,dependencies).fetchPersistentState(fetchState).preload(preload).shared(shared).purgeOnStartup(purge);
-    storeBuilder.singleton().enabled(singleton);
-    if (async) {
-      ModelNode writeBehind=store.get(ModelKeys.WRITE_BEHIND,ModelKeys.WRITE_BEHIND_NAME);
-      storeBuilder.async().enable().flushLockTimeout(StoreWriteBehindResourceDefinition.FLUSH_LOCK_TIMEOUT.resolveModelAttribute(context,writeBehind).asLong()).modificationQueueSize(StoreWriteBehindResourceDefinition.MODIFICATION_QUEUE_SIZE.resolveModelAttribute(context,writeBehind).asInt()).shutdownTimeout(StoreWriteBehindResourceDefinition.SHUTDOWN_TIMEOUT.resolveModelAttribute(context,writeBehind).asLong()).threadPoolSize(StoreWriteBehindResourceDefinition.THREAD_POOL_SIZE.resolveModelAttribute(context,writeBehind).asInt());
-    }
-    final Properties properties=new TypedProperties();
-    if (store.hasDefined(ModelKeys.PROPERTY)) {
-      for (      Property property : store.get(ModelKeys.PROPERTY).asPropertyList()) {
-        String propertyName=property.getName();
-        ModelNode propertyValue=null;
-        propertyValue=StorePropertyResourceDefinition.VALUE.resolveModelAttribute(context,property.getValue());
-        properties.setProperty(propertyName,propertyValue.asString());
+  StoreType type=findStoreType(cache);
+  if (type != null) {
+    ModelNode store=cache.get(type.pathElement().getKeyValuePair());
+    if (store.isDefined()) {
+      PersistenceConfigurationBuilder persistenceBuilder=builder.persistence().passivation(StoreResourceDefinition.PASSIVATION.resolveModelAttribute(context,store).asBoolean());
+      StoreConfigurationBuilder<?,?> storeBuilder=this.buildCacheStore(context,persistenceBuilder,containerName,type,store,dependencies).fetchPersistentState(StoreResourceDefinition.FETCH_STATE.resolveModelAttribute(context,store).asBoolean()).preload(StoreResourceDefinition.PRELOAD.resolveModelAttribute(context,store).asBoolean()).shared(StoreResourceDefinition.SHARED.resolveModelAttribute(context,store).asBoolean()).purgeOnStartup(StoreResourceDefinition.PURGE.resolveModelAttribute(context,store).asBoolean());
+      storeBuilder.singleton().enabled(StoreResourceDefinition.SINGLETON.resolveModelAttribute(context,store).asBoolean());
+      if (store.hasDefined(StoreWriteBehindResourceDefinition.PATH.getKey())) {
+        ModelNode writeBehind=store.get(StoreWriteBehindResourceDefinition.PATH.getKeyValuePair());
+        if (writeBehind.isDefined()) {
+          storeBuilder.async().enable().flushLockTimeout(StoreWriteBehindResourceDefinition.FLUSH_LOCK_TIMEOUT.resolveModelAttribute(context,writeBehind).asLong()).modificationQueueSize(StoreWriteBehindResourceDefinition.MODIFICATION_QUEUE_SIZE.resolveModelAttribute(context,writeBehind).asInt()).shutdownTimeout(StoreWriteBehindResourceDefinition.SHUTDOWN_TIMEOUT.resolveModelAttribute(context,writeBehind).asLong()).threadPoolSize(StoreWriteBehindResourceDefinition.THREAD_POOL_SIZE.resolveModelAttribute(context,writeBehind).asInt());
+        }
       }
+      Properties properties=new TypedProperties();
+      if (store.hasDefined(StorePropertyResourceDefinition.WILDCARD_PATH.getKey())) {
+        for (        Property property : store.get(StorePropertyResourceDefinition.WILDCARD_PATH.getKey()).asPropertyList()) {
+          properties.setProperty(property.getName(),StorePropertyResourceDefinition.VALUE.resolveModelAttribute(context,property.getValue()).asString());
+        }
+      }
+      storeBuilder.withProperties(properties);
     }
-    storeBuilder.withProperties(properties);
   }
 }

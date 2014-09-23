@@ -1,0 +1,17 @@
+{
+  PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
+  String channelName=address.getLastElement().getValue();
+  String stackName=ModelNodes.asString(ChannelResourceDefinition.STACK.resolveModelAttribute(context,model),ChannelFactoryService.DEFAULT);
+  ModuleIdentifier module=ModelNodes.asModuleIdentifier(ChannelResourceDefinition.MODULE.resolveModelAttribute(context,model));
+  ServiceTarget target=context.getServiceTarget();
+  List<ServiceController<?>> controllers=new LinkedList<>();
+  controllers.add(new InjectedValueServiceBuilder(target).build(ChannelService.getStackServiceName(channelName),ChannelFactoryService.getServiceName(stackName),ChannelFactory.class).install());
+  controllers.add(ChannelService.build(target,channelName).setInitialMode(ON_DEMAND).install());
+  controllers.add(ConnectedChannelService.build(target,channelName).setInitialMode(ON_DEMAND).install());
+  controllers.add(new BinderServiceBuilder(target).build(ChannelService.createChannelBinding(channelName),ChannelService.getServiceName(channelName),Channel.class).install());
+  for (  GroupServiceInstaller installer : ServiceLoader.load(ClusteredGroupServiceInstaller.class,ClusteredGroupServiceInstaller.class.getClassLoader())) {
+    JGroupsLogger.ROOT_LOGGER.debugf("Installing %s for channel %s",installer.getClass().getSimpleName(),channelName);
+    controllers.addAll(installer.install(target,channelName,module));
+  }
+  return controllers;
+}

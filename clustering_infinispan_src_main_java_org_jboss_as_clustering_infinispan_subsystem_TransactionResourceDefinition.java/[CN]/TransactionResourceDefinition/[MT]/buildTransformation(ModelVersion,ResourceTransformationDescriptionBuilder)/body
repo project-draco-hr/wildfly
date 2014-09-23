@@ -10,8 +10,7 @@
       @Override public TransformedOperation transformOperation(      TransformationContext context,      PathAddress address,      ModelNode operation) throws OperationFailedException {
         if (operation.hasDefined(MODE.getName())) {
           ModelNode mode=operation.get(MODE.getName());
-          boolean batching=(TransactionMode.valueOf(mode.asString()) == TransactionMode.BATCH);
-          if (batching) {
+          if ((mode.getType() == ModelType.STRING) && (TransactionMode.valueOf(mode.asString()) == TransactionMode.BATCH)) {
             mode.set(TransactionMode.NONE.name());
             ModelNode writeBatchingOperation=OperationFactory.createWriteAttributeOperation(cacheAddress(address),CacheResourceDefinition.BATCHING.getName(),new ModelNode(true));
             return new TransformedOperation(OperationFactory.createCompositeOperation(writeBatchingOperation,operation),OperationResultTransformer.ORIGINAL_RESULT);
@@ -48,7 +47,7 @@
     OperationTransformer writeAttributeTransformer=new OperationTransformer(){
       @Override public TransformedOperation transformOperation(      TransformationContext context,      PathAddress address,      ModelNode operation) throws OperationFailedException {
         ModelNode mode=operation.hasDefined(ModelDescriptionConstants.VALUE) ? operation.get(ModelDescriptionConstants.VALUE) : null;
-        boolean batching=(mode != null) ? (TransactionMode.valueOf(mode.asString()) == TransactionMode.BATCH) : false;
+        boolean batching=(mode != null) && (mode.getType() == ModelType.STRING) ? (TransactionMode.valueOf(mode.asString()) == TransactionMode.BATCH) : false;
         if (batching) {
           mode.set(TransactionMode.NONE.name());
         }
@@ -63,7 +62,7 @@
       @Override public void convertOperationParameter(      PathAddress address,      String name,      ModelNode value,      ModelNode operation,      TransformationContext context){
       }
       @Override public void convertResourceAttribute(      PathAddress address,      String name,      ModelNode value,      TransformationContext context){
-        if (value.isDefined()) {
+        if (value.isDefined() && (value.getType() == ModelType.STRING)) {
           TransactionMode mode=TransactionMode.valueOf(value.asString());
           if (mode == TransactionMode.BATCH) {
             value.set(TransactionMode.NONE.name());
@@ -72,7 +71,7 @@
       }
     }
 ;
-    builder.getAttributeBuilder().setValueConverter(modeConverter,MODE);
+    builder.getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,MODE).setValueConverter(modeConverter,MODE).end();
   }
   if (InfinispanModel.VERSION_1_4_0.requiresTransformation(version)) {
     builder.getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,MODE,STOP_TIMEOUT,LOCKING);

@@ -1,5 +1,97 @@
 {
   ResourceTransformationDescriptionBuilder builder=parent.addChildResource(PATH);
+  if (InfinispanModel.VERSION_3_0_0.requiresTransformation(version)) {
+    Rejecter stackRejecter=new Rejecter(){
+      @Override public boolean reject(      PathAddress address,      String name,      ModelNode value,      ModelNode model,      TransformationContext context){
+        if (value.isDefined())         return false;
+        PathAddress rootAddress=address.subAddress(0,address.size() - 3);
+        PathAddress subsystemAddress=rootAddress.append(JGroupsSubsystemResourceDefinition.PATH);
+        ModelNode subsystemModel=context.readResourceFromRoot(subsystemAddress).getModel();
+        String channelName=null;
+        if (model.hasDefined(CHANNEL.getName())) {
+          ModelNode channel=model.get(CHANNEL.getName());
+          if (channel.getType() == ModelType.STRING) {
+            channelName=channel.asString();
+          }
+        }
+ else         if (subsystemModel.hasDefined(JGroupsSubsystemResourceDefinition.DEFAULT_CHANNEL.getName())) {
+          ModelNode defaultChannel=subsystemModel.get(JGroupsSubsystemResourceDefinition.DEFAULT_CHANNEL.getName());
+          if (defaultChannel.getType() == ModelType.STRING) {
+            channelName=defaultChannel.asString();
+          }
+        }
+        if (channelName == null)         return true;
+        String stackName=null;
+        PathAddress channelAddress=subsystemAddress.append(ChannelResourceDefinition.pathElement(channelName));
+        try {
+          ModelNode channel=context.readResourceFromRoot(channelAddress).getModel();
+          if (channel.hasDefined(ChannelResourceDefinition.STACK.getName())) {
+            ModelNode stack=channel.get(ChannelResourceDefinition.STACK.getName());
+            if (stack.getType() == ModelType.STRING) {
+              stackName=stack.asString();
+            }
+          }
+ else           if (subsystemModel.hasDefined(JGroupsSubsystemResourceDefinition.DEFAULT_STACK.getName())) {
+            ModelNode defaultStack=subsystemModel.get(JGroupsSubsystemResourceDefinition.DEFAULT_STACK.getName());
+            if (defaultStack.getType() == ModelType.STRING) {
+              stackName=defaultStack.asString();
+            }
+          }
+        }
+ catch (        NoSuchResourceException e) {
+        }
+        return (stackName == null);
+      }
+      @Override public String getRejectedMessage(      Set<String> attributes){
+        return InfinispanLogger.ROOT_LOGGER.indeterminiteStack();
+      }
+    }
+;
+    Converter stackConverter=new Converter(){
+      @Override public void convert(      PathAddress address,      String name,      ModelNode value,      ModelNode model,      TransformationContext context){
+        if (!value.isDefined()) {
+          PathAddress rootAddress=address.subAddress(0,address.size() - 3);
+          PathAddress subsystemAddress=rootAddress.append(JGroupsSubsystemResourceDefinition.PATH);
+          ModelNode subsystemModel=context.readResourceFromRoot(subsystemAddress).getModel();
+          String channelName=null;
+          if (model.hasDefined(CHANNEL.getName())) {
+            ModelNode channel=model.get(CHANNEL.getName());
+            if (channel.getType() == ModelType.STRING) {
+              channelName=channel.asString();
+            }
+          }
+ else           if (subsystemModel.hasDefined(JGroupsSubsystemResourceDefinition.DEFAULT_CHANNEL.getName())) {
+            ModelNode defaultChannel=subsystemModel.get(JGroupsSubsystemResourceDefinition.DEFAULT_CHANNEL.getName());
+            if (defaultChannel.getType() == ModelType.STRING) {
+              channelName=defaultChannel.asString();
+            }
+          }
+          if (channelName != null) {
+            PathAddress channelAddress=subsystemAddress.append(ChannelResourceDefinition.pathElement(channelName));
+            try {
+              ModelNode channel=context.readResourceFromRoot(channelAddress).getModel();
+              if (channel.hasDefined(ChannelResourceDefinition.STACK.getName())) {
+                ModelNode stack=channel.get(ChannelResourceDefinition.STACK.getName());
+                if (stack.getType() == ModelType.STRING) {
+                  value.set(stack.asString());
+                }
+              }
+ else               if (subsystemModel.hasDefined(JGroupsSubsystemResourceDefinition.DEFAULT_STACK.getName())) {
+                ModelNode defaultStack=subsystemModel.get(JGroupsSubsystemResourceDefinition.DEFAULT_STACK.getName());
+                if (defaultStack.getType() == ModelType.STRING) {
+                  value.set(defaultStack.asString());
+                }
+              }
+            }
+ catch (            NoSuchResourceException e) {
+            }
+          }
+        }
+      }
+    }
+;
+    builder.getAttributeBuilder().addRejectCheck(new SimpleRejectAttributeChecker(stackRejecter),STACK).setValueConverter(new SimpleAttributeConverter(stackConverter),STACK).addRename(CHANNEL,CLUSTER.getName()).end();
+  }
   if (InfinispanModel.VERSION_1_4_0.requiresTransformation(version)) {
     builder.getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,STACK,EXECUTOR,LOCK_TIMEOUT);
   }

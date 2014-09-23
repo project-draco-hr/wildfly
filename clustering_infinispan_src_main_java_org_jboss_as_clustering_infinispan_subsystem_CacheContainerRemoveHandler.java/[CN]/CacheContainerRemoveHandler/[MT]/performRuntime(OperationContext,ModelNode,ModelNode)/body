@@ -1,6 +1,28 @@
 {
   final PathAddress address=PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR));
+  removeExistingCacheServices(context,address,model);
   final String containerName=address.getLastElement().getValue();
-  removeExistingCacheServices(context,model,containerName);
-  CacheContainerAddHandler.removeRuntimeServices(context,operation,model);
+  context.removeService(KeyAffinityServiceFactoryService.getServiceName(containerName));
+  String jndiName=ModelNodes.asString(CacheContainerResourceDefinition.JNDI_NAME.resolveModelAttribute(context,model));
+  context.removeService(CacheContainerAddHandler.createCacheContainerBinding(jndiName,containerName).getBinderServiceName());
+  context.removeService(EmbeddedCacheManagerService.getServiceName(containerName));
+  context.removeService(EmbeddedCacheManagerConfigurationService.getServiceName(containerName));
+  if (model.hasDefined(TransportResourceDefinition.PATH.getKey())) {
+    removeServices(context,ClusteredGroupServiceInstaller.class,containerName);
+    context.removeService(CacheContainerAddHandler.createChannelBinding(containerName).getBinderServiceName());
+    context.removeService(ChannelService.getServiceName(containerName));
+    context.removeService(ChannelService.getStackServiceName(containerName));
+  }
+ else {
+    removeServices(context,LocalGroupServiceInstaller.class,containerName);
+  }
+  String defaultCache=ModelNodes.asString(CacheContainerResourceDefinition.DEFAULT_CACHE.resolveModelAttribute(context,model));
+  if ((defaultCache != null) && !defaultCache.equals(CacheContainer.DEFAULT_CACHE_ALIAS)) {
+    Class<? extends CacheServiceInstaller> installerClass=model.hasDefined(TransportResourceDefinition.PATH.getKey()) ? ClusteredCacheServiceInstaller.class : LocalCacheServiceInstaller.class;
+    for (    CacheServiceInstaller installer : ServiceLoader.load(installerClass,installerClass.getClassLoader())) {
+      for (      ServiceName serviceName : installer.getServiceNames(containerName,CacheContainer.DEFAULT_CACHE_ALIAS)) {
+        context.removeService(serviceName);
+      }
+    }
+  }
 }
