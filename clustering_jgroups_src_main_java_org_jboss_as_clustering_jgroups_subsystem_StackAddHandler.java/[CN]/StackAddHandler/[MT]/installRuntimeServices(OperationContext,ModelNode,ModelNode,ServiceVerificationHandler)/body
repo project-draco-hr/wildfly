@@ -46,7 +46,8 @@
   String defaultExecutor=ModelNodes.asString(TransportResourceDefinition.DEFAULT_EXECUTOR.resolveModelAttribute(context,transport));
   String oobExecutor=ModelNodes.asString(TransportResourceDefinition.OOB_EXECUTOR.resolveModelAttribute(context,transport));
   String transportSocketBinding=ModelNodes.asString(ProtocolResourceDefinition.SOCKET_BINDING.resolveModelAttribute(context,transport));
-  ServiceBuilder<ChannelFactory> builder=context.getServiceTarget().addService(ChannelFactoryService.getServiceName(name),new ChannelFactoryService(stackConfig)).addDependency(ProtocolDefaultsService.SERVICE_NAME,ProtocolDefaults.class,stackConfig.getDefaultsInjector()).addDependency(ServerEnvironmentService.SERVICE_NAME,ServerEnvironment.class,stackConfig.getEnvironmentInjector()).setInitialMode(ServiceController.Mode.ON_DEMAND);
+  ServiceTarget target=context.getServiceTarget();
+  ServiceBuilder<ChannelFactory> builder=target.addService(ChannelFactoryService.getServiceName(name),new ChannelFactoryService(stackConfig)).addDependency(ProtocolDefaultsService.SERVICE_NAME,ProtocolDefaults.class,stackConfig.getDefaultsInjector()).addDependency(ServerEnvironmentService.SERVICE_NAME,ServerEnvironment.class,stackConfig.getEnvironmentInjector()).setInitialMode(ServiceController.Mode.ON_DEMAND);
   addSocketBindingDependency(builder,transportSocketBinding,transportConfig.getSocketBindingInjector());
   for (  Map.Entry<Protocol,String> entry : protocolSocketBindings) {
     addSocketBindingDependency(builder,entry.getValue(),entry.getKey().getSocketBindingInjector());
@@ -63,5 +64,6 @@
   for (  Map.Entry<String,Injector<Channel>> entry : channels) {
     builder.addDependency(ChannelService.getServiceName(entry.getKey()),Channel.class,entry.getValue());
   }
-  return Collections.<ServiceController<?>>singleton(builder.install());
+  ServiceBuilder<?> binderBuilder=new BinderServiceBuilder(target).build(ChannelFactoryService.createChannelFactoryBinding(name),ChannelFactoryService.getServiceName(name),ChannelFactory.class);
+  return Arrays.asList(builder.install(),binderBuilder.install());
 }
