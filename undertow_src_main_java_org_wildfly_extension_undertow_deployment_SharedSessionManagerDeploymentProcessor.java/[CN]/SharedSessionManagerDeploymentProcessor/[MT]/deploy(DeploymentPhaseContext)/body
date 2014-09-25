@@ -6,11 +6,11 @@
   }
   ServiceTarget target=phaseContext.getServiceTarget();
   ServiceName deploymentServiceName=deploymentUnit.getServiceName();
-  ServiceName serviceName=deploymentServiceName.append(SharedSessionManagerConfig.SHARED_SESSION_MANAGER_SERVICE_NAME);
+  ServiceName managerServiceName=deploymentServiceName.append(SharedSessionManagerConfig.SHARED_SESSION_MANAGER_SERVICE_NAME);
   DistributableSessionManagerFactoryBuilder builder=new DistributableSessionManagerFactoryBuilderValue().getValue();
   if (builder != null) {
     Module module=deploymentUnit.getAttachment(Attachments.MODULE);
-    builder.build(target,serviceName,new SimpleDistributableSessionManagerConfiguration(sharedConfig,deploymentUnit.getName(),module)).setInitialMode(Mode.ON_DEMAND).install();
+    builder.build(target,managerServiceName,new SimpleDistributableSessionManagerConfiguration(sharedConfig,deploymentUnit.getName(),module)).setInitialMode(Mode.ON_DEMAND).install();
   }
  else {
     InMemorySessionManager manager=new InMemorySessionManager(deploymentUnit.getName(),sharedConfig.getMaxActiveSessions());
@@ -20,6 +20,14 @@
       }
     }
     SessionManagerFactory factory=new ImmediateSessionManagerFactory(manager);
-    target.addService(serviceName,new ValueService<>(new ImmediateValue<>(factory))).setInitialMode(Mode.ON_DEMAND).install();
+    target.addService(managerServiceName,new ValueService<>(new ImmediateValue<>(factory))).setInitialMode(Mode.ON_DEMAND).install();
+  }
+  ServiceName codecServiceName=deploymentServiceName.append(SharedSessionManagerConfig.SHARED_SESSION_IDENTIFIER_CODEC_SERVICE_NAME);
+  DistributableSessionIdentifierCodecBuilder sessionIdentifierCodecBuilder=new DistributableSessionIdentifierCodecBuilderValue().getValue();
+  if (sessionIdentifierCodecBuilder != null) {
+    sessionIdentifierCodecBuilder.build(target,codecServiceName,deploymentUnit.getName()).setInitialMode(Mode.ON_DEMAND).install();
+  }
+ else {
+    SimpleSessionIdentifierCodecService.build(target,codecServiceName).setInitialMode(Mode.ON_DEMAND).install();
   }
 }
