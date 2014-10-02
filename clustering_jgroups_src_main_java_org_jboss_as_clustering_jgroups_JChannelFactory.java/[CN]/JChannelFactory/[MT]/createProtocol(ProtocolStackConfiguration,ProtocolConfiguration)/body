@@ -1,11 +1,20 @@
 {
   String protocolName=protocol.getName();
+  ModuleIdentifier module=protocol.getModule();
   final Map<String,String> properties=new HashMap<>(stack.getDefaults().getProperties(protocolName));
   properties.putAll(protocol.getProperties());
-  return new org.jgroups.conf.ProtocolConfiguration(protocolName,properties){
-    @Override public Map<String,String> getOriginalProperties(){
-      return properties;
-    }
+  if (module.equals(ProtocolConfiguration.DEFAULT_MODULE) && !protocolName.startsWith(org.jgroups.conf.ProtocolConfiguration.protocol_prefix)) {
+    protocolName=org.jgroups.conf.ProtocolConfiguration.protocol_prefix + "." + protocolName;
   }
+  try {
+    return new org.jgroups.conf.ProtocolConfiguration(protocolName,properties,stack.getModuleLoader().loadModule(module).getClassLoader()){
+      @Override public Map<String,String> getOriginalProperties(){
+        return properties;
+      }
+    }
 ;
+  }
+ catch (  ModuleLoadException e) {
+    throw new IllegalArgumentException(e);
+  }
 }
