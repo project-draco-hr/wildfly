@@ -1,0 +1,38 @@
+{
+  try {
+    final String profileName=address.getLastElement().getValue();
+    final ServiceName profileServiceName=RemotingProfileService.BASE_SERVICE_NAME.append(profileName);
+    final RemotingProfileService profileService=new RemotingProfileService();
+    final ServiceBuilder<RemotingProfileService> builder=context.getServiceTarget().addService(profileServiceName,profileService);
+    final Boolean isLocalReceiverExcluded=RemotingProfileResourceDefinition.EXCLUDE_LOCAL_RECEIVER.resolveModelAttribute(context,profileNode).asBoolean();
+    if (!isLocalReceiverExcluded) {
+      final ModelNode passByValueNode=RemotingProfileResourceDefinition.LOCAL_RECEIVER_PASS_BY_VALUE.resolveModelAttribute(context,profileNode);
+      if (passByValueNode.isDefined()) {
+        final ServiceName localEjbReceiverServiceName=passByValueNode.asBoolean() == true ? LocalEjbReceiver.BY_VALUE_SERVICE_NAME : LocalEjbReceiver.BY_REFERENCE_SERVICE_NAME;
+        builder.addDependency(localEjbReceiverServiceName,LocalEjbReceiver.class,profileService.getLocalEjbReceiverInjector());
+      }
+ else {
+        builder.addDependency(LocalEjbReceiver.DEFAULT_LOCAL_EJB_RECEIVER_SERVICE_NAME,LocalEjbReceiver.class,profileService.getLocalEjbReceiverInjector());
+      }
+    }
+    if (profileNode.hasDefined(EJB3SubsystemModel.REMOTING_EJB_RECEIVER)) {
+      for (      final Property receiverProperty : profileNode.get(EJB3SubsystemModel.REMOTING_EJB_RECEIVER).asPropertyList()) {
+        final ModelNode receiverNode=receiverProperty.getValue();
+        final String connectionRef=RemotingEjbReceiverDefinition.OUTBOUND_CONNECTION_REF.resolveModelAttribute(context,receiverNode).asString();
+        final long timeout=RemotingEjbReceiverDefinition.CONNECT_TIMEOUT.resolveModelAttribute(context,receiverNode).asLong();
+        profileService.addConnectionTimeout(connectionRef,timeout);
+        final ServiceName connectionDependencyService=AbstractOutboundConnectionService.OUTBOUND_CONNECTION_BASE_SERVICE_NAME.append(connectionRef);
+        final InjectedValue<AbstractOutboundConnectionService> connectionInjector=new InjectedValue<AbstractOutboundConnectionService>();
+        builder.addDependency(connectionDependencyService,AbstractOutboundConnectionService.class,connectionInjector);
+        profileService.addRemotingConnectionInjector(connectionDependencyService,connectionInjector);
+        final ModelNode channelCreationOptionsNode=receiverNode.get(EJB3SubsystemModel.CHANNEL_CREATION_OPTIONS);
+        OptionMap channelCreationOptions=createChannelOptionMap(context,channelCreationOptionsNode);
+        profileService.addChannelCreationOption(connectionRef,channelCreationOptions);
+      }
+    }
+    builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+  }
+ catch (  IllegalArgumentException e) {
+    throw new OperationFailedException(e.getLocalizedMessage());
+  }
+}
