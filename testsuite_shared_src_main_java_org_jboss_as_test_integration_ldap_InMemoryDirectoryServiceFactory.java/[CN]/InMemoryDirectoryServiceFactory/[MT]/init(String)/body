@@ -1,0 +1,44 @@
+{
+  if ((directoryService != null) && directoryService.isStarted()) {
+    return;
+  }
+  directoryService.setInstanceId(name);
+  InstanceLayout instanceLayout=new InstanceLayout(System.getProperty("java.io.tmpdir") + "/server-work-" + name);
+  if (instanceLayout.getInstanceDirectory().exists()) {
+    try {
+      FileUtils.deleteDirectory(instanceLayout.getInstanceDirectory());
+    }
+ catch (    IOException e) {
+      LOG.warn("couldn't delete the instance directory before initializing the DirectoryService",e);
+    }
+  }
+  directoryService.setInstanceLayout(instanceLayout);
+  Configuration ehCacheConfig=new Configuration();
+  CacheConfiguration defaultCache=new CacheConfiguration("default",1).eternal(false).timeToIdleSeconds(30).timeToLiveSeconds(30).overflowToDisk(false);
+  ehCacheConfig.addDefaultCache(defaultCache);
+  CacheService cacheService=new CacheService(new CacheManager(ehCacheConfig));
+  directoryService.setCacheService(cacheService);
+  SchemaLoader loader=new JarLdifSchemaLoader();
+  SchemaManager schemaManager=new DefaultSchemaManager(loader);
+  schemaManager.loadAllEnabled();
+  ComparatorRegistry comparatorRegistry=schemaManager.getComparatorRegistry();
+  for (  LdapComparator<?> comparator : comparatorRegistry) {
+    if (comparator instanceof NormalizingComparator) {
+      ((NormalizingComparator)comparator).setOnServer();
+    }
+  }
+  directoryService.setSchemaManager(schemaManager);
+  InMemorySchemaPartition inMemorySchemaPartition=new InMemorySchemaPartition(schemaManager);
+  SchemaPartition schemaPartition=new SchemaPartition(schemaManager);
+  schemaPartition.setWrappedPartition(inMemorySchemaPartition);
+  directoryService.setSchemaPartition(schemaPartition);
+  List<Throwable> errors=schemaManager.getErrors();
+  if (errors.size() != 0) {
+    throw new Exception(I18n.err(I18n.ERR_317,Exceptions.printErrors(errors)));
+  }
+  Partition systemPartition=partitionFactory.createPartition(directoryService.getSchemaManager(),"system",ServerDNConstants.SYSTEM_DN,500,new File(directoryService.getInstanceLayout().getPartitionsDirectory(),"system"));
+  systemPartition.setSchemaManager(directoryService.getSchemaManager());
+  partitionFactory.addIndex(systemPartition,SchemaConstants.OBJECT_CLASS_AT,100);
+  directoryService.setSystemPartition(systemPartition);
+  directoryService.startup();
+}
