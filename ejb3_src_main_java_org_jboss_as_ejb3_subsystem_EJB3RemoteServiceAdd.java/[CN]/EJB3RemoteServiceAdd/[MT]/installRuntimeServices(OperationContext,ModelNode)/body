@@ -1,0 +1,22 @@
+{
+  final String connectorName=EJB3RemoteResourceDefinition.CONNECTOR_REF.resolveModelAttribute(context,model).asString();
+  final String threadPoolName=EJB3RemoteResourceDefinition.THREAD_POOL_NAME.resolveModelAttribute(context,model).asString();
+  final ServiceName remotingServerInfoServiceName=RemotingConnectorBindingInfoService.serviceName(connectorName);
+  final ServiceTarget target=context.getServiceTarget();
+  new EJBRemotingConnectorClientMappingsEntryProviderService().build(target,remotingServerInfoServiceName).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  new RegistryInstallerService().build(target).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+  Resource rootResource=context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS);
+  PathElement infinispanPath=PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,"infinispan");
+  if (!rootResource.hasChild(infinispanPath) || !rootResource.getChild(infinispanPath).hasChild(PathElement.pathElement("cache-container",BeanManagerFactoryBuilderConfiguration.DEFAULT_CONTAINER_NAME))) {
+    ModuleIdentifier module=Module.forClass(this.getClass()).getIdentifier();
+    for (    GroupServiceInstaller installer : ServiceLoader.load(LocalGroupServiceInstaller.class,LocalGroupServiceInstaller.class.getClassLoader())) {
+      installer.install(target,BeanManagerFactoryBuilderConfiguration.DEFAULT_CONTAINER_NAME,module);
+    }
+    for (    CacheServiceInstaller installer : ServiceLoader.load(LocalCacheServiceInstaller.class,LocalCacheServiceInstaller.class.getClassLoader())) {
+      installer.install(target,BeanManagerFactoryBuilderConfiguration.DEFAULT_CONTAINER_NAME,CacheServiceNameFactory.DEFAULT_CACHE);
+    }
+  }
+  final OptionMap channelCreationOptions=this.getChannelCreationOptions(context);
+  final EJBRemoteConnectorService ejbRemoteConnectorService=new EJBRemoteConnectorService((byte)0x02,new String[]{"river"},channelCreationOptions);
+  target.addService(EJBRemoteConnectorService.SERVICE_NAME,ejbRemoteConnectorService).addDependency(RemotingServices.SUBSYSTEM_ENDPOINT,Endpoint.class,ejbRemoteConnectorService.getEndpointInjector()).addDependency(EJB3SubsystemModel.BASE_THREAD_POOL_SERVICE_NAME.append(threadPoolName),ExecutorService.class,ejbRemoteConnectorService.getExecutorService()).addDependency(DeploymentRepository.SERVICE_NAME,DeploymentRepository.class,ejbRemoteConnectorService.getDeploymentRepositoryInjector()).addDependency(EJBRemoteTransactionsRepository.SERVICE_NAME,EJBRemoteTransactionsRepository.class,ejbRemoteConnectorService.getEJBRemoteTransactionsRepositoryInjector()).addDependency(RegistryCollectorService.SERVICE_NAME,RegistryCollector.class,ejbRemoteConnectorService.getClusterRegistryCollectorInjector()).addDependency(TransactionManagerService.SERVICE_NAME,TransactionManager.class,ejbRemoteConnectorService.getTransactionManagerInjector()).addDependency(TransactionSynchronizationRegistryService.SERVICE_NAME,TransactionSynchronizationRegistry.class,ejbRemoteConnectorService.getTxSyncRegistryInjector()).addDependency(RemoteAsyncInvocationCancelStatusService.SERVICE_NAME,RemoteAsyncInvocationCancelStatusService.class,ejbRemoteConnectorService.getAsyncInvocationCancelStatusInjector()).addDependency(remotingServerInfoServiceName,RemotingConnectorBindingInfoService.RemotingConnectorInfo.class,ejbRemoteConnectorService.getRemotingConnectorInfoInjectedValue()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+}
