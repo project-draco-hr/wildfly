@@ -1,23 +1,29 @@
 {
-  if (timer == null) {
-    return;
-  }
-  try {
-    lock.lock();
-    if (status == Status.STATUS_COMMITTED) {
-      final Map<String,TimerImpl> map=getTimers(timer.getTimedObjectId(),timer.getTimerService());
-      if (timer.getState() == TimerState.CANCELED || timer.getState() == TimerState.EXPIRED) {
-        map.remove(timer.getId());
+  doPrivileged(new PrivilegedAction<Void>(){
+    public Void run(){
+      if (timer == null) {
+        return null;
       }
+      try {
+        lock.lock();
+        if (status == Status.STATUS_COMMITTED) {
+          final Map<String,TimerImpl> map=getTimers(timer.getTimedObjectId(),timer.getTimerService());
+          if (timer.getState() == TimerState.CANCELED || timer.getState() == TimerState.EXPIRED) {
+            map.remove(timer.getId());
+          }
  else {
-        if (newTimer || map.containsKey(timer.getId())) {
-          map.put(timer.getId(),timer);
+            if (newTimer || map.containsKey(timer.getId())) {
+              map.put(timer.getId(),timer);
+            }
+          }
+          writeFile(timer);
         }
       }
-      writeFile(timer);
+  finally {
+        lock.unlock();
+      }
+      return null;
     }
   }
-  finally {
-    lock.unlock();
-  }
+);
 }
