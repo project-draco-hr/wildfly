@@ -1,0 +1,34 @@
+{
+  String name=config.getProtocolName();
+  try {
+    this.protocolClass=config.getClassLoader().loadClass(name).asSubclass(Protocol.class);
+    PrivilegedAction<Void> action=new PrivilegedAction<Void>(){
+      @Override public Void run(){
+        Class<?> targetClass=Introspector.this.protocolClass;
+        while (Protocol.class.isAssignableFrom(targetClass)) {
+          for (          Method method : targetClass.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(Property.class)) {
+              String property=method.getAnnotation(Property.class).name();
+              if (!property.isEmpty()) {
+                Introspector.this.properties.add(property);
+              }
+            }
+          }
+          for (          Field field : targetClass.getDeclaredFields()) {
+            if (field.isAnnotationPresent(Property.class)) {
+              String property=field.getAnnotation(Property.class).name();
+              Introspector.this.properties.add(!property.isEmpty() ? property : field.getName());
+            }
+          }
+          targetClass=targetClass.getSuperclass();
+        }
+        return null;
+      }
+    }
+;
+    WildFlySecurityManager.doChecked(action);
+  }
+ catch (  ClassNotFoundException e) {
+    throw new IllegalArgumentException(e);
+  }
+}

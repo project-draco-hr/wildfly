@@ -6,19 +6,32 @@
   if (transport.isShared()) {
     properties.put(Global.SINGLETON_NAME,this.configuration.getName());
   }
+  Introspector introspector=new Introspector(protocol);
   SocketBinding binding=transport.getSocketBinding();
   if (binding != null) {
-    configureBindAddress(transport,protocol,binding);
-    configureServerSocket(transport,protocol,"bind_port",binding);
-    configureMulticastSocket(transport,protocol,"mcast_addr","mcast_port",binding);
+    configureBindAddress(introspector,protocol,binding);
+    configureServerSocket(introspector,protocol,"bind_port",binding);
+    configureMulticastSocket(introspector,protocol,"mcast_addr","mcast_port",binding);
   }
   SocketBinding diagnosticsSocketBinding=transport.getDiagnosticsSocketBinding();
   boolean diagnostics=(diagnosticsSocketBinding != null);
   properties.put("enable_diagnostics",String.valueOf(diagnostics));
   if (diagnostics) {
-    configureMulticastSocket(transport,protocol,"diagnostics_addr","diagnostics_port",diagnosticsSocketBinding);
+    configureMulticastSocket(introspector,protocol,"diagnostics_addr","diagnostics_port",diagnosticsSocketBinding);
   }
   stack.add(protocol);
-  stack.addAll(createProtocols(this.configuration));
+  final Class<? extends TP> transportClass=introspector.getProtocolClass().asSubclass(TP.class);
+  PrivilegedExceptionAction<TP> action=new PrivilegedExceptionAction<TP>(){
+    @Override public TP run() throws InstantiationException, IllegalAccessException {
+      return transportClass.newInstance();
+    }
+  }
+;
+  try {
+    stack.addAll(createProtocols(this.configuration,WildFlySecurityManager.doChecked(action).isMulticastCapable()));
+  }
+ catch (  PrivilegedActionException e) {
+    throw new IllegalStateException(e.getCause());
+  }
   return stack;
 }
