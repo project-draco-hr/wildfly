@@ -20,24 +20,29 @@
         StreamUtils.safeClose(out);
       }
       Assert.assertTrue(dodeploy.exists());
-      while (!deployed.exists()) {
+      for (int i=0; i < TIMEOUT / BACKOFF; i++) {
+        if (deployed.exists()) {
+          break;
+        }
         try {
-          Thread.sleep(50);
+          Thread.sleep(BACKOFF);
         }
  catch (        InterruptedException e) {
+          Thread.currentThread().interrupt();
           throw new RuntimeException(e);
         }
       }
+      Assert.assertTrue(deployed.exists());
     }
     @Override public void fullReplace() throws IOException {
       final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
       final File isdeploying=new File(deployDir,"test-deployment.sar.isdeploying");
-      for (int i=0; i < 500; i++) {
+      for (int i=0; i < TIMEOUT / BACKOFF; i++) {
         if (!dodeploy.exists() && !isdeploying.exists()) {
           break;
         }
         try {
-          Thread.sleep(10);
+          Thread.sleep(BACKOFF);
         }
  catch (        InterruptedException e) {
           Thread.currentThread().interrupt();
@@ -52,12 +57,13 @@
     @Override public void undeploy(){
       final File dodeploy=new File(deployDir,"test-deployment.sar.dodeploy");
       final File isdeploying=new File(deployDir,"test-deployment.sar.isdeploying");
-      for (int i=0; i < 500; i++) {
+      final File undeployed=new File(deployDir,"test-deployment.sar.undeployed");
+      for (int i=0; i < TIMEOUT / BACKOFF; i++) {
         if (!dodeploy.exists() && !isdeploying.exists() && deployed.exists()) {
           break;
         }
         try {
-          Thread.sleep(10);
+          Thread.sleep(BACKOFF);
         }
  catch (        InterruptedException e) {
           Thread.currentThread().interrupt();
@@ -68,6 +74,21 @@
         Assert.fail("fullReplace step did not complete in a reasonably timely fashion");
       }
       deployed.delete();
+      for (int i=0; i < TIMEOUT / BACKOFF; i++) {
+        if (undeployed.exists()) {
+          break;
+        }
+        try {
+          Thread.sleep(BACKOFF);
+        }
+ catch (        InterruptedException e) {
+          Thread.currentThread().interrupt();
+          break;
+        }
+      }
+      if (!undeployed.exists()) {
+        Assert.fail("undeploy step did not complete in a reasonably timely fashion");
+      }
     }
   }
 );
