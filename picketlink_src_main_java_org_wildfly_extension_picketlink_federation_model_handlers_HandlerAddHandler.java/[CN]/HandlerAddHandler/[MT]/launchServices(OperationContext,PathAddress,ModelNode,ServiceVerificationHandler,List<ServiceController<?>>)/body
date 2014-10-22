@@ -1,19 +1,8 @@
 {
   Handler newHandler=new Handler();
-  ModelNode classNameNode=HandlerResourceDefinition.CLASS_NAME.resolveModelAttribute(context,model);
-  ModelNode codeNode=HandlerResourceDefinition.CODE.resolveModelAttribute(context,model);
-  String typeName;
-  if (classNameNode.isDefined()) {
-    typeName=classNameNode.asString();
-  }
- else   if (codeNode.isDefined()) {
-    typeName=HandlerTypeEnum.forType(codeNode.asString());
-  }
- else {
-    throw PicketLinkLogger.ROOT_LOGGER.federationHandlerTypeNotProvided();
-  }
+  String typeName=getHandlerType(context,model);
   newHandler.setClazz(typeName);
-  ModelNode handler=Resource.Tools.readModel(context.readResourceFromRoot(pathAddress));
+  ModelNode handler=context.readResourceFromRoot(pathAddress).getModel();
   if (handler.hasDefined(COMMON_HANDLER_PARAMETER.getName())) {
     for (    Property handlerParameter : handler.get(COMMON_HANDLER_PARAMETER.getName()).asPropertyList()) {
       String paramName=handlerParameter.getName();
@@ -27,7 +16,7 @@
   SAMLHandlerService service=new SAMLHandlerService(newHandler);
   PathElement providerAlias=pathAddress.subAddress(0,pathAddress.size() - 1).getLastElement();
   ServiceTarget serviceTarget=context.getServiceTarget();
-  ServiceBuilder<SAMLHandlerService> serviceBuilder=serviceTarget.addService(createServiceName(providerAlias.getValue(),newHandler.getClazz()),service);
+  ServiceBuilder<SAMLHandlerService> serviceBuilder=serviceTarget.addService(createServiceName(providerAlias.getValue(),pathAddress.getLastElement().getValue()),service);
   ServiceName serviceName;
   if (providerAlias.getKey().equals(IDENTITY_PROVIDER.getName())) {
     serviceName=IdentityProviderService.createServiceName(providerAlias.getValue());
@@ -39,11 +28,8 @@
   if (verificationHandler != null) {
     serviceBuilder.addListener(verificationHandler);
   }
-  ServiceController<SAMLHandlerService> controller=serviceBuilder.setInitialMode(ServiceController.Mode.PASSIVE).install();
+  ServiceController<SAMLHandlerService> controller=serviceBuilder.install();
   if (newControllers != null) {
     newControllers.add(controller);
-  }
-  if (!context.isBooting()) {
-    context.reloadRequired();
   }
 }
