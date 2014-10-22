@@ -11,8 +11,10 @@
   final boolean useListenerEncoding=ServletContainerDefinition.USE_LISTENER_ENCODING.resolveModelAttribute(context,model).asBoolean();
   final boolean ignoreFlush=ServletContainerDefinition.IGNORE_FLUSH.resolveModelAttribute(context,model).asBoolean();
   final boolean eagerFilterInit=ServletContainerDefinition.EAGER_FILTER_INIT.resolveModelAttribute(context,model).asBoolean();
+  final boolean disableCachingForSecuredPages=ServletContainerDefinition.DISABLE_CACHING_FOR_SECURED_PAGES.resolveModelAttribute(context,model).asBoolean();
   final int sessionTimeout=ServletContainerDefinition.DEFAULT_SESSION_TIMEOUT.resolveModelAttribute(context,model).asInt();
-  final ServletContainerService container=new ServletContainerService(allowNonStandardWrappers,ServletStackTraces.valueOf(stackTracesString.toUpperCase().replace('-','_')),config,jspConfig,defaultEncoding,useListenerEncoding,ignoreFlush,eagerFilterInit,sessionTimeout);
+  WebsocketsDefinition.WebSocketInfo info=WebsocketsDefinition.INSTANCE.getConfig(context,model);
+  final ServletContainerService container=new ServletContainerService(allowNonStandardWrappers,ServletStackTraces.valueOf(stackTracesString.toUpperCase().replace('-','_')),config,jspConfig,defaultEncoding,useListenerEncoding,ignoreFlush,eagerFilterInit,sessionTimeout,disableCachingForSecuredPages,info != null,info != null && info.isDispatchToWorker());
   final ServiceTarget target=context.getServiceTarget();
   final ServiceBuilder<ServletContainerService> builder=target.addService(UndertowService.SERVLET_CONTAINER.append(name),container);
   if (bufferCache != null) {
@@ -20,6 +22,10 @@
   }
   if (persistentSessions) {
     builder.addDependency(AbstractPersistentSessionManager.SERVICE_NAME,SessionPersistenceManager.class,container.getSessionPersistenceManagerInjectedValue());
+  }
+  if (info != null) {
+    builder.addDependency(IOServices.WORKER.append(info.getWorker()),XnioWorker.class,container.getWebsocketsWorker());
+    builder.addDependency(IOServices.BUFFER_POOL.append(info.getBufferPool()),Pool.class,(InjectedValue)container.getWebsocketsBufferPool());
   }
   newControllers.add(builder.setInitialMode(ServiceController.Mode.ON_DEMAND).install());
 }
