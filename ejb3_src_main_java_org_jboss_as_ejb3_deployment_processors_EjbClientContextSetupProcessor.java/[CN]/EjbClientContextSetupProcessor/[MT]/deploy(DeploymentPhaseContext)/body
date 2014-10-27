@@ -4,19 +4,14 @@
   if (module == null) {
     return;
   }
-  final EJBClientContext ejbClientContext=this.getEJBClientContext(phaseContext);
-  final ServiceController<TCCLEJBClientContextSelectorService> tcclEJBClientContextSelectorServiceController=(ServiceController<TCCLEJBClientContextSelectorService>)phaseContext.getServiceRegistry().getService(TCCLEJBClientContextSelectorService.TCCL_BASED_EJB_CLIENT_CONTEXT_SELECTOR_SERVICE_NAME);
-  if (tcclEJBClientContextSelectorServiceController != null) {
-    final TCCLEJBClientContextSelectorService tcclBasedEJBClientContextSelector=tcclEJBClientContextSelectorServiceController.getValue();
-    logger.debug("Registering EJB client context " + ejbClientContext + " for classloader "+ module.getClassLoader());
-    tcclBasedEJBClientContextSelector.registerEJBClientContext(ejbClientContext,module.getClassLoader());
-  }
+  RegistractionService registractionService=new RegistractionService(module);
+  ServiceName registrationServiceName=deploymentUnit.getServiceName().append("ejb3","client-context","registration-service");
+  phaseContext.getServiceTarget().addService(registrationServiceName,registractionService).addDependency(getEJBClientContextServiceName(phaseContext),EJBClientContext.class,registractionService.ejbClientContextInjectedValue).addDependency(TCCLEJBClientContextSelectorService.TCCL_BASED_EJB_CLIENT_CONTEXT_SELECTOR_SERVICE_NAME,TCCLEJBClientContextSelectorService.class,registractionService.tcclEJBClientContextSelectorServiceController).install();
   final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(Attachments.EE_MODULE_DESCRIPTION);
   if (moduleDescription == null) {
     return;
   }
-  final ServiceName clientContextService=getEJBClientContextServiceName(phaseContext);
   for (  final ComponentDescription component : moduleDescription.getComponentDescriptions()) {
-    component.addDependency(clientContextService,ServiceBuilder.DependencyType.REQUIRED);
+    component.addDependency(registrationServiceName,ServiceBuilder.DependencyType.REQUIRED);
   }
 }
