@@ -6,15 +6,16 @@
     newNodes.removeAll(previousMembers);
     try (Batch batch=this.batcher.createBatch()){
       if (!deadNodes.isEmpty()) {
-        for (        Object service : this.cache.keySet()) {
-          Set<Node> nodes=this.cache.get(service);
-          if (nodes != null) {
+        try (CloseableIterator<Map.Entry<Object,Set<Node>>> entries=this.cache.entrySet().iterator()){
+          while (entries.hasNext()) {
+            Map.Entry<Object,Set<Node>> entry=entries.next();
+            Set<Node> nodes=entry.getValue();
             if (nodes.removeAll(deadNodes)) {
-              this.cache.getAdvancedCache().withFlags(Flag.IGNORE_RETURN_VALUES).replace(service,nodes);
+              entry.setValue(nodes);
             }
           }
         }
-      }
+       }
       if (merged) {
         for (        Node node : newNodes) {
           List<Object> services=CacheServiceProviderRegistrationFactory.this.getServices(node);
