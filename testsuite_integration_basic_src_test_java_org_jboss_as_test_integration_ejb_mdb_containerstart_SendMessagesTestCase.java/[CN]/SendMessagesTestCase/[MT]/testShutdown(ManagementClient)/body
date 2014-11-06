@@ -13,30 +13,32 @@
     Set<String> expected=new TreeSet<String>();
     sendMessage(session,sender,replyQueue,"await");
     expected.add("Reply: await");
-    int awaitInt=awaitSingleton("first test");
-    log.debug("testsuite: awaitSingleton() returned: " + awaitInt);
+    int awaitInt=awaitSingleton("await before undeploy");
+    log.debug("testsuite: first awaitSingleton() returned: " + awaitInt);
     Future<?> undeployed=executor.submit(undeployTask());
-    Thread.sleep(THREAD_WAIT_MS);
-    for (int i=0; i < 50; i++) {
-      String msg="Do not lose! (" + i + ")";
+    for (int i=1; i <= 50; i++) {
+      String msg=this.getClass().getSimpleName() + " 50loop: " + i;
       sendMessage(session,sender,replyQueue,msg);
       expected.add("Reply: " + msg);
     }
+    log.debug("Sent 50 messages during MDB is undeploying");
+    awaitInt=awaitSingleton("await after undeploy");
+    log.debug("testsuite: second awaitSingleton() returned: " + awaitInt);
     undeployed.get(UNDEPLOYED_WAIT_S,SECONDS);
     final ModelNode deployAddr=new ModelNode();
-    deployAddr.get(ClientConstants.OP_ADDR).add("deployment",MBEAN + ".jar");
+    deployAddr.get(ClientConstants.OP_ADDR).add("deployment",MESSAGE_DRIVEN_BEAN + ".jar");
     deployAddr.get(ClientConstants.OP).set("deploy");
     applyUpdate(deployAddr,managementClient.getControllerClient());
-    for (int i=0; i < 10; i++) {
-      String msg="Some more (" + i + ")";
+    for (int i=1; i <= 10; i++) {
+      String msg=this.getClass().getSimpleName() + "10loop: " + i;
       sendMessage(session,sender,replyQueue,msg);
       expected.add("Reply: " + msg);
     }
-    log.debug("Some more messages sent");
+    log.debug("Sent 10 more messages");
     Set<String> received=new TreeSet<String>();
-    for (int i=0; i < (1 + 50 + 10+ 1); i++) {
+    for (int i=1; i <= (1 + 50 + 10+ 1); i++) {
       Message msg=receiver.receive(SECONDS.toMillis(RECEIVE_WAIT_S));
-      assertNotNull("did not receive message " + i,msg);
+      assertNotNull("did not receive message with ordered number " + i + " in "+ SECONDS.toMillis(RECEIVE_WAIT_S)+ " seconds",msg);
       String text=((TextMessage)msg).getText();
       received.add(text);
       log.info(i + ": " + text);
