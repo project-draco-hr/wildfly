@@ -5,9 +5,16 @@
     TextMessage replyMessage;
     if (message instanceof TextMessage) {
       if (text.equals("await") && !message.getJMSRedelivered()) {
+        log.infof("Message [%s, %s] contains text 'await'",message,text);
         HelperSingletonImpl.barrier.await(WAIT_S,SECONDS);
         HelperSingletonImpl.barrier.reset();
-        Thread.sleep(SECONDS.toMillis(WAIT_S));
+        try {
+          Thread.sleep(SECONDS.toMillis(WAIT_S));
+        }
+ catch (        InterruptedException ie) {
+          log.info("Sleeping for transaction timeout was interrupted." + "This is expected at least for JTS transaction.");
+        }
+        HelperSingletonImpl.barrier.await(WAIT_S,SECONDS);
       }
       replyMessage=session.createTextMessage("Reply: " + text);
     }
@@ -17,7 +24,7 @@
     Destination destination=message.getJMSReplyTo();
     message.setJMSDeliveryMode(NON_PERSISTENT);
     sender.send(destination,replyMessage);
-    log.info("onMessage method [OK], msg: " + message.toString());
+    log.infof("onMessage method [OK], msg: [%s] with id [%s]. Replying to destination [%s].",text,message,destination);
   }
  catch (  Exception e) {
     throw new RuntimeException(e);
