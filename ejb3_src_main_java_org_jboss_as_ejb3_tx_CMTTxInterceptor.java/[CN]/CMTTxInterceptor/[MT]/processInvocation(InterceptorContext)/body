@@ -1,15 +1,18 @@
 {
   final EJBComponent component=(EJBComponent)invocation.getPrivateData(Component.class);
-  final MethodIntf methodIntf=MethodIntfHelper.of(invocation);
-  final TransactionAttributeType attr=component.getTransactionAttributeType(methodIntf,invocation.getMethod());
-  final int timeoutInSeconds=component.getTransactionTimeout(methodIntf,invocation.getMethod());
+  final TransactionManager tm=component.getTransactionManager();
+  final int oldTimeout=getCurrentTransactionTimeout(component);
+  try {
+    final MethodIntf methodIntf=MethodIntfHelper.of(invocation);
+    final TransactionAttributeType attr=component.getTransactionAttributeType(methodIntf,invocation.getMethod());
+    final int timeoutInSeconds=component.getTransactionTimeout(methodIntf,invocation.getMethod());
 switch (attr) {
 case MANDATORY:
-    return mandatory(invocation,component);
+      return mandatory(invocation,component);
 case NEVER:
-  return never(invocation,component);
+    return never(invocation,component);
 case NOT_SUPPORTED:
-return notSupported(invocation,component);
+  return notSupported(invocation,component);
 case REQUIRED:
 return required(invocation,component,timeoutInSeconds);
 case REQUIRES_NEW:
@@ -18,5 +21,9 @@ case SUPPORTS:
 return supports(invocation,component);
 default :
 throw EjbLogger.ROOT_LOGGER.unknownTxAttributeOnInvocation(attr,invocation);
+}
+}
+  finally {
+tm.setTransactionTimeout(oldTimeout == -1 ? 0 : oldTimeout);
 }
 }
