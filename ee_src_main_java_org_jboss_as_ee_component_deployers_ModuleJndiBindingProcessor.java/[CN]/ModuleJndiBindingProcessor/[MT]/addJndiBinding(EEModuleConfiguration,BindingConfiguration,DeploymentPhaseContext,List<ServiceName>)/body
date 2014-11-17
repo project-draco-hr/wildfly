@@ -26,7 +26,7 @@ catch (      CircularDependencyException e) {
  else {
       BinderService service;
       try {
-        service=new SharedBinderService(bindInfo.getBindName(),bindingConfiguration.getSource());
+        service=new BinderService(bindInfo.getBindName(),bindingConfiguration.getSource(),true);
         ServiceBuilder<ManagedReferenceFactory> serviceBuilder=CurrentServiceContainer.getServiceContainer().addService(bindInfo.getBinderServiceName(),service);
         bindingConfiguration.getSource().getResourceValue(resolutionContext,serviceBuilder,phaseContext,service.getManagedObjectInjector());
         serviceBuilder.addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,service.getNamingStoreInjector());
@@ -41,9 +41,9 @@ catch (      CircularDependencyException e) {
           throw EeLogger.ROOT_LOGGER.conflictingBinding(bindingName,bindingConfiguration.getSource());
         }
       }
-      if (service instanceof SharedBinderService) {
-        phaseContext.getDeploymentUnit().addToAttachmentList(org.jboss.as.naming.deployment.Attachments.SHARED_BINDER_SERVICES,(SharedBinderService)service);
-      }
+      service.acquire();
+      ServiceController<?> unitService=CurrentServiceContainer.getServiceContainer().getService(phaseContext.getDeploymentUnit().getServiceName());
+      unitService.addListener(new BinderReleaseListener(service));
     }
   }
  else {
