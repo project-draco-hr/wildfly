@@ -1,0 +1,20 @@
+{
+  passwordProvider.resetFileCounter();
+  ModelNode op=new ModelNode();
+  LOGGER.info("Saving original vault setting");
+  op=Util.getReadAttributeOperation(VAULT_PATH,VAULT_OPTIONS);
+  originalVault=(managementClient.getControllerClient().execute(new OperationBuilder(op).build())).get(RESULT);
+  if (originalVault.get("KEYSTORE_URL") != null && originalVault.hasDefined("KEYSTORE_URL")) {
+    op=Util.createRemoveOperation(VAULT_PATH);
+    Utils.applyUpdate(op,managementClient.getControllerClient());
+  }
+  LOGGER.info("Creating new vault");
+  clean();
+  vaultHandler=new VaultHandler(KEYSTORE_URL,VAULT_PASSWORD,null,RESOURCE_LOCATION,128,VAULT_ALIAS,SALT,ITER_COUNT);
+  KEYSTORE_URL=vaultHandler.getKeyStore();
+  RESOURCE_LOCATION=vaultHandler.getEncodedVaultFileDirectory();
+  nonInteractiveSession=new VaultSession(KEYSTORE_URL,VAULT_PASSWORD,RESOURCE_LOCATION,SALT,ITER_COUNT);
+  nonInteractiveSession.startVaultSession(VAULT_ALIAS);
+  LOGGER.info("Inserting attribute " + VAULT_ATTRIBUTE + " to vault");
+  nonInteractiveSession.addSecuredAttribute(VAULT_BLOCK,ATTRIBUTE_NAME,VAULT_ATTRIBUTE.toCharArray());
+}
