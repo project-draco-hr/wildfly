@@ -1,48 +1,11 @@
 {
   super.populateModel(context,operation,resource);
-  final PathAddress channelAddress=PathAddress.pathAddress(operation.get(OP_ADDR));
-  final String channelName=channelAddress.getLastElement().getValue();
-  final String stackName=ModelNodes.asString(ChannelResourceDefinition.STACK.resolveModelAttribute(context,resource.getModel()));
   if (this.allowRuntimeOnlyRegistration && (context.getRunningMode() == RunningMode.NORMAL)) {
-    OperationStepHandler handler=new OperationStepHandler(){
-      @Override public void execute(      OperationContext context,      ModelNode operation) throws OperationFailedException {
-        PathAddress subsystemAddress=channelAddress.subAddress(0,channelAddress.size() - 1);
-        PathAddress stackAddress=subsystemAddress.append(StackResourceDefinition.pathElement((stackName != null) ? stackName : JGroupsSubsystemResourceDefinition.DEFAULT_STACK.resolveModelAttribute(context,context.readResourceFromRoot(subsystemAddress).getModel()).asString()));
-        OverrideDescriptionProvider provider=new OverrideDescriptionProvider(){
-          @Override public Map<String,ModelNode> getAttributeOverrideDescriptions(          Locale locale){
-            return Collections.emptyMap();
-          }
-          @Override public Map<String,ModelNode> getChildTypeOverrideDescriptions(          Locale locale){
-            StandardResourceDescriptionResolver resolver=JGroupsExtension.getResourceDescriptionResolver();
-            String description=resolver.getChildTypeDescription(ProtocolResourceDefinition.WILDCARD_PATH.getKey(),locale,resolver.getResourceBundle(locale));
-            ModelNode result=new ModelNode();
-            result.get(DESCRIPTION).set(description);
-            return Collections.singletonMap(ProtocolResourceDefinition.WILDCARD_PATH.getKey(),result);
-          }
-        }
-;
-        Resource resource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
-        ManagementResourceRegistration registration=context.getResourceRegistrationForUpdate().registerOverrideModel(channelName,provider);
-        PathAddress transportAddress=stackAddress.append(TransportResourceDefinition.PATH);
-        ModelNode transport=context.readResourceFromRoot(transportAddress).getModel();
-        String transportName=ProtocolResourceDefinition.TYPE.resolveModelAttribute(context,transport).asString();
-        registration.registerSubModel(createProtocolResourceDefinition(transportName)).setRuntimeOnly(true);
-        resource.registerChild(ProtocolResourceDefinition.pathElement(transportName),PlaceholderResource.INSTANCE);
-        Resource stackResource=context.readResourceFromRoot(stackAddress);
-        for (        ResourceEntry entry : stackResource.getChildren(ProtocolResourceDefinition.WILDCARD_PATH.getKey())) {
-          String protocolName=entry.getName();
-          registration.registerSubModel(createProtocolResourceDefinition(protocolName)).setRuntimeOnly(true);
-          resource.registerChild(ProtocolResourceDefinition.pathElement(protocolName),PlaceholderResource.INSTANCE);
-        }
-        if (stackResource.hasChild(RelayResourceDefinition.PATH)) {
-          String relayName="relay.RELAY2";
-          registration.registerSubModel(createProtocolResourceDefinition(relayName)).setRuntimeOnly(true);
-          resource.registerChild(ProtocolResourceDefinition.pathElement(relayName),PlaceholderResource.INSTANCE);
-        }
-        context.stepCompleted();
-      }
-    }
-;
-    context.addStep(handler,OperationContext.Stage.MODEL);
+    PathAddress address=Operations.getPathAddress(operation);
+    String name=address.getLastElement().getValue();
+    String stack=ModelNodes.asString(ChannelResourceDefinition.STACK.resolveModelAttribute(context,resource.getModel()));
+    PathAddress subsystemAddress=address.subAddress(0,address.size() - 1);
+    PathAddress stackAddress=subsystemAddress.append(StackResourceDefinition.pathElement((stack != null) ? stack : JGroupsSubsystemResourceDefinition.DEFAULT_STACK.resolveModelAttribute(context,context.readResourceFromRoot(subsystemAddress,false).getModel()).asString()));
+    context.addStep(new ProtocolResourceRegistrationHandler(name,stackAddress),OperationContext.Stage.MODEL);
   }
 }

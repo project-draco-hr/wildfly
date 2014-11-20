@@ -1,10 +1,11 @@
 {
-  PathAddress address=PathAddress.pathAddress(operation.get(OP_ADDR));
-  String name=address.getLastElement().getValue();
-  protocolStackSanityCheck(name,model);
-  List<Property> orderedProtocols=getOrderedProtocolPropertyList(model);
-  ModelNode transport=model.get(TransportResourceDefinition.PATH.getKeyValuePair());
-  String type=ProtocolResourceDefinition.TYPE.resolveModelAttribute(context,transport).asString();
+  String name=Operations.getPathAddress(operation).getLastElement().getValue();
+  if (!model.hasDefined(TransportResourceDefinition.WILDCARD_PATH.getKey())) {
+    throw JGroupsLogger.ROOT_LOGGER.transportNotDefined(name);
+  }
+  Property property=model.get(TransportResourceDefinition.WILDCARD_PATH.getKey()).asProperty();
+  String type=property.getName();
+  ModelNode transport=property.getValue();
   ModuleIdentifier module=ModelNodes.asModuleIdentifier(ProtocolResourceDefinition.MODULE.resolveModelAttribute(context,transport));
   boolean shared=TransportResourceDefinition.SHARED.resolveModelAttribute(context,transport).asBoolean();
   Transport transportConfig=new Transport(type,module,shared);
@@ -31,29 +32,31 @@
       }
     }
   }
-  ProtocolStack stackConfig=new ProtocolStack(name,transportConfig,relayConfig);
-  List<Map.Entry<Protocol,String>> protocolSocketBindings=new ArrayList<>(orderedProtocols.size());
-  for (  Property protocolProperty : orderedProtocols) {
-    ModelNode protocol=protocolProperty.getValue();
-    type=ProtocolResourceDefinition.TYPE.resolveModelAttribute(context,protocol).asString();
-    module=ModelNodes.asModuleIdentifier(ProtocolResourceDefinition.MODULE.resolveModelAttribute(context,protocol));
-    Protocol protocolConfig=new Protocol(type,module);
-    initProtocolProperties(context,protocol,protocolConfig);
-    stackConfig.getProtocols().add(protocolConfig);
-    String protocolSocketBinding=ModelNodes.asString(ProtocolResourceDefinition.SOCKET_BINDING.resolveModelAttribute(context,protocol));
-    protocolSocketBindings.add(new AbstractMap.SimpleImmutableEntry<>(protocolConfig,protocolSocketBinding));
-  }
   String timerExecutor=ModelNodes.asString(TransportResourceDefinition.TIMER_EXECUTOR.resolveModelAttribute(context,transport));
   String threadFactory=ModelNodes.asString(TransportResourceDefinition.THREAD_FACTORY.resolveModelAttribute(context,transport));
   String diagnosticsSocketBinding=ModelNodes.asString(TransportResourceDefinition.DIAGNOSTICS_SOCKET_BINDING.resolveModelAttribute(context,transport));
   String defaultExecutor=ModelNodes.asString(TransportResourceDefinition.DEFAULT_EXECUTOR.resolveModelAttribute(context,transport));
   String oobExecutor=ModelNodes.asString(TransportResourceDefinition.OOB_EXECUTOR.resolveModelAttribute(context,transport));
   String transportSocketBinding=ModelNodes.asString(ProtocolResourceDefinition.SOCKET_BINDING.resolveModelAttribute(context,transport));
+  ProtocolStack stackConfig=new ProtocolStack(name,transportConfig,relayConfig);
   ServiceTarget target=context.getServiceTarget();
   ServiceBuilder<ChannelFactory> builder=target.addService(ChannelFactoryService.getServiceName(name),new ChannelFactoryService(stackConfig)).addDependency(ProtocolDefaultsService.SERVICE_NAME,ProtocolDefaults.class,stackConfig.getDefaultsInjector()).addDependency(ServerEnvironmentService.SERVICE_NAME,ServerEnvironment.class,stackConfig.getEnvironmentInjector()).addDependency(Services.JBOSS_SERVICE_MODULE_LOADER,ModuleLoader.class,stackConfig.getModuleLoaderInjector());
   addSocketBindingDependency(builder,transportSocketBinding,transportConfig.getSocketBindingInjector());
-  for (  Map.Entry<Protocol,String> entry : protocolSocketBindings) {
-    addSocketBindingDependency(builder,entry.getValue(),entry.getKey().getSocketBindingInjector());
+  if (model.hasDefined(ProtocolResourceDefinition.WILDCARD_PATH.getKey())) {
+    List<Property> protocols=model.get(ProtocolResourceDefinition.WILDCARD_PATH.getKey()).asPropertyList();
+    List<Map.Entry<Protocol,String>> protocolSocketBindings=new ArrayList<>(protocols.size());
+    for (    Property protocolProperty : protocols) {
+      ModelNode protocol=protocolProperty.getValue();
+      module=ModelNodes.asModuleIdentifier(ProtocolResourceDefinition.MODULE.resolveModelAttribute(context,protocol));
+      Protocol protocolConfig=new Protocol(protocolProperty.getName(),module);
+      initProtocolProperties(context,protocol,protocolConfig);
+      stackConfig.getProtocols().add(protocolConfig);
+      String protocolSocketBinding=ModelNodes.asString(ProtocolResourceDefinition.SOCKET_BINDING.resolveModelAttribute(context,protocol));
+      protocolSocketBindings.add(new AbstractMap.SimpleImmutableEntry<>(protocolConfig,protocolSocketBinding));
+    }
+    for (    Map.Entry<Protocol,String> entry : protocolSocketBindings) {
+      addSocketBindingDependency(builder,entry.getValue(),entry.getKey().getSocketBindingInjector());
+    }
   }
   addSocketBindingDependency(builder,diagnosticsSocketBinding,transportConfig.getDiagnosticsSocketBindingInjector());
   addExecutorDependency(builder,defaultExecutor,transportConfig.getDefaultExecutorInjector());

@@ -1,42 +1,37 @@
 {
-  PathAddress pathAddress=PathAddress.pathAddress(operation.require(OP_ADDR));
-  String channelName=pathAddress.getElement(pathAddress.size() - 2).getValue();
-  String protocolName=pathAddress.getElement(pathAddress.size() - 1).getValue();
-  String name=operation.require(NAME).asString();
-  ServiceName channelServiceName=ChannelService.getServiceName(channelName);
-  ServiceController<?> controller=context.getServiceRegistry(false).getService(channelServiceName);
-  if (controller != null) {
-    Channel channel=(Channel)controller.getValue();
-    if (channel != null) {
-      int index=protocolName.lastIndexOf('.');
-      if (index > 0) {
-        protocolName=protocolName.substring(index + 1);
-      }
-      final Protocol protocol=channel.getProtocolStack().findProtocol(protocolName);
-      if (protocol != null) {
-        Attribute attribute=this.getAttribute(protocol.getClass(),name);
-        if (attribute != null) {
-          FieldType type=FieldType.valueOf(attribute.getType());
-          try {
-            ModelNode result=new ModelNode();
-            Object value=attribute.read(protocol);
-            if (value != null) {
-              type.setValue(result,value);
-            }
-            context.getResult().set(result);
+  PathAddress address=Operations.getPathAddress(operation);
+  String protocolName=address.getLastElement().getValue();
+  String name=Operations.getAttributeName(operation);
+  try {
+    Protocol protocol=this.locator.findProtocol(context.getServiceRegistry(false),address);
+    if (protocol != null) {
+      Attribute attribute=getAttribute(protocol.getClass(),name);
+      if (attribute != null) {
+        FieldType type=FieldType.valueOf(attribute.getType());
+        try {
+          ModelNode result=new ModelNode();
+          Object value=attribute.read(protocol);
+          if (value != null) {
+            type.setValue(result,value);
           }
- catch (          Exception e) {
-            context.getFailureDescription().set(JGroupsLogger.ROOT_LOGGER.privilegedAccessExceptionForAttribute(name));
-          }
+          context.getResult().set(result);
         }
- else {
-          context.getFailureDescription().set(JGroupsLogger.ROOT_LOGGER.unknownMetric(name));
+ catch (        Exception e) {
+          context.getFailureDescription().set(JGroupsLogger.ROOT_LOGGER.privilegedAccessExceptionForAttribute(name));
         }
       }
  else {
-        context.getFailureDescription().set(JGroupsLogger.ROOT_LOGGER.protocolNotFoundInStack(protocolName));
+        context.getFailureDescription().set(JGroupsLogger.ROOT_LOGGER.unknownMetric(name));
       }
     }
+ else {
+      context.getFailureDescription().set(JGroupsLogger.ROOT_LOGGER.protocolNotFoundInStack(protocolName));
+    }
   }
-  context.completeStep(OperationContext.ResultHandler.NOOP_RESULT_HANDLER);
+ catch (  ClassNotFoundException|ModuleLoadException e) {
+    context.getFailureDescription().set(e.getLocalizedMessage());
+  }
+ finally {
+    context.completeStep(OperationContext.ResultHandler.NOOP_RESULT_HANDLER);
+  }
 }
