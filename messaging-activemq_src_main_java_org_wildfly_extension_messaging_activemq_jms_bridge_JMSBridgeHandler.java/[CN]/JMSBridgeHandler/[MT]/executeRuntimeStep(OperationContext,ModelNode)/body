@@ -1,0 +1,90 @@
+{
+  final String bridgeName=PathAddress.pathAddress(operation.get(OP_ADDR)).getLastElement().getValue();
+  final String operationName=operation.require(OP).asString();
+  final boolean modify;
+  if (READ_ATTRIBUTE_OPERATION.equals(operationName)) {
+    modify=false;
+  }
+ else {
+    modify=true;
+  }
+  final ServiceName bridgeServiceName=MessagingServices.getJMSBridgeServiceName(bridgeName);
+  final ServiceController<?> bridgeService=context.getServiceRegistry(modify).getService(bridgeServiceName);
+  if (bridgeService == null) {
+    PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+    throw ControllerLogger.ROOT_LOGGER.managementResourceNotFound(address);
+  }
+  final JMSBridge bridge=JMSBridge.class.cast(bridgeService.getValue());
+  if (READ_ATTRIBUTE_OPERATION.equals(operationName)) {
+    readAttributeValidator.validate(operation);
+    final String name=operation.require(NAME).asString();
+    if (STARTED.equals(name)) {
+      context.getResult().set(bridge.isStarted());
+    }
+ else     if (PAUSED.getName().equals(name)) {
+      context.getResult().set(bridge.isPaused());
+    }
+ else {
+      throw MessagingLogger.ROOT_LOGGER.unsupportedAttribute(name);
+    }
+  }
+ else   if (START.equals(operationName)) {
+    try {
+      JMSBridgeService service=(JMSBridgeService)bridgeService.getService();
+      service.startBridge();
+    }
+ catch (    Exception e) {
+      context.getFailureDescription().set(e.getLocalizedMessage());
+    }
+  }
+ else   if (STOP.equals(operationName)) {
+    try {
+      bridge.stop();
+    }
+ catch (    Exception e) {
+      context.getFailureDescription().set(e.getLocalizedMessage());
+    }
+  }
+ else   if (PAUSE.equals(operationName)) {
+    try {
+      bridge.pause();
+    }
+ catch (    Exception e) {
+      context.getFailureDescription().set(e.getLocalizedMessage());
+    }
+  }
+ else   if (RESUME.equals(operationName)) {
+    try {
+      bridge.resume();
+    }
+ catch (    Exception e) {
+      context.getFailureDescription().set(e.getLocalizedMessage());
+    }
+  }
+ else {
+    throw MessagingLogger.ROOT_LOGGER.unsupportedOperation(operationName);
+  }
+  context.completeStep(new OperationContext.RollbackHandler(){
+    @Override public void handleRollback(    OperationContext context,    ModelNode operation){
+      try {
+        if (START.equals(operationName)) {
+          bridge.stop();
+        }
+ else         if (STOP.equals(operationName)) {
+          JMSBridgeService service=(JMSBridgeService)bridgeService.getService();
+          service.startBridge();
+        }
+ else         if (PAUSE.equals(operationName)) {
+          bridge.resume();
+        }
+ else         if (RESUME.equals(operationName)) {
+          bridge.pause();
+        }
+      }
+ catch (      Exception e) {
+        MessagingLogger.ROOT_LOGGER.revertOperationFailed(e,getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)));
+      }
+    }
+  }
+);
+}

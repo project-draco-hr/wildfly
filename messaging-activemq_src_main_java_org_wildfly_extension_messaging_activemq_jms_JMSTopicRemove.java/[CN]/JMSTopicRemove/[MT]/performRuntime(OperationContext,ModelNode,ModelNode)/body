@@ -1,0 +1,24 @@
+{
+  final ServiceName serviceName=MessagingServices.getActiveMQServiceName(PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)));
+  final PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+  final String name=address.getLastElement().getValue();
+  ServiceController<?> service=context.getServiceRegistry(false).getService(serviceName);
+  ActiveMQServer server=ActiveMQServer.class.cast(service.getValue());
+  JMSServerControl control=JMSServerControl.class.cast(server.getManagementService().getResource(ResourceNames.JMS_SERVER));
+  if (control != null) {
+    try {
+      control.destroyTopic(name,true);
+    }
+ catch (    Exception e) {
+      throw new OperationFailedException(e);
+    }
+  }
+  context.removeService(JMSServices.getJmsTopicBaseServiceName(serviceName).append(name));
+  final ModelNode entries=CommonAttributes.DESTINATION_ENTRIES.resolveModelAttribute(context,model);
+  final String[] jndiBindings=JMSServices.getJndiBindings(entries);
+  for (  String jndiBinding : jndiBindings) {
+    final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(jndiBinding);
+    ServiceName binderServiceName=bindInfo.getBinderServiceName();
+    context.removeService(binderServiceName);
+  }
+}

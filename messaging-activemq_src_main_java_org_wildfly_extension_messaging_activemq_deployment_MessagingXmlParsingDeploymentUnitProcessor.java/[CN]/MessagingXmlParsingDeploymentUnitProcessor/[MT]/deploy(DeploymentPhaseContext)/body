@@ -1,0 +1,38 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final Set<VirtualFile> files=messageDestinations(deploymentUnit);
+  final XMLMapper mapper=XMLMapper.Factory.create();
+  final MessagingDeploymentParser_1_0 messagingDeploymentParser_1_0=new MessagingDeploymentParser_1_0(JBossDescriptorPropertyReplacement.propertyReplacer(deploymentUnit));
+  mapper.registerRootElement(ROOT_1_0,messagingDeploymentParser_1_0);
+  mapper.registerRootElement(ROOT_NO_NAMESPACE,messagingDeploymentParser_1_0);
+  for (  final VirtualFile file : files) {
+    InputStream xmlStream=null;
+    try {
+      final File f=file.getPhysicalFile();
+      xmlStream=new FileInputStream(f);
+      try {
+        final XMLInputFactory inputFactory=INPUT_FACTORY;
+        setIfSupported(inputFactory,XMLInputFactory.IS_VALIDATING,Boolean.FALSE);
+        setIfSupported(inputFactory,XMLInputFactory.SUPPORT_DTD,Boolean.FALSE);
+        final XMLStreamReader streamReader=inputFactory.createXMLStreamReader(xmlStream);
+        final ParseResult result=new ParseResult();
+        try {
+          mapper.parseDocument(result,streamReader);
+          deploymentUnit.addToAttachmentList(MessagingAttachments.PARSE_RESULT,result);
+        }
+  finally {
+          safeClose(streamReader,f.getAbsolutePath());
+        }
+      }
+ catch (      XMLStreamException e) {
+        throw MessagingLogger.ROOT_LOGGER.couldNotParseDeployment(f.getPath(),e);
+      }
+    }
+ catch (    Exception e) {
+      throw new DeploymentUnitProcessingException(e.getMessage(),e);
+    }
+ finally {
+      VFSUtils.safeClose(xmlStream);
+    }
+  }
+}
