@@ -1,0 +1,38 @@
+{
+  final ServiceTarget serviceTarget=context.getServiceTarget();
+  final ServiceController<?> resourceAdaptersService=context.getServiceRegistry(false).getService(ConnectorServices.RESOURCEADAPTERS_SERVICE);
+  if (resourceAdaptersService == null) {
+    newControllers.add(serviceTarget.addService(ConnectorServices.RESOURCEADAPTERS_SERVICE,new ResourceAdaptersService()).setInitialMode(ServiceController.Mode.ACTIVE).install());
+  }
+  ServiceName raServiceName=ServiceName.of(ConnectorServices.RA_SERVICE,name);
+  final ServiceController<?> service=context.getServiceRegistry(true).getService(raServiceName);
+  if (service == null) {
+    ResourceAdapterService raService=new ResourceAdapterService(resourceAdapter,name);
+    ServiceBuilder builder=serviceTarget.addService(raServiceName,raService).setInitialMode(ServiceController.Mode.ACTIVE).addDependency(ConnectorServices.RESOURCEADAPTERS_SERVICE,ResourceAdaptersService.ModifiableResourceAdaptors.class,raService.getResourceAdaptersInjector()).addDependency(ConnectorServices.RESOURCEADAPTERS_SUBSYSTEM_SERVICE,CopyOnWriteArrayListMultiMap.class,raService.getResourceAdaptersMapInjector());
+    for (    ConnectionDefinition cd : resourceAdapter.getConnectionDefinitions()) {
+      Security security=cd.getSecurity();
+      if (security != null) {
+        if (security.getSecurityDomain() != null) {
+          builder.addDependency(SecurityDomainService.SERVICE_NAME.append(security.getSecurityDomain()));
+        }
+        if (security.getSecurityDomainAndApplication() != null) {
+          builder.addDependency(SecurityDomainService.SERVICE_NAME.append(security.getSecurityDomainAndApplication()));
+        }
+        if (cd.getRecovery() != null && cd.getRecovery().getCredential() != null && cd.getRecovery().getCredential().getSecurityDomain() != null) {
+          builder.addDependency(SecurityDomainService.SERVICE_NAME.append(cd.getRecovery().getCredential().getSecurityDomain()));
+        }
+      }
+    }
+    if (resourceAdapter.getWorkManager() != null) {
+      final WorkManagerSecurity workManagerSecurity=resourceAdapter.getWorkManager().getSecurity();
+      if (workManagerSecurity != null) {
+        final String securityDomainName=workManagerSecurity.getDomain();
+        if (securityDomainName != null) {
+          builder.addDependency(SecurityDomainService.SERVICE_NAME.append(securityDomainName));
+        }
+      }
+    }
+    newControllers.add(builder.install());
+  }
+  return raServiceName;
+}
