@@ -1,0 +1,34 @@
+{
+  ServletRequestContext src=ServletRequestContext.current();
+  Account requestAccount=null;
+  if (src != null) {
+    requestAccount=src.getExchange().getSecurityContext().getAuthenticatedAccount();
+    if (requestAccount != null) {
+      clearAccount(requestAccount);
+    }
+  }
+  if (se.getSession() instanceof HttpSessionImpl) {
+    final HttpSessionImpl impl=(HttpSessionImpl)se.getSession();
+    Session session;
+    if (WildFlySecurityManager.isChecking()) {
+      session=WildFlySecurityManager.doChecked(new PrivilegedAction<Session>(){
+        @Override public Session run(){
+          return impl.getSession();
+        }
+      }
+);
+    }
+ else {
+      session=impl.getSession();
+    }
+    if (session != null) {
+      AuthenticatedSessionManager.AuthenticatedSession authenticatedSession=(AuthenticatedSessionManager.AuthenticatedSession)session.getAttribute(CachedAuthenticatedSessionHandler.class.getName() + ".AuthenticatedSession");
+      if (authenticatedSession != null) {
+        Account sessionAccount=authenticatedSession.getAccount();
+        if (sessionAccount != null && !sessionAccount.equals(requestAccount)) {
+          clearAccount(sessionAccount);
+        }
+      }
+    }
+  }
+}
