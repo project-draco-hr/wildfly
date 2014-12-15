@@ -1,0 +1,23 @@
+{
+  final boolean appclient=context.getProcessType() == ProcessType.APPLICATION_CLIENT;
+  final RaDeploymentActivator raDeploymentActivator=new RaDeploymentActivator(appclient);
+  context.addStep(new AbstractDeploymentChainStep(){
+    protected void execute(    DeploymentProcessorTarget processorTarget){
+      raDeploymentActivator.activateProcessors(processorTarget);
+    }
+  }
+,OperationContext.Stage.RUNTIME);
+  ServiceTarget serviceTarget=context.getServiceTarget();
+  TransactionIntegrationService tiService=new TransactionIntegrationService();
+  serviceTarget.addService(ConnectorServices.TRANSACTION_INTEGRATION_SERVICE,tiService).addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,tiService.getTmInjector()).addDependency(TxnServices.JBOSS_TXN_SYNCHRONIZATION_REGISTRY,TransactionSynchronizationRegistry.class,tiService.getTsrInjector()).addDependency(TxnServices.JBOSS_TXN_USER_TRANSACTION_REGISTRY,org.jboss.tm.usertx.UserTransactionRegistry.class,tiService.getUtrInjector()).addDependency(TxnServices.JBOSS_TXN_XA_TERMINATOR,JBossXATerminator.class,tiService.getTerminatorInjector()).addDependency(TxnServices.JBOSS_TXN_ARJUNA_RECOVERY_MANAGER,XAResourceRecoveryRegistry.class,tiService.getRrInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  final JcaSubsystemConfiguration config=new JcaSubsystemConfiguration();
+  final JcaConfigService connectorConfigService=new JcaConfigService(config);
+  serviceTarget.addService(ConnectorServices.CONNECTOR_CONFIG_SERVICE,connectorConfigService).setInitialMode(Mode.ACTIVE).install();
+  final IdleRemoverService idleRemoverService=new IdleRemoverService();
+  serviceTarget.addService(ConnectorServices.IDLE_REMOVER_SERVICE,idleRemoverService).setInitialMode(Mode.ACTIVE).install();
+  final ConnectionValidatorService connectionValidatorService=new ConnectionValidatorService();
+  serviceTarget.addService(ConnectorServices.CONNECTION_VALIDATOR_SERVICE,connectionValidatorService).setInitialMode(Mode.ACTIVE).install();
+  final DriverRegistryService driverRegistryService=new DriverRegistryService();
+  serviceTarget.addService(ConnectorServices.JDBC_DRIVER_REGISTRY_SERVICE,driverRegistryService).install();
+  raDeploymentActivator.activateServices(serviceTarget);
+}
