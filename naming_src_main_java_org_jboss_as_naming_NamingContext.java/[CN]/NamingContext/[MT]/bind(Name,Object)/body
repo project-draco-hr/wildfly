@@ -2,10 +2,33 @@
   check(name,Action.BIND);
   if (namingStore instanceof WritableNamingStore) {
     final Name absoluteName=getAbsoluteName(name);
+    final Object value;
     if (object instanceof Referenceable) {
-      object=((Referenceable)object).getReference();
+      value=((Referenceable)object).getReference();
     }
-    getWritableNamingStore().bind(absoluteName,object);
+ else {
+      value=object;
+    }
+    if (System.getSecurityManager() == null) {
+      getWritableNamingStore().bind(absoluteName,value);
+    }
+ else {
+      final NamingException e=AccessController.doPrivileged(new PrivilegedAction<NamingException>(){
+        @Override public NamingException run(){
+          try {
+            getWritableNamingStore().bind(absoluteName,value);
+          }
+ catch (          NamingException e) {
+            return e;
+          }
+          return null;
+        }
+      }
+);
+      if (e != null) {
+        throw e;
+      }
+    }
   }
  else {
     throw NamingLogger.ROOT_LOGGER.readOnlyNamingContext();
