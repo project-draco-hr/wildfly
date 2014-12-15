@@ -1,0 +1,35 @@
+{
+  final RemotingProfileService profileService=new RemotingProfileService();
+  final ServiceBuilder<RemotingProfileService> profileServiceBuilder=serviceTarget.addService(profileServiceName,profileService);
+  for (  final EJBClientDescriptorMetaData.RemotingReceiverConfiguration remotingReceiverConfiguration : ejbClientDescriptorMetaData.getRemotingReceiverConfigurations()) {
+    final String connectionRef=remotingReceiverConfiguration.getOutboundConnectionRef();
+    final ServiceName connectionDependencyService=AbstractOutboundConnectionService.OUTBOUND_CONNECTION_BASE_SERVICE_NAME.append(connectionRef);
+    final InjectedValue<AbstractOutboundConnectionService> connectionInjector=new InjectedValue<AbstractOutboundConnectionService>();
+    profileServiceBuilder.addDependency(connectionDependencyService,AbstractOutboundConnectionService.class,connectionInjector);
+    profileService.addRemotingConnectionInjector(connectionDependencyService,connectionInjector);
+    profileService.addConnectionTimeout(connectionRef,remotingReceiverConfiguration.getConnectionTimeout());
+    final Properties channelCreationProps=remotingReceiverConfiguration.getChannelCreationOptions();
+    final OptionMap channelCreationOpts;
+    if (channelCreationProps == null) {
+      channelCreationOpts=OptionMap.EMPTY;
+    }
+ else {
+      channelCreationOpts=getOptionMapFromProperties(channelCreationProps,this.getClass().getClassLoader());
+    }
+    profileService.addChannelCreationOption(connectionRef,channelCreationOpts);
+    logger.debugf("Channel creation options for connection %s are %s",channelCreationOpts,connectionRef,channelCreationOpts);
+  }
+  final boolean localReceiverExcluded=ejbClientDescriptorMetaData.isLocalReceiverExcluded() != null ? ejbClientDescriptorMetaData.isLocalReceiverExcluded() : false;
+  if (!localReceiverExcluded) {
+    final Boolean passByValue=ejbClientDescriptorMetaData.isLocalReceiverPassByValue();
+    if (passByValue != null) {
+      final ServiceName localEjbReceiverServiceName=passByValue == true ? LocalEjbReceiver.BY_VALUE_SERVICE_NAME : LocalEjbReceiver.BY_REFERENCE_SERVICE_NAME;
+      profileServiceBuilder.addDependency(localEjbReceiverServiceName,LocalEjbReceiver.class,profileService.getLocalEjbReceiverInjector());
+    }
+ else {
+      profileServiceBuilder.addDependency(LocalEjbReceiver.DEFAULT_LOCAL_EJB_RECEIVER_SERVICE_NAME,LocalEjbReceiver.class,profileService.getLocalEjbReceiverInjector());
+    }
+  }
+  profileServiceBuilder.install();
+  return profileService;
+}
