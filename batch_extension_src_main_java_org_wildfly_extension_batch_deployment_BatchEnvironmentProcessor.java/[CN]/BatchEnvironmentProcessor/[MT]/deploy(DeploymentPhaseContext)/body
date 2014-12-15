@@ -9,13 +9,10 @@
     final BatchEnvironmentService service=new BatchEnvironmentService(moduleClassLoader,JobRepositoryFactory.getInstance().getJobRepository(moduleDescription));
     final ServiceBuilder<BatchEnvironment> serviceBuilder=serviceTarget.addService(BatchServiceNames.batchDeploymentServiceName(deploymentUnit),service);
     serviceBuilder.addDependency(BatchServiceNames.BATCH_THREAD_POOL_NAME,ExecutorService.class,service.getExecutorServiceInjector());
-    if (isBatchDeployment(deploymentUnit)) {
-      BatchLogger.LOGGER.tracef("Adding UserTransaction and BeanManager service dependencies for deployment %s",deploymentUnit.getName());
-      serviceBuilder.addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,service.getTransactionManagerInjector());
-      serviceBuilder.addDependency(BatchServiceNames.beanManagerServiceName(deploymentUnit),new CastingInjector<>(service.getBeanManagerInjector(),BeanManager.class));
-    }
- else {
-      BatchLogger.LOGGER.tracef("Skipping UserTransaction and BeanManager service dependencies for deployment %s",deploymentUnit.getName());
+    serviceBuilder.addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,service.getTransactionManagerInjector());
+    if (WeldDeploymentMarker.isPartOfWeldDeployment(deploymentUnit)) {
+      BatchLogger.LOGGER.tracef("Adding BeanManager service dependency for deployment %s",deploymentUnit.getName());
+      serviceBuilder.addDependency(BatchServiceNames.beanManagerServiceName(deploymentUnit),BeanManager.class,service.getBeanManagerInjector());
     }
     serviceBuilder.install();
   }
