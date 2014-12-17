@@ -1,9 +1,98 @@
 {
   super.registerOperations(registration);
-  registration.registerOperationHandler(ADD,new StackAddHandler());
-  registration.registerOperationHandler(ProtocolResourceDefinition.ADD,ProtocolResourceDefinition.ADD_HANDLER);
-  registration.registerOperationHandler(ProtocolResourceDefinition.REMOVE,ProtocolResourceDefinition.REMOVE_HANDLER);
+  OperationDefinition addOperation=new SimpleOperationDefinitionBuilder(ModelDescriptionConstants.ADD,JGroupsExtension.getResourceDescriptionResolver(ModelKeys.STACK)).addParameter(TRANSPORT).addParameter(PROTOCOLS).setAttributeResolver(JGroupsExtension.getResourceDescriptionResolver("stack.add")).build();
+  OperationStepHandler addHandler=new StackAddHandler(){
+    @Override protected void populateModel(    OperationContext context,    ModelNode operation,    Resource resource) throws OperationFailedException {
+      PathAddress address=Operations.getPathAddress(operation);
+      ModelNode transport=null;
+      if (operation.hasDefined(TRANSPORT.getName())) {
+        transport=operation.remove(TRANSPORT.getName());
+      }
+      List<ModelNode> protocols=Collections.emptyList();
+      if (operation.hasDefined(PROTOCOLS.getName())) {
+        protocols=operation.remove(PROTOCOLS.getName()).asList();
+      }
+      if (transport != null) {
+        String type=ProtocolResourceDefinition.TYPE.resolveModelAttribute(context,transport).asString();
+        PathAddress transportAddress=address.append(TransportResourceDefinition.pathElement(type));
+        ModelNode transportOperation=Util.createAddOperation(transportAddress);
+        for (        AttributeDefinition attribute : TransportResourceDefinition.ATTRIBUTES) {
+          String name=attribute.getName();
+          if (transport.hasDefined(name)) {
+            transportOperation.get(name).set(transport.get(name));
+          }
+        }
+        context.addStep(transportOperation,new ReloadRequiredAddStepHandler(TransportResourceDefinition.ATTRIBUTES),OperationContext.Stage.MODEL);
+        if (transport.hasDefined(ProtocolResourceDefinition.PROPERTIES.getName())) {
+          for (          Property property : operation.get(ProtocolResourceDefinition.PROPERTIES.getName()).asPropertyList()) {
+            ModelNode propertyOperation=Util.createAddOperation(transportAddress.append(property.getName()));
+            propertyOperation.set(PropertyResourceDefinition.VALUE.getName()).set(property.getValue());
+            context.addStep(propertyOperation,new ReloadRequiredAddStepHandler(PropertyResourceDefinition.VALUE),OperationContext.Stage.MODEL);
+          }
+        }
+      }
+      if (!protocols.isEmpty()) {
+        for (        ModelNode protocol : protocols) {
+          String type=ProtocolResourceDefinition.TYPE.resolveModelAttribute(context,protocol).asString();
+          PathAddress protocolAddress=address.append(ProtocolResourceDefinition.pathElement(type));
+          ModelNode protocolOperation=Util.createAddOperation(protocolAddress);
+          for (          AttributeDefinition attribute : ProtocolResourceDefinition.ATTRIBUTES) {
+            String name=attribute.getName();
+            if (protocol.hasDefined(name)) {
+              protocolOperation.get(name).set(protocol.get(name));
+            }
+          }
+          context.addStep(protocolOperation,new ReloadRequiredAddStepHandler(ProtocolResourceDefinition.ATTRIBUTES),OperationContext.Stage.MODEL);
+          if (protocol.hasDefined(ProtocolResourceDefinition.PROPERTIES.getName())) {
+            for (            Property property : operation.get(ProtocolResourceDefinition.PROPERTIES.getName()).asPropertyList()) {
+              ModelNode propertyOperation=Util.createAddOperation(protocolAddress.append(property.getName()));
+              propertyOperation.set(PropertyResourceDefinition.VALUE.getName()).set(property.getValue());
+              context.addStep(propertyOperation,new ReloadRequiredAddStepHandler(PropertyResourceDefinition.VALUE),OperationContext.Stage.MODEL);
+            }
+          }
+        }
+      }
+    }
+  }
+;
+  registration.registerOperationHandler(addOperation,addHandler);
+  OperationStepHandler legacyAddProtocolHandler=new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation){
+      PathAddress address=Operations.getPathAddress(operation);
+      String protocol=operation.require(ProtocolResourceDefinition.TYPE.getName()).asString();
+      PathAddress protocolAddress=address.append(ProtocolResourceDefinition.pathElement(protocol));
+      ModelNode protocolOperation=Util.createAddOperation(protocolAddress);
+      for (      AttributeDefinition attribute : ProtocolResourceDefinition.ATTRIBUTES) {
+        String name=attribute.getName();
+        if (operation.hasDefined(name)) {
+          protocolOperation.get(name).set(operation.get(name));
+        }
+      }
+      context.addStep(protocolOperation,new ReloadRequiredAddStepHandler(ProtocolResourceDefinition.ATTRIBUTES),OperationContext.Stage.MODEL);
+      if (operation.hasDefined(ProtocolResourceDefinition.PROPERTIES.getName())) {
+        for (        Property property : operation.get(ProtocolResourceDefinition.PROPERTIES.getName()).asPropertyList()) {
+          ModelNode addPropertyOperation=Util.createAddOperation(protocolAddress.append(PropertyResourceDefinition.pathElement(property.getName())));
+          addPropertyOperation.get(PropertyResourceDefinition.VALUE.getName()).set(property.getValue());
+          context.addStep(addPropertyOperation,new ReloadRequiredAddStepHandler(PropertyResourceDefinition.VALUE),OperationContext.Stage.MODEL);
+        }
+      }
+    }
+  }
+;
+  registration.registerOperationHandler(ADD_PROTOCOL,legacyAddProtocolHandler);
+  OperationStepHandler legacyRemoveProtocolHandler=new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation){
+      PathAddress address=Operations.getPathAddress(operation);
+      String protocol=operation.require(ProtocolResourceDefinition.TYPE.getName()).asString();
+      PathAddress protocolAddress=address.append(ProtocolResourceDefinition.pathElement(protocol));
+      ModelNode removeOperation=Util.createRemoveOperation(protocolAddress);
+      context.addStep(removeOperation,ReloadRequiredRemoveStepHandler.INSTANCE,context.getCurrentStage());
+    }
+  }
+;
+  registration.registerOperationHandler(REMOVE_PROTOCOL,legacyRemoveProtocolHandler);
   if (this.allowRuntimeOnlyRegistration) {
-    registration.registerOperationHandler(StackResourceDefinition.EXPORT_NATIVE_CONFIGURATION,new ExportNativeConfiguration());
+    OperationDefinition exportOperation=new SimpleOperationDefinitionBuilder(ModelKeys.EXPORT_NATIVE_CONFIGURATION,JGroupsExtension.getResourceDescriptionResolver("stack")).setReplyType(ModelType.STRING).build();
+    registration.registerOperationHandler(exportOperation,new ExportNativeConfiguration());
   }
 }

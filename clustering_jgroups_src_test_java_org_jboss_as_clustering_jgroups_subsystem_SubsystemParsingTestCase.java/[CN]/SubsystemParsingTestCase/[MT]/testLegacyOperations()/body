@@ -1,7 +1,7 @@
 {
   List<ModelNode> ops=new LinkedList<>();
-  PathAddress subsystemAddress=PathAddress.EMPTY_ADDRESS.append(SUBSYSTEM,getMainSubsystemName());
-  PathAddress udpAddress=subsystemAddress.append("stack","udp");
+  PathAddress subsystemAddress=PathAddress.pathAddress(JGroupsSubsystemResourceDefinition.PATH);
+  PathAddress udpAddress=subsystemAddress.append(StackResourceDefinition.pathElement("udp"));
   ModelNode op=Util.createAddOperation(subsystemAddress);
   op.get("default-stack").set("udp");
   ops.add(op);
@@ -15,18 +15,23 @@
     ModelNode protocol=new ModelNode();
     protocol.get(ModelKeys.TYPE).set(protocolList[i]);
     protocol.get("socket-binding").set("jgroups-udp");
-    System.out.println("adding protocol = " + protocol.toString());
     protocols.add(protocol);
   }
   op.get("transport").set(transport);
   op.get("protocols").set(protocols);
   ops.add(op);
-  ops.add(Util.getWriteAttributeOperation(udpAddress.append("protocol","FD_SOCK"),"socket-binding",new ModelNode("jgroups-udp-fd")));
   KernelServices servicesA=createKernelServicesBuilder(createAdditionalInitialization()).setBootOperations(ops).build();
   Assert.assertTrue("Subsystem boot failed!",servicesA.isSuccessfulBoot());
   final ModelNode modelA=servicesA.readWholeModel();
   validateModel(modelA);
-  ModelNode protos=modelA.get(SUBSYSTEM,getMainSubsystemName(),"stack","udp","protocols");
-  Assert.assertEquals("we should get back same number of protocols that we send",14,protos.asList().size());
   servicesA.shutdown();
+  final ModelNode operation=createDescribeOperation();
+  final ModelNode result=servicesA.executeOperation(operation);
+  Assert.assertTrue("the subsystem describe operation has to generate a list of operations to recreate the subsystem",!result.hasDefined(ModelDescriptionConstants.FAILURE_DESCRIPTION));
+  final List<ModelNode> operations=result.get(ModelDescriptionConstants.RESULT).asList();
+  servicesA.shutdown();
+  final KernelServices servicesC=createKernelServicesBuilder(createAdditionalInitialization()).setBootOperations(operations).build();
+  final ModelNode modelC=servicesC.readWholeModel();
+  compare(modelA,modelC);
+  assertRemoveSubsystemResources(servicesC,getIgnoredChildResourcesForRemovalTest());
 }
