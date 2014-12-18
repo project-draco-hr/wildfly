@@ -18,7 +18,7 @@
   ServiceTarget target=context.getServiceTarget();
   ServiceName configServiceName=CacheConfigurationService.getServiceName(containerName,cacheName);
   ServiceName containerServiceName=EmbeddedCacheManagerService.getServiceName(containerName);
-  ServiceBuilder<?> configBuilder=AsynchronousService.addService(target,configServiceName,new CacheConfigurationService(cacheName,cacheConfigurationDependencies)).addDependency(containerServiceName,EmbeddedCacheManager.class,cacheConfigurationDependencies.getCacheContainerInjector()).addDependency(Services.JBOSS_SERVICE_MODULE_LOADER,ModuleLoader.class,cacheConfigurationDependencies.getModuleLoaderInjector());
+  ServiceBuilder<?> configBuilder=new AsynchronousServiceBuilder<>(configServiceName,new CacheConfigurationService(cacheName,cacheConfigurationDependencies)).build(target).addDependency(containerServiceName,EmbeddedCacheManager.class,cacheConfigurationDependencies.getCacheContainerInjector()).addDependency(Services.JBOSS_SERVICE_MODULE_LOADER,ModuleLoader.class,cacheConfigurationDependencies.getModuleLoaderInjector());
   for (  Dependency<?> dependency : dependencies) {
     addDependency(configBuilder,dependency);
   }
@@ -27,13 +27,13 @@
   }
   configBuilder.setInitialMode(ServiceController.Mode.PASSIVE).install();
   ServiceName cacheServiceName=CacheService.getServiceName(containerName,cacheName);
-  ServiceBuilder<?> cacheBuilder=AsynchronousService.addService(target,cacheServiceName,new CacheService<>(cacheName,cacheDependencies)).addDependency(configServiceName).addDependency(containerServiceName,EmbeddedCacheManager.class,cacheDependencies.getCacheContainerInjector());
+  ServiceBuilder<?> cacheBuilder=new AsynchronousServiceBuilder<>(cacheServiceName,new CacheService<>(cacheName,cacheDependencies)).build(target).addDependency(configServiceName).addDependency(containerServiceName,EmbeddedCacheManager.class,cacheDependencies.getCacheContainerInjector());
   if (defaultCache) {
     cacheBuilder.addAliases(CacheService.getServiceName(containerName,null));
   }
   cacheBuilder.setInitialMode(initialMode).install();
   ContextNames.BindInfo binding=createCacheBinding((jndiName != null) ? JndiNameFactory.parse(jndiName) : createJndiName(containerName,cacheName));
-  ServiceBuilder<ManagedReferenceFactory> binderBuilder=new BinderServiceBuilder(target).build(binding,cacheServiceName,Cache.class);
+  ServiceBuilder<ManagedReferenceFactory> binderBuilder=new BinderServiceBuilder<>(binding,cacheServiceName,Cache.class).build(target);
   if (defaultCache) {
     ContextNames.BindInfo defaultBinding=createCacheBinding(createJndiName(containerName,CacheContainer.DEFAULT_CACHE_ALIAS));
     binderBuilder.addAliases(defaultBinding.getBinderServiceName(),ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(defaultBinding.getBindName()));

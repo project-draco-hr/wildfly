@@ -34,7 +34,6 @@
   final ModuleIdentifier module=ModelNodes.asModuleIdentifier(CacheContainerResourceDefinition.MODULE.resolveModelAttribute(context,model));
   Transport transportConfig=null;
   String transportExecutor=null;
-  InjectedValueServiceBuilder builder=new InjectedValueServiceBuilder(target);
   if (model.hasDefined(TransportResourceDefinition.PATH.getKey())) {
     ModelNode transport=model.get(TransportResourceDefinition.PATH.getKeyValuePair());
     if (transport.isDefined()) {
@@ -47,14 +46,14 @@
         channel=ModelNodes.asString(JGroupsSubsystemResourceDefinition.DEFAULT_CHANNEL.resolveModelAttribute(context,jgroupsModel));
       }
       if (!name.equals(channel)) {
-        new BinderServiceBuilder(target).build(ChannelService.createChannelBinding(name),ChannelService.getServiceName(name),Channel.class).install();
+        new BinderServiceBuilder<>(ChannelService.createChannelBinding(name),ChannelService.getServiceName(name),Channel.class).build(target).install();
         ChannelService.build(target,name).setInitialMode(ON_DEMAND).install();
-        builder.build(ChannelService.getFactoryServiceName(name),ChannelFactoryService.getServiceName(channel),ChannelFactory.class).install();
+        new AliasServiceBuilder<>(ChannelService.getFactoryServiceName(name),ChannelFactoryService.getServiceName(channel),ChannelFactory.class).build(target).install();
         for (        GroupServiceInstaller installer : ServiceLoader.load(ClusteredGroupServiceInstaller.class,ClusteredGroupServiceInstaller.class.getClassLoader())) {
           log.debugf("Installing %s for cache container %s",installer.getClass().getSimpleName(),name);
           Iterator<ServiceName> names=installer.getServiceNames(channel).iterator();
           for (          ServiceName serviceName : installer.getServiceNames(name)) {
-            builder.build(serviceName,names.next(),Object.class).install();
+            new AliasServiceBuilder<>(serviceName,names.next(),Object.class).build(target).install();
           }
         }
       }
@@ -87,7 +86,7 @@
   managerBuilder.setInitialMode(initialMode).install();
   ServiceName serviceName=EmbeddedCacheManagerService.getServiceName(name);
   ContextNames.BindInfo binding=createCacheContainerBinding(jndiName,name);
-  new BinderServiceBuilder(target).build(binding,serviceName,CacheContainer.class).install();
+  new BinderServiceBuilder<>(binding,serviceName,CacheContainer.class).build(target).install();
   KeyAffinityServiceFactoryService.build(target,name,10).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
   if ((defaultCache != null) && !defaultCache.equals(CacheContainer.DEFAULT_CACHE_ALIAS)) {
     Class<? extends CacheServiceInstaller> installerClass=(transportConfig != null) ? ClusteredCacheServiceInstaller.class : LocalCacheServiceInstaller.class;
