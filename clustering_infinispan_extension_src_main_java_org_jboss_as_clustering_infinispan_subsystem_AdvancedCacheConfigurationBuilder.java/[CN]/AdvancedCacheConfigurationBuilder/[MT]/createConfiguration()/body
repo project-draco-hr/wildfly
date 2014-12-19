@@ -1,0 +1,25 @@
+{
+  if (this.module != null) {
+    try {
+      Module module=this.loader.getValue().loadModule(this.module);
+      GroupsConfigurationBuilder groupsBuilder=this.configurationBuilder.clustering().hash().groups();
+      for (      Grouper<?> grouper : ServiceLoader.load(Grouper.class,module.getClassLoader())) {
+        groupsBuilder.addGrouper(grouper);
+      }
+    }
+ catch (    ModuleLoadException e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
+  TransactionManager tm=this.tm.getOptionalValue();
+  if (tm != null) {
+    this.configurationBuilder.transaction().transactionManagerLookup(new TransactionManagerProvider(tm));
+  }
+  TransactionSynchronizationRegistry tsr=this.tsr.getOptionalValue();
+  if (tsr != null) {
+    this.configurationBuilder.transaction().transactionSynchronizationRegistryLookup(new TransactionSynchronizationRegistryProvider(tsr));
+  }
+  boolean topologyAware=this.container.getValue().getCacheManagerConfiguration().transport().hasTopologyInfo();
+  this.consistentHashStrategy.buildHashConfiguration(this.configurationBuilder.clustering().hash(),this.mode,topologyAware);
+  return this.configurationBuilder.build();
+}

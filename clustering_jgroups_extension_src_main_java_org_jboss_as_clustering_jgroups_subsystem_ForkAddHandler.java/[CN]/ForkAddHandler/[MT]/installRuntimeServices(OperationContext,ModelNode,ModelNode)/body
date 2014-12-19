@@ -19,17 +19,23 @@
         socketBindings.add(new AbstractMap.SimpleImmutableEntry<>(socketBinding,protocolConfig.getSocketBindingInjector()));
       }
     }
-    ServiceBuilder<ChannelFactory> builder=new ForkChannelFactoryService(channel,protocols).build(target);
+    ServiceBuilder<ChannelFactory> builder=new ForkChannelFactoryBuilder(channel,protocols).build(target);
     for (    Map.Entry<String,Injector<SocketBinding>> socketBinding : socketBindings) {
       builder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(socketBinding.getKey()),SocketBinding.class,socketBinding.getValue());
     }
     builder.install();
   }
  else {
-    new ForkChannelFactoryService(channel).build(target).install();
+    new ForkChannelFactoryBuilder(channel).build(target).install();
   }
-  new AliasServiceBuilder<>(ChannelServiceName.FACTORY.getServiceName(name),ChannelFactoryService.getServiceName(channel),ChannelFactory.class).build(target).install();
+  new AliasServiceBuilder<>(ChannelServiceName.FACTORY.getServiceName(name),ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(channel),ChannelFactory.class).build(target).install();
   new ChannelBuilder(name).build(target).install();
   new ChannelConnectorBuilder(name).build(target).install();
   new BinderServiceBuilder<>(JGroupsBindingFactory.createChannelBinding(name),ChannelServiceName.CHANNEL.getServiceName(name),Channel.class).build(target).install();
+  for (  GroupServiceInstaller installer : ServiceLoader.load(ClusteredGroupServiceInstaller.class,ClusteredGroupServiceInstaller.class.getClassLoader())) {
+    Iterator<ServiceName> names=installer.getServiceNames(channel).iterator();
+    for (    ServiceName serviceName : installer.getServiceNames(name)) {
+      new AliasServiceBuilder<>(serviceName,names.next(),Object.class).build(target).install();
+    }
+  }
 }

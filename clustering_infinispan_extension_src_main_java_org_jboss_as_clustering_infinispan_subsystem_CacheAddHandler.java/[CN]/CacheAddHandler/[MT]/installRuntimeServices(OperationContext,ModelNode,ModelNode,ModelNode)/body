@@ -8,37 +8,17 @@
   if ((module == null) && Index.valueOf(CacheResourceDefinition.INDEXING.resolveModelAttribute(context,cacheModel).asString()).isEnabled()) {
     module=QUERY_MODULE;
   }
-  List<Dependency<?>> dependencies=new LinkedList<>();
-  ConfigurationBuilder builder=new ConfigurationBuilder().read(getDefaultConfiguration(this.mode));
-  CacheConfigurationDependencies cacheConfigurationDependencies=new CacheConfigurationDependencies(this.mode,builder,module);
-  CacheDependencies cacheDependencies=new CacheDependencies();
-  processModelNode(context,containerName,containerModel,cacheModel,builder,cacheConfigurationDependencies,cacheDependencies,dependencies);
-  String defaultCacheName=CacheContainerResourceDefinition.DEFAULT_CACHE.resolveModelAttribute(context,containerModel).asString();
-  boolean defaultCache=cacheName.equals(defaultCacheName);
+  AdvancedCacheConfigurationBuilder builder=new AdvancedCacheConfigurationBuilder(containerName,cacheName,this.mode,module);
+  processModelNode(context,containerName,containerModel,cacheModel,builder);
   ServiceTarget target=context.getServiceTarget();
-  ServiceName configServiceName=CacheConfigurationService.getServiceName(containerName,cacheName);
-  ServiceName containerServiceName=EmbeddedCacheManagerService.getServiceName(containerName);
-  ServiceBuilder<?> configBuilder=new AsynchronousServiceBuilder<>(configServiceName,new CacheConfigurationService(cacheName,cacheConfigurationDependencies)).build(target).addDependency(containerServiceName,EmbeddedCacheManager.class,cacheConfigurationDependencies.getCacheContainerInjector()).addDependency(Services.JBOSS_SERVICE_MODULE_LOADER,ModuleLoader.class,cacheConfigurationDependencies.getModuleLoaderInjector());
-  for (  Dependency<?> dependency : dependencies) {
-    addDependency(configBuilder,dependency);
+  builder.build(target).install();
+  new CacheBuilder<>(containerName,cacheName).build(target).setInitialMode(initialMode).install();
+  @SuppressWarnings("rawtypes") BinderServiceBuilder<Cache> bindingBuilder=new BinderServiceBuilder<>(InfinispanBindingFactory.createCacheBinding(containerName,cacheName),CacheServiceName.CACHE.getServiceName(containerName,cacheName),Cache.class);
+  if (jndiName != null) {
+    bindingBuilder.alias(ContextNames.bindInfoFor(JndiNameFactory.parse(jndiName).getAbsoluteName()));
   }
-  if (defaultCache) {
-    configBuilder.addAliases(CacheConfigurationService.getServiceName(containerName,null));
-  }
-  configBuilder.setInitialMode(ServiceController.Mode.PASSIVE).install();
-  ServiceName cacheServiceName=CacheService.getServiceName(containerName,cacheName);
-  ServiceBuilder<?> cacheBuilder=new AsynchronousServiceBuilder<>(cacheServiceName,new CacheService<>(cacheName,cacheDependencies)).build(target).addDependency(configServiceName).addDependency(containerServiceName,EmbeddedCacheManager.class,cacheDependencies.getCacheContainerInjector());
-  if (defaultCache) {
-    cacheBuilder.addAliases(CacheService.getServiceName(containerName,null));
-  }
-  cacheBuilder.setInitialMode(initialMode).install();
-  ContextNames.BindInfo binding=createCacheBinding((jndiName != null) ? JndiNameFactory.parse(jndiName) : createJndiName(containerName,cacheName));
-  ServiceBuilder<ManagedReferenceFactory> binderBuilder=new BinderServiceBuilder<>(binding,cacheServiceName,Cache.class).build(target);
-  if (defaultCache) {
-    ContextNames.BindInfo defaultBinding=createCacheBinding(createJndiName(containerName,CacheContainer.DEFAULT_CACHE_ALIAS));
-    binderBuilder.addAliases(defaultBinding.getBinderServiceName(),ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(defaultBinding.getBindName()));
-  }
-  binderBuilder.install();
+  bindingBuilder.build(target).install();
+  new XAResourceRecoveryBuilder(containerName,cacheName).build(target).install();
   Class<? extends CacheServiceInstaller> installerClass=this.mode.isClustered() ? ClusteredCacheServiceInstaller.class : LocalCacheServiceInstaller.class;
   for (  CacheServiceInstaller installer : ServiceLoader.load(installerClass,installerClass.getClassLoader())) {
     log.debugf("Installing %s for cache %s of container %s",installer.getClass().getSimpleName(),cacheName,containerName);

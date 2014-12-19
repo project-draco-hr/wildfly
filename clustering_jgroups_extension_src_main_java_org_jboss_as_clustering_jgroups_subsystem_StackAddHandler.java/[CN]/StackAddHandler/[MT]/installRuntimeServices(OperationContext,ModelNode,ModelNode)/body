@@ -38,9 +38,9 @@
   String defaultExecutor=ModelNodes.asString(TransportResourceDefinition.DEFAULT_EXECUTOR.resolveModelAttribute(context,transport));
   String oobExecutor=ModelNodes.asString(TransportResourceDefinition.OOB_EXECUTOR.resolveModelAttribute(context,transport));
   String transportSocketBinding=ModelNodes.asString(ProtocolResourceDefinition.SOCKET_BINDING.resolveModelAttribute(context,transport));
-  ProtocolStack stackConfig=new ProtocolStack(name,transportConfig,relayConfig);
+  List<ProtocolConfiguration> protocolConfigs=new LinkedList<>();
   ServiceTarget target=context.getServiceTarget();
-  ServiceBuilder<ChannelFactory> builder=target.addService(ChannelFactoryService.getServiceName(name),new ChannelFactoryService(stackConfig)).addDependency(ProtocolDefaultsService.SERVICE_NAME,ProtocolDefaults.class,stackConfig.getDefaultsInjector()).addDependency(ServerEnvironmentService.SERVICE_NAME,ServerEnvironment.class,stackConfig.getEnvironmentInjector()).addDependency(Services.JBOSS_SERVICE_MODULE_LOADER,ModuleLoader.class,stackConfig.getModuleLoaderInjector());
+  ServiceBuilder<ChannelFactory> builder=new JChannelFactoryBuilder(name,transportConfig,protocolConfigs,relayConfig).build(target);
   addSocketBindingDependency(builder,transportSocketBinding,transportConfig.getSocketBindingInjector());
   if (model.hasDefined(ProtocolResourceDefinition.WILDCARD_PATH.getKey())) {
     List<Property> protocols=model.get(ProtocolResourceDefinition.WILDCARD_PATH.getKey()).asPropertyList();
@@ -50,7 +50,7 @@
       module=ModelNodes.asModuleIdentifier(ProtocolResourceDefinition.MODULE.resolveModelAttribute(context,protocol));
       Protocol protocolConfig=new Protocol(protocolProperty.getName(),module);
       initProtocolProperties(context,protocol,protocolConfig);
-      stackConfig.getProtocols().add(protocolConfig);
+      protocolConfigs.add(protocolConfig);
       String protocolSocketBinding=ModelNodes.asString(ProtocolResourceDefinition.SOCKET_BINDING.resolveModelAttribute(context,protocol));
       protocolSocketBindings.add(new AbstractMap.SimpleImmutableEntry<>(protocolConfig,protocolSocketBinding));
     }
@@ -70,6 +70,6 @@
   for (  Map.Entry<String,Injector<Channel>> entry : channels) {
     builder.addDependency(ChannelServiceName.CHANNEL.getServiceName(entry.getKey()),Channel.class,entry.getValue());
   }
-  builder.setInitialMode(ServiceController.Mode.ON_DEMAND).install();
-  new BinderServiceBuilder<>(ChannelFactoryService.createChannelFactoryBinding(name),ChannelFactoryService.getServiceName(name),ChannelFactory.class).build(target).install();
+  builder.install();
+  new BinderServiceBuilder<>(JGroupsBindingFactory.createChannelFactoryBinding(name),ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(name),ChannelFactory.class).build(target).install();
 }
