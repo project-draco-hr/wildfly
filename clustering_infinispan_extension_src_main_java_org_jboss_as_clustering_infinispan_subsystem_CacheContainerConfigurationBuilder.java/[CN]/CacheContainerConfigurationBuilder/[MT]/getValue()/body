@@ -1,0 +1,49 @@
+{
+  GlobalConfigurationBuilder builder=new GlobalConfigurationBuilder();
+  ModuleLoader moduleLoader=this.loader.getValue();
+  builder.serialization().classResolver(ModularClassResolver.getInstance(moduleLoader));
+  try {
+    ClassLoader loader=(this.module != null) ? moduleLoader.loadModule(this.module).getClassLoader() : CacheContainerConfiguration.class.getClassLoader();
+    builder.classLoader(loader);
+    int id=Ids.MAX_ID;
+    for (    SimpleExternalizer<?> externalizer : ServiceLoader.load(SimpleExternalizer.class,loader)) {
+      InfinispanLogger.ROOT_LOGGER.debugf("Cache container %s will use an externalizer for %s",this.name,externalizer.getTargetClass().getName());
+      builder.serialization().addAdvancedExternalizer(id++,externalizer);
+    }
+  }
+ catch (  ModuleLoadException e) {
+    throw new IllegalStateException(e);
+  }
+  builder.shutdown().hookBehavior(ShutdownHookBehavior.DONT_REGISTER);
+  TransportConfiguration transport=(this.transport != null) ? this.transport.getValue() : null;
+  if (transport != null) {
+    org.infinispan.configuration.global.TransportConfigurationBuilder transportBuilder=builder.transport().clusterName(this.name).transport(new ChannelTransport(transport.getChannel())).distributedSyncTimeout(transport.getLockTimeout());
+    ProtocolStackConfiguration stack=transport.getChannelFactory().getProtocolStackConfiguration();
+    org.wildfly.clustering.jgroups.spi.TransportConfiguration.Topology topology=stack.getTransport().getTopology();
+    if (topology != null) {
+      transportBuilder.siteId(topology.getSite()).rackId(topology.getRack()).machineId(topology.getMachine());
+    }
+    Executor executor=transport.getExecutor();
+    if (executor != null) {
+      transportBuilder.asyncTransportExecutor().factory(new ManagedExecutorFactory(executor));
+    }
+    RelayConfiguration relay=stack.getRelay();
+    if (relay != null) {
+      builder.site().localSite(relay.getSiteName());
+    }
+  }
+  Executor listenerExecutor=(this.listenerExecutor != null) ? this.listenerExecutor.getValue() : null;
+  if (listenerExecutor != null) {
+    builder.listenerThreadPool().threadPoolFactory(new ManagedExecutorFactory(listenerExecutor));
+  }
+  ScheduledExecutorService evictionExecutor=(this.evictionExecutor != null) ? this.evictionExecutor.getValue() : null;
+  if (evictionExecutor != null) {
+    builder.evictionThreadPool().threadPoolFactory(new ManagedScheduledExecutorFactory(evictionExecutor));
+  }
+  ScheduledExecutorService replicationQueueExecutor=(this.replicationQueueExecutor != null) ? this.replicationQueueExecutor.getValue() : null;
+  if (replicationQueueExecutor != null) {
+    builder.replicationQueueThreadPool().threadPoolFactory(new ManagedExecutorFactory(replicationQueueExecutor));
+  }
+  builder.globalJmxStatistics().enabled(this.statisticsEnabled).cacheManagerName(this.name).mBeanServerLookup(new MBeanServerProvider(this.server.getValue())).jmxDomain(CacheContainerServiceName.CACHE_CONTAINER.getServiceName(CacheServiceNameFactory.DEFAULT_CACHE).getParent().getCanonicalName()).allowDuplicateDomains(true);
+  return builder.build();
+}

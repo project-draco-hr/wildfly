@@ -3,31 +3,16 @@
   String name=address.getElement(address.size() - 1).getValue();
   String channel=address.getElement(address.size() - 2).getValue();
   ServiceTarget target=context.getServiceTarget();
+  ForkChannelFactoryBuilder builder=new ForkChannelFactoryBuilder(channel);
   if (model.hasDefined(ProtocolResourceDefinition.WILDCARD_PATH.getKey())) {
-    List<Property> properties=model.get(ProtocolResourceDefinition.WILDCARD_PATH.getKey()).asPropertyList();
-    List<ProtocolConfiguration> protocols=new ArrayList<>(properties.size());
-    List<Map.Entry<String,Injector<SocketBinding>>> socketBindings=new ArrayList<>(properties.size());
-    for (    Property property : properties) {
+    for (    Property property : model.get(ProtocolResourceDefinition.WILDCARD_PATH.getKey()).asPropertyList()) {
       String protocolName=property.getName();
       ModelNode protocol=property.getValue();
-      ModuleIdentifier module=ModelNodes.asModuleIdentifier(ProtocolResourceDefinition.MODULE.resolveModelAttribute(context,protocol));
-      Protocol protocolConfig=new Protocol(protocolName,module);
-      StackAddHandler.initProtocolProperties(context,protocol,protocolConfig);
-      protocols.add(protocolConfig);
-      String socketBinding=ModelNodes.asString(ProtocolResourceDefinition.SOCKET_BINDING.resolveModelAttribute(context,protocol));
-      if (socketBinding != null) {
-        socketBindings.add(new AbstractMap.SimpleImmutableEntry<>(socketBinding,protocolConfig.getSocketBindingInjector()));
-      }
+      ProtocolConfigurationBuilder protocolBuilder=builder.addProtocol(protocolName).setModule(ModelNodes.asModuleIdentifier(ProtocolResourceDefinition.MODULE.resolveModelAttribute(context,protocol))).setSocketBinding(ModelNodes.asString(ProtocolResourceDefinition.SOCKET_BINDING.resolveModelAttribute(context,protocol)));
+      StackAddHandler.addProtocolProperties(context,protocol,protocolBuilder).build(target).install();
     }
-    ServiceBuilder<ChannelFactory> builder=new ForkChannelFactoryBuilder(channel,protocols).build(target);
-    for (    Map.Entry<String,Injector<SocketBinding>> socketBinding : socketBindings) {
-      builder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(socketBinding.getKey()),SocketBinding.class,socketBinding.getValue());
-    }
-    builder.install();
   }
- else {
-    new ForkChannelFactoryBuilder(channel).build(target).install();
-  }
+  builder.build(target).install();
   new AliasServiceBuilder<>(ChannelServiceName.FACTORY.getServiceName(name),ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(channel),ChannelFactory.class).build(target).install();
   new ChannelBuilder(name).build(target).install();
   new ChannelConnectorBuilder(name).build(target).install();
