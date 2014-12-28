@@ -2,13 +2,28 @@
   if (SarLogger.ROOT_LOGGER.isTraceEnabled()) {
     SarLogger.ROOT_LOGGER.tracef("Creating Service: %s",context.getController().getName());
   }
+  final Runnable task=new Runnable(){
+    @Override public void run(){
+      try {
+        invokeLifecycleMethod(createMethod,context);
+        if (componentInstantiator != null) {
+          managedReference=componentInstantiator.initializeInstance(getValue());
+        }
+        context.complete();
+      }
+ catch (      Throwable e) {
+        context.failed(new StartException(SarLogger.ROOT_LOGGER.failedExecutingLegacyMethod("create()"),e));
+      }
+    }
+  }
+;
   try {
-    invokeLifecycleMethod(createMethod,context);
+    executor.getValue().submit(task);
   }
- catch (  final Exception e) {
-    throw new StartException(SarLogger.ROOT_LOGGER.failedExecutingLegacyMethod("create()"),e);
+ catch (  RejectedExecutionException e) {
+    task.run();
   }
-  if (componentInstantiator != null) {
-    managedReference=componentInstantiator.initializeInstance(getValue());
+ finally {
+    context.asynchronous();
   }
 }
