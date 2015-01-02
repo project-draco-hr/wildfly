@@ -2,13 +2,30 @@
   if (SarLogger.ROOT_LOGGER.isTraceEnabled()) {
     SarLogger.ROOT_LOGGER.tracef("Destroying Service: %s",context.getController().getName());
   }
-  if (managedReference != null) {
-    managedReference.release();
+  final Runnable task=new Runnable(){
+    @Override public void run(){
+      try {
+        if (managedReference != null) {
+          managedReference.release();
+        }
+        invokeLifecycleMethod(destroyMethod,context);
+      }
+ catch (      Exception e) {
+        SarLogger.ROOT_LOGGER.error(SarLogger.ROOT_LOGGER.failedExecutingLegacyMethod("destroy()"),e);
+      }
+ finally {
+        context.complete();
+      }
+    }
   }
+;
   try {
-    invokeLifecycleMethod(destroyMethod,context);
+    executor.getValue().submit(task);
   }
- catch (  final Exception e) {
-    SarLogger.ROOT_LOGGER.error(SarLogger.ROOT_LOGGER.failedExecutingLegacyMethod("create()"),e);
+ catch (  RejectedExecutionException e) {
+    task.run();
+  }
+ finally {
+    context.asynchronous();
   }
 }

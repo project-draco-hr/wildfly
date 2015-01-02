@@ -2,10 +2,27 @@
   if (SarLogger.ROOT_LOGGER.isTraceEnabled()) {
     SarLogger.ROOT_LOGGER.tracef("Stopping Service: %s",context.getController().getName());
   }
-  try {
-    invokeLifecycleMethod(stopMethod,context);
+  final Runnable task=new Runnable(){
+    @Override public void run(){
+      try {
+        invokeLifecycleMethod(stopMethod,context);
+      }
+ catch (      Exception e) {
+        SarLogger.ROOT_LOGGER.error(SarLogger.ROOT_LOGGER.failedExecutingLegacyMethod("stop()"),e);
+      }
+ finally {
+        context.complete();
+      }
+    }
   }
- catch (  final Exception e) {
-    SarLogger.ROOT_LOGGER.error(SarLogger.ROOT_LOGGER.failedExecutingLegacyMethod("stop()"),e);
+;
+  try {
+    executor.getValue().submit(task);
+  }
+ catch (  RejectedExecutionException e) {
+    task.run();
+  }
+ finally {
+    context.asynchronous();
   }
 }
