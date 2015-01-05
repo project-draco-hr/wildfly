@@ -30,19 +30,21 @@
       new ChannelBuilder(name).build(target).install();
       new ChannelConnectorBuilder(name).build(target).install();
       new AliasServiceBuilder<>(ChannelServiceName.FACTORY.getServiceName(name),ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(channel),ChannelFactory.class).build(target).install();
-      for (      GroupServiceInstaller installer : ServiceLoader.load(ClusteredGroupServiceInstaller.class,ClusteredGroupServiceInstaller.class.getClassLoader())) {
-        log.debugf("Installing %s for cache container %s",installer.getClass().getSimpleName(),name);
-        Iterator<ServiceName> names=installer.getServiceNames(channel).iterator();
-        for (        ServiceName serviceName : installer.getServiceNames(name)) {
-          new AliasServiceBuilder<>(serviceName,names.next(),Object.class).build(target).install();
+      for (      GroupBuilderProvider provider : ServiceLoader.load(ClusteredGroupBuilderProvider.class,ClusteredGroupBuilderProvider.class.getClassLoader())) {
+        log.debugf("Installing %s for cache container %s",provider.getClass().getSimpleName(),name);
+        Iterator<Builder<?>> builders=provider.getBuilders(channel,module).iterator();
+        for (        Builder<?> builder : provider.getBuilders(name,module)) {
+          new AliasServiceBuilder<>(builder.getServiceName(),builders.next().getServiceName(),Object.class).build(target).install();
         }
       }
     }
   }
  else {
-    for (    GroupServiceInstaller installer : ServiceLoader.load(LocalGroupServiceInstaller.class,LocalGroupServiceInstaller.class.getClassLoader())) {
-      log.debugf("Installing %s for cache container %s",installer.getClass().getSimpleName(),name);
-      installer.install(target,name,module);
+    for (    GroupBuilderProvider provider : ServiceLoader.load(LocalGroupBuilderProvider.class,LocalGroupBuilderProvider.class.getClassLoader())) {
+      log.debugf("Installing %s for cache container %s",provider.getClass().getSimpleName(),name);
+      for (      Builder<?> builder : provider.getBuilders(name,module)) {
+        builder.build(target).install();
+      }
     }
   }
   configBuilder.build(target).install();
@@ -65,9 +67,11 @@
       new AliasServiceBuilder<>(nameFactory.getServiceName(name),nameFactory.getServiceName(name,defaultCache),Object.class).build(target).install();
     }
     new BinderServiceBuilder<>(InfinispanBindingFactory.createCacheBinding(name,CacheServiceNameFactory.DEFAULT_CACHE),CacheServiceName.CACHE.getServiceName(name),Cache.class).build(target).install();
-    Class<? extends CacheServiceInstaller> installerClass=model.hasDefined(TransportResourceDefinition.PATH.getKey()) ? ClusteredCacheServiceInstaller.class : LocalCacheServiceInstaller.class;
-    for (    CacheServiceInstaller installer : ServiceLoader.load(installerClass,installerClass.getClassLoader())) {
-      installer.install(target,name,CacheServiceNameFactory.DEFAULT_CACHE);
+    Class<? extends CacheGroupBuilderProvider> providerClass=model.hasDefined(TransportResourceDefinition.PATH.getKey()) ? ClusteredCacheGroupBuilderProvider.class : LocalCacheGroupBuilderProvider.class;
+    for (    CacheGroupBuilderProvider installer : ServiceLoader.load(providerClass,providerClass.getClassLoader())) {
+      for (      Builder<?> builder : installer.getBuilders(name,CacheServiceNameFactory.DEFAULT_CACHE)) {
+        builder.build(target).install();
+      }
     }
   }
 }
