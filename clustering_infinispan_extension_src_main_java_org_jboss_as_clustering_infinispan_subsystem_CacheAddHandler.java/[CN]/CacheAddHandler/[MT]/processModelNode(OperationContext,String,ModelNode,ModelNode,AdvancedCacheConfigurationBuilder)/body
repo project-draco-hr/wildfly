@@ -1,0 +1,91 @@
+{
+  ConfigurationBuilder builder=configBuilder.getConfigurationBuilder();
+  if (cache.hasDefined(CacheResourceDefinition.STATISTICS_ENABLED.getName())) {
+    builder.jmxStatistics().enabled(CacheResourceDefinition.STATISTICS_ENABLED.resolveModelAttribute(context,cache).asBoolean());
+  }
+ else {
+    builder.jmxStatistics().enabled(CacheContainerResourceDefinition.STATISTICS_ENABLED.resolveModelAttribute(context,containerModel).asBoolean());
+  }
+  final Index indexing=Index.valueOf(CacheResourceDefinition.INDEXING.resolveModelAttribute(context,cache).asString());
+  builder.clustering().cacheMode(this.mode);
+  final ModelNode indexingPropertiesModel=CacheResourceDefinition.INDEXING_PROPERTIES.resolveModelAttribute(context,cache);
+  Properties indexingProperties=new Properties();
+  if (indexing.isEnabled() && indexingPropertiesModel.isDefined()) {
+    for (    Property p : indexingPropertiesModel.asPropertyList()) {
+      String value=p.getValue().asString();
+      indexingProperties.put(p.getName(),value);
+    }
+  }
+  builder.indexing().index(indexing).withProperties(indexingProperties);
+  IsolationLevel isolationLevel=IsolationLevel.valueOf(LockingResourceDefinition.ISOLATION.getDefaultValue().asString());
+  if (cache.hasDefined(LockingResourceDefinition.PATH.getKey()) && cache.get(LockingResourceDefinition.PATH.getKeyValuePair()).isDefined()) {
+    ModelNode locking=cache.get(LockingResourceDefinition.PATH.getKeyValuePair());
+    isolationLevel=IsolationLevel.valueOf(LockingResourceDefinition.ISOLATION.resolveModelAttribute(context,locking).asString());
+    final boolean striping=LockingResourceDefinition.STRIPING.resolveModelAttribute(context,locking).asBoolean();
+    final long acquireTimeout=LockingResourceDefinition.ACQUIRE_TIMEOUT.resolveModelAttribute(context,locking).asLong();
+    final int concurrencyLevel=LockingResourceDefinition.CONCURRENCY_LEVEL.resolveModelAttribute(context,locking).asInt();
+    builder.locking().isolationLevel(isolationLevel).useLockStriping(striping).lockAcquisitionTimeout(acquireTimeout).concurrencyLevel(concurrencyLevel);
+  }
+  if (cache.hasDefined(TransactionResourceDefinition.PATH.getKey())) {
+    ModelNode transaction=cache.get(TransactionResourceDefinition.PATH.getKeyValuePair());
+    if (transaction.isDefined()) {
+      long stopTimeout=TransactionResourceDefinition.STOP_TIMEOUT.resolveModelAttribute(context,transaction).asLong();
+      TransactionMode txMode=TransactionMode.valueOf(TransactionResourceDefinition.MODE.resolveModelAttribute(context,transaction).asString());
+      LockingMode lockingMode=LockingMode.valueOf(TransactionResourceDefinition.LOCKING.resolveModelAttribute(context,transaction).asString());
+      configBuilder.setTransactionMode(txMode);
+      builder.transaction().cacheStopTimeout(stopTimeout).transactionMode((txMode == TransactionMode.NONE) ? org.infinispan.transaction.TransactionMode.NON_TRANSACTIONAL : org.infinispan.transaction.TransactionMode.TRANSACTIONAL).lockingMode(lockingMode).useSynchronization(txMode == TransactionMode.NON_XA).recovery().enabled(txMode == TransactionMode.FULL_XA).invocationBatching().disable();
+      if ((lockingMode == LockingMode.OPTIMISTIC) && (isolationLevel == IsolationLevel.REPEATABLE_READ) && this.mode.isSynchronous()&& !this.mode.isInvalidation()) {
+        builder.locking().writeSkewCheck(true);
+        builder.versioning().enable().scheme(VersioningScheme.SIMPLE);
+      }
+    }
+  }
+  if (cache.hasDefined(EvictionResourceDefinition.PATH.getKey())) {
+    ModelNode eviction=cache.get(EvictionResourceDefinition.PATH.getKeyValuePair());
+    if (eviction.isDefined()) {
+      final EvictionStrategy strategy=EvictionStrategy.valueOf(EvictionResourceDefinition.STRATEGY.resolveModelAttribute(context,eviction).asString());
+      builder.eviction().strategy(strategy);
+      if (strategy.isEnabled()) {
+        final int maxEntries=EvictionResourceDefinition.MAX_ENTRIES.resolveModelAttribute(context,eviction).asInt();
+        builder.eviction().maxEntries(maxEntries);
+      }
+    }
+  }
+  if (cache.hasDefined(ExpirationResourceDefinition.PATH.getKey())) {
+    ModelNode expiration=cache.get(ExpirationResourceDefinition.PATH.getKeyValuePair());
+    if (expiration.isDefined()) {
+      final long maxIdle=ExpirationResourceDefinition.MAX_IDLE.resolveModelAttribute(context,expiration).asLong();
+      final long lifespan=ExpirationResourceDefinition.LIFESPAN.resolveModelAttribute(context,expiration).asLong();
+      final long interval=ExpirationResourceDefinition.INTERVAL.resolveModelAttribute(context,expiration).asLong();
+      builder.expiration().maxIdle(maxIdle).lifespan(lifespan).wakeUpInterval(interval);
+      if ((maxIdle > 0) || (lifespan > 0)) {
+        builder.expiration().enableReaper();
+      }
+ else {
+        builder.expiration().disableReaper();
+      }
+    }
+  }
+  StoreType type=findStoreType(cache);
+  if (type != null) {
+    ModelNode store=cache.get(type.pathElement().getKeyValuePair());
+    if (store.isDefined()) {
+      PersistenceConfigurationBuilder persistenceBuilder=builder.persistence().passivation(StoreResourceDefinition.PASSIVATION.resolveModelAttribute(context,store).asBoolean());
+      StoreConfigurationBuilder<?,?> storeBuilder=buildCacheStore(context,persistenceBuilder,containerName,type,store,configBuilder).fetchPersistentState(StoreResourceDefinition.FETCH_STATE.resolveModelAttribute(context,store).asBoolean()).preload(StoreResourceDefinition.PRELOAD.resolveModelAttribute(context,store).asBoolean()).shared(StoreResourceDefinition.SHARED.resolveModelAttribute(context,store).asBoolean()).purgeOnStartup(StoreResourceDefinition.PURGE.resolveModelAttribute(context,store).asBoolean());
+      storeBuilder.singleton().enabled(StoreResourceDefinition.SINGLETON.resolveModelAttribute(context,store).asBoolean());
+      if (store.hasDefined(StoreWriteBehindResourceDefinition.PATH.getKey())) {
+        ModelNode writeBehind=store.get(StoreWriteBehindResourceDefinition.PATH.getKeyValuePair());
+        if (writeBehind.isDefined()) {
+          storeBuilder.async().enable().flushLockTimeout(StoreWriteBehindResourceDefinition.FLUSH_LOCK_TIMEOUT.resolveModelAttribute(context,writeBehind).asLong()).modificationQueueSize(StoreWriteBehindResourceDefinition.MODIFICATION_QUEUE_SIZE.resolveModelAttribute(context,writeBehind).asInt()).shutdownTimeout(StoreWriteBehindResourceDefinition.SHUTDOWN_TIMEOUT.resolveModelAttribute(context,writeBehind).asLong()).threadPoolSize(StoreWriteBehindResourceDefinition.THREAD_POOL_SIZE.resolveModelAttribute(context,writeBehind).asInt());
+        }
+      }
+      Properties properties=new TypedProperties();
+      if (store.hasDefined(StorePropertyResourceDefinition.WILDCARD_PATH.getKey())) {
+        for (        Property property : store.get(StorePropertyResourceDefinition.WILDCARD_PATH.getKey()).asPropertyList()) {
+          properties.setProperty(property.getName(),StorePropertyResourceDefinition.VALUE.resolveModelAttribute(context,property.getValue()).asString());
+        }
+      }
+      storeBuilder.withProperties(properties);
+    }
+  }
+}

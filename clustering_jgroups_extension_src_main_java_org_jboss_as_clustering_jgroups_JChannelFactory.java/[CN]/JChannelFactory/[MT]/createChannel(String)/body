@@ -1,0 +1,65 @@
+{
+  JGroupsLogger.ROOT_LOGGER.debugf("Creating channel %s from stack %s",id,this.configuration.getName());
+  PrivilegedExceptionAction<JChannel> action=new PrivilegedExceptionAction<JChannel>(){
+    @Override public JChannel run() throws Exception {
+      return new JChannel(JChannelFactory.this);
+    }
+  }
+;
+  JChannel channel=WildFlySecurityManager.doChecked(action);
+  ProtocolStack stack=channel.getProtocolStack();
+  TP transport=stack.getTransport();
+  if (transport.isSingleton()) {
+synchronized (transport) {
+      this.init(transport);
+    }
+  }
+ else {
+    this.init(transport);
+  }
+  RelayConfiguration relayConfig=this.configuration.getRelay();
+  if (relayConfig != null) {
+    String localSite=relayConfig.getSiteName();
+    List<RemoteSiteConfiguration> remoteSites=this.configuration.getRelay().getRemoteSites();
+    List<String> sites=new ArrayList<>(remoteSites.size() + 1);
+    sites.add(localSite);
+    Map<String,RelayConfig.BridgeConfig> bridges=new HashMap<>();
+    for (    final RemoteSiteConfiguration remoteSite : remoteSites) {
+      String siteName=remoteSite.getName();
+      sites.add(siteName);
+      String clusterName=remoteSite.getClusterName();
+      RelayConfig.BridgeConfig bridge=new RelayConfig.BridgeConfig(clusterName){
+        @Override public JChannel createChannel() throws Exception {
+          JChannel channel=(JChannel)remoteSite.getChannel();
+          channel.getProtocolStack().removeProtocol(FORK.class);
+          return channel;
+        }
+      }
+;
+      bridges.put(clusterName,bridge);
+    }
+    RELAY2 relay=new RELAY2().site(localSite);
+    for (    String site : sites) {
+      RelayConfig.SiteConfig siteConfig=new RelayConfig.SiteConfig(site);
+      relay.addSite(site,siteConfig);
+      if (site.equals(localSite)) {
+        for (        RelayConfig.BridgeConfig bridge : bridges.values()) {
+          siteConfig.addBridge(bridge);
+        }
+      }
+    }
+    Configurator.resolveAndAssignFields(relay,relayConfig.getProperties());
+    Configurator.resolveAndInvokePropertyMethods(relay,relayConfig.getProperties());
+    stack.addProtocol(relay);
+    relay.init();
+  }
+  FORK fork=new FORK();
+  stack.addProtocol(fork);
+  fork.init();
+  channel.setName(this.configuration.getNodeName());
+  TransportConfiguration.Topology topology=this.configuration.getTransport().getTopology();
+  if (topology != null) {
+    channel.addAddressGenerator(new TopologyAddressGenerator(topology));
+  }
+  return channel;
+}

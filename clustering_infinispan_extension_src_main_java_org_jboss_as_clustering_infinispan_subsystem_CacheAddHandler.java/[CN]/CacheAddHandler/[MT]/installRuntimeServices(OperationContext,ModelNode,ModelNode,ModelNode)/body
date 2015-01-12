@@ -1,0 +1,29 @@
+{
+  PathAddress address=Operations.getPathAddress(operation);
+  String containerName=address.getElement(address.size() - 2).getValue();
+  String cacheName=address.getElement(address.size() - 1).getValue();
+  String jndiName=ModelNodes.asString(CacheResourceDefinition.JNDI_NAME.resolveModelAttribute(context,cacheModel));
+  ServiceController.Mode initialMode=StartMode.valueOf(CacheResourceDefinition.START.resolveModelAttribute(context,cacheModel).asString()).getMode();
+  ModuleIdentifier module=ModelNodes.asModuleIdentifier(CacheResourceDefinition.MODULE.resolveModelAttribute(context,cacheModel));
+  if ((module == null) && Index.valueOf(CacheResourceDefinition.INDEXING.resolveModelAttribute(context,cacheModel).asString()).isEnabled()) {
+    module=QUERY_MODULE;
+  }
+  AdvancedCacheConfigurationBuilder builder=new AdvancedCacheConfigurationBuilder(containerName,cacheName,this.mode,module);
+  processModelNode(context,containerName,containerModel,cacheModel,builder);
+  ServiceTarget target=context.getServiceTarget();
+  builder.build(target).install();
+  new CacheBuilder<>(containerName,cacheName).build(target).setInitialMode(initialMode).install();
+  @SuppressWarnings("rawtypes") BinderServiceBuilder<Cache> bindingBuilder=new BinderServiceBuilder<>(InfinispanBindingFactory.createCacheBinding(containerName,cacheName),CacheServiceName.CACHE.getServiceName(containerName,cacheName),Cache.class);
+  if (jndiName != null) {
+    bindingBuilder.alias(ContextNames.bindInfoFor(JndiNameFactory.parse(jndiName).getAbsoluteName()));
+  }
+  bindingBuilder.build(target).install();
+  new XAResourceRecoveryBuilder(containerName,cacheName).build(target).install();
+  Class<? extends CacheGroupBuilderProvider> providerClass=this.mode.isClustered() ? ClusteredCacheGroupBuilderProvider.class : LocalCacheGroupBuilderProvider.class;
+  for (  CacheGroupBuilderProvider provider : ServiceLoader.load(providerClass,providerClass.getClassLoader())) {
+    log.debugf("Installing %s for cache %s of container %s",provider.getClass().getSimpleName(),cacheName,containerName);
+    for (    Builder<?> groupBuilder : provider.getBuilders(containerName,cacheName)) {
+      groupBuilder.build(target).install();
+    }
+  }
+}

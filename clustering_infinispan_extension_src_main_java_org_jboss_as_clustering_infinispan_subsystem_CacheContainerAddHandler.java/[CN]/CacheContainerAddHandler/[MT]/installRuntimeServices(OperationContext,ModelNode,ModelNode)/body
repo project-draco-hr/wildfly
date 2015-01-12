@@ -1,0 +1,77 @@
+{
+  PathAddress address=Operations.getPathAddress(operation);
+  String name=address.getLastElement().getValue();
+  if (context.getProcessType().isServer() && !context.isBooting() && name.equals("ejb")) {
+    Resource rootResource=context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS);
+    PathElement ejbPath=PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,"ejb3");
+    if (rootResource.hasChild(ejbPath) && rootResource.getChild(ejbPath).hasChild(PathElement.pathElement("service","remote"))) {
+      context.addStep(new OperationStepHandler(){
+        @Override public void execute(        final OperationContext context,        final ModelNode operation) throws OperationFailedException {
+          context.reloadRequired();
+          context.completeStep(OperationContext.RollbackHandler.REVERT_RELOAD_REQUIRED_ROLLBACK_HANDLER);
+        }
+      }
+,OperationContext.Stage.RUNTIME);
+      return;
+    }
+  }
+  ServiceTarget target=context.getServiceTarget();
+  String defaultCache=ModelNodes.asString(CacheContainerResourceDefinition.DEFAULT_CACHE.resolveModelAttribute(context,model));
+  String jndiName=ModelNodes.asString(CacheContainerResourceDefinition.JNDI_NAME.resolveModelAttribute(context,model));
+  ServiceController.Mode initialMode=StartMode.valueOf(CacheContainerResourceDefinition.START.resolveModelAttribute(context,model).asString()).getMode();
+  ModuleIdentifier module=ModelNodes.asModuleIdentifier(CacheContainerResourceDefinition.MODULE.resolveModelAttribute(context,model));
+  CacheContainerConfigurationBuilder configBuilder=new CacheContainerConfigurationBuilder(name).setModule(module).setStatisticsEnabled(CacheContainerResourceDefinition.STATISTICS_ENABLED.resolveModelAttribute(context,model).asBoolean()).setListenerExecutor(ModelNodes.asString(CacheContainerResourceDefinition.LISTENER_EXECUTOR.resolveModelAttribute(context,model))).setEvictionExecutor(ModelNodes.asString(CacheContainerResourceDefinition.EVICTION_EXECUTOR.resolveModelAttribute(context,model))).setReplicationQueueExecutor(ModelNodes.asString(CacheContainerResourceDefinition.REPLICATION_QUEUE_EXECUTOR.resolveModelAttribute(context,model)));
+  if (model.hasDefined(TransportResourceDefinition.PATH.getKey())) {
+    ModelNode transport=model.get(TransportResourceDefinition.PATH.getKeyValuePair());
+    String channel=ModelNodes.asString(TransportResourceDefinition.CHANNEL.resolveModelAttribute(context,transport),ChannelServiceNameFactory.DEFAULT_CHANNEL);
+    configBuilder.setTransport().setLockTimeout(TransportResourceDefinition.LOCK_TIMEOUT.resolveModelAttribute(context,transport).asLong(),TimeUnit.MILLISECONDS).setExecutor(ModelNodes.asString(TransportResourceDefinition.EXECUTOR.resolveModelAttribute(context,transport))).build(target).install();
+    if (!name.equals(channel)) {
+      new BinderServiceBuilder<>(JGroupsBindingFactory.createChannelBinding(name),ChannelServiceName.CHANNEL.getServiceName(name),Channel.class).build(target).install();
+      new ChannelBuilder(name).build(target).install();
+      new ChannelConnectorBuilder(name).build(target).install();
+      new AliasServiceBuilder<>(ChannelServiceName.FACTORY.getServiceName(name),ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(channel),ChannelFactory.class).build(target).install();
+      for (      GroupBuilderProvider provider : ServiceLoader.load(ClusteredGroupBuilderProvider.class,ClusteredGroupBuilderProvider.class.getClassLoader())) {
+        log.debugf("Installing %s for cache container %s",provider.getClass().getSimpleName(),name);
+        Iterator<Builder<?>> builders=provider.getBuilders(channel,module).iterator();
+        for (        Builder<?> builder : provider.getBuilders(name,module)) {
+          new AliasServiceBuilder<>(builder.getServiceName(),builders.next().getServiceName(),Object.class).build(target).install();
+        }
+      }
+    }
+  }
+ else {
+    for (    GroupBuilderProvider provider : ServiceLoader.load(LocalGroupBuilderProvider.class,LocalGroupBuilderProvider.class.getClassLoader())) {
+      log.debugf("Installing %s for cache container %s",provider.getClass().getSimpleName(),name);
+      for (      Builder<?> builder : provider.getBuilders(name,module)) {
+        builder.build(target).install();
+      }
+    }
+  }
+  configBuilder.build(target).install();
+  CacheContainerBuilder containerBuilder=new CacheContainerBuilder(name,defaultCache);
+  if (model.hasDefined(CacheContainerResourceDefinition.ALIASES.getName())) {
+    for (    ModelNode alias : operation.get(CacheContainerResourceDefinition.ALIASES.getName()).asList()) {
+      containerBuilder.addAlias(alias.asString());
+    }
+  }
+  containerBuilder.build(target).setInitialMode(initialMode).install();
+  ContextNames.BindInfo binding=InfinispanBindingFactory.createCacheContainerBinding(name);
+  BinderServiceBuilder<CacheContainer> bindingBuilder=new BinderServiceBuilder<>(binding,CacheContainerServiceName.CACHE_CONTAINER.getServiceName(name),CacheContainer.class);
+  if (jndiName != null) {
+    bindingBuilder.alias(ContextNames.bindInfoFor(JndiNameFactory.parse(jndiName).getAbsoluteName()));
+  }
+  bindingBuilder.build(target).install();
+  new KeyAffinityServiceFactoryBuilder(name).build(target).install();
+  if ((defaultCache != null) && !defaultCache.equals(CacheServiceNameFactory.DEFAULT_CACHE)) {
+    for (    CacheServiceNameFactory nameFactory : CacheServiceName.values()) {
+      new AliasServiceBuilder<>(nameFactory.getServiceName(name),nameFactory.getServiceName(name,defaultCache),Object.class).build(target).install();
+    }
+    new BinderServiceBuilder<>(InfinispanBindingFactory.createCacheBinding(name,CacheServiceNameFactory.DEFAULT_CACHE),CacheServiceName.CACHE.getServiceName(name),Cache.class).build(target).install();
+    Class<? extends CacheGroupBuilderProvider> providerClass=model.hasDefined(TransportResourceDefinition.PATH.getKey()) ? ClusteredCacheGroupBuilderProvider.class : LocalCacheGroupBuilderProvider.class;
+    for (    CacheGroupBuilderProvider installer : ServiceLoader.load(providerClass,providerClass.getClassLoader())) {
+      for (      Builder<?> builder : installer.getBuilders(name,CacheServiceNameFactory.DEFAULT_CACHE)) {
+        builder.build(target).install();
+      }
+    }
+  }
+}
