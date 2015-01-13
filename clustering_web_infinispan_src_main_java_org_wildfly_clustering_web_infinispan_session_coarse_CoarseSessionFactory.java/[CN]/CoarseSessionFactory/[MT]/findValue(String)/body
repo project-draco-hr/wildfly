@@ -3,7 +3,20 @@
   boolean pessimistic=transaction.transactionMode().isTransactional() && (transaction.lockingMode() == LockingMode.PESSIMISTIC);
   Cache<String,CoarseSessionCacheEntry<L>> cache=pessimistic ? this.sessionCache.getAdvancedCache().withFlags(Flag.FORCE_WRITE_LOCK) : this.sessionCache;
   CoarseSessionCacheEntry<L> entry=cache.get(id);
-  if (entry == null)   return null;
-  MarshalledValue<Map<String,Object>,MarshallingContext> value=this.attributesCache.get(new SessionAttributesCacheKey(id));
-  return (value != null) ? new CoarseSessionEntry<>(entry,value) : null;
+  if (entry != null) {
+    MutableCacheEntry<CoarseSessionCacheEntry<L>> sessionEntry=new MutableCacheEntry<>(entry,new CacheEntryMutator<>(this.sessionCache,id,entry));
+    SessionAttributesCacheKey key=new SessionAttributesCacheKey(id);
+    MarshalledValue<Map<String,Object>,MarshallingContext> value=this.attributesCache.get(key);
+    if (value != null) {
+      try {
+        Map<String,Object> attributes=this.marshaller.read(value);
+        return new CoarseSessionEntry<>(sessionEntry,new MutableCacheEntry<>(attributes,new CacheEntryMutator<>(this.attributesCache,key,value)));
+      }
+ catch (      InvalidSerializedFormException e) {
+        InfinispanWebLogger.ROOT_LOGGER.failedToActivateSession(e,id);
+      }
+    }
+    this.remove(id);
+  }
+  return null;
 }

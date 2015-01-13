@@ -1,12 +1,27 @@
 {
   CoarseSessionCacheEntry<L> entry=new CoarseSessionCacheEntry<>(new SimpleSessionMetaData());
   CoarseSessionCacheEntry<L> existingEntry=this.sessionCache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).putIfAbsent(id,entry);
-  if (existingEntry != null) {
-    MarshalledValue<Map<String,Object>,MarshallingContext> value=this.attributesCache.get(new SessionAttributesCacheKey(id));
-    return new CoarseSessionEntry<>(existingEntry,value);
+  SessionAttributesCacheKey key=new SessionAttributesCacheKey(id);
+  Map<String,Object> attributes=new HashMap<>();
+  MutableCacheEntry<Map<String,Object>> attributesEntry=new MutableCacheEntry<>(attributes,Mutator.PASSIVE);
+  MarshalledValue<Map<String,Object>,MarshallingContext> value=this.marshaller.write(attributes);
+  if (existingEntry == null) {
+    this.attributesCache.getAdvancedCache().withFlags(Flag.IGNORE_RETURN_VALUES).put(key,value);
+    MutableCacheEntry<CoarseSessionCacheEntry<L>> sessionEntry=new MutableCacheEntry<>(entry,Mutator.PASSIVE);
+    return new CoarseSessionEntry<>(sessionEntry,attributesEntry);
   }
-  Map<String,Object> map=new HashMap<>();
-  MarshalledValue<Map<String,Object>,MarshallingContext> value=this.marshaller.write(map);
-  MarshalledValue<Map<String,Object>,MarshallingContext> existingValue=this.attributesCache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).putIfAbsent(new SessionAttributesCacheKey(id),value);
-  return new CoarseSessionEntry<>(entry,(existingValue != null) ? existingValue : value);
+  MutableCacheEntry<CoarseSessionCacheEntry<L>> sessionEntry=new MutableCacheEntry<>(existingEntry,new CacheEntryMutator<>(this.sessionCache,id,existingEntry));
+  MarshalledValue<Map<String,Object>,MarshallingContext> existingValue=this.attributesCache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).putIfAbsent(key,value);
+  if (existingValue != null) {
+    try {
+      Map<String,Object> existingAttributes=this.marshaller.read(existingValue);
+      MutableCacheEntry<Map<String,Object>> existingAttributesEntry=new MutableCacheEntry<>(existingAttributes,new CacheEntryMutator<>(this.attributesCache,key,existingValue));
+      return new CoarseSessionEntry<>(sessionEntry,existingAttributesEntry);
+    }
+ catch (    InvalidSerializedFormException e) {
+      InfinispanWebLogger.ROOT_LOGGER.failedToActivateSession(e,id);
+      new CacheEntryMutator<>(this.attributesCache,key,value).mutate();
+    }
+  }
+  return new CoarseSessionEntry<>(sessionEntry,attributesEntry);
 }
