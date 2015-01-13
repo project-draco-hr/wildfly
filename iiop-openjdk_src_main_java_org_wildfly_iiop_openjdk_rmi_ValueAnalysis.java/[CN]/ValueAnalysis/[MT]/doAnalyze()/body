@@ -1,0 +1,88 @@
+{
+  super.doAnalyze();
+  if (cls == String.class)   throw IIOPLogger.ROOT_LOGGER.cannotAnalyzeStringType();
+  if (cls == Class.class)   throw IIOPLogger.ROOT_LOGGER.cannotAnalyzeClassType();
+  if (Remote.class.isAssignableFrom(cls))   throw IIOPLogger.ROOT_LOGGER.valueTypeCantImplementRemote(cls.getName(),"1.2.4");
+  if (cls.getName().indexOf('$') != -1)   throw IIOPLogger.ROOT_LOGGER.valueTypeCantBeProxy(cls.getName());
+  externalizable=Externalizable.class.isAssignableFrom(cls);
+  if (!externalizable) {
+    Field spf=null;
+    try {
+      spf=cls.getField("serialPersistentFields");
+    }
+ catch (    NoSuchFieldException ex) {
+    }
+    if (spf != null) {
+      int mods=spf.getModifiers();
+      if (!Modifier.isFinal(mods) || !Modifier.isStatic(mods) || !Modifier.isPrivate(mods))       spf=null;
+    }
+    if (spf != null) {
+      Class type=spf.getType();
+      if (type.isArray()) {
+        type=type.getComponentType();
+        if (type != ObjectStreamField.class)         spf=null;
+      }
+ else       spf=null;
+    }
+    if (spf != null) {
+      try {
+        serialPersistentFields=(ObjectStreamField[])spf.get(null);
+      }
+ catch (      IllegalAccessException ex) {
+        throw IIOPLogger.ROOT_LOGGER.unexpectedException(ex);
+      }
+      for (int i=0; i < fields.length; ++i) {
+        if (fields[i] == spf) {
+          f_flags[i]|=F_SPFFIELD;
+          break;
+        }
+      }
+    }
+    Method wo=null;
+    try {
+      wo=cls.getMethod("writeObject",new Class[]{java.io.OutputStream[].class});
+    }
+ catch (    NoSuchMethodException ex) {
+    }
+    if (wo != null) {
+      if (wo.getReturnType() != Void.TYPE)       wo=null;
+    }
+    if (wo != null) {
+      int mods=spf.getModifiers();
+      if (!Modifier.isPrivate(mods))       wo=null;
+    }
+    if (wo != null) {
+      Class[] paramTypes=wo.getParameterTypes();
+      if (paramTypes.length != 1)       wo=null;
+ else       if (paramTypes[0] != java.io.OutputStream.class)       wo=null;
+    }
+    if (wo != null) {
+      hasWriteObjectMethod=true;
+      for (int i=0; i < methods.length; ++i) {
+        if (methods[i] == wo) {
+          m_flags[i]|=M_WRITEOBJECT;
+          break;
+        }
+      }
+    }
+  }
+  SortedSet m=new TreeSet(new ValueMemberComparator());
+  for (int i=0; i < fields.length; ++i) {
+    if (f_flags[i] != 0)     continue;
+    int mods=fields[i].getModifiers();
+    if (Modifier.isStatic(mods) || Modifier.isTransient(mods))     continue;
+    ValueMemberAnalysis vma;
+    vma=new ValueMemberAnalysis(fields[i].getName(),fields[i].getType(),Modifier.isPublic(mods));
+    m.add(vma);
+  }
+  members=new ValueMemberAnalysis[m.size()];
+  members=(ValueMemberAnalysis[])m.toArray(members);
+  Class superClass=cls.getSuperclass();
+  if (superClass == java.lang.Object.class)   superClass=null;
+  if (superClass == null)   superAnalysis=null;
+ else {
+    superAnalysis=getValueAnalysis(superClass);
+  }
+  if (!Serializable.class.isAssignableFrom(cls))   abstractValue=true;
+  fixupCaseNames();
+}

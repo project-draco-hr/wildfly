@@ -1,0 +1,33 @@
+{
+  if (this.destroyed)   throw new CannotProceed();
+  if (nc == null || nc.length == 0)   throw new InvalidName();
+  if (obj == null)   throw new org.omg.CORBA.BAD_PARAM();
+  Name n=new Name(nc);
+  Name ctx=n.ctxName();
+  NameComponent nb=n.baseNameComponent();
+  if (ctx == null) {
+    if (this.names.containsKey(n)) {
+      org.omg.CORBA.Object ref=(org.omg.CORBA.Object)this.names.get(n);
+      if (isDead(ref)) {
+        rebind(n.components(),obj);
+        return;
+      }
+      throw new AlreadyBound();
+    }
+ else     if (this.contexts.containsKey(n)) {
+      org.omg.CORBA.Object ref=(org.omg.CORBA.Object)this.contexts.get(n);
+      if (isDead(ref))       unbind(n.components());
+      throw new AlreadyBound();
+    }
+    if ((this.names.put(n,obj)) != null)     throw new CannotProceed(_this(),n.components());
+    IIOPLogger.ROOT_LOGGER.debugf("Bound name: %s",n);
+  }
+ else {
+    NameComponent[] ncx=new NameComponent[]{nb};
+    org.omg.CORBA.Object context=this.resolve(ctx.components());
+    String contextOID=this.getObjectOID(context);
+    CorbaNamingContext jbossContext=(contextOID == null ? null : contextImpls.get(contextOID));
+    if (jbossContext != null)     jbossContext.bind(ncx,obj);
+ else     NamingContextExtHelper.narrow(context).bind(ncx,obj);
+  }
+}

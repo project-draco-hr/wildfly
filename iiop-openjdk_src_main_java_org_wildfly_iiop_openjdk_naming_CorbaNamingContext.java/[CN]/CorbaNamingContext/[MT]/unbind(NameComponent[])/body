@@ -1,0 +1,33 @@
+{
+  if (this.destroyed)   throw new CannotProceed();
+  if (nc == null || nc.length == 0)   throw new InvalidName();
+  Name n=new Name(nc);
+  Name ctx=n.ctxName();
+  NameComponent nb=n.baseNameComponent();
+  if (ctx == null) {
+    if (this.names.containsKey(n)) {
+      org.omg.CORBA.Object ref=(org.omg.CORBA.Object)this.names.remove(n);
+      ref._release();
+      IIOPLogger.ROOT_LOGGER.debugf("Unbound: %s",n);
+    }
+ else     if (this.contexts.containsKey(n)) {
+      org.omg.CORBA.Object ref=(org.omg.CORBA.Object)this.contexts.remove(n);
+      ref._release();
+      String oid=this.getObjectOID(ref);
+      if (oid != null)       contextImpls.remove(oid);
+      IIOPLogger.ROOT_LOGGER.debugf("Unbound: %s",n);
+    }
+ else {
+      IIOPLogger.ROOT_LOGGER.failedToUnbindObject(n);
+      throw new NotFound(NotFoundReason.not_context,n.components());
+    }
+  }
+ else {
+    NameComponent[] ncx=new NameComponent[]{nb};
+    org.omg.CORBA.Object context=this.resolve(ctx.components());
+    String contextOID=this.getObjectOID(context);
+    CorbaNamingContext jbossContext=(contextOID == null ? null : contextImpls.get(contextOID));
+    if (jbossContext != null)     jbossContext.unbind(ncx);
+ else     NamingContextExtHelper.narrow(context).unbind(ncx);
+  }
+}
