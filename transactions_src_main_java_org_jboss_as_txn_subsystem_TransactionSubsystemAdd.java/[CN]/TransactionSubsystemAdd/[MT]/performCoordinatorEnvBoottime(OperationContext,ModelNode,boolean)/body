@@ -1,0 +1,16 @@
+{
+  final boolean coordinatorEnableStatistics=TransactionSubsystemRootResourceDefinition.ENABLE_STATISTICS.resolveModelAttribute(context,coordEnvModel).asBoolean();
+  final boolean transactionStatusManagerEnable=TransactionSubsystemRootResourceDefinition.ENABLE_TSM_STATUS.resolveModelAttribute(context,coordEnvModel).asBoolean();
+  final int coordinatorDefaultTimeout=TransactionSubsystemRootResourceDefinition.DEFAULT_TIMEOUT.resolveModelAttribute(context,coordEnvModel).asInt();
+  final String nodeIdentifier=TransactionSubsystemRootResourceDefinition.NODE_IDENTIFIER.resolveModelAttribute(context,coordEnvModel).asString();
+  final JTAEnvironmentBeanService jtaEnvironmentBeanService=new JTAEnvironmentBeanService(nodeIdentifier,jts);
+  context.getServiceTarget().addService(TxnServices.JBOSS_TXN_JTA_ENVIRONMENT,jtaEnvironmentBeanService).setInitialMode(Mode.ACTIVE).install();
+  final ArjunaTransactionManagerService transactionManagerService=new ArjunaTransactionManagerService(coordinatorEnableStatistics,coordinatorDefaultTimeout,transactionStatusManagerEnable,jts,nodeIdentifier);
+  final ServiceBuilder<com.arjuna.ats.jbossatx.jta.TransactionManagerService> transactionManagerServiceServiceBuilder=context.getServiceTarget().addService(TxnServices.JBOSS_TXN_ARJUNA_TRANSACTION_MANAGER,transactionManagerService);
+  transactionManagerServiceServiceBuilder.addDependency(TxnServices.JBOSS_TXN_JTA_ENVIRONMENT,JTAEnvironmentBean.class,transactionManagerService.getJTAEnvironmentBeanInjector());
+  if (jts) {
+    transactionManagerServiceServiceBuilder.addDependency(ServiceName.JBOSS.append("iiop-openjdk","orb-service"),ORB.class,transactionManagerService.getOrbInjector());
+    transactionManagerServiceServiceBuilder.addDependency(CorbaNamingService.SERVICE_NAME);
+  }
+  transactionManagerServiceServiceBuilder.addDependency(TxnServices.JBOSS_TXN_XA_TERMINATOR,JBossXATerminator.class,transactionManagerService.getXaTerminatorInjector()).addDependency(TxnServices.JBOSS_TXN_USER_TRANSACTION_REGISTRY,UserTransactionRegistry.class,transactionManagerService.getUserTransactionRegistry()).addDependency(TxnServices.JBOSS_TXN_CORE_ENVIRONMENT).addDependency(TxnServices.JBOSS_TXN_ARJUNA_OBJECTSTORE_ENVIRONMENT).addDependency(TxnServices.JBOSS_TXN_ARJUNA_RECOVERY_MANAGER).setInitialMode(ServiceController.Mode.ACTIVE).install();
+}
