@@ -1,0 +1,33 @@
+{
+  ServiceTarget target=context.getServiceTarget();
+  final ModelNode fullModel=Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
+  final ModelNode modelConfig=fullModel.get(ModClusterConfigResourceDefinition.PATH.getKeyValuePair());
+  final ModClusterConfig config=getModClusterConfig(context,modelConfig);
+  target.addService(ContainerEventHandlerService.CONFIG_SERVICE_NAME,new ValueService<>(new ImmediateValue<>(config))).setInitialMode(Mode.ACTIVE).install();
+  Set<LoadMetric> metrics=new HashSet<LoadMetric>();
+  final LoadBalanceFactorProvider loadProvider=getModClusterLoadProvider(metrics,context,modelConfig);
+  for (  BoottimeHandlerProvider handler : ServiceLoader.load(BoottimeHandlerProvider.class,BoottimeHandlerProvider.class.getClassLoader())) {
+    handler.performBoottime(metrics,context,operation,model);
+  }
+  final String connector=CONNECTOR.resolveModelAttribute(context,modelConfig).asString();
+  final int statusInterval=STATUS_INTERVAL.resolveModelAttribute(context,modelConfig).asInt();
+  InjectedValue<SocketBindingManager> socketBindingManager=new InjectedValue<SocketBindingManager>();
+  ContainerEventHandlerService service=new ContainerEventHandlerService(config,loadProvider,socketBindingManager);
+  final ServiceBuilder<?> builder=new AsynchronousServiceBuilder<>(ContainerEventHandlerService.SERVICE_NAME,service).build(target).addDependency(SocketBindingManager.SOCKET_BINDING_MANAGER,SocketBindingManager.class,socketBindingManager).setInitialMode(Mode.ACTIVE);
+  final ModelNode bindingRefNode=ADVERTISE_SOCKET.resolveModelAttribute(context,modelConfig);
+  final String bindingRef=bindingRefNode.isDefined() ? bindingRefNode.asString() : null;
+  if (bindingRef != null) {
+    builder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(bindingRef),SocketBinding.class,service.getSocketBindingInjector());
+  }
+  List<ModelNode> modelNodes=modelConfig.get(CommonAttributes.PROXIES).isDefined() ? modelConfig.get(CommonAttributes.PROXIES).asList() : null;
+  if (modelNodes != null) {
+    for (    ModelNode node : modelNodes) {
+      String ref=node.asString();
+      builder.addDependency(OutboundSocketBinding.OUTBOUND_SOCKET_BINDING_BASE_SERVICE_NAME.append(ref),OutboundSocketBinding.class,service.getOutboundSocketBindingInjector(ref));
+    }
+  }
+  builder.install();
+  for (  ContainerEventHandlerAdapterBuilder adapterBuilder : ServiceLoader.load(ContainerEventHandlerAdapterBuilder.class,ContainerEventHandlerAdapterBuilder.class.getClassLoader())) {
+    adapterBuilder.build(target,connector,statusInterval).setInitialMode(Mode.PASSIVE).install();
+  }
+}

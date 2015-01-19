@@ -1,0 +1,27 @@
+{
+  final String nodeIdentifier=TransactionSubsystemRootResourceDefinition.NODE_IDENTIFIER.resolveModelAttribute(context,coreEnvModel).asString();
+  final String varDirPathRef=TransactionSubsystemRootResourceDefinition.RELATIVE_TO.resolveModelAttribute(context,coreEnvModel).asString();
+  final String varDirPath=TransactionSubsystemRootResourceDefinition.PATH.resolveModelAttribute(context,coreEnvModel).asString();
+  if (TransactionLogger.ROOT_LOGGER.isDebugEnabled()) {
+    TransactionLogger.ROOT_LOGGER.debugf("nodeIdentifier=%s%n",nodeIdentifier);
+    TransactionLogger.ROOT_LOGGER.debugf("varDirPathRef=%s, varDirPath=%s%n",varDirPathRef,varDirPath);
+  }
+  final CoreEnvironmentService coreEnvironmentService=new CoreEnvironmentService(nodeIdentifier,varDirPath,varDirPathRef);
+  String socketBindingName=null;
+  if (TransactionSubsystemRootResourceDefinition.PROCESS_ID_UUID.resolveModelAttribute(context,coreEnvModel).asBoolean(false)) {
+    UuidProcessId id=new UuidProcessId();
+    coreEnvironmentService.setProcessImplementation(id);
+  }
+ else {
+    coreEnvironmentService.setProcessImplementationClassName(ProcessIdType.SOCKET.getClazz());
+    socketBindingName=TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_BINDING.resolveModelAttribute(context,coreEnvModel).asString();
+    int ports=TransactionSubsystemRootResourceDefinition.PROCESS_ID_SOCKET_MAX_PORTS.resolveModelAttribute(context,coreEnvModel).asInt();
+    coreEnvironmentService.setSocketProcessIdMaxPorts(ports);
+  }
+  final ServiceBuilder<?> coreEnvBuilder=context.getServiceTarget().addService(TxnServices.JBOSS_TXN_CORE_ENVIRONMENT,coreEnvironmentService);
+  if (socketBindingName != null) {
+    ServiceName bindingName=SocketBinding.JBOSS_BINDING_NAME.append(socketBindingName);
+    coreEnvBuilder.addDependency(bindingName,SocketBinding.class,coreEnvironmentService.getSocketProcessBindingInjector());
+  }
+  coreEnvBuilder.addDependency(PathManagerService.SERVICE_NAME,PathManager.class,coreEnvironmentService.getPathManagerInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+}
