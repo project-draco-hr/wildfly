@@ -1,0 +1,18 @@
+{
+  FineSessionCacheEntry<L> value=new FineSessionCacheEntry<>(new SimpleSessionMetaData());
+  FineSessionCacheEntry<L> existing=this.sessionCache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).putIfAbsent(id,value);
+  if (existing == null) {
+    return new MutableCacheEntry<>(value,Mutator.PASSIVE);
+  }
+  for (  Map.Entry<SessionAttributeCacheKey,MarshalledValue<Object,MarshallingContext>> entry : this.attributeCache.getAdvancedCache().getGroup(id).entrySet()) {
+    try {
+      this.marshaller.read(entry.getValue());
+    }
+ catch (    InvalidSerializedFormException e) {
+      InfinispanWebLogger.ROOT_LOGGER.failedToActivateSessionAttribute(e,id,entry.getKey().getAttribute());
+      this.remove(id);
+      return this.createValue(id,context);
+    }
+  }
+  return new MutableCacheEntry<>(existing,new CacheEntryMutator<>(this.sessionCache,id,existing));
+}
