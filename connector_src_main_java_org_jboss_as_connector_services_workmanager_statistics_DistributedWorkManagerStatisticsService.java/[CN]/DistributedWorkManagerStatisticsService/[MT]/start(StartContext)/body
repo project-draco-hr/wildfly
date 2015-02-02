@@ -1,0 +1,21 @@
+{
+synchronized (this) {
+    DistributedWorkManager dwm=distributedWorkManager.getValue();
+    dwm.setDistributedStatisticsEnabled(statsEnabled);
+    if (dwm.getDistributedStatistics() != null) {
+      PathElement peDistributedWm=PathElement.pathElement(Constants.STATISTICS_NAME,"distributed");
+      ResourceBuilder resourceBuilder=ResourceBuilder.Factory.create(peDistributedWm,new StandardResourceDescriptionResolver(Constants.STATISTICS_NAME + "." + Constants.WORKMANAGER_NAME,CommonAttributes.RESOURCE_NAME,CommonAttributes.class.getClassLoader()));
+      ManagementResourceRegistration dwmSubRegistration=overrideRegistration.registerSubModel(resourceBuilder.build());
+      OperationStepHandler metricHandler=new WorkManagerRuntimeAttributeReadHandler(dwm,dwm.getDistributedStatistics(),false);
+      for (      SimpleAttributeDefinition metric : Constants.WORKMANAGER_METRICS) {
+        dwmSubRegistration.registerMetric(metric,metricHandler);
+      }
+      OperationStepHandler readHandler=new WorkManagerRuntimeAttributeReadHandler(dwm,dwm.getDistributedStatistics(),false);
+      OperationStepHandler writeHandler=new WorkManagerRuntimeAttributeWriteHandler(dwm,false,Constants.DISTRIBUTED_WORKMANAGER_RW_ATTRIBUTES);
+      for (      SimpleAttributeDefinition attribute : Constants.DISTRIBUTED_WORKMANAGER_RW_ATTRIBUTES) {
+        dwmSubRegistration.registerReadWriteAttribute(attribute,readHandler,writeHandler);
+      }
+      dwmSubRegistration.registerOperationHandler(ClearWorkManagerStatisticsHandler.DEFINITION,new ClearWorkManagerStatisticsHandler(dwm));
+    }
+  }
+}

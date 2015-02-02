@@ -1,0 +1,136 @@
+{
+  ManagementResourceRegistration subRegistration;
+  final CommonDeployment deploymentMD=deployment.getValue().getDeployment();
+  ROOT_LOGGER.debugf("Starting IronJacamarActivationResourceService %s",deploymentMD.getDeploymentName());
+  try {
+    ResourceBuilder resourceBuilder=ResourceBuilder.Factory.create(SUBSYSTEM_PATH_ELEMENT,new StandardResourceDescriptionResolver(Constants.STATISTICS_NAME,CommonAttributes.RESOURCE_NAME,CommonAttributes.class.getClassLoader()));
+    subRegistration=registration.registerSubModel(resourceBuilder.build());
+  }
+ catch (  IllegalArgumentException iae) {
+    subRegistration=registration.getSubModel(PathAddress.pathAddress(SUBSYSTEM_PATH_ELEMENT));
+  }
+  ManagementResourceRegistration ijRegistration;
+  try {
+    ijRegistration=subRegistration.registerSubModel(new IronJacamarResourceDefinition());
+  }
+ catch (  IllegalArgumentException iae) {
+    ijRegistration=subRegistration.getSubModel(PathAddress.pathAddress(Constants.IRONJACAMAR_NAME,Constants.IRONJACAMAR_NAME));
+  }
+  try {
+    if (deploymentResource != null) {
+      PathElement peLocalStats=PathElement.pathElement(Constants.STATISTICS_NAME,"extended");
+      if (deploymentMD.getConnector() != null && deploymentMD.getConnector().getResourceAdapter() != null) {
+        ManagementResourceRegistration raRegistration=ijRegistration.getSubModel(PathAddress.EMPTY_ADDRESS.append(PathElement.pathElement(Constants.RESOURCEADAPTER_NAME))).registerOverrideModel(deploymentMD.getDeploymentName(),new OverrideDescriptionProvider(){
+          @Override public Map<String,ModelNode> getAttributeOverrideDescriptions(          Locale locale){
+            return Collections.emptyMap();
+          }
+          @Override public Map<String,ModelNode> getChildTypeOverrideDescriptions(          Locale locale){
+            return Collections.emptyMap();
+          }
+        }
+);
+        ResourceBuilder resourceBuilder=ResourceBuilder.Factory.create(peLocalStats,new StandardResourceDescriptionResolver(Constants.STATISTICS_NAME + "." + Constants.WORKMANAGER_NAME,CommonAttributes.RESOURCE_NAME,CommonAttributes.class.getClassLoader()));
+        ManagementResourceRegistration raStatsSubRegistration=raRegistration.registerSubModel(resourceBuilder.build());
+        if (deploymentMD.getConnector().getResourceAdapter().getStatistics() != null) {
+          StatisticsPlugin raStats=deploymentMD.getConnector().getResourceAdapter().getStatistics();
+          raStats.setEnabled(statsEnabled);
+          PoolMetrics.ParametrizedPoolMetricsHandler handler=new PoolMetrics.ParametrizedPoolMetricsHandler(raStats);
+          for (          AttributeDefinition attribute : StatisticsResourceDefinition.getAttributesFromPlugin(raStats)) {
+            raStatsSubRegistration.registerMetric(attribute,handler);
+          }
+          raStatsSubRegistration.registerOperationHandler(ClearStatisticsHandler.DEFINITION,new ClearStatisticsHandler(raStats));
+        }
+        if (deploymentMD.getConnector() != null && deploymentMD.getConnector().getConnectionFactories() != null) {
+          for (          ConnectionFactory cf : deploymentMD.getConnector().getConnectionFactories()) {
+            if (cf.getManagedConnectionFactory() != null && cf.getManagedConnectionFactory().getStatistics() != null) {
+              PathElement peCD=PathElement.pathElement(Constants.CONNECTIONDEFINITIONS_NAME,cf.getJndiName());
+              PathElement peCdStats=PathElement.pathElement(Constants.STATISTICS_NAME,"extended");
+              StatisticsPlugin extendStats=cf.getManagedConnectionFactory().getStatistics();
+              extendStats.setEnabled(statsEnabled);
+              if (extendStats.getNames().size() != 0) {
+                if (extendStats.getNames().size() != 0) {
+                  ManagementResourceRegistration cdRegistration=raRegistration.getSubModel(PathAddress.pathAddress(peCD));
+                  ManagementResourceRegistration overrideCdRegistration=cdRegistration.registerOverrideModel(cf.getJndiName(),new OverrideDescriptionProvider(){
+                    @Override public Map<String,ModelNode> getAttributeOverrideDescriptions(                    Locale locale){
+                      return Collections.emptyMap();
+                    }
+                    @Override public Map<String,ModelNode> getChildTypeOverrideDescriptions(                    Locale locale){
+                      return Collections.emptyMap();
+                    }
+                  }
+);
+                  if (extendStats.getNames().size() != 0 && overrideCdRegistration.getSubModel(PathAddress.pathAddress(peCdStats)) == null) {
+                    overrideCdRegistration.registerSubModel(new StatisticsResourceDefinition(peCdStats,CommonAttributes.RESOURCE_NAME,extendStats));
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (deploymentMD.getConnectionManagers() != null) {
+          for (          ConnectionManager cm : deploymentMD.getConnectionManagers()) {
+            if (cm.getPool() != null) {
+              PathElement peCD=PathElement.pathElement(Constants.CONNECTIONDEFINITIONS_NAME,cm.getJndiName());
+              PathElement peCdStats=PathElement.pathElement(Constants.STATISTICS_NAME,"pool");
+              StatisticsPlugin poolStats=cm.getPool().getStatistics();
+              poolStats.setEnabled(statsEnabled);
+              if (poolStats.getNames().size() != 0) {
+                ManagementResourceRegistration cdRegistration=raRegistration.getSubModel(PathAddress.pathAddress(peCD));
+                ManagementResourceRegistration overrideCdRegistration=cdRegistration.registerOverrideModel(cm.getJndiName(),new OverrideDescriptionProvider(){
+                  @Override public Map<String,ModelNode> getAttributeOverrideDescriptions(                  Locale locale){
+                    return Collections.emptyMap();
+                  }
+                  @Override public Map<String,ModelNode> getChildTypeOverrideDescriptions(                  Locale locale){
+                    return Collections.emptyMap();
+                  }
+                }
+);
+                if (poolStats.getNames().size() != 0 && overrideCdRegistration.getSubModel(PathAddress.pathAddress(peCdStats)) == null) {
+                  overrideCdRegistration.registerSubModel(new StatisticsResourceDefinition(peCdStats,CommonAttributes.RESOURCE_NAME,poolStats));
+                }
+              }
+            }
+          }
+        }
+        if (deploymentMD.getConnector() != null && deploymentMD.getConnector().getAdminObjects() != null) {
+          for (          AdminObject ao : deploymentMD.getConnector().getAdminObjects()) {
+            if (ao.getStatistics() != null) {
+              PathElement peCD=PathElement.pathElement(Constants.ADMIN_OBJECTS_NAME,ao.getJndiName());
+              PathElement peCdStats=PathElement.pathElement(Constants.STATISTICS_NAME,"extended");
+              StatisticsPlugin extendStats=ao.getStatistics();
+              extendStats.setEnabled(statsEnabled);
+              if (extendStats.getNames().size() != 0) {
+                if (extendStats.getNames().size() != 0) {
+                  ManagementResourceRegistration cdRegistration=raRegistration.getSubModel(PathAddress.pathAddress(peCD));
+                  ManagementResourceRegistration overrideCdRegistration=cdRegistration.registerOverrideModel(ao.getJndiName(),new OverrideDescriptionProvider(){
+                    @Override public Map<String,ModelNode> getAttributeOverrideDescriptions(                    Locale locale){
+                      return Collections.emptyMap();
+                    }
+                    @Override public Map<String,ModelNode> getChildTypeOverrideDescriptions(                    Locale locale){
+                      return Collections.emptyMap();
+                    }
+                  }
+);
+                  if (extendStats.getNames().size() != 0 && overrideCdRegistration.getSubModel(PathAddress.pathAddress(peCdStats)) == null) {
+                    overrideCdRegistration.registerSubModel(new StatisticsResourceDefinition(peCdStats,CommonAttributes.RESOURCE_NAME,extendStats));
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+ catch (  IllegalArgumentException e) {
+  }
+  Resource subsystemResource;
+  if (!deploymentResource.hasChild(SUBSYSTEM_PATH_ELEMENT)) {
+    subsystemResource=new IronJacamarResource.IronJacamarRuntimeResource();
+    deploymentResource.registerChild(SUBSYSTEM_PATH_ELEMENT,subsystemResource);
+  }
+ else {
+    subsystemResource=deploymentResource.getChild(SUBSYSTEM_PATH_ELEMENT);
+  }
+  IronJacamarResourceCreator.INSTANCE.execute(subsystemResource,mdr.getValue());
+}

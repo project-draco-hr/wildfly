@@ -1,0 +1,34 @@
+{
+  ROOT_LOGGER.debugf("Starting ConnectionDefinitionStatisticsService %s",jndiName);
+synchronized (this) {
+    final CommonDeployment deploymentMD=deployment.getValue().getDeployment();
+    PathElement pePoolStats=PathElement.pathElement(Constants.STATISTICS_NAME,"pool");
+    PathElement peExtendedStats=PathElement.pathElement(Constants.STATISTICS_NAME,"extended");
+    if (deploymentMD.getConnector() != null && deploymentMD.getConnector().getConnectionFactories() != null) {
+      for (      ConnectionFactory cf : deploymentMD.getConnector().getConnectionFactories()) {
+        if (cf.getManagedConnectionFactory() != null && cf.getManagedConnectionFactory().getStatistics() != null) {
+          StatisticsPlugin extendStats=cf.getManagedConnectionFactory().getStatistics();
+          extendStats.setEnabled(statsEnabled);
+          if (extendStats.getNames().size() != 0) {
+            if (extendStats.getNames().size() != 0 && overrideRegistration.getSubModel(PathAddress.pathAddress(peExtendedStats)) == null) {
+              overrideRegistration.registerSubModel(new StatisticsResourceDefinition(peExtendedStats,CommonAttributes.RESOURCE_NAME,extendStats));
+            }
+          }
+        }
+      }
+    }
+    if (deploymentMD.getConnectionManagers() != null) {
+      for (      ConnectionManager cm : deploymentMD.getConnectionManagers()) {
+        if (cm.getPool() != null && cm.getJndiName() != null && cm.getJndiName().equals(jndiName)) {
+          StatisticsPlugin poolStats=cm.getPool().getStatistics();
+          poolStats.setEnabled(statsEnabled);
+          if (poolStats.getNames().size() != 0) {
+            if (poolStats.getNames().size() != 0 && overrideRegistration.getSubModel(PathAddress.pathAddress(pePoolStats)) == null) {
+              overrideRegistration.registerSubModel(new StatisticsResourceDefinition(pePoolStats,CommonAttributes.RESOURCE_NAME,poolStats));
+            }
+          }
+        }
+      }
+    }
+  }
+}
