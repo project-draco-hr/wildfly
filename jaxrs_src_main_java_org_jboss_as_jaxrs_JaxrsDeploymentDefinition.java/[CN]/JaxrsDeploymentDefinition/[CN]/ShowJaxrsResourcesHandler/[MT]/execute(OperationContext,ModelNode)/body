@@ -1,0 +1,41 @@
+{
+  final PathAddress address=PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR));
+  final ModelNode subModel=context.readResourceFromRoot(address.subAddress(0,address.size() - 1).append(SUBSYSTEM,UndertowExtension.SUBSYSTEM_NAME),false).getModel();
+  final String host=VIRTUAL_HOST.resolveModelAttribute(context,subModel).asString();
+  final String contextPath=CONTEXT_ROOT.resolveModelAttribute(context,subModel).asString();
+  final String server=SERVER.resolveModelAttribute(context,subModel).asString();
+  final ServiceController<?> controller=context.getServiceRegistry(false).getService(UndertowService.deploymentServiceName(server,host,contextPath));
+  final UndertowDeploymentService deploymentService=(UndertowDeploymentService)controller.getService();
+  Servlet resteasyServlet=null;
+  Handle handle=deploymentService.getDeployment().getThreadSetupAction().setup(null);
+  try {
+    for (    Map.Entry<String,ServletHandler> servletHandler : deploymentService.getDeployment().getServlets().getServletHandlers().entrySet()) {
+      if (HttpServletDispatcher.class.isAssignableFrom(servletHandler.getValue().getManagedServlet().getServletInfo().getServletClass())) {
+        resteasyServlet=(Servlet)servletHandler.getValue().getManagedServlet().getServlet().getInstance();
+        break;
+      }
+    }
+    if (resteasyServlet != null) {
+      final Collection<String> servletMappings=resteasyServlet.getServletConfig().getServletContext().getServletRegistration(resteasyServlet.getServletConfig().getServletName()).getMappings();
+      final ResourceMethodRegistry registry=(ResourceMethodRegistry)((HttpServletDispatcher)resteasyServlet).getDispatcher().getRegistry();
+      context.addStep(new OperationStepHandler(){
+        @Override public void execute(        final OperationContext context,        final ModelNode operation) throws OperationFailedException {
+          if (registry != null) {
+            final ModelNode response=new ModelNode();
+            for (            Map.Entry<String,List<ResourceInvoker>> resource : registry.getBounded().entrySet()) {
+              handle(response,contextPath,servletMappings,resource.getKey(),resource.getValue());
+            }
+            context.getResult().set(response);
+          }
+        }
+      }
+,OperationContext.Stage.RUNTIME);
+    }
+  }
+ catch (  ServletException ex) {
+    throw new RuntimeException(ex);
+  }
+ finally {
+    handle.tearDown();
+  }
+}
