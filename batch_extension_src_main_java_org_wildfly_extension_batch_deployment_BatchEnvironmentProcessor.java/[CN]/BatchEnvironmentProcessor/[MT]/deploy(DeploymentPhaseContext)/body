@@ -1,19 +1,41 @@
 {
   final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
   if (deploymentUnit.hasAttachment(Attachments.MODULE)) {
-    BatchLogger.LOGGER.tracef("Processing deployment '%s' for batch.",deploymentUnit.getName());
+    BatchLogger.LOGGER.tracef("Processing deployment '%s' for the batch environment.",deploymentUnit.getName());
     final Module module=deploymentUnit.getAttachment(Attachments.MODULE);
     final ClassLoader moduleClassLoader=module.getClassLoader();
     final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
     final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
     final BatchEnvironmentService service=new BatchEnvironmentService(moduleClassLoader,JobRepositoryFactory.getInstance().getJobRepository(moduleDescription));
-    final ServiceBuilder<BatchEnvironment> serviceBuilder=serviceTarget.addService(BatchServiceNames.batchDeploymentServiceName(deploymentUnit),service);
+    final ServiceBuilder<BatchEnvironment> serviceBuilder=serviceTarget.addService(BatchServiceNames.batchEnvironmentServiceName(deploymentUnit),service);
     serviceBuilder.addDependency(BatchServiceNames.BATCH_THREAD_POOL_NAME,ExecutorService.class,service.getExecutorServiceInjector());
     serviceBuilder.addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,service.getTransactionManagerInjector());
     if (WeldDeploymentMarker.isPartOfWeldDeployment(deploymentUnit)) {
       BatchLogger.LOGGER.tracef("Adding BeanManager service dependency for deployment %s",deploymentUnit.getName());
       serviceBuilder.addDependency(BatchServiceNames.beanManagerServiceName(deploymentUnit),BeanManager.class,service.getBeanManagerInjector());
     }
+    final VirtualFile root=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
+    VirtualFile jobsDir=null;
+    if (DeploymentTypeMarker.isType(DeploymentType.EJB_JAR,deploymentUnit)) {
+      jobsDir=root.getChild("META-INF/batch-jobs");
+    }
+ else     if (DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit)) {
+      jobsDir=root.getChild("WEB-INF/classes/META-INF/batch-jobs");
+    }
+    final JobXmlResolverService jobXmlResolverService;
+    if (jobsDir != null && jobsDir.exists()) {
+      try {
+        jobXmlResolverService=new JobXmlResolverService(moduleClassLoader,jobsDir.getChildren(JobXmlFilter.INSTANCE));
+      }
+ catch (      IOException e) {
+        throw BatchLogger.LOGGER.errorProcessingBatchJobsDir(e);
+      }
+    }
+ else {
+      jobXmlResolverService=new JobXmlResolverService();
+    }
+    serviceTarget.addService(BatchServiceNames.jobXmlResolverServiceName(deploymentUnit),jobXmlResolverService).install();
+    serviceBuilder.addDependency(BatchServiceNames.jobXmlResolverServiceName(deploymentUnit),JobXmlResolver.class,service.getJobXmlResolverInjector());
     serviceBuilder.install();
   }
 }
