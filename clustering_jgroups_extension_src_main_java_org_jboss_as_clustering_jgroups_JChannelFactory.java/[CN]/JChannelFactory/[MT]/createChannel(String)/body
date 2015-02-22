@@ -6,7 +6,7 @@
     }
   }
 ;
-  JChannel channel=WildFlySecurityManager.doChecked(action);
+  final JChannel channel=WildFlySecurityManager.doChecked(action);
   ProtocolStack stack=channel.getProtocolStack();
   TP transport=stack.getTransport();
   if (transport.isSingleton()) {
@@ -53,7 +53,29 @@ synchronized (transport) {
     stack.addProtocol(relay);
     relay.init();
   }
+  UnknownForkHandler unknownForkHandler=new UnknownForkHandler(){
+    private final short id=ClassConfigurator.getProtocolId(RequestCorrelator.class);
+    @Override public Object handleUnknownForkStack(    Message message,    String forkStackId){
+      return this.handle(message);
+    }
+    @Override public Object handleUnknownForkChannel(    Message message,    String forkChannelId){
+      return this.handle(message);
+    }
+    private Object handle(    Message message){
+      Header header=(Header)message.getHeader(this.id);
+      if ((header != null) && (header.type == Header.REQ) && header.rsp_expected) {
+        Message response=message.makeReply().setFlag(message.getFlags()).clearFlag(Message.Flag.RSVP,Message.Flag.SCOPED);
+        response.putHeader(FORK.ID,message.getHeader(FORK.ID));
+        response.putHeader(this.id,new Header(Header.RSP,header.id,false,this.id));
+        response.setBuffer(UNKNOWN_FORK_RESPONSE.array());
+        channel.down(new Event(Event.MSG,response));
+      }
+      return null;
+    }
+  }
+;
   FORK fork=new FORK();
+  fork.setUnknownForkHandler(unknownForkHandler);
   stack.addProtocol(fork);
   fork.init();
   channel.setName(this.configuration.getNodeName());
