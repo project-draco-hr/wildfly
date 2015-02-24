@@ -1,0 +1,79 @@
+{
+  final Set<EJBClientDescriptorXMLAttribute> required=EnumSet.of(EJBClientDescriptorXMLAttribute.NAME);
+  final int count=reader.getAttributeCount();
+  String clusterName=null;
+  String clusterNodeSelector=null;
+  long connectTimeout=5000;
+  long maxAllowedConnectedNodes=10;
+  String userName=null;
+  String securityRealm=null;
+  for (int i=0; i < count; i++) {
+    final EJBClientDescriptorXMLAttribute attribute=EJBClientDescriptorXMLAttribute.forName(reader.getAttributeLocalName(i));
+    required.remove(attribute);
+    final String value=readResolveValue(reader,i);
+switch (attribute) {
+case NAME:
+      clusterName=value;
+    break;
+case CONNECT_TIMEOUT:
+  connectTimeout=Long.parseLong(value);
+break;
+case CLUSTER_NODE_SELECTOR:
+clusterNodeSelector=value;
+break;
+case MAX_ALLOWED_CONNECTED_NODES:
+maxAllowedConnectedNodes=Long.parseLong(value);
+break;
+case USERNAME:
+userName=value;
+break;
+case SECURITY_REALM:
+securityRealm=value;
+break;
+default :
+unexpectedContent(reader);
+}
+}
+if (!required.isEmpty()) {
+missingAttributes(reader.getLocation(),required);
+}
+final EJBClientDescriptorMetaData.ClusterConfig clusterConfig=ejbClientDescriptorMetaData.newClusterConfig(clusterName);
+clusterConfig.setConnectTimeout(connectTimeout);
+clusterConfig.setNodeSelector(clusterNodeSelector);
+clusterConfig.setMaxAllowedConnectedNodes(maxAllowedConnectedNodes);
+clusterConfig.setSecurityRealm(securityRealm);
+clusterConfig.setUserName(userName);
+while (reader.hasNext()) {
+switch (reader.nextTag()) {
+case END_ELEMENT:
+{
+return;
+}
+case START_ELEMENT:
+{
+final EJBClientDescriptorXMLElement element=EJBClientDescriptorXMLElement.forName(reader.getLocalName());
+switch (element) {
+case CONNECTION_CREATION_OPTIONS:
+final Properties connectionCreationOptions=this.parseConnectionCreationOptions(reader);
+clusterConfig.setConnectionOptions(connectionCreationOptions);
+break;
+case CHANNEL_CREATION_OPTIONS:
+final Properties channelCreationOptions=this.parseChannelCreationOptions(reader);
+clusterConfig.setChannelCreationOptions(channelCreationOptions);
+break;
+case NODE:
+this.parseClusterNode(reader,clusterConfig);
+break;
+default :
+unexpectedElement(reader);
+}
+break;
+}
+default :
+{
+unexpectedContent(reader);
+}
+}
+}
+unexpectedEndOfDocument(reader.getLocation());
+}
