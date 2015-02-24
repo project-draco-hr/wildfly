@@ -6,13 +6,11 @@
   ImmutableSession activeSession=mock(ImmutableSession.class);
   CommandDispatcherFactory dispatcherFactory=mock(CommandDispatcherFactory.class);
   CommandDispatcher<SessionEvictionContext> dispatcher=mock(CommandDispatcher.class);
-  Batcher<TransactionBatch> batcher=mock(Batcher.class);
-  TransactionBatch batch=mock(TransactionBatch.class);
   Evictor<String> evictor=mock(Evictor.class);
   ArgumentCaptor<Command> capturedCommand=ArgumentCaptor.forClass(Command.class);
   ArgumentCaptor<SessionEvictionContext> capturedContext=ArgumentCaptor.forClass(SessionEvictionContext.class);
   when(dispatcherFactory.createCommandDispatcher(same(name),capturedContext.capture())).thenReturn(dispatcher);
-  try (Scheduler scheduler=new SessionEvictionScheduler(name,batcher,evictor,dispatcherFactory,1)){
+  try (Scheduler scheduler=new SessionEvictionScheduler(name,evictor,dispatcherFactory,1)){
     SessionEvictionContext context=capturedContext.getValue();
     assertSame(scheduler,context);
     when(evictedSession.getId()).thenReturn(evictedSessionId);
@@ -21,11 +19,9 @@
     verifyZeroInteractions(dispatcher);
     scheduler.schedule(activeSession);
     verify(dispatcher).submitOnCluster(capturedCommand.capture());
-    when(batcher.createBatch()).thenReturn(batch);
     capturedCommand.getValue().execute(context);
     verify(evictor).evict(evictedSessionId);
     verify(evictor,never()).evict(activeSessionId);
-    verify(batch).close();
   }
    verify(dispatcher).close();
 }
