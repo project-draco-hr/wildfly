@@ -10,20 +10,22 @@
   operation.get(ModelDescriptionConstants.INCLUDE_RUNTIME).set(true);
   operation.get(ModelDescriptionConstants.RECURSIVE).set(true);
   ModelNode result=managementClient.getControllerClient().execute(operation);
-  Assert.assertEquals(ModelDescriptionConstants.SUCCESS,result.get(ModelDescriptionConstants.OUTCOME).asString());
+  List<ModelNode> endpoints=DomainTestSupport.validateResponse(result).asList();
+  assertThat(endpoints.size() > 0,is(true));
   for (  final ModelNode endpointResult : result.get("result").asList()) {
     final ModelNode endpoint=endpointResult.get("result");
-    final URL url=new URL(endpoint.get("wsdl-url").asString());
-    HttpRequest.get(url.toExternalForm(),30,TimeUnit.SECONDS);
+    final URL wsdlUrl=new URL(endpoint.get("wsdl-url").asString());
+    String wsdl=HttpRequest.get(wsdlUrl.toExternalForm(),30,TimeUnit.SECONDS);
+    assertThat(wsdl,is(notNullValue()));
     checkCountMetric(endpointResult,managementClient.getControllerClient(),"request-count");
     checkCountMetric(endpointResult,managementClient.getControllerClient(),"response-count");
   }
   setStatisticsEnabled(false);
   result=managementClient.getControllerClient().execute(operation);
-  Assert.assertEquals(ModelDescriptionConstants.SUCCESS,result.get(ModelDescriptionConstants.OUTCOME).asString());
-  for (  final ModelNode endpointResult : result.get("result").asList()) {
+  endpoints=DomainTestSupport.validateResponse(result).asList();
+  for (  final ModelNode endpointResult : endpoints) {
     final ModelNode endpoint=endpointResult.get("result");
-    Assert.assertTrue(endpoint.hasDefined("request-count"));
-    Assert.assertTrue(endpoint.get("request-count").asString().contains("No metrics available"));
+    assertThat(endpoint.hasDefined("request-count"),is(true));
+    assertThat(endpoint.get("request-count").asString(),containsString("No metrics available"));
   }
 }
