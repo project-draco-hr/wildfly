@@ -6,12 +6,24 @@
   if (Utils.getRootDeploymentUnit(deploymentUnit).getAttachment(WeldConfiguration.ATTACHMENT_KEY).isRequireBeanDescriptor()) {
     return;
   }
-  final CompositeIndex index=deploymentUnit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
   final Set<AnnotationType> beanDefiningAnnotations=new HashSet<>(getRootDeploymentUnit(deploymentUnit).getAttachment(WeldAttachments.BEAN_DEFINING_ANNOTATIONS));
-  for (  final AnnotationType annotation : beanDefiningAnnotations) {
-    if (!index.getAnnotations(annotation.getName()).isEmpty()) {
-      WeldDeploymentMarker.mark(deploymentUnit);
-      return;
+  final Map<ResourceRoot,Index> indexes=AnnotationIndexUtils.getAnnotationIndexes(deploymentUnit);
+  final ExplicitBeanArchiveMetadataContainer explicitBeanArchiveMetadata=deploymentUnit.getAttachment(ExplicitBeanArchiveMetadataContainer.ATTACHMENT_KEY);
+  final ResourceRoot classesRoot=deploymentUnit.getAttachment(WeldAttachments.CLASSES_RESOURCE_ROOT);
+  final ResourceRoot deploymentRoot=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+  for (  Entry<ResourceRoot,Index> entry : indexes.entrySet()) {
+    ResourceRoot resourceRoot=entry.getKey();
+    if (resourceRoot == classesRoot) {
+      resourceRoot=deploymentRoot;
+    }
+    if (explicitBeanArchiveMetadata != null && explicitBeanArchiveMetadata.getBeanArchiveMetadata().containsKey(resourceRoot)) {
+      continue;
+    }
+    for (    final AnnotationType annotation : beanDefiningAnnotations) {
+      if (!entry.getValue().getAnnotations(annotation.getName()).isEmpty()) {
+        WeldDeploymentMarker.mark(deploymentUnit);
+        return;
+      }
     }
   }
   final EEModuleDescription eeModuleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
