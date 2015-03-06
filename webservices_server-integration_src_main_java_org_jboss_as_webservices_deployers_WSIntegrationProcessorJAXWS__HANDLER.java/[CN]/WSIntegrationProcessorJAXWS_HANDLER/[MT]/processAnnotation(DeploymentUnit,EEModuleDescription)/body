@@ -1,6 +1,10 @@
 {
   final WSEndpointHandlersMapping mapping=getOptionalAttachment(unit,WS_ENDPOINT_HANDLERS_MAPPING_KEY);
-  if (mapping == null)   return;
+  final VirtualFile root=unit.getAttachment(DEPLOYMENT_ROOT).getRoot();
+  final JBossWebservicesMetaData jbossWebservicesMD=unit.getAttachment(WSAttachmentKeys.JBOSS_WEBSERVICES_METADATA_KEY);
+  final CompositeIndex index=unit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
+  final boolean war=DeploymentTypeMarker.isType(DeploymentType.WAR,unit);
+  final JBossWebMetaData jwmd=ASHelper.getJBossWebMetaData(unit);
   for (  EEModuleClassDescription classDescription : moduleDescription.getClassDescriptions()) {
     ClassInfo classInfo=null;
     ClassAnnotationInformation<WebService,WebServiceAnnotationInfo> annotationInfo=classDescription.getAnnotationInformation(WebService.class);
@@ -11,27 +15,35 @@
     if (providreInfo != null) {
       classInfo=(ClassInfo)providreInfo.getClassLevelAnnotations().get(0).getTarget();
     }
-    if (classInfo != null && mapping.getHandlers(classInfo.name().toString()) != null) {
+    if (classInfo != null && isJaxwsEndpoint(classInfo,index,false)) {
       final String endpointClassName=classInfo.name().toString();
-      if (isEjb3(classInfo)) {
-        for (        final EJBEndpoint ejbEndpoint : getJaxwsEjbs(unit)) {
-          if (endpointClassName.equals(ejbEndpoint.getClassName())) {
-            for (            final String handlerClassName : mapping.getHandlers(endpointClassName)) {
-              final String ejbEndpointName=ejbEndpoint.getName();
-              final String handlerName=ejbEndpointName + "-" + handlerClassName;
-              final ComponentDescription jaxwsHandlerDescription=createComponentDescription(unit,handlerName,handlerClassName,ejbEndpointName);
-              propagateNamingContext(jaxwsHandlerDescription,ejbEndpoint);
+      final ConfigResolver configResolver=new ConfigResolver(classInfo,jbossWebservicesMD,jwmd,root,war);
+      final EndpointConfig config=configResolver.resolveEndpointConfig();
+      if (config != null) {
+        registerConfigMapping(endpointClassName,config,unit);
+      }
+      final Set<String> handlers=getHandlers(endpointClassName,config,configResolver,mapping);
+      if (!handlers.isEmpty()) {
+        if (isEjb3(classInfo)) {
+          for (          final EJBEndpoint ejbEndpoint : getJaxwsEjbs(unit)) {
+            if (endpointClassName.equals(ejbEndpoint.getClassName())) {
+              for (              final String handlerClassName : handlers) {
+                final String ejbEndpointName=ejbEndpoint.getName();
+                final String handlerName=ejbEndpointName + "-" + handlerClassName;
+                final ComponentDescription jaxwsHandlerDescription=createComponentDescription(unit,handlerName,handlerClassName,ejbEndpointName);
+                propagateNamingContext(jaxwsHandlerDescription,ejbEndpoint);
+              }
             }
           }
         }
-      }
  else {
-        for (        final POJOEndpoint pojoEndpoint : getJaxwsPojos(unit)) {
-          if (endpointClassName.equals(pojoEndpoint.getClassName())) {
-            for (            final String handlerClassName : mapping.getHandlers(endpointClassName)) {
-              final String pojoEndpointName=pojoEndpoint.getName();
-              final String handlerName=pojoEndpointName + "-" + handlerClassName;
-              createComponentDescription(unit,handlerName,handlerClassName,pojoEndpointName);
+          for (          final POJOEndpoint pojoEndpoint : getJaxwsPojos(unit)) {
+            if (endpointClassName.equals(pojoEndpoint.getClassName())) {
+              for (              final String handlerClassName : handlers) {
+                final String pojoEndpointName=pojoEndpoint.getName();
+                final String handlerName=pojoEndpointName + "-" + handlerClassName;
+                createComponentDescription(unit,handlerName,handlerClassName,pojoEndpointName);
+              }
             }
           }
         }
