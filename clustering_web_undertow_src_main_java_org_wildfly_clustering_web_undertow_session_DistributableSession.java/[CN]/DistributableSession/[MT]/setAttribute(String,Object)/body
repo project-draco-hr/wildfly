@@ -5,15 +5,8 @@
   Session<LocalSessionContext> session=this.entry.getKey();
   try (BatchContext context=this.manager.getSessionManager().getBatcher().resumeBatch(this.batch)){
     if (AUTHENTICATED_SESSION_ATTRIBUTE_NAME.equals(name)) {
-      AuthenticatedSession authSession=(AuthenticatedSession)value;
-      if (authSession.getMechanism().equals(HttpServletRequest.FORM_AUTH)) {
-        Account account=(Account)session.getAttributes().setAttribute(name,authSession.getAccount());
-        return (account != null) ? new AuthenticatedSession(account,HttpServletRequest.FORM_AUTH) : null;
-      }
-      LocalSessionContext localContext=session.getLocalContext();
-      AuthenticatedSession old=localContext.getAuthenticatedSession();
-      localContext.setAuthenticatedSession(authSession);
-      return old;
+      AuthenticatedSession auth=(AuthenticatedSession)value;
+      return AUTO_REAUTHENTICATING_MECHANISMS.contains(auth.getMechanism()) ? this.setLocalContext(auth) : session.getAttributes().setAttribute(name,auth);
     }
     if (!(value instanceof Serializable)) {
       throw new IllegalArgumentException(new NotSerializableException(value.getClass().getName()));
