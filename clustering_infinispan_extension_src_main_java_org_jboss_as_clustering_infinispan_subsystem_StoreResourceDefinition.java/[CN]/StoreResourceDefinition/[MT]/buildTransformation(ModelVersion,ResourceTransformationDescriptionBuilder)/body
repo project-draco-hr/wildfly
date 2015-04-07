@@ -1,4 +1,33 @@
 {
+  if (InfinispanModel.VERSION_3_0_0.requiresTransformation(version)) {
+    OperationTransformer putPropertyTransformer=new OperationTransformer(){
+      @Override public ModelNode transformOperation(      ModelNode operation){
+        if (operation.get(ModelDescriptionConstants.NAME).asString().equals(PROPERTIES.getName())) {
+          String key=operation.get("key").asString();
+          ModelNode value=Operations.getAttributeValue(operation);
+          PathAddress address=Operations.getPathAddress(operation);
+          ModelNode transformedOperation=Util.createAddOperation(address.append(StorePropertyResourceDefinition.pathElement(key)));
+          transformedOperation.get(StorePropertyResourceDefinition.VALUE.getName()).set(value);
+          return transformedOperation;
+        }
+        return operation;
+      }
+    }
+;
+    builder.addRawOperationTransformationOverride(MapOperations.MAP_PUT_DEFINITION.getName(),new SimpleOperationTransformer(putPropertyTransformer));
+    OperationTransformer removePropertyTransformer=new OperationTransformer(){
+      @Override public ModelNode transformOperation(      ModelNode operation){
+        if (operation.get(ModelDescriptionConstants.NAME).asString().equals(PROPERTIES.getName())) {
+          String key=operation.get("key").asString();
+          PathAddress address=Operations.getPathAddress(operation);
+          return Util.createRemoveOperation(address.append(StorePropertyResourceDefinition.pathElement(key)));
+        }
+        return operation;
+      }
+    }
+;
+    builder.addRawOperationTransformationOverride(MapOperations.MAP_PUT_DEFINITION.getName(),new SimpleOperationTransformer(removePropertyTransformer));
+  }
   if (InfinispanModel.VERSION_1_4_0.requiresTransformation(version)) {
     builder.getAttributeBuilder().addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,FETCH_STATE,PASSIVATION,PRELOAD,PURGE,SHARED,SINGLETON);
   }
