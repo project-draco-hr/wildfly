@@ -1,5 +1,37 @@
 {
   ResourceTransformationDescriptionBuilder builder=parent.addChildResource(WILDCARD_PATH);
+  if (InfinispanModel.VERSION_3_0_0.requiresTransformation(version)) {
+    OperationTransformer addAliasTransformer=new OperationTransformer(){
+      @Override public ModelNode transformOperation(      ModelNode operation){
+        String attributeName=Operations.getAttributeName(operation);
+        if (ALIASES.getName().equals(attributeName)) {
+          ModelNode value=Operations.getAttributeValue(operation);
+          PathAddress address=Operations.getPathAddress(operation);
+          ModelNode transformedOperation=Util.createOperation(ALIAS_ADD,address);
+          transformedOperation.get(ALIAS.getName()).set(value);
+          return transformedOperation;
+        }
+        return operation;
+      }
+    }
+;
+    builder.addRawOperationTransformationOverride(ListOperations.LIST_ADD_DEFINITION.getName(),new SimpleOperationTransformer(addAliasTransformer));
+    OperationTransformer removeAliasTransformer=new OperationTransformer(){
+      @Override public ModelNode transformOperation(      ModelNode operation){
+        String attributeName=Operations.getAttributeName(operation);
+        if (ALIASES.getName().equals(attributeName)) {
+          ModelNode value=Operations.getAttributeValue(operation);
+          PathAddress address=Operations.getPathAddress(operation);
+          ModelNode transformedOperation=Util.createOperation(ALIAS_REMOVE,address);
+          transformedOperation.get(ALIAS.getName()).set(value);
+          return transformedOperation;
+        }
+        return operation;
+      }
+    }
+;
+    builder.addRawOperationTransformationOverride(ListOperations.LIST_REMOVE_DEFINITION.getName(),new SimpleOperationTransformer(removeAliasTransformer));
+  }
   if (InfinispanModel.VERSION_1_5_0.requiresTransformation(version)) {
     builder.getAttributeBuilder().setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(false,false,new ModelNode(true)),STATISTICS_ENABLED).addRejectCheck(RejectAttributeChecker.UNDEFINED,STATISTICS_ENABLED).addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS,STATISTICS_ENABLED).addRejectCheck(new RejectAttributeChecker.SimpleRejectAttributeChecker(new ModelNode(false)),STATISTICS_ENABLED);
   }
