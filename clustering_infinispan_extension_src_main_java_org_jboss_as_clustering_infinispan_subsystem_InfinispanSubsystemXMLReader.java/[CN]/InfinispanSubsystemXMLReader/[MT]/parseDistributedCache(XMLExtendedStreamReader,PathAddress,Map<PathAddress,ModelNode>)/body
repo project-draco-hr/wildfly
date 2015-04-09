@@ -1,48 +1,50 @@
 {
-  String name=require(reader,Attribute.NAME);
-  PathAddress address=containerAddress.append(CacheType.DISTRIBUTED.pathElement(name));
+  String name=require(reader,XMLAttribute.NAME);
+  PathAddress address=containerAddress.append(DistributedCacheResourceDefinition.pathElement(name));
   ModelNode operation=Util.createAddOperation(address);
   operations.put(address,operation);
+  addSharedStateCacheOperations(address,operations);
   for (int i=0; i < reader.getAttributeCount(); i++) {
-    String value=reader.getAttributeValue(i);
-    Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+    XMLAttribute attribute=XMLAttribute.forName(reader.getAttributeLocalName(i));
 switch (attribute) {
 case OWNERS:
 {
-        DistributedCacheResourceDefinition.OWNERS.parseAndSetParameter(value,operation,reader);
+        readAttribute(reader,i,operation,DistributedCacheResourceDefinition.Attribute.OWNERS);
         break;
       }
 case L1_LIFESPAN:
 {
-      DistributedCacheResourceDefinition.L1_LIFESPAN.parseAndSetParameter(value,operation,reader);
+      readAttribute(reader,i,operation,DistributedCacheResourceDefinition.Attribute.L1_LIFESPAN);
       break;
     }
 case VIRTUAL_NODES:
 {
-    if (!this.schema.since(InfinispanSchema.VERSION_1_4)) {
-      String segments=SegmentsAndVirtualNodeConverter.virtualNodesToSegments(value);
-      DistributedCacheResourceDefinition.SEGMENTS.parseAndSetParameter(segments,operation,reader);
-      break;
+    if (this.schema.since(InfinispanSchema.VERSION_1_4)) {
+      throw ParseUtils.unexpectedAttribute(reader,i);
     }
+    String virtualNodes=readAttribute(reader,i,DistributedCacheResourceDefinition.Attribute.SEGMENTS).asString();
+    String segments=SegmentsAndVirtualNodeConverter.virtualNodesToSegments(virtualNodes);
+    setAttribute(reader,segments,operation,DistributedCacheResourceDefinition.Attribute.SEGMENTS);
+    break;
   }
 case SEGMENTS:
 {
   if (this.schema.since(InfinispanSchema.VERSION_1_4)) {
-    DistributedCacheResourceDefinition.SEGMENTS.parseAndSetParameter(value,operation,reader);
+    readAttribute(reader,i,operation,DistributedCacheResourceDefinition.Attribute.SEGMENTS);
     break;
   }
 }
 case CAPACITY_FACTOR:
 {
 if (this.schema.since(InfinispanSchema.VERSION_3_0)) {
-  DistributedCacheResourceDefinition.CAPACITY_FACTOR.parseAndSetParameter(value,operation,reader);
+  readAttribute(reader,i,operation,DistributedCacheResourceDefinition.Attribute.CAPACITY_FACTOR);
   break;
 }
 }
 case CONSISTENT_HASH_STRATEGY:
 {
 if (this.schema.since(InfinispanSchema.VERSION_3_0)) {
-DistributedCacheResourceDefinition.CONSISTENT_HASH_STRATEGY.parseAndSetParameter(value,operation,reader);
+readAttribute(reader,i,operation,DistributedCacheResourceDefinition.Attribute.CONSISTENT_HASH_STRATEGY);
 break;
 }
 }
@@ -52,15 +54,15 @@ this.parseClusteredCacheAttribute(reader,i,address,operations);
 }
 }
 }
-if (!operation.hasDefined(ClusteredCacheResourceDefinition.MODE.getName())) {
-throw ParseUtils.missingRequired(reader,EnumSet.of(Attribute.MODE));
+if (!operation.hasDefined(ClusteredCacheResourceDefinition.Attribute.MODE.getDefinition().getName())) {
+throw ParseUtils.missingRequired(reader,EnumSet.of(XMLAttribute.MODE));
 }
 while (reader.hasNext() && (reader.nextTag() != XMLStreamConstants.END_ELEMENT)) {
 if (this.schema.since(InfinispanSchema.VERSION_1_1)) {
 this.parseSharedStateCacheElement(reader,address,operations);
 }
  else {
-Element element=Element.forName(reader.getLocalName());
+XMLElement element=XMLElement.forName(reader.getLocalName());
 switch (element) {
 case REHASHING:
 {
