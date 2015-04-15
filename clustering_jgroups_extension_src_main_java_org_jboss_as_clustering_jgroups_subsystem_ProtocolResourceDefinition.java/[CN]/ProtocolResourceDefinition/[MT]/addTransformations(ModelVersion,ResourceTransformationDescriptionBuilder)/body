@@ -9,32 +9,20 @@
     }
 ;
     builder.getAttributeBuilder().setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(Attribute.MODULE.getDefinition().getDefaultValue()),Attribute.MODULE.getDefinition()).addRejectCheck(RejectAttributeChecker.DEFINED,Attribute.MODULE.getDefinition()).setValueConverter(typeConverter,DeprecatedAttribute.TYPE.getDefinition()).end();
-    OperationTransformer putPropertyTransformer=new OperationTransformer(){
+    OperationTransformer getPropertyTransformer=new OperationTransformer(){
       @Override public ModelNode transformOperation(      ModelNode operation){
         if (operation.get(ModelDescriptionConstants.NAME).asString().equals(Attribute.PROPERTIES.getDefinition().getName())) {
           String key=operation.get("key").asString();
-          ModelNode value=operation.get(ModelDescriptionConstants.VALUE);
           PathAddress address=Operations.getPathAddress(operation);
-          ModelNode transformedOperation=Util.createAddOperation(address.append(PropertyResourceDefinition.pathElement(key)));
-          transformedOperation.get(PropertyResourceDefinition.VALUE.getName()).set(value);
+          ModelNode transformedOperation=Util.createOperation(ModelDescriptionConstants.READ_ATTRIBUTE_OPERATION,address.append(PropertyResourceDefinition.pathElement(key)));
+          transformedOperation.get(ModelDescriptionConstants.NAME).set(PropertyResourceDefinition.VALUE.getName());
           return transformedOperation;
         }
         return operation;
       }
     }
 ;
-    builder.addRawOperationTransformationOverride(MapOperations.MAP_PUT_DEFINITION.getName(),new SimpleOperationTransformer(putPropertyTransformer));
-    OperationTransformer removePropertyTransformer=new OperationTransformer(){
-      @Override public ModelNode transformOperation(      ModelNode operation){
-        if (operation.get(ModelDescriptionConstants.NAME).asString().equals(Attribute.PROPERTIES.getDefinition().getName())) {
-          String key=operation.get("key").asString();
-          PathAddress address=Operations.getPathAddress(operation);
-          return Util.createRemoveOperation(address.append(PropertyResourceDefinition.pathElement(key)));
-        }
-        return operation;
-      }
-    }
-;
-    builder.addRawOperationTransformationOverride(MapOperations.MAP_PUT_DEFINITION.getName(),new SimpleOperationTransformer(removePropertyTransformer));
+    builder.addRawOperationTransformationOverride(MapOperations.MAP_GET_DEFINITION.getName(),new SimpleOperationTransformer(getPropertyTransformer));
+    builder.addRawOperationTransformationOverride(MapOperations.MAP_PUT_DEFINITION.getName(),PropertyResourceDefinition.PROPERTIES_OP_TRANSFORMER).addRawOperationTransformationOverride(MapOperations.MAP_REMOVE_DEFINITION.getName(),PropertyResourceDefinition.PROPERTIES_OP_TRANSFORMER).addRawOperationTransformationOverride(MapOperations.MAP_CLEAR_DEFINITION.getName(),PropertyResourceDefinition.PROPERTIES_OP_TRANSFORMER).addRawOperationTransformationOverride(ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION,PropertyResourceDefinition.PROPERTIES_OP_TRANSFORMER).addRawOperationTransformationOverride(ModelDescriptionConstants.UNDEFINE_ATTRIBUTE_OPERATION,PropertyResourceDefinition.PROPERTIES_OP_TRANSFORMER);
   }
 }
