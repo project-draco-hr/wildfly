@@ -1,8 +1,15 @@
 {
   this.container.start(DEFAULT_JBOSSAS);
+  final ModelControllerClient serverBClient=createModelControllerClient(DEFAULT_JBOSSAS);
+  LocalAuthenticationSetup.INSTANCE.setup(createManagementClient(serverBClient,DEFAULT_JBOSSAS),DEFAULT_JBOSSAS);
+  this.container.stop(DEFAULT_JBOSSAS);
+  this.container.start(DEFAULT_JBOSSAS);
+  ModelControllerClient serverAClient=null;
   try {
     this.deployer.deploy(DEFAULT_AS_DEPLOYMENT);
     this.container.start(JBOSSAS_WITH_REMOTE_OUTBOUND_CONNECTION);
+    serverAClient=createModelControllerClient(JBOSSAS_WITH_REMOTE_OUTBOUND_CONNECTION);
+    SystemPropertySetup.INSTANCE.setup(createManagementClient(serverAClient,JBOSSAS_WITH_REMOTE_OUTBOUND_CONNECTION),JBOSSAS_WITH_REMOTE_OUTBOUND_CONNECTION);
     this.deployer.deploy(DEPLOYMENT_WITH_JBOSS_EJB_CLIENT_XML);
     final NodeNameEcho nonClusteredBean=(NodeNameEcho)this.context.lookup("ejb:/" + MODULE_NAME + "//"+ NonClusteredStatefulNodeNameEcho.class.getSimpleName()+ "!"+ NodeNameEcho.class.getName()+ "?stateful");
     final String nodeNameBeforeShutdown=nonClusteredBean.getNodeName(true);
@@ -14,20 +21,30 @@
   finally {
     try {
       this.deployer.undeploy(DEPLOYMENT_WITH_JBOSS_EJB_CLIENT_XML);
-      this.container.stop(JBOSSAS_WITH_REMOTE_OUTBOUND_CONNECTION);
+      SystemPropertySetup.INSTANCE.tearDown(createManagementClient(serverAClient,JBOSSAS_WITH_REMOTE_OUTBOUND_CONNECTION),JBOSSAS_WITH_REMOTE_OUTBOUND_CONNECTION);
     }
  catch (    Exception e) {
       logger.debug("Exception during container shutdown",e);
+    }
+ finally {
+      this.container.stop(JBOSSAS_WITH_REMOTE_OUTBOUND_CONNECTION);
     }
     try {
       if (!this.container.isStarted(DEFAULT_JBOSSAS)) {
         this.container.start(DEFAULT_JBOSSAS);
       }
       this.deployer.undeploy(DEFAULT_AS_DEPLOYMENT);
-      this.container.stop(DEFAULT_JBOSSAS);
+      LocalAuthenticationSetup.INSTANCE.tearDown(createManagementClient(serverBClient,DEFAULT_JBOSSAS),DEFAULT_JBOSSAS);
     }
  catch (    Exception e) {
       logger.debug("Exception during container shutdown",e);
     }
+ finally {
+      this.container.stop(DEFAULT_JBOSSAS);
+    }
+    if (serverAClient != null) {
+      serverAClient.close();
+    }
+    serverBClient.close();
   }
 }
