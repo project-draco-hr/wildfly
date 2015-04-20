@@ -10,54 +10,48 @@
     ROOT_LOGGER.trace("Trying to acquire lock: " + lock + " for entity bean "+ instance+ " during invocation: "+ context);
   }
   final Object lockOwner=getLockOwner(transactionSynchronizationRegistry);
-  lock.pushOwner(lockOwner);
-  try {
-    lock.lock();
-    boolean syncRegistered=false;
+  lock.lock(lockOwner);
+  boolean syncRegistered=false;
 synchronized (lock) {
-      if (instance.isReloadRequired()) {
-        instance.reload();
-      }
-      if (ROOT_LOGGER.isTraceEnabled()) {
-        ROOT_LOGGER.trace("Acquired lock: " + lock + " for entity bean instance: "+ instance+ " during invocation: "+ context);
-      }
-      if (context.getPrivateData(InternalInvocationMarker.class) == null) {
-        if (instance.isRemoved() || instance.isDiscarded()) {
-          final Object primaryKey=context.getPrivateData(EntityBeanComponent.PRIMARY_KEY_CONTEXT_KEY);
-          component.getCache().release(instance,true);
-          lock.unlock();
-          throw EjbLogger.ROOT_LOGGER.instanceWasRemoved(component.getComponentName(),primaryKey);
-        }
-      }
-      Object currentTransactionKey=null;
-      try {
-        currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
-        if (!instance.isSynchronizeRegistered()) {
-          if (currentTransactionKey != null) {
-            final Synchronization entitySynchronization=new EntityBeanSynchronization(instance,lockOwner);
-            transactionSynchronizationRegistry.registerInterposedSynchronization(entitySynchronization);
-            syncRegistered=true;
-            if (ROOT_LOGGER.isTraceEnabled()) {
-              ROOT_LOGGER.trace("Registered tx synchronization: " + entitySynchronization + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
-            }
-          }
-          instance.setSynchronizationRegistered(true);
-        }
-        return context.proceed();
-      }
-  finally {
-        if (currentTransactionKey == null) {
-          instance.store();
-          releaseInstance(instance,true);
-        }
- else         if (!syncRegistered) {
-          component.getCache().release(instance,true);
-          lock.unlock();
-        }
+    if (instance.isReloadRequired()) {
+      instance.reload();
+    }
+    if (ROOT_LOGGER.isTraceEnabled()) {
+      ROOT_LOGGER.trace("Acquired lock: " + lock + " for entity bean instance: "+ instance+ " during invocation: "+ context);
+    }
+    if (context.getPrivateData(InternalInvocationMarker.class) == null) {
+      if (instance.isRemoved() || instance.isDiscarded()) {
+        final Object primaryKey=context.getPrivateData(EntityBeanComponent.PRIMARY_KEY_CONTEXT_KEY);
+        component.getCache().release(instance,true);
+        lock.unlock(lockOwner);
+        throw EjbLogger.ROOT_LOGGER.instanceWasRemoved(component.getComponentName(),primaryKey);
       }
     }
-  }
+    Object currentTransactionKey=null;
+    try {
+      currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
+      if (!instance.isSynchronizeRegistered()) {
+        if (currentTransactionKey != null) {
+          final Synchronization entitySynchronization=new EntityBeanSynchronization(instance,lockOwner);
+          transactionSynchronizationRegistry.registerInterposedSynchronization(entitySynchronization);
+          syncRegistered=true;
+          if (ROOT_LOGGER.isTraceEnabled()) {
+            ROOT_LOGGER.trace("Registered tx synchronization: " + entitySynchronization + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
+          }
+        }
+        instance.setSynchronizationRegistered(true);
+      }
+      return context.proceed();
+    }
   finally {
-    lock.popOwner();
+      if (currentTransactionKey == null) {
+        instance.store();
+        releaseInstance(instance,true);
+      }
+ else       if (!syncRegistered) {
+        component.getCache().release(instance,true);
+        lock.unlock(lockOwner);
+      }
+    }
   }
 }
