@@ -1,0 +1,24 @@
+{
+  URL testURL=new URL(url.toString() + "ResponseBufferSizeServlet?" + ResponseBufferSizeServlet.SIZE_CHANGE_PARAM_NAME+ "=1.5"+ "&"+ ResponseBufferSizeServlet.DATA_LENGTH_IN_PERCENTS_PARAM_NAME+ "=0.8");
+  final HttpGet request=new HttpGet(testURL.toString());
+  CloseableHttpClient httpClient=HttpClientBuilder.create().build();
+  CloseableHttpResponse response=null;
+  try {
+    response=httpClient.execute(request);
+    Assert.assertEquals("Failed to access " + testURL,HttpURLConnection.HTTP_OK,response.getStatusLine().getStatusCode());
+    String content=EntityUtils.toString(response.getEntity());
+    Assert.assertFalse(content.contains(ResponseBufferSizeServlet.RESPONSE_COMMITED_MESSAGE));
+    final Header[] transferEncodingHeaders=response.getHeaders("Transfer-Encoding");
+    log.info("transferEncodingHeaders: " + Arrays.toString(transferEncodingHeaders));
+    final Header[] contentLengthHeader=response.getHeaders("Content-Length");
+    log.info("contentLengthHeader: " + Arrays.toString(contentLengthHeader));
+    for (    Header transferEncodingHeader : transferEncodingHeaders) {
+      Assert.assertNotEquals("Transfer-Encoding shouldn't be chunked as set BufferSize shouldn't be filled yet, " + "probably caused due https://bugzilla.redhat.com/show_bug.cgi?id=1212566","chunked",transferEncodingHeader.getValue());
+    }
+    Assert.assertFalse("Content-Length header not specified",contentLengthHeader.length == 0);
+  }
+  finally {
+    IOUtils.closeQuietly(response);
+    httpClient.close();
+  }
+}
