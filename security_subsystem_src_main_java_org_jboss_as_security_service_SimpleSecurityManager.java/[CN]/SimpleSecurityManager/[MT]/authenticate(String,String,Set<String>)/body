@@ -1,20 +1,23 @@
 {
-  SecurityContext context=SecurityContextAssociation.getSecurityContext();
-  SecurityContextUtil util=context.getUtil();
-  Object credential=util.getCredential();
-  Subject subject=null;
-  if (credential instanceof RemotingConnectionCredential) {
-    subject=((RemotingConnectionCredential)credential).getSubject();
-  }
-  if (authenticate(context,subject) == false) {
-    throw SecurityLogger.ROOT_LOGGER.invalidUserException();
-  }
+  SecurityContext current=SecurityContextAssociation.getSecurityContext();
   SecurityContext previous=contexts.peek();
+  boolean skipReauthentication=current.getSubjectInfo() != null && current.getSubjectInfo().getAuthenticatedSubject() != null && previous != null && current.getSecurityDomain().equals(previous.getSecurityDomain());
+  if (!skipReauthentication) {
+    SecurityContextUtil util=current.getUtil();
+    Object credential=util.getCredential();
+    Subject subject=null;
+    if (credential instanceof RemotingConnectionCredential) {
+      subject=((RemotingConnectionCredential)credential).getSubject();
+    }
+    if (authenticate(current,subject) == false) {
+      throw SecurityLogger.ROOT_LOGGER.invalidUserException();
+    }
+  }
   if (runAs != null) {
     RunAs runAsIdentity=new RunAsIdentity(runAs,runAsPrincipal,extraRoles);
-    context.setOutgoingRunAs(runAsIdentity);
+    current.setOutgoingRunAs(runAsIdentity);
   }
  else   if (propagate && previous != null && previous.getOutgoingRunAs() != null) {
-    context.setOutgoingRunAs(previous.getOutgoingRunAs());
+    current.setOutgoingRunAs(previous.getOutgoingRunAs());
   }
 }
