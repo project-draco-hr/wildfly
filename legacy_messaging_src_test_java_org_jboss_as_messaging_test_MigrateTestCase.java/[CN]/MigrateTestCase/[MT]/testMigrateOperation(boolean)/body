@@ -1,0 +1,37 @@
+{
+  String subsystemXml=readResource("subsystem_migration.xml");
+  newSubsystemAdditionalInitialization additionalInitialization=new newSubsystemAdditionalInitialization();
+  KernelServices services=createKernelServicesBuilder(additionalInitialization).setSubsystemXml(subsystemXml).build();
+  ModelNode model=services.readWholeModel();
+  assertFalse(additionalInitialization.extensionAdded);
+  assertTrue(model.get(SUBSYSTEM,MessagingExtension.SUBSYSTEM_NAME).isDefined());
+  assertFalse(model.get(SUBSYSTEM,MESSAGING_ACTIVEMQ_SUBSYSTEM_NAME).isDefined());
+  ModelNode migrateOp=new ModelNode();
+  migrateOp.get(OP).set("migrate");
+  migrateOp.get("add-legacy-entries").set(addLegacyEntries);
+  migrateOp.get(OP_ADDR).add(SUBSYSTEM,MessagingExtension.SUBSYSTEM_NAME);
+  checkOutcome(services.executeOperation(migrateOp));
+  model=services.readWholeModel();
+  assertTrue(additionalInitialization.extensionAdded);
+  assertFalse(model.get(SUBSYSTEM,MessagingExtension.SUBSYSTEM_NAME).isDefined());
+  assertTrue(model.get(SUBSYSTEM,MESSAGING_ACTIVEMQ_SUBSYSTEM_NAME).isDefined());
+  ModelNode newSubsystem=model.get(SUBSYSTEM,MESSAGING_ACTIVEMQ_SUBSYSTEM_NAME);
+  ModelNode newServer=newSubsystem.get("server","default");
+  assertNotNull(newServer);
+  assertTrue(newServer.isDefined());
+  if (addLegacyEntries) {
+    ModelNode jmsQueueLegacyEntries=newServer.get("jms-queue","testQueue","legacy-entries");
+    assertTrue(jmsQueueLegacyEntries.toJSONString(true),jmsQueueLegacyEntries.isDefined());
+    assertEquals(1,jmsQueueLegacyEntries.asList().size());
+    ModelNode jmsTopicLegacyEntries=newServer.get("jms-topic","testTopic","legacy-entries");
+    assertTrue(jmsTopicLegacyEntries.toJSONString(true),jmsQueueLegacyEntries.isDefined());
+    assertEquals(1,jmsTopicLegacyEntries.asList().size());
+    assertTrue(newServer.get("legacy-connection-factory","RemoteConnectionFactory").isDefined());
+  }
+ else {
+    assertFalse(newServer.get("jms-queue","testQueue","legacy-entries").isDefined());
+    assertFalse(newServer.get("jms-topic","testTopic","legacy-entries").isDefined());
+    assertFalse(newServer.get("jms-topic","testTopic","legacy-entries").isDefined());
+    assertFalse(newServer.get("legacy-connection-factory","RemoteConnectionFactory").isDefined());
+  }
+}
