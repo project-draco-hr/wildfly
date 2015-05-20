@@ -12,9 +12,25 @@
   final boolean ignoreFlush=ServletContainerDefinition.IGNORE_FLUSH.resolveModelAttribute(context,model).asBoolean();
   final boolean eagerFilterInit=ServletContainerDefinition.EAGER_FILTER_INIT.resolveModelAttribute(context,model).asBoolean();
   final boolean disableCachingForSecuredPages=ServletContainerDefinition.DISABLE_CACHING_FOR_SECURED_PAGES.resolveModelAttribute(context,model).asBoolean();
+  Boolean directoryListingEnabled=null;
+  if (model.hasDefined(Constants.DIRECTORY_LISTING)) {
+    directoryListingEnabled=ServletContainerDefinition.DIRECTORY_LISTING.resolveModelAttribute(context,model).asBoolean();
+  }
   final int sessionTimeout=ServletContainerDefinition.DEFAULT_SESSION_TIMEOUT.resolveModelAttribute(context,model).asInt();
   WebsocketsDefinition.WebSocketInfo info=WebsocketsDefinition.INSTANCE.getConfig(context,model);
-  final ServletContainerService container=new ServletContainerService(allowNonStandardWrappers,ServletStackTraces.valueOf(stackTracesString.toUpperCase().replace('-','_')),config,jspConfig,defaultEncoding,useListenerEncoding,ignoreFlush,eagerFilterInit,sessionTimeout,disableCachingForSecuredPages,info != null,info != null && info.isDispatchToWorker());
+  final Map<String,String> mimeMappings=new HashMap<>();
+  if (fullModel.hasDefined(Constants.MIME_MAPPING)) {
+    for (    final Property mapping : fullModel.get(Constants.MIME_MAPPING).asPropertyList()) {
+      mimeMappings.put(mapping.getName(),MimeMappingDefinition.VALUE.resolveModelAttribute(context,mapping.getValue()).asString());
+    }
+  }
+  List<String> welcomeFiles=new ArrayList<>();
+  if (fullModel.hasDefined(Constants.WELCOME_FILE)) {
+    for (    final Property welcome : fullModel.get(Constants.WELCOME_FILE).asPropertyList()) {
+      welcomeFiles.add(welcome.getName());
+    }
+  }
+  final ServletContainerService container=new ServletContainerService(allowNonStandardWrappers,ServletStackTraces.valueOf(stackTracesString.toUpperCase().replace('-','_')),config,jspConfig,defaultEncoding,useListenerEncoding,ignoreFlush,eagerFilterInit,sessionTimeout,disableCachingForSecuredPages,info != null,info != null && info.isDispatchToWorker(),mimeMappings,welcomeFiles,directoryListingEnabled);
   final ServiceTarget target=context.getServiceTarget();
   final ServiceBuilder<ServletContainerService> builder=target.addService(UndertowService.SERVLET_CONTAINER.append(name),container);
   if (bufferCache != null) {
