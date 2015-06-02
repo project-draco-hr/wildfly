@@ -1,0 +1,48 @@
+{
+  final WildFlyManagedConfiguration masterConfig=createConfiguration("domain.xml","host-master.xml",getClass().getSimpleName());
+  final DomainLifecycleUtil masterUtils=new DomainLifecycleUtil(masterConfig);
+  final WildFlyManagedConfiguration slaveConfig=createConfiguration("domain.xml","host-slave.xml",getClass().getSimpleName(),"slave",slaveAddress,19999);
+  final DomainLifecycleUtil slaveUtils=new DomainLifecycleUtil(slaveConfig);
+  try {
+    masterUtils.start();
+    slaveUtils.start();
+    PathAddress jgroupsTcpAddr=PathAddress.pathAddress(PROFILE,"full-ha").append(SUBSYSTEM,"jgroups").append("stack","tcp");
+    final ModelNode originalMasterStack=readResource(masterUtils.getDomainClient(),jgroupsTcpAddr);
+    originalMasterStack.protect();
+    final ModelNode originalSlaveStack=readResource(slaveUtils.getDomainClient(),jgroupsTcpAddr);
+    originalSlaveStack.protect();
+    Assert.assertEquals(originalMasterStack,originalSlaveStack);
+    final String protocolName="FD";
+    int index=-1;
+    ModelNode value=null;
+    Iterator<Property> it=originalMasterStack.get(PROTOCOL).asPropertyList().iterator();
+    for (int i=0; it.hasNext(); i++) {
+      Property property=it.next();
+      if (property.getName().equals(protocolName)) {
+        value=property.getValue();
+        index=i;
+        break;
+      }
+    }
+    Assert.assertTrue(0 <= index);
+    Assert.assertTrue(index < originalMasterStack.get(PROTOCOL).keys().size() - 2);
+    DomainTestUtils.executeForResult(Util.createRemoveOperation(jgroupsTcpAddr.append(PROTOCOL,protocolName)),masterUtils.getDomainClient());
+    reloadMaster(masterUtils,true);
+    ModelNode add=value.clone();
+    add.get(OP).set(ADD);
+    add.get(OP_ADDR).set(jgroupsTcpAddr.append(PROTOCOL,protocolName).toModelNode());
+    add.get(ADD_INDEX).set(index);
+    DomainTestUtils.executeForResult(add,masterUtils.getDomainClient());
+    reloadMaster(masterUtils,false);
+    ModelNode slaveStack=readResource(slaveUtils.getDomainClient(),jgroupsTcpAddr);
+    Assert.assertEquals(originalMasterStack,slaveStack);
+  }
+  finally {
+    try {
+      slaveUtils.stop();
+    }
+  finally {
+      masterUtils.stop();
+    }
+  }
+}

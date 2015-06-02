@@ -1,0 +1,30 @@
+{
+  if (schema.getMajor() < 3) {
+    return;
+  }
+  final KernelServices services=this.buildKernelServices();
+  ModelNode originalModel=services.readWholeModel();
+  final ModelNode originalFork=originalModel.get(SUBSYSTEM,getMainSubsystemName(),CHANNEL,"ee",FORK,"web");
+  Assert.assertTrue(originalFork.isDefined());
+  originalFork.protect();
+  Assert.assertTrue(0 < originalFork.get(PROTOCOL).keys().size());
+  final ModelNode originalStack=originalModel.get(SUBSYSTEM,getMainSubsystemName(),STACK,"maximal");
+  Assert.assertTrue(originalStack.isDefined());
+  originalStack.protect();
+  final PathAddress subsystemAddress=PathAddress.pathAddress(SUBSYSTEM,getMainSubsystemName());
+  final PathAddress forkAddress=subsystemAddress.append(CHANNEL,"ee").append(FORK,"web");
+  final PathAddress stackAddress=subsystemAddress.append(STACK,"maximal");
+  ModelNode add=Util.createAddOperation(forkAddress.append(PROTOCOL,"MERGE2"));
+  add.get(ADD_INDEX).set(0);
+  ModelTestUtils.checkOutcome(services.executeOperation(add));
+  final ModelNode fork=services.readWholeModel().get(SUBSYSTEM,getMainSubsystemName(),CHANNEL,"ee",FORK,"web");
+  Assert.assertEquals(originalFork.keys().size() + 1,fork.get(PROTOCOL).keys().size());
+  Assert.assertEquals("MERGE2",fork.get(PROTOCOL).keys().iterator().next());
+  ModelNode remove=Util.createRemoveOperation(stackAddress.append(PROTOCOL,"FD"));
+  ModelTestUtils.checkOutcome(services.executeOperation(remove));
+  add=Util.createAddOperation(stackAddress.append(PROTOCOL,"FD"));
+  add.get(ADD_INDEX).set(3);
+  ModelTestUtils.checkOutcome(services.executeOperation(add));
+  final ModelNode stack=services.readWholeModel().get(SUBSYSTEM,getMainSubsystemName(),STACK,"maximal");
+  Assert.assertEquals(originalStack,stack);
+}
