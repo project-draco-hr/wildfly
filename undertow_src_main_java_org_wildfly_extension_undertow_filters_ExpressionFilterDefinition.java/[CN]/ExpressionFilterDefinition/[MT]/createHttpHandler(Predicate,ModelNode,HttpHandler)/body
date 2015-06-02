@@ -1,0 +1,29 @@
+{
+  String expression=model.get(EXPRESSION.getName()).asString();
+  String moduleName=null;
+  if (model.hasDefined(MODULE.getName())) {
+    moduleName=model.get(MODULE.getName()).asString();
+  }
+  ClassLoader classLoader;
+  if (moduleName == null) {
+    classLoader=getClass().getClassLoader();
+  }
+ else {
+    try {
+      ModuleLoader moduleLoader=Module.getBootModuleLoader();
+      Module filterModule=moduleLoader.loadModule(ModuleIdentifier.fromString(moduleName));
+      classLoader=filterModule.getClassLoader();
+    }
+ catch (    ModuleLoadException e) {
+      throw UndertowLogger.ROOT_LOGGER.couldNotLoadHandlerFromModule(expression,moduleName,e);
+    }
+  }
+  List<PredicatedHandler> handlers=PredicatedHandlersParser.parse(expression,classLoader);
+  UndertowLogger.ROOT_LOGGER.debugf("Creating http handler %s from module %s",expression,moduleName);
+  if (predicate != null) {
+    return Handlers.predicate(predicate,Handlers.predicates(handlers,next),next);
+  }
+ else {
+    return Handlers.predicates(handlers,next);
+  }
+}
