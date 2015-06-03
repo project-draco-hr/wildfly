@@ -1,6 +1,21 @@
 {
   super.start(context);
-  modCluster=ModCluster.builder(workerInjectedValue.getValue()).setHealthCheckInterval(healthCheckInterval).setMaxRequestTime(maxRequestTime).setCacheConnections(cachedConnections).setQueueNewRequests(requestQueueSize > 0).setRequestQueueSize(requestQueueSize).setRemoveBrokenNodes(removeBrokenNodes).build();
+  SecurityRealm realm=securityRealm.getOptionalValue();
+  final ModCluster.Builder modClusterBuilder;
+  final XnioWorker worker=workerInjectedValue.getValue();
+  if (realm == null) {
+    modClusterBuilder=ModCluster.builder(worker);
+  }
+ else {
+    SSLContext sslContext=realm.getSSLContext();
+    OptionMap.Builder builder=OptionMap.builder();
+    builder.set(Options.USE_DIRECT_BUFFERS,true);
+    OptionMap combined=builder.getMap();
+    XnioSsl xnioSsl=new UndertowXnioSsl(worker.getXnio(),combined,sslContext);
+    modClusterBuilder=ModCluster.builder(worker,UndertowClient.getInstance(),xnioSsl);
+  }
+  modClusterBuilder.setHealthCheckInterval(healthCheckInterval).setMaxRequestTime(maxRequestTime).setCacheConnections(cachedConnections).setQueueNewRequests(requestQueueSize > 0).setRequestQueueSize(requestQueueSize).setRemoveBrokenNodes(removeBrokenNodes);
+  modCluster=modClusterBuilder.build();
   MCMPConfig.Builder builder=MCMPConfig.builder();
   InetAddress multicastAddress=advertiseSocketBinding.getValue().getMulticastAddress();
   if (multicastAddress == null) {
