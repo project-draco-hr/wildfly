@@ -5,59 +5,53 @@
   final Object threadLock=instance.getThreadLock();
   final TransactionSynchronizationRegistry transactionSynchronizationRegistry=component.getTransactionSynchronizationRegistry();
   final Object lockOwner=getLockOwner(transactionSynchronizationRegistry);
-  lock.pushOwner(lockOwner);
-  try {
-    final AccessTimeoutDetails timeout=component.getAccessTimeout(context.getMethod());
-    if (ROOT_LOGGER.isTraceEnabled()) {
-      ROOT_LOGGER.trace("Trying to acquire lock: " + lock + " for stateful component instance: "+ instance+ " during invocation: "+ context);
-    }
-    boolean acquired=lock.tryLock(timeout.getValue(),timeout.getTimeUnit());
-    if (!acquired) {
-      throw EjbLogger.ROOT_LOGGER.failToObtainLock(component.getComponentName(),timeout.getValue(),timeout.getTimeUnit());
-    }
-synchronized (threadLock) {
-      if (ROOT_LOGGER.isTraceEnabled()) {
-        ROOT_LOGGER.trace("Acquired lock: " + lock + " for stateful component instance: "+ instance+ " during invocation: "+ context);
-      }
-      Object currentTransactionKey=null;
-      boolean wasTxSyncRegistered=false;
-      try {
-        if (containerManagedTransactions) {
-          if (!instance.isSynchronizationRegistered()) {
-            currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
-            final int status=transactionSynchronizationRegistry.getTransactionStatus();
-            if (currentTransactionKey != null && status != Status.STATUS_COMMITTED && status != Status.STATUS_ROLLEDBACK) {
-              final Synchronization statefulSessionSync=new StatefulSessionSynchronization(instance,lockOwner);
-              transactionSynchronizationRegistry.registerInterposedSynchronization(statefulSessionSync);
-              wasTxSyncRegistered=true;
-              if (ROOT_LOGGER.isTraceEnabled()) {
-                ROOT_LOGGER.trace("Registered tx synchronization: " + statefulSessionSync + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
-              }
-              instance.afterBegin();
-              instance.setSynchronizationRegistered(true);
-              context.putPrivateData(StatefulTransactionMarker.class,StatefulTransactionMarker.of(true));
-            }
-          }
- else {
-            context.putPrivateData(StatefulTransactionMarker.class,StatefulTransactionMarker.of(false));
-          }
-        }
-        return context.proceed();
-      }
-  finally {
-        if (!wasTxSyncRegistered && !instance.isSynchronizationRegistered()) {
-          releaseInstance(instance);
-        }
- else         if (!wasTxSyncRegistered) {
-          releaseLock(instance);
-          if (!instance.isDiscarded()) {
-            instance.getComponent().getCache().release(instance);
-          }
-        }
-      }
-    }
+  final AccessTimeoutDetails timeout=component.getAccessTimeout(context.getMethod());
+  if (ROOT_LOGGER.isTraceEnabled()) {
+    ROOT_LOGGER.trace("Trying to acquire lock: " + lock + " for stateful component instance: "+ instance+ " during invocation: "+ context);
   }
+  boolean acquired=lock.tryLock(timeout.getValue(),timeout.getTimeUnit(),lockOwner);
+  if (!acquired) {
+    throw EjbLogger.ROOT_LOGGER.failToObtainLock(component.getComponentName(),timeout.getValue(),timeout.getTimeUnit());
+  }
+synchronized (threadLock) {
+    if (ROOT_LOGGER.isTraceEnabled()) {
+      ROOT_LOGGER.trace("Acquired lock: " + lock + " for stateful component instance: "+ instance+ " during invocation: "+ context);
+    }
+    Object currentTransactionKey=null;
+    boolean wasTxSyncRegistered=false;
+    try {
+      if (containerManagedTransactions) {
+        if (!instance.isSynchronizationRegistered()) {
+          currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
+          final int status=transactionSynchronizationRegistry.getTransactionStatus();
+          if (currentTransactionKey != null && status != Status.STATUS_COMMITTED && status != Status.STATUS_ROLLEDBACK) {
+            final Synchronization statefulSessionSync=new StatefulSessionSynchronization(instance,lockOwner);
+            transactionSynchronizationRegistry.registerInterposedSynchronization(statefulSessionSync);
+            wasTxSyncRegistered=true;
+            if (ROOT_LOGGER.isTraceEnabled()) {
+              ROOT_LOGGER.trace("Registered tx synchronization: " + statefulSessionSync + " for tx: "+ currentTransactionKey+ " associated with stateful component instance: "+ instance);
+            }
+            instance.afterBegin();
+            instance.setSynchronizationRegistered(true);
+            context.putPrivateData(StatefulTransactionMarker.class,StatefulTransactionMarker.of(true));
+          }
+        }
+ else {
+          context.putPrivateData(StatefulTransactionMarker.class,StatefulTransactionMarker.of(false));
+        }
+      }
+      return context.proceed();
+    }
   finally {
-    lock.popOwner();
+      if (!wasTxSyncRegistered && !instance.isSynchronizationRegistered()) {
+        releaseInstance(instance);
+      }
+ else       if (!wasTxSyncRegistered) {
+        releaseLock(instance);
+        if (!instance.isDiscarded()) {
+          instance.getComponent().getCache().release(instance);
+        }
+      }
+    }
   }
 }
