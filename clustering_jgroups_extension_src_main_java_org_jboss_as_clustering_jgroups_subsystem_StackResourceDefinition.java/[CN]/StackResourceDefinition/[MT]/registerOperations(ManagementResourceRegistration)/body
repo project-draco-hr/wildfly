@@ -14,8 +14,7 @@
       }
       if (transport != null) {
         String type=ProtocolResourceDefinition.TYPE.resolveModelAttribute(context,transport).asString();
-        PathElement transportPath=TransportResourceDefinition.pathElement(type);
-        PathAddress transportAddress=address.append(transportPath);
+        PathAddress transportAddress=address.append(TransportResourceDefinition.pathElement(type));
         ModelNode transportOperation=Util.createAddOperation(transportAddress);
         for (        AttributeDefinition attribute : TransportResourceDefinition.ATTRIBUTES) {
           String name=attribute.getName();
@@ -23,13 +22,19 @@
             transportOperation.get(name).set(transport.get(name));
           }
         }
-        context.addStep(transportOperation,context.getResourceRegistration().getOperationHandler(PathAddress.pathAddress(transportPath),ModelDescriptionConstants.ADD),OperationContext.Stage.MODEL);
+        context.addStep(transportOperation,new ReloadRequiredAddStepHandler(TransportResourceDefinition.ATTRIBUTES),OperationContext.Stage.MODEL);
+        if (transport.hasDefined(ProtocolResourceDefinition.PROPERTIES.getName())) {
+          for (          Property property : operation.get(ProtocolResourceDefinition.PROPERTIES.getName()).asPropertyList()) {
+            ModelNode propertyOperation=Util.createAddOperation(transportAddress.append(property.getName()));
+            propertyOperation.set(PropertyResourceDefinition.VALUE.getName()).set(property.getValue());
+            context.addStep(propertyOperation,new ReloadRequiredAddStepHandler(PropertyResourceDefinition.VALUE),OperationContext.Stage.MODEL);
+          }
+        }
       }
       if (!protocols.isEmpty()) {
         for (        ModelNode protocol : protocols) {
           String type=ProtocolResourceDefinition.TYPE.resolveModelAttribute(context,protocol).asString();
-          PathElement protocolPath=ProtocolResourceDefinition.pathElement(type);
-          PathAddress protocolAddress=address.append(protocolPath);
+          PathAddress protocolAddress=address.append(ProtocolResourceDefinition.pathElement(type));
           ModelNode protocolOperation=Util.createAddOperation(protocolAddress);
           for (          AttributeDefinition attribute : ProtocolResourceDefinition.ATTRIBUTES) {
             String name=attribute.getName();
@@ -37,7 +42,14 @@
               protocolOperation.get(name).set(protocol.get(name));
             }
           }
-          context.addStep(protocolOperation,context.getResourceRegistration().getOperationHandler(PathAddress.pathAddress(protocolPath),ModelDescriptionConstants.ADD),OperationContext.Stage.MODEL);
+          context.addStep(protocolOperation,new ReloadRequiredAddStepHandler(ProtocolResourceDefinition.ATTRIBUTES),OperationContext.Stage.MODEL);
+          if (protocol.hasDefined(ProtocolResourceDefinition.PROPERTIES.getName())) {
+            for (            Property property : operation.get(ProtocolResourceDefinition.PROPERTIES.getName()).asPropertyList()) {
+              ModelNode propertyOperation=Util.createAddOperation(protocolAddress.append(property.getName()));
+              propertyOperation.set(PropertyResourceDefinition.VALUE.getName()).set(property.getValue());
+              context.addStep(propertyOperation,new ReloadRequiredAddStepHandler(PropertyResourceDefinition.VALUE),OperationContext.Stage.MODEL);
+            }
+          }
         }
       }
     }
@@ -49,8 +61,7 @@
     @Override public void execute(    OperationContext context,    ModelNode operation){
       PathAddress address=context.getCurrentAddress();
       String protocol=operation.require(ProtocolResourceDefinition.TYPE.getName()).asString();
-      PathElement protocolPath=ProtocolResourceDefinition.pathElement(protocol);
-      PathAddress protocolAddress=address.append(protocolPath);
+      PathAddress protocolAddress=address.append(ProtocolResourceDefinition.pathElement(protocol));
       ModelNode protocolOperation=Util.createAddOperation(protocolAddress);
       for (      AttributeDefinition attribute : ProtocolResourceDefinition.ATTRIBUTES) {
         String name=attribute.getName();
@@ -58,7 +69,14 @@
           protocolOperation.get(name).set(operation.get(name));
         }
       }
-      context.addStep(protocolOperation,context.getResourceRegistration().getOperationHandler(PathAddress.pathAddress(protocolPath),ModelDescriptionConstants.ADD),OperationContext.Stage.MODEL);
+      context.addStep(protocolOperation,new ReloadRequiredAddStepHandler(ProtocolResourceDefinition.ATTRIBUTES),OperationContext.Stage.MODEL);
+      if (operation.hasDefined(ProtocolResourceDefinition.PROPERTIES.getName())) {
+        for (        Property property : operation.get(ProtocolResourceDefinition.PROPERTIES.getName()).asPropertyList()) {
+          ModelNode addPropertyOperation=Util.createAddOperation(protocolAddress.append(PropertyResourceDefinition.pathElement(property.getName())));
+          addPropertyOperation.get(PropertyResourceDefinition.VALUE.getName()).set(property.getValue());
+          context.addStep(addPropertyOperation,new ReloadRequiredAddStepHandler(PropertyResourceDefinition.VALUE),OperationContext.Stage.MODEL);
+        }
+      }
     }
   }
 ;
@@ -68,10 +86,9 @@
     @Override public void execute(    OperationContext context,    ModelNode operation){
       PathAddress address=context.getCurrentAddress();
       String protocol=operation.require(ProtocolResourceDefinition.TYPE.getName()).asString();
-      PathElement protocolPath=ProtocolResourceDefinition.pathElement(protocol);
-      PathAddress protocolAddress=address.append(protocolPath);
+      PathAddress protocolAddress=address.append(ProtocolResourceDefinition.pathElement(protocol));
       ModelNode removeOperation=Util.createRemoveOperation(protocolAddress);
-      context.addStep(removeOperation,context.getResourceRegistration().getOperationHandler(PathAddress.pathAddress(protocolPath),ModelDescriptionConstants.REMOVE),context.getCurrentStage());
+      context.addStep(removeOperation,ReloadRequiredRemoveStepHandler.INSTANCE,context.getCurrentStage());
     }
   }
 ;
