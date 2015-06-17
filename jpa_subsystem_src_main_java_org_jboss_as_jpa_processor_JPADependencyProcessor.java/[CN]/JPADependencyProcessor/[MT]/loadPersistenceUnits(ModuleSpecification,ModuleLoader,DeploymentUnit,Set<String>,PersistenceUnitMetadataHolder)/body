@@ -1,0 +1,36 @@
+{
+  int defaultProviderCount=0;
+  if (holder != null) {
+    for (    PersistenceUnitMetadata pu : holder.getPersistenceUnits()) {
+      String providerModule=pu.getProperties().getProperty(Configuration.PROVIDER_MODULE);
+      String adapterModule=pu.getProperties().getProperty(Configuration.ADAPTER_MODULE);
+      String adapterClass=pu.getProperties().getProperty(Configuration.ADAPTER_CLASS);
+      if (adapterModule != null) {
+        ROOT_LOGGER.debugf("%s is configured to use adapter module '%s'",pu.getPersistenceUnitName(),adapterModule);
+        moduleDependencies.add(adapterModule);
+      }
+      deploymentUnit.putAttachment(JpaAttachments.ADAPTOR_CLASS_NAME,adapterClass);
+      String provider=pu.getProperties().getProperty(Configuration.PROVIDER_MODULE);
+      if (provider != null) {
+        if (provider.equals(Configuration.PROVIDER_MODULE_APPLICATION_SUPPLIED)) {
+          ROOT_LOGGER.debugf("%s is configured to use application supplied persistence provider",pu.getPersistenceUnitName());
+        }
+ else {
+          moduleDependencies.add(provider);
+          ROOT_LOGGER.debugf("%s is configured to use provider module '%s'",pu.getPersistenceUnitName(),provider);
+        }
+      }
+ else       if (Configuration.PROVIDER_CLASS_DEFAULT.equals(pu.getPersistenceProviderClassName())) {
+        defaultProviderCount++;
+      }
+ else {
+        String providerModuleName=Configuration.getProviderModuleNameFromProviderClassName(pu.getPersistenceProviderClassName());
+        if (providerModuleName != null) {
+          addOptionalDependency(moduleSpecification,moduleLoader,deploymentUnit,ModuleIdentifier.fromString(providerModuleName));
+          ROOT_LOGGER.debugf("%s is configured to use persistence provider '%s', adding an optional dependency on module '%s'",pu.getPersistenceUnitName(),pu.getPersistenceProviderClassName(),providerModuleName);
+        }
+      }
+    }
+  }
+  return defaultProviderCount;
+}
