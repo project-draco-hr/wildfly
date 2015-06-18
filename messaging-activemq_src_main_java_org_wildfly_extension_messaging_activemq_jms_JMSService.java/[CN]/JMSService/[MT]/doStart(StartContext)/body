@@ -1,0 +1,44 @@
+{
+  final ServiceContainer serviceContainer=context.getController().getServiceContainer();
+  ClassLoader oldTccl=WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(getClass());
+  try {
+    jmsServer=new JMSServerManagerImpl(activeMQServer.getValue(),new WildFlyBindingRegistry(context.getController().getServiceContainer()));
+    activeMQServer.getValue().registerActivateCallback(new ActivateCallback(){
+      private volatile ServiceController<Void> activeMQActivationController;
+      public void preActivate(){
+      }
+      public void activated(){
+        if (overrideInVMSecurity) {
+          activeMQServer.getValue().getRemotingService().allowInvmSecurityOverride(new ActiveMQPrincipal(DefaultCredentials.getUsername(),DefaultCredentials.getPassword()));
+        }
+        if (activeMQActivationController == null) {
+          activeMQActivationController=serviceContainer.addService(ActiveMQActivationService.getServiceName(serverServiceName),new ActiveMQActivationService()).setInitialMode(Mode.ACTIVE).install();
+        }
+ else {
+          activeMQActivationController.setMode(ACTIVE);
+        }
+      }
+      @Override public void activationComplete(){
+      }
+      public void deActivate(){
+        if (activeMQActivationController != null) {
+          if (!activeMQActivationController.getState().in(STOPPING,REMOVED)) {
+            activeMQActivationController.compareAndSetMode(ACTIVE,REMOVE);
+            activeMQActivationController=null;
+          }
+        }
+      }
+    }
+);
+    jmsServer.start();
+  }
+ catch (  StartException e) {
+    throw e;
+  }
+catch (  Exception e) {
+    throw MessagingLogger.ROOT_LOGGER.failedToStartService(e);
+  }
+ finally {
+    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(oldTccl);
+  }
+}

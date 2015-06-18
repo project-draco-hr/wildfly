@@ -1,0 +1,28 @@
+{
+  final String attributeName=operation.require(ModelDescriptionConstants.NAME).asString();
+  PathAddress pathAddress=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR));
+  String addressName=pathAddress.getElement(pathAddress.size() - 2).getValue();
+  String roleName=pathAddress.getLastElement().getValue();
+  final ServiceName serviceName=MessagingServices.getActiveMQServiceName(PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)));
+  ServiceController<?> service=context.getServiceRegistry(false).getService(serviceName);
+  ActiveMQServer server=ActiveMQServer.class.cast(service.getValue());
+  AddressControl control=AddressControl.class.cast(server.getManagementService().getResource(ResourceNames.CORE_ADDRESS + addressName));
+  if (control == null) {
+    PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+    throw ControllerLogger.ROOT_LOGGER.managementResourceNotFound(address);
+  }
+  try {
+    String rolesAsJSON=control.getRolesAsJSON();
+    ModelNode res=ModelNode.fromJSONString(rolesAsJSON);
+    ModelNode roles=ManagementUtil.convertSecurityRole(res);
+    ModelNode matchedRole=findRole(roleName,roles);
+    if (matchedRole == null || !matchedRole.hasDefined(attributeName)) {
+      throw MessagingLogger.ROOT_LOGGER.unsupportedAttribute(attributeName);
+    }
+    boolean value=matchedRole.get(attributeName).asBoolean();
+    context.getResult().set(value);
+  }
+ catch (  Exception e) {
+    context.getFailureDescription().set(e.getLocalizedMessage());
+  }
+}

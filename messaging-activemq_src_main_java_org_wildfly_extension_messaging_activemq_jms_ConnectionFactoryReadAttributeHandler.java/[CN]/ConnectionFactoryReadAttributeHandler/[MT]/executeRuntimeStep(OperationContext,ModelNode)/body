@@ -1,0 +1,28 @@
+{
+  if (ignoreOperationIfServerNotActive(context,operation)) {
+    return;
+  }
+  validator.validate(operation);
+  final String attributeName=operation.require(ModelDescriptionConstants.NAME).asString();
+  String factoryName=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
+  final ServiceName serviceName=MessagingServices.getActiveMQServiceName(PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)));
+  ServiceController<?> service=context.getServiceRegistry(false).getService(serviceName);
+  ActiveMQServer server=ActiveMQServer.class.cast(service.getValue());
+  ConnectionFactoryControl control=ConnectionFactoryControl.class.cast(server.getManagementService().getResource(ResourceNames.JMS_CONNECTION_FACTORY + factoryName));
+  if (control == null) {
+    PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+    throw ControllerLogger.ROOT_LOGGER.managementResourceNotFound(address);
+  }
+  if (HA.getName().equals(attributeName)) {
+    context.getResult().set(control.isHA());
+  }
+ else   if (ConnectionFactoryAttributes.Regular.FACTORY_TYPE.getName().equals(attributeName)) {
+    context.getResult().set(control.getFactoryType());
+  }
+ else   if (ConnectionFactoryAttributes.Regular.INITIAL_MESSAGE_PACKET_SIZE.getName().equals(attributeName)) {
+    context.getResult().set(control.getInitialMessagePacketSize());
+  }
+ else {
+    throw MessagingLogger.ROOT_LOGGER.unsupportedAttribute(attributeName);
+  }
+}

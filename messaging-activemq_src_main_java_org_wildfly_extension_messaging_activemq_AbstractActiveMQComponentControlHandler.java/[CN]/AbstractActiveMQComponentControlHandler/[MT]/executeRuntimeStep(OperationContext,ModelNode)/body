@@ -1,0 +1,78 @@
+{
+  final String operationName=operation.require(OP).asString();
+  if (READ_ATTRIBUTE_OPERATION.equals(operationName)) {
+    if (ActiveMQActivationService.ignoreOperationIfServerNotActive(context,operation)) {
+      return;
+    }
+    readAttributeValidator.validate(operation);
+    final String name=operation.require(NAME).asString();
+    if (STARTED.getName().equals(name)) {
+      ActiveMQComponentControl control=getActiveMQComponentControl(context,operation,false);
+      context.getResult().set(control.isStarted());
+    }
+ else {
+      handleReadAttribute(name,context,operation);
+    }
+    return;
+  }
+  if (ActiveMQActivationService.rollbackOperationIfServerNotActive(context,operation)) {
+    return;
+  }
+  ActiveMQComponentControl control=null;
+  boolean appliedToRuntime=false;
+  Object handback=null;
+  if (START.equals(operationName)) {
+    control=getActiveMQComponentControl(context,operation,true);
+    try {
+      control.start();
+      appliedToRuntime=true;
+      context.getResult();
+    }
+ catch (    Exception e) {
+      context.getFailureDescription().set(e.getLocalizedMessage());
+    }
+  }
+ else   if (STOP.equals(operationName)) {
+    control=getActiveMQComponentControl(context,operation,true);
+    try {
+      control.stop();
+      appliedToRuntime=true;
+      context.getResult();
+    }
+ catch (    Exception e) {
+      context.getFailureDescription().set(e.getLocalizedMessage());
+    }
+  }
+ else {
+    handback=handleOperation(operationName,context,operation);
+    appliedToRuntime=handback != null;
+  }
+  OperationContext.RollbackHandler rh;
+  if (appliedToRuntime) {
+    final ActiveMQComponentControl rhControl=control;
+    final Object rhHandback=handback;
+    rh=new OperationContext.RollbackHandler(){
+      @Override public void handleRollback(      OperationContext context,      ModelNode operation){
+        try {
+          if (START.equals(operationName)) {
+            rhControl.stop();
+          }
+ else           if (STOP.equals(operationName)) {
+            rhControl.start();
+          }
+ else {
+            handleRevertOperation(operationName,context,operation,rhHandback);
+          }
+        }
+ catch (        Exception e) {
+          ROOT_LOGGER.revertOperationFailed(e,getClass().getSimpleName(),operation.require(ModelDescriptionConstants.OP).asString(),PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)));
+        }
+      }
+    }
+;
+  }
+ else {
+    rh=OperationContext.RollbackHandler.NOOP_ROLLBACK_HANDLER;
+  }
+  context.completeStep(rh);
+}

@@ -1,0 +1,57 @@
+{
+  if (ignoreOperationIfServerNotActive(context,operation)) {
+    return;
+  }
+  validator.validate(operation);
+  final String attributeName=operation.require(ModelDescriptionConstants.NAME).asString();
+  String topicName=PathAddress.pathAddress(operation.require(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
+  final ServiceName serviceName=MessagingServices.getActiveMQServiceName(PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)));
+  ServiceController<?> service=context.getServiceRegistry(false).getService(serviceName);
+  ActiveMQServer server=ActiveMQServer.class.cast(service.getValue());
+  TopicControl control=TopicControl.class.cast(server.getManagementService().getResource(ResourceNames.JMS_TOPIC + topicName));
+  if (control == null) {
+    PathAddress address=PathAddress.pathAddress(operation.require(OP_ADDR));
+    throw ControllerLogger.ROOT_LOGGER.managementResourceNotFound(address);
+  }
+  if (CommonAttributes.MESSAGE_COUNT.getName().equals(attributeName)) {
+    try {
+      context.getResult().set(control.getMessageCount());
+    }
+ catch (    RuntimeException e) {
+      throw e;
+    }
+catch (    Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+ else   if (CommonAttributes.DELIVERING_COUNT.getName().equals(attributeName)) {
+    context.getResult().set(control.getDeliveringCount());
+  }
+ else   if (CommonAttributes.MESSAGES_ADDED.getName().equals(attributeName)) {
+    context.getResult().set(control.getMessagesAdded());
+  }
+ else   if (DURABLE_MESSAGE_COUNT.getName().equals(attributeName)) {
+    context.getResult().set(control.getDurableMessageCount());
+  }
+ else   if (NON_DURABLE_MESSAGE_COUNT.getName().equals(attributeName)) {
+    context.getResult().set(control.getNonDurableMessageCount());
+  }
+ else   if (SUBSCRIPTION_COUNT.getName().equals(attributeName)) {
+    context.getResult().set(control.getSubscriptionCount());
+  }
+ else   if (DURABLE_SUBSCRIPTION_COUNT.getName().equals(attributeName)) {
+    context.getResult().set(control.getDurableSubscriptionCount());
+  }
+ else   if (NON_DURABLE_SUBSCRIPTION_COUNT.getName().equals(attributeName)) {
+    context.getResult().set(control.getNonDurableSubscriptionCount());
+  }
+ else   if (TOPIC_ADDRESS.getName().equals(attributeName)) {
+    context.getResult().set(control.getAddress());
+  }
+ else   if (CommonAttributes.TEMPORARY.getName().equals(attributeName)) {
+    context.getResult().set(control.isTemporary());
+  }
+ else {
+    throw MessagingLogger.ROOT_LOGGER.unsupportedAttribute(attributeName);
+  }
+}
