@@ -5,7 +5,7 @@
   final File root=connectorXmlDescriptor == null ? null : connectorXmlDescriptor.getRoot();
   DEPLOYMENT_CONNECTOR_LOGGER.debugf("DEPLOYMENT name = %s",deploymentName);
   final boolean fromModule=duServiceName.getParent().equals(RaOperationUtil.RAR_MODULE);
-  final AS7RaDeployer raDeployer=new AS7RaDeployer(context.getChildTarget(),url,deploymentName,root,classLoader,cmd,activation,deploymentServiceName,fromModule);
+  final WildFLyRaDeployer raDeployer=new WildFLyRaDeployer(context.getChildTarget(),url,deploymentName,root,classLoader,cmd,activation,deploymentServiceName,fromModule);
   raDeployer.setConfiguration(config.getValue());
   ClassLoader old=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
   try {
@@ -25,7 +25,11 @@
       value=new ResourceAdapterDeployment(raDeployment,deploymentName,raServiceName);
       managementRepository.getValue().getConnectors().add(value.getDeployment().getConnector());
       registry.getValue().registerResourceAdapterDeployment(value);
-      context.getChildTarget().addService(raServiceName,new ResourceAdapterService(raServiceName,value.getDeployment().getResourceAdapter())).setInitialMode(Mode.ACTIVE).install();
+      ServiceTarget serviceTarget=context.getChildTarget();
+      serviceTarget.addService(raServiceName,new ResourceAdapterService(raServiceName,value.getDeployment().getResourceAdapter())).setInitialMode(Mode.ACTIVE).install();
+      final ServiceName deployerServiceName=ConnectorServices.RESOURCE_ADAPTER_DEPLOYER_SERVICE_PREFIX.append(connectorXmlDescriptor.getDeploymentName());
+      IronJacamarActivationResourceService ijResourceService=new IronJacamarActivationResourceService(registration,deploymentResource,false);
+      serviceTarget.addService(deployerServiceName.append(ConnectorServices.IRONJACAMAR_RESOURCE),ijResourceService).addDependency(ConnectorServices.IRONJACAMAR_MDR,AS7MetadataRepository.class,ijResourceService.getMdrInjector()).addDependency(deployerServiceName,ResourceAdapterDeployment.class,ijResourceService.getResourceAdapterDeploymentInjector()).setInitialMode(Mode.PASSIVE).install();
     }
  else {
       DEPLOYMENT_CONNECTOR_LOGGER.debugf("Not activating: %s",deploymentName);

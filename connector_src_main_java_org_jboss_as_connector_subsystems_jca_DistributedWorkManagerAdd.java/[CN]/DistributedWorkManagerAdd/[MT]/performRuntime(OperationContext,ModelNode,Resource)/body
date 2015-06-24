@@ -1,0 +1,93 @@
+{
+  ModelNode model=resource.getModel();
+  String name=JcaDistributedWorkManagerDefinition.DWmParameters.NAME.getAttribute().resolveModelAttribute(context,model).asString();
+  String policy=JcaDistributedWorkManagerDefinition.DWmParameters.POLICY.getAttribute().resolveModelAttribute(context,model).asString();
+  String selector=JcaDistributedWorkManagerDefinition.DWmParameters.SELECTOR.getAttribute().resolveModelAttribute(context,model).asString();
+  ServiceTarget serviceTarget=context.getServiceTarget();
+  NamedDistributedWorkManager namedDistributedWorkManager=new NamedDistributedWorkManager(name);
+  if (policy != null && !policy.trim().isEmpty()) {
+switch (JcaDistributedWorkManagerDefinition.PolicyValue.valueOf(policy)) {
+case NEVER:
+{
+        namedDistributedWorkManager.setPolicy(new Never());
+        break;
+      }
+case ALWAYS:
+{
+      namedDistributedWorkManager.setPolicy(new Always());
+      break;
+    }
+case WATERMARK:
+{
+    namedDistributedWorkManager.setPolicy(new WaterMark());
+    break;
+  }
+default :
+throw ROOT_LOGGER.unsupportedPolicy(policy);
+}
+Injection injector=new Injection();
+for (Map.Entry<String,String> entry : ((PropertiesAttributeDefinition)JcaDistributedWorkManagerDefinition.DWmParameters.POLICY_OPTIONS.getAttribute()).unwrap(context,model).entrySet()) {
+try {
+injector.inject(namedDistributedWorkManager.getPolicy(),entry.getKey(),entry.getValue());
+}
+ catch (Exception e) {
+ROOT_LOGGER.unsupportedPolicyOption(entry.getKey());
+}
+}
+}
+ else {
+namedDistributedWorkManager.setPolicy(new WaterMark());
+}
+if (selector != null && !selector.trim().isEmpty()) {
+switch (JcaDistributedWorkManagerDefinition.SelectorValue.valueOf(selector)) {
+case FIRST_AVAILABLE:
+{
+namedDistributedWorkManager.setSelector(new FirstAvailable());
+break;
+}
+case MAX_FREE_THREADS:
+{
+namedDistributedWorkManager.setSelector(new MaxFreeThreads());
+break;
+}
+case PING_TIME:
+{
+namedDistributedWorkManager.setSelector(new PingTime());
+break;
+}
+default :
+throw ROOT_LOGGER.unsupportedSelector(selector);
+}
+Injection injector=new Injection();
+for (Map.Entry<String,String> entry : ((PropertiesAttributeDefinition)JcaDistributedWorkManagerDefinition.DWmParameters.SELECTOR_OPTIONS.getAttribute()).unwrap(context,model).entrySet()) {
+try {
+injector.inject(namedDistributedWorkManager.getSelector(),entry.getKey(),entry.getValue());
+}
+ catch (Exception e) {
+ROOT_LOGGER.unsupportedSelectorOption(entry.getKey());
+}
+}
+}
+ else {
+namedDistributedWorkManager.setSelector(new PingTime());
+}
+String jgroupsStack=model.hasDefined(JcaDistributedWorkManagerDefinition.DWmParameters.TRANSPORT_JGROPUS_STACK.getAttribute().getName()) ? JcaDistributedWorkManagerDefinition.DWmParameters.TRANSPORT_JGROPUS_STACK.getAttribute().resolveModelAttribute(context,model).asString() : "udp";
+String channelName=JcaDistributedWorkManagerDefinition.DWmParameters.TRANSPORT_JGROPUS_CLUSTER.getAttribute().resolveModelAttribute(context,model).asString();
+Long requestTimeout=JcaDistributedWorkManagerDefinition.DWmParameters.TRANSPORT_REQUEST_TIMEOUT.getAttribute().resolveModelAttribute(context,model).asLong();
+DistributedWorkManagerService wmService=new DistributedWorkManagerService(namedDistributedWorkManager,channelName,requestTimeout);
+ServiceBuilder<DistributedWorkManager> builder=serviceTarget.addService(ConnectorServices.WORKMANAGER_SERVICE.append(name),wmService);
+builder.addDependency(ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(jgroupsStack),ChannelFactory.class,wmService.getJGroupsChannelFactoryInjector());
+builder.addDependency(ServiceBuilder.DependencyType.OPTIONAL,ThreadsServices.EXECUTOR.append(WORKMANAGER_LONG_RUNNING).append(name),Executor.class,wmService.getExecutorLongInjector());
+builder.addDependency(ThreadsServices.EXECUTOR.append(WORKMANAGER_SHORT_RUNNING).append(name),Executor.class,wmService.getExecutorShortInjector());
+builder.addDependency(TxnServices.JBOSS_TXN_XA_TERMINATOR,JBossXATerminator.class,wmService.getXaTerminatorInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+WorkManagerStatisticsService wmStatsService=new WorkManagerStatisticsService(context.getResourceRegistrationForUpdate(),name,true);
+serviceTarget.addService(ConnectorServices.WORKMANAGER_STATS_SERVICE.append(name),wmStatsService).addDependency(ConnectorServices.WORKMANAGER_SERVICE.append(name),WorkManager.class,wmStatsService.getWorkManagerInjector()).setInitialMode(ServiceController.Mode.PASSIVE).install();
+DistributedWorkManagerStatisticsService dwmStatsService=new DistributedWorkManagerStatisticsService(context.getResourceRegistrationForUpdate(),name,true);
+serviceTarget.addService(ConnectorServices.DISTRIBUTED_WORKMANAGER_STATS_SERVICE.append(name),dwmStatsService).addDependency(ConnectorServices.WORKMANAGER_SERVICE.append(name),DistributedWorkManager.class,dwmStatsService.getDistributedWorkManagerInjector()).setInitialMode(ServiceController.Mode.PASSIVE).install();
+PathElement peDistributedWm=PathElement.pathElement(org.jboss.as.connector.subsystems.resourceadapters.Constants.STATISTICS_NAME,"distributed");
+PathElement peLocaldWm=PathElement.pathElement(org.jboss.as.connector.subsystems.resourceadapters.Constants.STATISTICS_NAME,"local");
+final Resource wmResource=new IronJacamarResource.IronJacamarRuntimeResource();
+if (!resource.hasChild(peLocaldWm)) resource.registerChild(peLocaldWm,wmResource);
+final Resource dwmResource=new IronJacamarResource.IronJacamarRuntimeResource();
+if (!resource.hasChild(peDistributedWm)) resource.registerChild(peDistributedWm,dwmResource);
+}
