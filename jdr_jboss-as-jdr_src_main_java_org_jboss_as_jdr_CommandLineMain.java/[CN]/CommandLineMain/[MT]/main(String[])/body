@@ -2,6 +2,7 @@
   int port=9990;
   String host="localhost";
   String protocol="http-remoting";
+  String config=null;
   try {
     CommandLine line=parser.parse(options,args,false);
     if (line.hasOption("help")) {
@@ -17,6 +18,9 @@
     if (line.hasOption("protocol")) {
       protocol=line.getOptionValue("protocol");
     }
+    if (line.hasOption("config")) {
+      config=line.getOptionValue("config");
+    }
   }
  catch (  ParseException e) {
     System.out.println(e.getMessage());
@@ -29,34 +33,36 @@ catch (  NumberFormatException nfe) {
     return;
   }
   System.out.println("Initializing JBoss Diagnostic Reporter...");
-  CLI cli=null;
+  CLI cli=CLI.newInstance();
+  boolean embedded=false;
   try {
-    cli=CLI.newInstance();
-    cli.connect(host,port,null,null);
+    cli.connect(protocol,host,port,null,null);
+  }
+ catch (  IllegalStateException ex) {
+    String startEmbeddedServer="embed-server" + ((config != null && !config.isEmpty()) ? (" --server-config=" + config) : "");
+    cli.getCommandContext().handleSafe(startEmbeddedServer);
+    embedded=true;
+  }
+  try {
     Result cmdResult=cli.cmd("/subsystem=jdr:generate-jdr-report()");
     ModelNode response=cmdResult.getResponse();
-    reportFailure(response);
-    ModelNode result=response.get(ClientConstants.RESULT);
-    String startTime=result.get("start-time").asString();
-    String endTime=result.get("end-time").asString();
-    String reportLocation=result.get("report-location").asString();
-    System.out.println("JDR started: " + startTime);
-    System.out.println("JDR ended: " + endTime);
-    System.out.println("JDR location: " + reportLocation);
+    if (Operations.isSuccessfulOutcome(response) || !embedded) {
+      reportFailure(response);
+      ModelNode result=response.get(ClientConstants.RESULT);
+      String startTime=result.get("start-time").asString();
+      String endTime=result.get("end-time").asString();
+      String reportLocation=result.get("report-location").asString();
+      System.out.println("JDR started: " + startTime);
+      System.out.println("JDR ended: " + endTime);
+      System.out.println("JDR location: " + reportLocation);
+    }
+ else {
+      standaloneCollect(cli,protocol,host,port);
+    }
   }
  catch (  IllegalStateException ise) {
     System.out.println(ise.getMessage());
-    JdrReportService reportService=new JdrReportService();
-    JdrReport response=null;
-    try {
-      response=reportService.standaloneCollect(protocol,host,String.valueOf(port));
-      System.out.println("JDR started: " + response.getStartTime().toString());
-      System.out.println("JDR ended: " + response.getEndTime().toString());
-      System.out.println("JDR location: " + response.getLocation());
-    }
- catch (    OperationFailedException e) {
-      System.out.println("Failed to complete the JDR report: " + e.getMessage());
-    }
+    standaloneCollect(cli,protocol,host,port);
   }
  finally {
     if (cli != null) {
