@@ -2,6 +2,7 @@
   final ApplicationPolicy applicationPolicy=createApplicationPolicy(context,securityDomain,model);
   final JSSESecurityDomain jsseSecurityDomain=createJSSESecurityDomain(context,securityDomain,model);
   final String cacheType=getAuthenticationCacheType(model);
+  final boolean exportElytronRealm=SecurityDomainResourceDefinition.EXPORT_ELYTRON_REALM.resolveModelAttribute(context,model).asBoolean();
   final SecurityDomainService securityDomainService=new SecurityDomainService(securityDomain,applicationPolicy,jsseSecurityDomain,cacheType);
   final ServiceTarget target=context.getServiceTarget();
   final Injector<TransactionManager> transactionManagerInjector=new Injector<TransactionManager>(){
@@ -17,4 +18,9 @@
     builder.addDependency(CacheContainerServiceName.CACHE_CONTAINER.getServiceName(CACHE_CONTAINER_NAME),Object.class,securityDomainService.getCacheManagerInjector());
   }
   builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
+  if (exportElytronRealm) {
+    final ServiceName realmServiceName=context.getCapabilityServiceName(Capabilities.SECURITY_REALM_CAPABILITY,securityDomain,SecurityRealm.class);
+    final DomainContextRealmService domainContextRealmService=new DomainContextRealmService();
+    target.addService(realmServiceName,domainContextRealmService).addDependency(SecurityDomainService.SERVICE_NAME.append(securityDomain),SecurityDomainContext.class,domainContextRealmService.getSecurityDomainContextInjector()).setInitialMode(ServiceController.Mode.ACTIVE).install();
+  }
 }
