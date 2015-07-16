@@ -1,38 +1,64 @@
 {
   PathAddress address=cacheAddress.append(RemoteStoreResourceDefinition.PATH);
   ModelNode operation=Util.createAddOperation(address);
-  operations.put(address,operation);
+  operations.put(cacheAddress.append(StoreResourceDefinition.WILDCARD_PATH),operation);
+  this.addStoreOperations(address,operations);
   for (int i=0; i < reader.getAttributeCount(); i++) {
-    String value=reader.getAttributeValue(i);
-    Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+    XMLAttribute attribute=XMLAttribute.forName(reader.getAttributeLocalName(i));
 switch (attribute) {
 case CACHE:
 {
-        RemoteStoreResourceDefinition.CACHE.parseAndSetParameter(value,operation,reader);
+        readAttribute(reader,i,operation,RemoteStoreResourceDefinition.Attribute.CACHE);
         break;
       }
 case SOCKET_TIMEOUT:
 {
-      RemoteStoreResourceDefinition.SOCKET_TIMEOUT.parseAndSetParameter(value,operation,reader);
+      readAttribute(reader,i,operation,RemoteStoreResourceDefinition.Attribute.SOCKET_TIMEOUT);
       break;
     }
 case TCP_NO_DELAY:
 {
-    RemoteStoreResourceDefinition.TCP_NO_DELAY.parseAndSetParameter(value,operation,reader);
+    readAttribute(reader,i,operation,RemoteStoreResourceDefinition.Attribute.TCP_NO_DELAY);
     break;
   }
+case REMOTE_SERVERS:
+{
+  if (this.schema.since(InfinispanSchema.VERSION_4_0)) {
+    for (    String value : reader.getListAttributeValue(i)) {
+      setAttribute(reader,value,operation,RemoteStoreResourceDefinition.Attribute.SOCKET_BINDINGS);
+    }
+    break;
+  }
+}
 default :
 {
-  this.parseStoreAttribute(reader,i,operation);
+this.parseStoreAttribute(reader,i,operation);
 }
 }
 }
 while (reader.hasNext() && (reader.nextTag() != XMLStreamConstants.END_ELEMENT)) {
-Element element=Element.forName(reader.getLocalName());
+XMLElement element=XMLElement.forName(reader.getLocalName());
 switch (element) {
 case REMOTE_SERVER:
 {
-this.parseRemoteServer(reader,operation);
+if (this.schema.since(InfinispanSchema.VERSION_4_0)) {
+throw ParseUtils.unexpectedElement(reader);
+}
+for (int i=0; i < reader.getAttributeCount(); i++) {
+XMLAttribute attribute=XMLAttribute.forName(reader.getAttributeLocalName(i));
+switch (attribute) {
+case OUTBOUND_SOCKET_BINDING:
+{
+    readAttribute(reader,i,operation,RemoteStoreResourceDefinition.Attribute.SOCKET_BINDINGS);
+    break;
+  }
+default :
+{
+  throw ParseUtils.unexpectedAttribute(reader,i);
+}
+}
+}
+ParseUtils.requireNoContent(reader);
 break;
 }
 default :
@@ -41,7 +67,7 @@ this.parseStoreElement(reader,address,operations);
 }
 }
 }
-if (!operation.hasDefined(RemoteStoreResourceDefinition.REMOTE_SERVERS.getName())) {
-throw ParseUtils.missingRequired(reader,Collections.singleton(Element.REMOTE_SERVER));
+if (!operation.hasDefined(RemoteStoreResourceDefinition.Attribute.SOCKET_BINDINGS.getDefinition().getName())) {
+throw ParseUtils.missingRequired(reader,Collections.singleton(XMLAttribute.REMOTE_SERVERS.getLocalName()));
 }
 }

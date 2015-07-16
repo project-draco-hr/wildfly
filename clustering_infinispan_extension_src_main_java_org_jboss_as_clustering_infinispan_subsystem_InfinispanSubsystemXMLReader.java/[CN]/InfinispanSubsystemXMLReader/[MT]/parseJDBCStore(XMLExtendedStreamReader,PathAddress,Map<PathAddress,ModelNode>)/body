@@ -1,30 +1,44 @@
 {
   PathAddress address=null;
   ModelNode operation=Util.createAddOperation();
+  PathAddress storeAddressKey=cacheAddress.append(StoreResourceDefinition.WILDCARD_PATH);
+  operations.put(storeAddressKey,operation);
   this.parseJDBCStoreAttributes(reader,operation);
   while (reader.hasNext() && (reader.nextTag() != XMLStreamConstants.END_ELEMENT)) {
-    Element element=Element.forName(reader.getLocalName());
+    XMLElement element=XMLElement.forName(reader.getLocalName());
 switch (element) {
 case ENTRY_TABLE:
 {
         if (address != null) {
-          operations.remove(address);
+          this.removeStoreOperations(address,operations);
         }
-        address=cacheAddress.append((address == null) ? BinaryKeyedJDBCStoreResourceDefinition.PATH : MixedKeyedJDBCStoreResourceDefinition.PATH);
-        operation.get(ModelDescriptionConstants.OP_ADDR).set(address.toModelNode());
-        operations.put(address,operation);
-        this.parseJDBCStoreTable(reader,operation.get(JDBCStoreResourceDefinition.STRING_KEYED_TABLE.getName()).setEmptyObject());
+        address=cacheAddress.append((address == null) ? StringKeyedJDBCStoreResourceDefinition.PATH : MixedKeyedJDBCStoreResourceDefinition.PATH);
+        Operations.setPathAddress(operation,address);
+        this.addStoreOperations(address,operations);
+        ModelNode binaryTableOperation=operations.get(storeAddressKey.append(BinaryTableResourceDefinition.PATH));
+        if (binaryTableOperation != null) {
+          Operations.setPathAddress(binaryTableOperation,address.append(BinaryTableResourceDefinition.PATH));
+        }
+        ModelNode stringTableOperation=Util.createAddOperation(address.append(StringTableResourceDefinition.PATH));
+        operations.put(storeAddressKey.append(StringTableResourceDefinition.PATH),stringTableOperation);
+        this.parseJDBCStoreStringTable(reader,stringTableOperation);
         break;
       }
 case BUCKET_TABLE:
 {
       if (address != null) {
-        operations.remove(address);
+        this.removeStoreOperations(address,operations);
       }
-      address=cacheAddress.append((address == null) ? StringKeyedJDBCStoreResourceDefinition.PATH : MixedKeyedJDBCStoreResourceDefinition.PATH);
-      operation.get(ModelDescriptionConstants.OP_ADDR).set(address.toModelNode());
-      operations.put(address,operation);
-      this.parseJDBCStoreTable(reader,operation.get(JDBCStoreResourceDefinition.BINARY_KEYED_TABLE.getName()).setEmptyObject());
+      address=cacheAddress.append((address == null) ? BinaryKeyedJDBCStoreResourceDefinition.PATH : MixedKeyedJDBCStoreResourceDefinition.PATH);
+      Operations.setPathAddress(operation,address);
+      this.addStoreOperations(address,operations);
+      ModelNode stringTableOperation=operations.get(storeAddressKey.append(StringTableResourceDefinition.PATH));
+      if (stringTableOperation != null) {
+        Operations.setPathAddress(stringTableOperation,address.append(StringTableResourceDefinition.PATH));
+      }
+      ModelNode tableOperation=Util.createAddOperation(address.append(BinaryTableResourceDefinition.PATH));
+      operations.put(storeAddressKey.append(BinaryTableResourceDefinition.PATH),tableOperation);
+      this.parseJDBCStoreBinaryTable(reader,tableOperation);
       break;
     }
 default :
