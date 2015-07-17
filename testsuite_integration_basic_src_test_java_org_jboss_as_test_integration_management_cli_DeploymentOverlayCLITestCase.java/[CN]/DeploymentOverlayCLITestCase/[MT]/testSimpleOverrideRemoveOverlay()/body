@@ -1,0 +1,30 @@
+{
+  ctx.handle("deploy " + war1.getAbsolutePath());
+  ctx.handle("deploy " + war2.getAbsolutePath());
+  ctx.handle("deployment-overlay add --name=" + "overlay-test --content=" + "WEB-INF/web.xml=" + overrideXml.getAbsolutePath() + ","+ "a.jsp="+ replacedAjsp.getAbsolutePath()+ ","+ "WEB-INF/lib/lib.jar="+ replacedLibrary.getAbsolutePath()+ ","+ "WEB-INF/lib/addedlib.jar="+ addedLibrary.getAbsolutePath()+ " --deployments="+ war1.getName());
+  String response=readResponse("deployment0");
+  assertEquals("NON OVERRIDDEN",response);
+  response=readResponse("deployment1");
+  assertEquals("NON OVERRIDDEN",response);
+  ctx.handle("/deployment=" + war1.getName() + ":redeploy");
+  ctx.handle("/deployment=" + war2.getName() + ":redeploy");
+  response=readResponse("deployment0");
+  assertEquals("OVERRIDDEN",response);
+  response=readResponse("deployment1");
+  assertEquals("NON OVERRIDDEN",response);
+  assertEquals("Replaced JSP File",HttpRequest.get(baseUrl + "deployment0/a.jsp",10,TimeUnit.SECONDS).trim());
+  assertEquals("Replaced Library Servlet",HttpRequest.get(baseUrl + "deployment0/LibraryServlet",10,TimeUnit.SECONDS).trim());
+  assertEquals("Added Library Servlet",HttpRequest.get(baseUrl + "deployment0/AddedLibraryServlet",10,TimeUnit.SECONDS).trim());
+  ctx.handleSafe("deployment-overlay remove --name=overlay-test");
+  ctx.handle("/deployment=" + war1.getName() + ":redeploy");
+  response=readResponse("deployment0");
+  assertEquals("NON OVERRIDDEN",response);
+  assertEquals("Original Library Servlet",HttpRequest.get(baseUrl + "deployment0/LibraryServlet",10,TimeUnit.SECONDS).trim());
+  try {
+    HttpRequest.get(baseUrl + "deployment0/AddedLibraryServlet",10,TimeUnit.SECONDS);
+    Assert.fail();
+  }
+ catch (  IOException e) {
+  }
+  assertEquals("Original JSP File",HttpRequest.get(baseUrl + "deployment0/a.jsp",10,TimeUnit.SECONDS).trim());
+}
