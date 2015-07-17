@@ -3,17 +3,20 @@
     final ModelNode newAddOp=legacyAddOp.clone();
     ModelNode newAddress=transformAddress(legacyAddOp.get(OP_ADDR).clone());
     newAddOp.get(OP_ADDR).set(newAddress);
+    PathAddress address=PathAddress.pathAddress(newAddress);
+    if (address.size() == 2 && "server".equals(address.getLastElement().getKey())) {
+      migrateServer(newAddOp,warnings);
+    }
     if (newAddress.asList().size() > 2) {
-      Property subsystemSubresource=newAddress.asPropertyList().get(1);
-      if (subsystemSubresource.getName().equals("server")) {
-        Property serverSubresource=newAddress.asPropertyList().get(2);
-switch (serverSubresource.getName()) {
+      String parentType=address.getElement(1).getKey();
+      String resourceType=address.getElement(2).getKey();
+      if ("server".equals(parentType)) {
+switch (resourceType) {
 case BROADCAST_GROUP:
           migrateBroadcastGroup(newAddOp,warnings);
         break;
 case CONNECTION_FACTORY:
       if (addLegacyEntries) {
-        PathAddress address=PathAddress.pathAddress(newAddress);
         PathAddress legacyConnectionFactoryAddress=address.getParent().append("legacy-connection-factory",address.getLastElement().getValue());
         final ModelNode addLegacyConnectionFactoryOp=legacyAddOp.clone();
         addLegacyConnectionFactoryOp.get(OP_ADDR).set(legacyConnectionFactoryAddress.toModelNode());
@@ -45,11 +48,10 @@ case REMOTE_ACCEPTOR:
 case HTTP_CONNECTOR:
 case REMOTE_CONNECTOR:
 case CONNECTOR_SERVICE:
-if (newAddress.asPropertyList().size() > 3) {
-String name=newAddress.asPropertyList().get(3).getValue().asString();
+if (address.size() == 4) {
+String name=address.getLastElement().getValue();
 ModelNode value=newAddOp.get(VALUE);
-PathAddress currentAddress=pathAddress(newAddress);
-ModelNode parentAddOp=newAddOperations.get(currentAddress.getParent());
+ModelNode parentAddOp=newAddOperations.get(address.getParent());
 parentAddOp.get("params").add(new Property(name,value));
 continue;
 }
@@ -57,6 +59,6 @@ break;
 }
 }
 }
-newAddOperations.put(pathAddress(newAddOp.get(OP_ADDR)),newAddOp);
+newAddOperations.put(address,newAddOp);
 }
 }
