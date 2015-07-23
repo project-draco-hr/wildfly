@@ -12,6 +12,7 @@
   final String serverName=serverAddress.getLastElement().getValue();
   final boolean isDefaultHost=defaultServerName.equals(serverName) && name.equals(defaultHostName);
   final int defaultResponseCode=HostDefinition.DEFAULT_RESPONSE_CODE.resolveModelAttribute(context,model).asInt();
+  final boolean enableConsoleRedirect=!HostDefinition.DISABLE_CONSOLE_REDIRECT.resolveModelAttribute(context,model).asBoolean();
   final ServiceName virtualHostServiceName=UndertowService.virtualHostName(serverName,name);
   final Host service=new Host(name,aliases == null ? new LinkedList<>() : aliases,defaultWebModule,defaultResponseCode);
   final ServiceBuilder<Host> builder=context.getServiceTarget().addService(virtualHostServiceName,service).addDependency(UndertowService.SERVER.append(serverName),Server.class,service.getServerInjection()).addDependency(UndertowService.UNDERTOW,UndertowService.class,service.getUndertowService());
@@ -21,15 +22,17 @@
     builder.addAliases(UndertowService.DEFAULT_HOST);
   }
   builder.install();
-  final ServiceName consoleRedirectName=UndertowService.consoleRedirectServiceName(serverName,name);
-  if (context.getProcessType() == ProcessType.STANDALONE_SERVER) {
-    final ConsoleRedirectService redirectService=new ConsoleRedirectService();
-    final ServiceBuilder<ConsoleRedirectService> redirectBuilder=context.getServiceTarget().addService(consoleRedirectName,redirectService).addDependency(UndertowHttpManagementService.SERVICE_NAME,HttpManagement.class,redirectService.getHttpManagementInjector()).addDependency(virtualHostServiceName,Host.class,redirectService.getHostInjector()).setInitialMode(Mode.PASSIVE);
-    redirectBuilder.install();
-  }
+  if (enableConsoleRedirect) {
+    final ServiceName consoleRedirectName=UndertowService.consoleRedirectServiceName(serverName,name);
+    if (context.getProcessType() == ProcessType.STANDALONE_SERVER) {
+      final ConsoleRedirectService redirectService=new ConsoleRedirectService();
+      final ServiceBuilder<ConsoleRedirectService> redirectBuilder=context.getServiceTarget().addService(consoleRedirectName,redirectService).addDependency(UndertowHttpManagementService.SERVICE_NAME,HttpManagement.class,redirectService.getHttpManagementInjector()).addDependency(virtualHostServiceName,Host.class,redirectService.getHostInjector()).setInitialMode(Mode.PASSIVE);
+      redirectBuilder.install();
+    }
  else {
-    final ConsoleRedirectService redirectService=new ConsoleRedirectService();
-    final ServiceBuilder<ConsoleRedirectService> redirectBuilder=context.getServiceTarget().addService(consoleRedirectName,redirectService).addDependency(virtualHostServiceName,Host.class,redirectService.getHostInjector()).setInitialMode(Mode.PASSIVE);
-    redirectBuilder.install();
+      final ConsoleRedirectService redirectService=new ConsoleRedirectService();
+      final ServiceBuilder<ConsoleRedirectService> redirectBuilder=context.getServiceTarget().addService(consoleRedirectName,redirectService).addDependency(virtualHostServiceName,Host.class,redirectService.getHostInjector()).setInitialMode(Mode.PASSIVE);
+      redirectBuilder.install();
+    }
   }
 }
