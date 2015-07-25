@@ -4,16 +4,24 @@
   if (moduleConfiguration == null) {
     return;
   }
+  final List<EJBBoundClusteringMetaData> clusteringMetaData=getEJBBoundClusteringMetaData(phaseContext.getDeploymentUnit());
+  final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
+  boolean clusteredSingletonFound=false;
   for (  final ComponentConfiguration configuration : moduleConfiguration.getComponentConfigurations()) {
     ComponentDescription description=configuration.getComponentDescription();
     if (description instanceof MessageDrivenComponentDescription) {
       final MessageDrivenComponentDescription mdbDescription=(MessageDrivenComponentDescription)description;
       final String deliveryGroup=mdbDescription.getDeliveryGroup();
-      if (deliveryGroup != null) {
+      final boolean clusteredSingleton=isClusteredSingleton(mdbDescription,clusteringMetaData);
+      if (deliveryGroup != null || clusteredSingleton) {
         final ServiceName serviceName=description.getStartServiceName();
         final MdbDeliveryControllerService mdbDeliveryControllerService=new MdbDeliveryControllerService();
         final ServiceName mdbDeliveryControllerServiceName=createMdbDeliveryControllerServiceName(serviceName);
-        ServiceBuilder<MdbDeliveryControllerService> builder=phaseContext.getServiceTarget().addService(mdbDeliveryControllerServiceName,mdbDeliveryControllerService).addDependency(description.getCreateServiceName(),MessageDrivenComponent.class,mdbDeliveryControllerService.getMdbComponent()).setInitialMode(Mode.PASSIVE);
+        ServiceBuilder<MdbDeliveryControllerService> builder=serviceTarget.addService(mdbDeliveryControllerServiceName,mdbDeliveryControllerService).addDependency(description.getCreateServiceName(),MessageDrivenComponent.class,mdbDeliveryControllerService.getMdbComponent()).setInitialMode(Mode.PASSIVE);
+        if (clusteredSingleton) {
+          clusteredSingletonFound=true;
+          builder.addDependency(CLUSTERED_SINGLETON_CAPABILITY.getCapabilityServiceName().append("service"));
+        }
         if (deliveryGroup != null) {
           final ServiceName deliveyGroupServiceName=MdbDeliveryGroupResourceDefinition.getDeliveryGroupServiceName(deliveryGroup);
           if (phaseContext.getServiceRegistry().getService(deliveyGroupServiceName) == null) {
@@ -24,5 +32,8 @@
         builder.install();
       }
     }
+  }
+  if (clusteredSingletonFound) {
+    serviceTarget.addService(createClusteredSingletonDemanderServiceName(deploymentUnit),Service.NULL).addDependency(CLUSTERED_SINGLETON_CAPABILITY.getCapabilityServiceName()).install();
   }
 }
