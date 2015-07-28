@@ -1,12 +1,12 @@
 {
-  String site=require(reader,Attribute.NAME);
+  String site=require(reader,XMLAttribute.NAME);
   PathAddress address=relayAddress.append(RemoteSiteResourceDefinition.pathElement(site));
   ModelNode operation=Util.createAddOperation(address);
   operations.put(address,operation);
   String cluster=null;
   for (int i=0; i < reader.getAttributeCount(); i++) {
     String value=reader.getAttributeValue(i);
-    Attribute attribute=Attribute.forName(reader.getAttributeLocalName(i));
+    XMLAttribute attribute=XMLAttribute.forName(reader.getAttributeLocalName(i));
 switch (attribute) {
 case NAME:
 {
@@ -14,34 +14,36 @@ case NAME:
       }
 case STACK:
 {
-      if (!this.schema.since(JGroupsSchema.VERSION_3_0)) {
-        RemoteSiteResourceDefinition.STACK.parseAndSetParameter(value,operation,reader);
-        break;
+      if (this.schema.since(JGroupsSchema.VERSION_3_0)) {
+        throw ParseUtils.unexpectedAttribute(reader,i);
       }
+      readAttribute(reader,i,operation,RemoteSiteResourceDefinition.DeprecatedAttribute.STACK);
+      break;
     }
 case CLUSTER:
 {
-    if (!this.schema.since(JGroupsSchema.VERSION_3_0)) {
-      cluster=value;
-      break;
+    if (this.schema.since(JGroupsSchema.VERSION_3_0)) {
+      throw ParseUtils.unexpectedAttribute(reader,i);
     }
+    cluster=value;
+    break;
   }
 case CHANNEL:
 {
   if (this.schema.since(JGroupsSchema.VERSION_3_0)) {
-    RemoteSiteResourceDefinition.CHANNEL.parseAndSetParameter(value,operation,reader);
+    readAttribute(reader,i,operation,RemoteSiteResourceDefinition.Attribute.CHANNEL);
     PathAddress subsystemAddress=PathAddress.pathAddress(JGroupsSubsystemResourceDefinition.PATH);
     PathAddress channelAddress=subsystemAddress.append(ChannelResourceDefinition.pathElement(value));
     ModelNode channelOperation=operations.get(channelAddress);
     if (channelOperation != null) {
       String stack;
-      if (channelOperation.hasDefined(ChannelResourceDefinition.STACK.getName())) {
-        stack=channelOperation.get(ChannelResourceDefinition.STACK.getName()).asString();
+      if (channelOperation.hasDefined(ChannelResourceDefinition.Attribute.STACK.getDefinition().getName())) {
+        stack=channelOperation.get(ChannelResourceDefinition.Attribute.STACK.getDefinition().getName()).asString();
       }
  else {
-        stack=operations.get(subsystemAddress).get(JGroupsSubsystemResourceDefinition.DEFAULT_STACK.getName()).asString();
+        stack=operations.get(subsystemAddress).get(JGroupsSubsystemResourceDefinition.Attribute.DEFAULT_STACK.getDefinition().getName()).asString();
       }
-      RemoteSiteResourceDefinition.STACK.parseAndSetParameter(stack,operation,reader);
+      setAttribute(reader,stack,operation,RemoteSiteResourceDefinition.DeprecatedAttribute.STACK);
     }
     break;
   }
@@ -53,21 +55,21 @@ throw ParseUtils.unexpectedAttribute(reader,i);
 }
 }
 if (this.schema.since(JGroupsSchema.VERSION_3_0)) {
-if (!operation.hasDefined(RemoteSiteResourceDefinition.CHANNEL.getName())) {
-throw ParseUtils.missingRequired(reader,EnumSet.of(Attribute.CHANNEL));
+if (!operation.hasDefined(RemoteSiteResourceDefinition.Attribute.CHANNEL.getDefinition().getName())) {
+throw ParseUtils.missingRequired(reader,EnumSet.of(XMLAttribute.CHANNEL));
 }
 }
  else {
-if (!operation.hasDefined(RemoteSiteResourceDefinition.STACK.getName())) {
-throw ParseUtils.missingRequired(reader,EnumSet.of(Attribute.STACK));
+if (!operation.hasDefined(RemoteSiteResourceDefinition.DeprecatedAttribute.STACK.getDefinition().getName())) {
+throw ParseUtils.missingRequired(reader,EnumSet.of(XMLAttribute.STACK));
 }
 String channel=(cluster != null) ? cluster : site;
-RemoteSiteResourceDefinition.CHANNEL.parseAndSetParameter(channel,operation,reader);
+setAttribute(reader,channel,operation,RemoteSiteResourceDefinition.Attribute.CHANNEL);
 PathAddress subsystemAddress=PathAddress.pathAddress(JGroupsSubsystemResourceDefinition.PATH);
 PathAddress channelAddress=subsystemAddress.append(ChannelResourceDefinition.pathElement(channel));
 ModelNode channelOperation=Util.createAddOperation(channelAddress);
-String stack=operation.get(RemoteSiteResourceDefinition.STACK.getName()).asString();
-ChannelResourceDefinition.STACK.parseAndSetParameter(stack,channelOperation,reader);
+String stack=operation.get(RemoteSiteResourceDefinition.DeprecatedAttribute.STACK.getDefinition().getName()).asString();
+setAttribute(reader,stack,channelOperation,ChannelResourceDefinition.Attribute.STACK);
 operations.put(channelAddress,channelOperation);
 }
 ParseUtils.requireNoContent(reader);

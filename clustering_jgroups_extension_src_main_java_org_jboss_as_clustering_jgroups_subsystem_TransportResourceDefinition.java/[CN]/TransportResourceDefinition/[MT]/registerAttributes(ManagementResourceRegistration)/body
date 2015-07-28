@@ -1,11 +1,22 @@
 {
-  final OperationStepHandler writeHandler=new ReloadRequiredWriteAttributeHandler(ATTRIBUTES);
-  for (  AttributeDefinition attr : ATTRIBUTES) {
-    if (attr.isDeprecated()) {
-      registration.registerReadWriteAttribute(attr,null,new ThreadsAttributesWriteHandler(attr));
-    }
- else {
-      registration.registerReadWriteAttribute(attr,null,writeHandler);
+  super.registerAttributes(registration);
+  new RestartParentResourceWriteAttributeHandler<>(this.parentBuilderFactory,Attribute.class).register(registration);
+  new ReloadRequiredWriteAttributeHandler(ThreadingAttribute.class){
+    @Override protected void validateUpdatedModel(    OperationContext context,    Resource model) throws OperationFailedException {
+      context.addStep(new OperationStepHandler(){
+        @Override public void execute(        OperationContext context,        ModelNode operation) throws OperationFailedException {
+          ModelNode conf=context.readResource(PathAddress.EMPTY_ADDRESS).getModel();
+          if (context.getProcessType().isServer()) {
+            for (            ThreadingAttribute attribute : ThreadingAttribute.values()) {
+              if (conf.hasDefined(attribute.getDefinition().getName())) {
+                throw new OperationFailedException(JGroupsLogger.ROOT_LOGGER.threadsAttributesUsedInRuntime());
+              }
+            }
+          }
+        }
+      }
+,OperationContext.Stage.MODEL);
     }
   }
+.register(registration);
 }

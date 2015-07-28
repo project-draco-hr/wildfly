@@ -1,0 +1,37 @@
+{
+  final String machine=ModelNodes.asString(MACHINE.getDefinition().resolveModelAttribute(context,transport));
+  final String rack=ModelNodes.asString(RACK.getDefinition().resolveModelAttribute(context,transport));
+  final String site=ModelNodes.asString(SITE.getDefinition().resolveModelAttribute(context,transport));
+  if ((site != null) || (rack != null) || (machine != null)) {
+    this.topology=new Topology(){
+      @Override public String getMachine(){
+        return machine;
+      }
+      @Override public String getRack(){
+        return rack;
+      }
+      @Override public String getSite(){
+        return site;
+      }
+    }
+;
+  }
+  this.shared=SHARED.getDefinition().resolveModelAttribute(context,transport).asBoolean();
+  String diagnosticsBinding=ModelNodes.asString(DIAGNOSTICS_SOCKET_BINDING.getDefinition().resolveModelAttribute(context,transport));
+  if (diagnosticsBinding != null) {
+    this.diagnosticsSocketBinding=new InjectedValueDependency<>(SocketBinding.JBOSS_BINDING_NAME.append(diagnosticsBinding),SocketBinding.class);
+  }
+  for (  ThreadPoolResourceDefinition pool : ThreadPoolResourceDefinition.values()) {
+    String prefix=pool.getPrefix();
+    ModelNode model=transport.get(pool.getPathElement().getKeyValuePair());
+    this.getProperties().put(prefix + ".min_threads",pool.getMinThreads().getDefinition().resolveModelAttribute(context,model).asString());
+    this.getProperties().put(prefix + ".max_threads",pool.getMaxThreads().getDefinition().resolveModelAttribute(context,model).asString());
+    int queueSize=pool.getQueueLength().getDefinition().resolveModelAttribute(context,model).asInt();
+    if (pool != ThreadPoolResourceDefinition.TIMER) {
+      this.getProperties().put(prefix + ".queue_enabled",String.valueOf(queueSize > 0));
+    }
+    this.getProperties().put(prefix + ".queue_max_size",String.valueOf(queueSize));
+    this.getProperties().put(prefix + ".keep_alive_time",pool.getKeepAliveTime().getDefinition().resolveModelAttribute(context,model).asString());
+  }
+  return super.configure(context,transport);
+}
