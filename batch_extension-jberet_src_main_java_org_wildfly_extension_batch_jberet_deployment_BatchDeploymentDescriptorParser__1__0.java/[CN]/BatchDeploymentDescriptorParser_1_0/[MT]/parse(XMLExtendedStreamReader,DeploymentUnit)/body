@@ -1,0 +1,38 @@
+{
+  JobRepository jobRepository=null;
+  ExecutorService executorService=null;
+  boolean empty=true;
+  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+    final String localName=reader.getLocalName();
+    final Element element=Element.forName(localName);
+    if (element == Element.JOB_REPOSITORY) {
+      if (jobRepository != null) {
+        BatchLogger.LOGGER.multipleJobRepositoriesFound();
+      }
+ else {
+        jobRepository=parseJobRepository(reader,deploymentUnit);
+      }
+      ParseUtils.requireNoContent(reader);
+    }
+ else     if (element == Element.THREAD_POOL) {
+      final String name=readRequiredAttribute(reader,Attribute.NAME);
+      final ServiceName serviceName=BatchServiceNames.BASE_BATCH_THREAD_POOL_NAME.append(name);
+      final ServiceController<?> controller=deploymentUnit.getServiceRegistry().getRequiredService(serviceName);
+      if (controller == null) {
+        BatchLogger.LOGGER.missingNamedService("thread-pool",name,deploymentUnit.getName());
+        return null;
+      }
+      executorService=(ExecutorService)controller.getValue();
+      ParseUtils.requireNoContent(reader);
+    }
+ else {
+      throw ParseUtils.unexpectedElement(reader);
+    }
+    empty=false;
+  }
+  if (empty) {
+    BatchLogger.LOGGER.debugf("An empty batch element in the deployment descriptor was found for %s.",deploymentUnit.getName());
+    return null;
+  }
+  return new BatchEnvironmentMetaData(jobRepository,executorService);
+}

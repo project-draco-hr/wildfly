@@ -1,0 +1,34 @@
+{
+  if (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+    final String localName=reader.getLocalName();
+    final Element element=Element.forName(localName);
+    if (element == Element.IN_MEMORY) {
+      ParseUtils.requireNoContent(reader);
+      return new InMemoryRepository();
+    }
+ else     if (element == Element.JDBC) {
+      final String value=readRequiredAttribute(reader,Attribute.JNDI_NAME);
+      final Properties configProperties=new Properties();
+      configProperties.setProperty(JNDI_NAME,value);
+      ParseUtils.requireNoContent(reader);
+      return JdbcRepository.create(configProperties);
+    }
+ else     if (element == Element.NAMED) {
+      final String jobRepositoryName=readRequiredAttribute(reader,Attribute.NAME);
+      final CapabilityServiceSupport support=deploymentUnit.getAttachment(Attachments.CAPABILITY_SERVICE_SUPPORT);
+      final ServiceName serviceName=support.getCapabilityServiceName(Capabilities.JOB_REPOSITORY_CAPABILITY.getName(),jobRepositoryName);
+      final ServiceController<?> controller=deploymentUnit.getServiceRegistry().getRequiredService(serviceName);
+      if (controller == null) {
+        BatchLogger.LOGGER.missingNamedService("job-repository",jobRepositoryName,deploymentUnit.getName());
+        return null;
+      }
+      ParseUtils.requireNoContent(reader);
+      return (JobRepository)controller.getValue();
+    }
+ else {
+      throw ParseUtils.unexpectedElement(reader);
+    }
+  }
+  BatchLogger.LOGGER.emptyJobRepositoryElement(deploymentUnit.getName());
+  return null;
+}
