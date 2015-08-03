@@ -1,0 +1,40 @@
+{
+  final ThreadsParser threadsParser=ThreadsParser.getInstance();
+  final PathAddress subsystemAddress=PathAddress.pathAddress(BatchSubsystemDefinition.SUBSYSTEM_PATH);
+  final ModelNode subsystemAddOp=Util.createAddOperation(subsystemAddress);
+  ops.add(subsystemAddOp);
+  final Set<Element> requiredElements=EnumSet.of(Element.JOB_REPOSITORY,Element.THREAD_POOL);
+  final Namespace namespace=Namespace.forUri(reader.getNamespaceURI());
+  while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+    final String localName=reader.getLocalName();
+    final Element element=Element.forName(localName);
+    if (element == Element.DEFAULT_THREAD_POOL) {
+      BatchSubsystemDefinition.DEFAULT_THREAD_POOL.parseAndSetParameter(readNameAttribute(reader),subsystemAddOp,reader);
+      ParseUtils.requireNoContent(reader);
+      requiredElements.remove(Element.DEFAULT_THREAD_POOL);
+    }
+ else     if (element == Element.DEFAULT_JOB_REPOSITORY) {
+      BatchSubsystemDefinition.DEFAULT_JOB_REPOSITORY.parseAndSetParameter(readNameAttribute(reader),subsystemAddOp,reader);
+      ParseUtils.requireNoContent(reader);
+    }
+ else     if (element == Element.JOB_REPOSITORY) {
+      final String name=readNameAttribute(reader);
+      parseJobRepository(reader,subsystemAddress,name,ops);
+      requiredElements.remove(Element.JOB_REPOSITORY);
+    }
+ else     if (element == Element.THREAD_POOL) {
+      threadsParser.parseUnboundedQueueThreadPool(reader,namespace.getUriString(),THREADS_1_1,subsystemAddress.toModelNode(),ops,BatchSubsystemDefinition.THREAD_POOL,null);
+      requiredElements.remove(Element.THREAD_POOL);
+    }
+ else     if (element == Element.THREAD_FACTORY) {
+      threadsParser.parseThreadFactory(reader,namespace.getUriString(),THREADS_1_1,subsystemAddress.toModelNode(),ops,BatchSubsystemDefinition.THREAD_FACTORY,null);
+    }
+ else {
+      throw ParseUtils.unexpectedElement(reader);
+    }
+  }
+  if (!requiredElements.isEmpty()) {
+    throw ParseUtils.missingRequired(reader,requiredElements);
+  }
+  ParseUtils.requireNoContent(reader);
+}

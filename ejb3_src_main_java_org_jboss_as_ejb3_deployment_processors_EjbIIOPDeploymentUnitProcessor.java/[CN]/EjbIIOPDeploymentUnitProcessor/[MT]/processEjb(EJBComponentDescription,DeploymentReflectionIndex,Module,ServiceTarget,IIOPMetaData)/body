@@ -1,0 +1,90 @@
+{
+  componentDescription.setExposedViaIiop(true);
+  final EJBViewDescription remoteView=componentDescription.getEjbRemoteView();
+  final Class<?> remoteClass;
+  try {
+    remoteClass=ClassLoadingUtils.loadClass(remoteView.getViewClassName(),module);
+  }
+ catch (  ClassNotFoundException e) {
+    throw EjbLogger.ROOT_LOGGER.failedToLoadViewClassForComponent(e,componentDescription.getEJBClassName());
+  }
+  final EJBViewDescription homeView=componentDescription.getEjbHomeView();
+  final Class<?> homeClass;
+  try {
+    homeClass=ClassLoadingUtils.loadClass(homeView.getViewClassName(),module);
+  }
+ catch (  ClassNotFoundException e) {
+    throw EjbLogger.ROOT_LOGGER.failedToLoadViewClassForComponent(e,componentDescription.getEJBClassName());
+  }
+  componentDescription.getEjbHomeView().getConfigurators().add(new IIOPInterceptorViewConfigurator());
+  componentDescription.getEjbRemoteView().getConfigurators().add(new IIOPInterceptorViewConfigurator());
+  final InterfaceAnalysis remoteInterfaceAnalysis;
+  try {
+    remoteInterfaceAnalysis=InterfaceAnalysis.getInterfaceAnalysis(remoteClass);
+  }
+ catch (  RMIIIOPViolationException e) {
+    throw EjbLogger.ROOT_LOGGER.failedToAnalyzeRemoteInterface(e,componentDescription.getComponentName());
+  }
+  final Map<String,SkeletonStrategy> beanMethodMap=new HashMap<String,SkeletonStrategy>();
+  final AttributeAnalysis[] remoteAttrs=remoteInterfaceAnalysis.getAttributes();
+  for (int i=0; i < remoteAttrs.length; i++) {
+    final OperationAnalysis op=remoteAttrs[i].getAccessorAnalysis();
+    if (op != null) {
+      EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s",op.getJavaName(),op.getIDLName());
+      final Method method=translateMethod(deploymentReflectionIndex,op);
+      beanMethodMap.put(op.getIDLName(),new SkeletonStrategy(method));
+      final OperationAnalysis setop=remoteAttrs[i].getMutatorAnalysis();
+      if (setop != null) {
+        EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s",setop.getJavaName(),setop.getIDLName());
+        final Method realSetmethod=translateMethod(deploymentReflectionIndex,setop);
+        beanMethodMap.put(setop.getIDLName(),new SkeletonStrategy(realSetmethod));
+      }
+    }
+  }
+  final OperationAnalysis[] ops=remoteInterfaceAnalysis.getOperations();
+  for (int i=0; i < ops.length; i++) {
+    EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s",ops[i].getJavaName(),ops[i].getIDLName());
+    beanMethodMap.put(ops[i].getIDLName(),new SkeletonStrategy(translateMethod(deploymentReflectionIndex,ops[i])));
+  }
+  final String[] beanRepositoryIds=remoteInterfaceAnalysis.getAllTypeIds();
+  final InterfaceAnalysis homeInterfaceAnalysis;
+  try {
+    homeInterfaceAnalysis=InterfaceAnalysis.getInterfaceAnalysis(homeClass);
+  }
+ catch (  RMIIIOPViolationException e) {
+    throw EjbLogger.ROOT_LOGGER.failedToAnalyzeRemoteInterface(e,componentDescription.getComponentName());
+  }
+  final Map<String,SkeletonStrategy> homeMethodMap=new HashMap<String,SkeletonStrategy>();
+  final AttributeAnalysis[] attrs=homeInterfaceAnalysis.getAttributes();
+  for (int i=0; i < attrs.length; i++) {
+    final OperationAnalysis op=attrs[i].getAccessorAnalysis();
+    if (op != null) {
+      EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s",op.getJavaName(),op.getIDLName());
+      homeMethodMap.put(op.getIDLName(),new SkeletonStrategy(translateMethod(deploymentReflectionIndex,op)));
+      final OperationAnalysis setop=attrs[i].getMutatorAnalysis();
+      if (setop != null) {
+        EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s",setop.getJavaName(),setop.getIDLName());
+        homeMethodMap.put(setop.getIDLName(),new SkeletonStrategy(translateMethod(deploymentReflectionIndex,setop)));
+      }
+    }
+  }
+  final OperationAnalysis[] homeops=homeInterfaceAnalysis.getOperations();
+  for (int i=0; i < homeops.length; i++) {
+    EjbLogger.DEPLOYMENT_LOGGER.debugf("    %s%n                %s",homeops[i].getJavaName(),homeops[i].getIDLName());
+    homeMethodMap.put(homeops[i].getIDLName(),new SkeletonStrategy(translateMethod(deploymentReflectionIndex,homeops[i])));
+  }
+  final String[] homeRepositoryIds=homeInterfaceAnalysis.getAllTypeIds();
+  final EjbIIOPService service=new EjbIIOPService(beanMethodMap,beanRepositoryIds,homeMethodMap,homeRepositoryIds,settingsService.isUseQualifiedName(),iiopMetaData,module);
+  final ServiceBuilder<EjbIIOPService> builder=serviceTarget.addService(componentDescription.getServiceName().append(EjbIIOPService.SERVICE_NAME),service);
+  builder.addDependency(componentDescription.getCreateServiceName(),EJBComponent.class,service.getEjbComponentInjectedValue());
+  builder.addDependency(homeView.getServiceName(),ComponentView.class,service.getHomeView());
+  builder.addDependency(remoteView.getServiceName(),ComponentView.class,service.getRemoteView());
+  builder.addDependency(CorbaORBService.SERVICE_NAME,ORB.class,service.getOrb());
+  builder.addDependency(POARegistry.SERVICE_NAME,POARegistry.class,service.getPoaRegistry());
+  builder.addDependency(CorbaPOAService.INTERFACE_REPOSITORY_SERVICE_NAME,POA.class,service.getIrPoa());
+  builder.addDependency(CorbaNamingService.SERVICE_NAME,NamingContextExt.class,service.getCorbaNamingContext());
+  builder.addDependency(IORSecConfigMetaDataService.SERVICE_NAME,IORSecurityConfigMetaData.class,service.getIORSecConfigMetaDataInjectedValue());
+  builder.addDependency(Services.JBOSS_SERVICE_MODULE_LOADER,ServiceModuleLoader.class,service.getServiceModuleLoaderInjectedValue());
+  builder.addDependency(TxnServices.JBOSS_TXN_ARJUNA_TRANSACTION_MANAGER);
+  builder.install();
+}

@@ -1,0 +1,59 @@
+{
+  String protocol=newAddOp.get(WebConnectorDefinition.PROTOCOL.getName()).asString();
+  String scheme=null;
+  if (newAddOp.hasDefined(WebConnectorDefinition.SCHEME.getName())) {
+    scheme=newAddOp.get(WebConnectorDefinition.SCHEME.getName()).asString();
+  }
+  final PathAddress newAddress;
+  final ModelNode addConnector;
+switch (protocol) {
+case "HTTP/1.1":
+    if (scheme == null || scheme.equals("http")) {
+      newAddress=pathAddress(UndertowExtension.SUBSYSTEM_PATH,DEFAULT_SERVER_PATH,pathElement(Constants.HTTP_LISTENER,address.getLastElement().getValue()));
+      addConnector=createAddOperation(newAddress);
+    }
+ else     if (scheme.equals("https")) {
+      newAddress=pathAddress(UndertowExtension.SUBSYSTEM_PATH,DEFAULT_SERVER_PATH,pathElement(Constants.HTTPS_LISTENER,address.getLastElement().getValue()));
+      addConnector=createAddOperation(newAddress);
+      SSLInformation sslInfo=createSecurityRealm(context,newAddOperations,legacyModelAddOps,newAddress.getLastElement().getValue());
+      if (sslInfo == null) {
+        throw UndertowLogger.ROOT_LOGGER.noSslConfig();
+      }
+ else {
+        addConnector.get(Constants.SECURITY_REALM).set(sslInfo.realmName);
+        addConnector.get(Constants.VERIFY_CLIENT).set(sslInfo.verifyClient);
+        addConnector.get(Constants.SSL_SESSION_CACHE_SIZE).set(sslInfo.sessionCacheSize);
+        addConnector.get(Constants.SSL_SESSION_TIMEOUT).set(sslInfo.sessionTimeout);
+        addConnector.get(Constants.ENABLED_PROTOCOLS).set(sslInfo.sslProtocol);
+        addConnector.get(Constants.ENABLED_CIPHER_SUITES).set(sslInfo.cipherSuites);
+      }
+    }
+ else {
+      newAddress=null;
+      addConnector=null;
+    }
+  break;
+case "AJP":
+newAddress=pathAddress(UndertowExtension.SUBSYSTEM_PATH,DEFAULT_SERVER_PATH,pathElement(Constants.AJP_LISTENER,address.getLastElement().getValue()));
+addConnector=createAddOperation(newAddress);
+break;
+default :
+newAddress=null;
+addConnector=null;
+}
+if (newAddress == null) {
+UndertowLogger.ROOT_LOGGER.couldNotMigrateResource(newAddOp);
+return;
+}
+addConnector.get(Constants.SOCKET_BINDING).set(newAddOp.get(SOCKET_BINDING));
+addConnector.get(Constants.SECURE).set(newAddOp.get(WebConnectorDefinition.SECURE.getName()));
+addConnector.get(Constants.REDIRECT_SOCKET).set(newAddOp.get(WebConnectorDefinition.REDIRECT_BINDING.getName()));
+addConnector.get(Constants.ENABLED).set(newAddOp.get(WebConnectorDefinition.ENABLED.getName()));
+addConnector.get(Constants.RESOLVE_PEER_ADDRESS).set(newAddOp.get(WebConnectorDefinition.ENABLE_LOOKUPS.getName()));
+addConnector.get(Constants.MAX_POST_SIZE).set(newAddOp.get(WebConnectorDefinition.MAX_POST_SIZE.getName()));
+addConnector.get(Constants.REDIRECT_SOCKET).set(newAddOp.get(WebConnectorDefinition.REDIRECT_BINDING.getName()));
+if (newAddOp.hasDefined(WebConnectorDefinition.EXECUTOR.getName())) {
+UndertowLogger.ROOT_LOGGER.couldNotMigrateResource(WebConnectorDefinition.EXECUTOR.getName(),pathAddress(newAddOp.get(ADDRESS)));
+}
+newAddOperations.put(pathAddress(newAddOp.get(OP_ADDR)),addConnector);
+}

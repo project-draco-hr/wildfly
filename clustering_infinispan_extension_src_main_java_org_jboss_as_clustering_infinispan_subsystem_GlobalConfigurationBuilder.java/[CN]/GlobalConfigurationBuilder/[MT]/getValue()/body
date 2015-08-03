@@ -1,0 +1,22 @@
+{
+  org.infinispan.configuration.global.GlobalConfigurationBuilder builder=new org.infinispan.configuration.global.GlobalConfigurationBuilder();
+  TransportConfiguration transport=this.transport.getValue();
+  builder.transport().transport(transport.transport()).distributedSyncTimeout(transport.distributedSyncTimeout()).clusterName(transport.clusterName()).machineId(transport.machineId()).rackId(transport.rackId()).siteId(transport.siteId());
+  ModuleLoader moduleLoader=this.loader.getValue();
+  builder.serialization().classResolver(ModularClassResolver.getInstance(moduleLoader));
+  try {
+    ClassLoader loader=moduleLoader.loadModule(this.module).getClassLoader();
+    builder.classLoader(loader);
+    int id=Ids.MAX_ID;
+    for (    SimpleExternalizer<?> externalizer : ServiceLoader.load(SimpleExternalizer.class,loader)) {
+      InfinispanLogger.ROOT_LOGGER.debugf("Cache container %s will use an externalizer for %s",this.name,externalizer.getTargetClass().getName());
+      builder.serialization().addAdvancedExternalizer(id++,externalizer);
+    }
+  }
+ catch (  ModuleLoadException e) {
+    throw new IllegalStateException(e);
+  }
+  builder.shutdown().hookBehavior(ShutdownHookBehavior.DONT_REGISTER);
+  builder.globalJmxStatistics().enabled(this.statisticsEnabled).cacheManagerName(this.name).mBeanServerLookup(new MBeanServerProvider(this.server.getValue())).jmxDomain(CacheContainerServiceName.CACHE_CONTAINER.getServiceName(CacheServiceName.DEFAULT_CACHE).getParent().getCanonicalName()).allowDuplicateDomains(true);
+  return builder.build();
+}
