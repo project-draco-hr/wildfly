@@ -1,6 +1,5 @@
 {
   Map<PathAddress,ModelNode> operations=new LinkedHashMap<>();
-  List<ModelNode> channelsWithoutExplicitStack=new LinkedList<>();
   PathAddress address=PathAddress.pathAddress(JGroupsSubsystemResourceDefinition.PATH);
   ModelNode operation=Util.createAddOperation(address);
   operations.put(address,operation);
@@ -14,7 +13,7 @@ switch (element) {
 case CHANNELS:
 {
         if (this.schema.since(JGroupsSchema.VERSION_3_0)) {
-          this.parseChannels(reader,address,operations,channelsWithoutExplicitStack);
+          this.parseChannels(reader,address,operations);
           break;
         }
       }
@@ -38,10 +37,16 @@ default :
 }
 }
 }
-if (!channelsWithoutExplicitStack.isEmpty()) {
+if (!this.schema.since(JGroupsSchema.VERSION_4_0)) {
 ModelNode defaultStack=operation.get(JGroupsSubsystemResourceDefinition.Attribute.DEFAULT_STACK.getDefinition().getName());
-for (ModelNode channelOp : channelsWithoutExplicitStack) {
-channelOp.get(ChannelResourceDefinition.Attribute.STACK.getDefinition().getName()).set(defaultStack);
+for (Map.Entry<PathAddress,ModelNode> entry : operations.entrySet()) {
+PathAddress opAddr=entry.getKey();
+if (opAddr.getLastElement().getKey().equals(ChannelResourceDefinition.WILDCARD_PATH.getKey())) {
+ModelNode op=entry.getValue();
+if (!op.hasDefined(ChannelResourceDefinition.Attribute.STACK.getDefinition().getName())) {
+  op.get(ChannelResourceDefinition.Attribute.STACK.getDefinition().getName()).set(defaultStack);
+}
+}
 }
 }
 result.addAll(operations.values());
