@@ -1,0 +1,35 @@
+{
+  if (this.getGroup().isCoordinator()) {
+    final Set<Node> deadNodes=new HashSet<>(previousMembers);
+    deadNodes.removeAll(members);
+    final Set<Node> newNodes=new HashSet<>(members);
+    newNodes.removeAll(previousMembers);
+    try (Batch batch=this.batcher.createBatch()){
+      if (!deadNodes.isEmpty()) {
+        try (CloseableIterator<Map.Entry<T,Set<Node>>> entries=this.cache.entrySet().iterator()){
+          while (entries.hasNext()) {
+            Map.Entry<T,Set<Node>> entry=entries.next();
+            Set<Node> nodes=entry.getValue();
+            if (nodes.removeAll(deadNodes)) {
+              entry.setValue(nodes);
+            }
+          }
+        }
+       }
+      if (merged) {
+        for (        Node node : newNodes) {
+          List<T> services=CacheServiceProviderRegistry.this.getServices(node);
+          for (          T service : services) {
+            Set<Node> nodes=new HashSet<>(Collections.singleton(node));
+            Set<Node> existing=this.cache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).putIfAbsent(service,nodes);
+            if (existing != null) {
+              if (existing.add(node)) {
+                this.cache.getAdvancedCache().withFlags(Flag.IGNORE_RETURN_VALUES).replace(service,existing);
+              }
+            }
+          }
+        }
+      }
+    }
+   }
+}
