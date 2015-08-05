@@ -6,7 +6,7 @@
     final ClassLoader moduleClassLoader=module.getClassLoader();
     final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
     final EEModuleDescription moduleDescription=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
-    final BatchEnvironmentService service=new BatchEnvironmentService(moduleClassLoader,deploymentUnit.getName());
+    final BatchEnvironmentService service=new BatchEnvironmentService(moduleClassLoader,WildFlyJobXmlResolver.of(moduleClassLoader,deploymentUnit),deploymentUnit.getName());
     service.getJobRepositoryInjector().setValue(new ImmediateValue<>(JobRepositoryFactory.getInstance().getJobRepository(moduleDescription)));
     final ServiceBuilder<BatchEnvironment> serviceBuilder=serviceTarget.addService(BatchServiceNames.batchEnvironmentServiceName(deploymentUnit),service);
     serviceBuilder.addDependency(BatchServiceNames.BATCH_THREAD_POOL_NAME,ExecutorService.class,service.getExecutorServiceInjector());
@@ -15,28 +15,6 @@
       BatchLogger.LOGGER.tracef("Adding BeanManager service dependency for deployment %s",deploymentUnit.getName());
       serviceBuilder.addDependency(BatchServiceNames.beanManagerServiceName(deploymentUnit),BeanManager.class,service.getBeanManagerInjector());
     }
-    final VirtualFile root=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT).getRoot();
-    VirtualFile jobsDir=null;
-    if (DeploymentTypeMarker.isType(DeploymentType.WAR,deploymentUnit)) {
-      jobsDir=root.getChild("WEB-INF/classes/META-INF/batch-jobs");
-    }
- else {
-      jobsDir=root.getChild("META-INF/batch-jobs");
-    }
-    final JobXmlResolverService jobXmlResolverService;
-    if (jobsDir != null && jobsDir.exists()) {
-      try {
-        jobXmlResolverService=new JobXmlResolverService(moduleClassLoader,jobsDir.getChildren(JobXmlFilter.INSTANCE));
-      }
- catch (      IOException e) {
-        throw BatchLogger.LOGGER.errorProcessingBatchJobsDir(e);
-      }
-    }
- else {
-      jobXmlResolverService=new JobXmlResolverService();
-    }
-    Services.addServerExecutorDependency(serviceTarget.addService(org.wildfly.extension.batch.jberet.BatchServiceNames.jobXmlResolverServiceName(deploymentUnit),jobXmlResolverService),jobXmlResolverService.getExecutorServiceInjector(),false).install();
-    serviceBuilder.addDependency(BatchServiceNames.jobXmlResolverServiceName(deploymentUnit),JobXmlResolver.class,service.getJobXmlResolverInjector());
     if (rcPresent) {
       serviceBuilder.addDependency(RequestController.SERVICE_NAME,RequestController.class,service.getRequestControllerInjector());
     }
