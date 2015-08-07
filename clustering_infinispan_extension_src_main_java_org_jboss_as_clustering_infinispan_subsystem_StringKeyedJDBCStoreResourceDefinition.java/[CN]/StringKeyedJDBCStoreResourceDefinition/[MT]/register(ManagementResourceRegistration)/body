@@ -1,3 +1,24 @@
 {
-  registration.registerAlias(LEGACY_PATH,new SimpleAliasEntry(registration.registerSubModel(this)));
+  ManagementResourceRegistration registration=parentRegistration.registerSubModel(this);
+  parentRegistration.registerAlias(LEGACY_PATH,new SimpleAliasEntry(registration));
+  ResourceDescriptor descriptor=new ResourceDescriptor(this.getResourceDescriptionResolver()).addAttributes(JDBCStoreResourceDefinition.Attribute.class).addAttributes(StoreResourceDefinition.Attribute.class).addExtraParameters(DeprecatedAttribute.class);
+  ResourceServiceHandler handler=new SimpleResourceServiceHandler<>(new StringKeyedJDBCStoreBuilderFactory());
+  new AddStepHandler(descriptor,handler){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      super.execute(context,operation);
+      if (operation.hasDefined(DeprecatedAttribute.TABLE.getDefinition().getName())) {
+        ModelNode addTableOperation=Util.createAddOperation(context.getCurrentAddress().append(StringTableResourceDefinition.PATH));
+        ModelNode parameters=operation.get(DeprecatedAttribute.TABLE.getDefinition().getName());
+        for (        Property parameter : parameters.asPropertyList()) {
+          addTableOperation.get(parameter.getName()).set(parameter.getValue());
+        }
+        context.addStep(addTableOperation,registration.getOperationHandler(PathAddress.pathAddress(StringTableResourceDefinition.PATH),ModelDescriptionConstants.ADD),context.getCurrentStage());
+      }
+    }
+  }
+.register(registration);
+  new RemoveStepHandler(descriptor,handler).register(registration);
+  registration.registerReadWriteAttribute(DeprecatedAttribute.TABLE.getDefinition(),LEGACY_READ_TABLE_HANDLER,LEGACY_WRITE_TABLE_HANDLER);
+  new StringTableResourceDefinition().register(registration);
+  super.register(registration);
 }
