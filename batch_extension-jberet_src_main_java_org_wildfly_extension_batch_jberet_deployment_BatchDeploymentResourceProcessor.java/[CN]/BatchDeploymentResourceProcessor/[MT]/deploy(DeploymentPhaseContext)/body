@@ -6,14 +6,15 @@
     final ClassLoader moduleClassLoader=module.getClassLoader();
     final DeploymentResourceSupport deploymentResourceSupport=deploymentUnit.getAttachment(Attachments.DEPLOYMENT_RESOURCE_SUPPORT);
     final JobOperatorService jobOperatorService=new JobOperatorService(moduleClassLoader);
-    final JobXmlResolverService jobXmlResolverService=(JobXmlResolverService)phaseContext.getServiceRegistry().getService(BatchServiceNames.jobXmlResolverServiceName(deploymentUnit)).getValue();
-    for (    String jobXml : jobXmlResolverService.getJobXmlNames(moduleClassLoader)) {
+    final WildFlyJobXmlResolver jobXmlResolver=deploymentUnit.getAttachment(WildFlyJobXmlResolver.JOB_XML_RESOLVER);
+    for (    String jobXml : jobXmlResolver.getJobXmlNames(moduleClassLoader)) {
       try {
-        final String jobName=jobXmlResolverService.resolveJobName(jobXml,moduleClassLoader);
+        final String jobName=jobXmlResolver.resolveJobName(jobXml,moduleClassLoader);
         jobOperatorService.addAllowedJob(jobXml,jobName);
+        BatchLogger.LOGGER.debugf("Added job XML %s with job name %s to allowed jobs for deployment %s",jobXml,jobName,deploymentUnit.getName());
         final PathAddress jobAddress=PathAddress.pathAddress(BatchJobResourceDefinition.JOB,jobName);
-        if (!deploymentResourceSupport.hasDeploymentSubModel(BatchSubsystemDefinition.NAME,jobAddress)) {
-          deploymentResourceSupport.registerDeploymentSubResource(BatchSubsystemDefinition.NAME,jobAddress,new BatchJobExecutionResource(jobOperatorService,jobName));
+        if (!deploymentResourceSupport.hasDeploymentSubModel(subsystemName,jobAddress)) {
+          deploymentResourceSupport.registerDeploymentSubResource(subsystemName,jobAddress,new BatchJobExecutionResource(jobOperatorService,jobName));
         }
       }
  catch (      Exception e) {

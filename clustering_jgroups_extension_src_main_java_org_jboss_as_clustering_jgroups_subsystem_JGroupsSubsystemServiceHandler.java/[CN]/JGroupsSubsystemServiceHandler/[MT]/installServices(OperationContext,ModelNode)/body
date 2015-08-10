@@ -1,0 +1,24 @@
+{
+  ROOT_LOGGER.activatingSubsystem();
+  ServiceTarget target=context.getServiceTarget();
+  new ProtocolDefaultsBuilder().build(target).install();
+  String defaultChannel=ModelNodes.asString(DEFAULT_CHANNEL.getDefinition().resolveModelAttribute(context,model),ChannelServiceNameFactory.DEFAULT_CHANNEL);
+  if (!defaultChannel.equals(ChannelServiceNameFactory.DEFAULT_CHANNEL)) {
+    for (    ChannelServiceNameFactory factory : ChannelServiceName.values()) {
+      new AliasServiceBuilder<>(factory.getServiceName(),factory.getServiceName(defaultChannel),Object.class).build(target).install();
+    }
+    new BinderServiceBuilder<>(JGroupsBindingFactory.createChannelBinding(ChannelServiceNameFactory.DEFAULT_CHANNEL),ChannelServiceName.CHANNEL.getServiceName(defaultChannel),Channel.class).build(target).install();
+    new AliasServiceBuilder<>(ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(ChannelServiceNameFactory.DEFAULT_CHANNEL),ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(defaultChannel),ChannelFactory.class).build(target).install();
+    new BinderServiceBuilder<>(JGroupsBindingFactory.createChannelFactoryBinding(ChannelServiceNameFactory.DEFAULT_CHANNEL),ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(defaultChannel),ChannelFactory.class).build(target).install();
+    for (    GroupBuilderProvider provider : ServiceLoader.load(DistributedGroupBuilderProvider.class,DistributedGroupBuilderProvider.class.getClassLoader())) {
+      Iterator<Builder<?>> groupBuilders=provider.getBuilders(defaultChannel,null).iterator();
+      for (      Builder<?> groupBuilder : provider.getBuilders(ChannelServiceNameFactory.DEFAULT_CHANNEL,null)) {
+        new AliasServiceBuilder<>(groupBuilder.getServiceName(),groupBuilders.next().getServiceName(),Object.class).build(target).install();
+      }
+    }
+  }
+  @SuppressWarnings("deprecation") String defaultStack=ModelNodes.asString(DEFAULT_STACK.getDefinition().resolveModelAttribute(context,model),ProtocolStackServiceNameFactory.DEFAULT_STACK);
+  if (!defaultStack.equals(ProtocolStackServiceNameFactory.DEFAULT_STACK)) {
+    new AliasServiceBuilder<>(ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(),ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(defaultStack),ChannelFactory.class).build(target).install();
+  }
+}

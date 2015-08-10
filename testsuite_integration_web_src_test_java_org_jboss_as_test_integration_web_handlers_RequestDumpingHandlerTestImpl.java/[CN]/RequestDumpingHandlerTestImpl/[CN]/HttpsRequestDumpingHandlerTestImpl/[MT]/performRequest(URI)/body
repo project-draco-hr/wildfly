@@ -1,0 +1,38 @@
+{
+  scheme="https";
+  TrustManager[] trustAllCerts=new TrustManager[]{new X509TrustManager(){
+    @Override public X509Certificate[] getAcceptedIssuers(){
+      return new X509Certificate[0];
+    }
+    @Override public void checkServerTrusted(    X509Certificate[] chain,    String authType) throws CertificateException {
+    }
+    @Override public void checkClientTrusted(    X509Certificate[] chain,    String authType) throws CertificateException {
+    }
+  }
+};
+  SSLContext sc=SSLContext.getInstance("TLS");
+  sc.init(null,trustAllCerts,new java.security.SecureRandom());
+  HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+  HttpsURLConnection httpsConn=(HttpsURLConnection)uri.toURL().openConnection();
+  httpsConn.setDoOutput(false);
+  httpsConn.setHostnameVerifier(new HostnameVerifier(){
+    @Override public boolean verify(    String hostname,    SSLSession session){
+      return true;
+    }
+  }
+);
+  BufferedReader br=new BufferedReader(new InputStreamReader(httpsConn.getInputStream()));
+  StringBuilder sb=new StringBuilder();
+  String input;
+  while ((input=br.readLine()) != null) {
+    sb=sb.append(input);
+  }
+  br.close();
+  httpsConn.disconnect();
+  Header[][] reqAndrespHeaders=new Header[2][];
+  reqAndrespHeaders[1]=retrieveHeaders(httpsConn.getHeaderFields());
+  log.info("The content of the URL ('" + uri + "'):\n"+ sb.toString());
+  Assert.assertEquals(200,httpsConn.getResponseCode());
+  Assert.assertEquals("Could not reach expected content via http request","A file",sb.toString());
+  return reqAndrespHeaders;
+}

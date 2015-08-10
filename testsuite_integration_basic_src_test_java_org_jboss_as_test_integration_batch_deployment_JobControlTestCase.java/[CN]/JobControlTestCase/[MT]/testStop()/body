@@ -1,0 +1,20 @@
+{
+  final ModelNode address=Operations.createAddress("deployment",DEPLOYMENT_NAME,"subsystem","batch-jberet");
+  ModelNode op=Operations.createOperation("start-job",address);
+  op.get("job-xml-name").set("test-chunk");
+  final ModelNode properties=op.get("properties");
+  properties.get("reader.end").set("20");
+  properties.get("writer.sleep.time").set(Integer.toString(TimeoutUtil.adjust(1000)));
+  final ModelNode result=executeOperation(op);
+  final long executionId=result.asLong();
+  Assert.assertTrue("Execution id should be greater than 0",executionId > 0L);
+  op=Operations.createOperation("stop-job",address);
+  op.get("execution-id").set(executionId);
+  executeOperation(op);
+  final JobOperator jobOperator=BatchRuntime.getJobOperator();
+  final JobExecution execution=jobOperator.getJobExecution(executionId);
+  Assert.assertNotNull(execution);
+  waitForTermination(execution,3);
+  currentCount=countingItemWriter.getWrittenItemSize();
+  Assert.assertEquals(BatchStatus.STOPPED,execution.getBatchStatus());
+}
