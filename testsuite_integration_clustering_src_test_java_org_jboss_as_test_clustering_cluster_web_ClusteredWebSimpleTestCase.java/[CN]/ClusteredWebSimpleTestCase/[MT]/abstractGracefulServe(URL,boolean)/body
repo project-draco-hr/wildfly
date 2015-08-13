@@ -1,48 +1,31 @@
 {
-  HttpClient client=HttpClients.createDefault();
-  try {
-    URI uri=SimpleServlet.createURI(baseURL);
-    HttpResponse response=client.execute(new HttpGet(uri));
-    try {
-      Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
-    }
-  finally {
-      HttpClientUtils.closeQuietly(response);
-    }
-    URI longRunningURI=SimpleServlet.createURI(baseURL,REQUEST_DURATION);
-    ExecutorService executor=Executors.newSingleThreadExecutor();
-    Future<HttpResponse> future=executor.submit(new RequestTask(client,longRunningURI));
-    Thread.sleep(1000);
-    if (undeployOnly) {
-      undeploy(DEPLOYMENT_1);
-    }
- else {
-      stop(CONTAINER_1);
-    }
-    try {
-      response=future.get();
-      try {
-        Assert.assertEquals("Request should succeed since it initiated before undeply or shutdown.",HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
-      }
-  finally {
-        HttpClientUtils.closeQuietly(response);
-      }
-    }
- catch (    ExecutionException e) {
-      e.printStackTrace(System.err);
-      Assert.fail(e.getCause().getMessage());
-    }
-    if (undeployOnly) {
-      response=client.execute(new HttpGet(uri));
-      try {
-        Assert.assertEquals("If we are only undeploying, then subsequent requests should return 404.",HttpServletResponse.SC_NOT_FOUND,response.getStatusLine().getStatusCode());
-      }
-  finally {
-        HttpClientUtils.closeQuietly(response);
-      }
-    }
+  final DefaultHttpClient client=HttpClientUtils.relaxedCookieHttpClient();
+  String url1=baseURL1.toString() + "simple";
+  HttpResponse response=client.execute(new HttpGet(url1));
+  Assert.assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+  response.getEntity().getContent().close();
+  String longRunningUrl=url1 + "?" + SimpleServlet.REQUEST_DURATION_PARAM+ "="+ REQUEST_DURATION;
+  ExecutorService executor=Executors.newSingleThreadExecutor();
+  Future<HttpResponse> future=executor.submit(new RequestTask(client,longRunningUrl));
+  Thread.sleep(1000);
+  if (undeployOnly) {
+    undeploy(DEPLOYMENT_1);
   }
-  finally {
-    HttpClientUtils.closeQuietly(client);
+ else {
+    stop(CONTAINER_1);
+  }
+  try {
+    response=future.get();
+    Assert.assertEquals("Request should succeed since it initiated before undeply or shutdown.",HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+    response.getEntity().getContent().close();
+  }
+ catch (  ExecutionException e) {
+    e.printStackTrace(System.err);
+    Assert.fail(e.getCause().getMessage());
+  }
+  if (undeployOnly) {
+    response=client.execute(new HttpGet(url1));
+    Assert.assertEquals("If we are only undeploying, then subsequent requests should return 404.",HttpServletResponse.SC_NOT_FOUND,response.getStatusLine().getStatusCode());
+    response.getEntity().getContent().close();
   }
 }
