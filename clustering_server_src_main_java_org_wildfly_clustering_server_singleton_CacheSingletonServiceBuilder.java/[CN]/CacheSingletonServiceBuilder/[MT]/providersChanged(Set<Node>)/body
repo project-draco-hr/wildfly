@@ -1,13 +1,32 @@
 {
-  if (this.elected(nodes)) {
-    if (!this.master.get()) {
-      ClusteringServerLogger.ROOT_LOGGER.electedMaster(this.singletonServiceName.getCanonicalName());
-      this.singletonDispatcher.stopOldMaster();
-      this.startNewMaster();
+  List<Node> candidates=this.group.getNodes();
+  candidates.retainAll(nodes);
+  if (candidates.isEmpty() || candidates.get(0).equals(this.group.getLocalNode())) {
+    Node elected=null;
+    int size=candidates.size();
+    if (size >= this.quorum) {
+      if ((this.quorum > 1) && (size == this.quorum)) {
+        ClusteringServerLogger.ROOT_LOGGER.quorumJustReached(this.singletonServiceName.getCanonicalName(),this.quorum);
+      }
+      if (!candidates.isEmpty()) {
+        elected=this.electionPolicy.elect(candidates);
+        ClusteringServerLogger.ROOT_LOGGER.elected(elected.getName(),this.singletonServiceName.getCanonicalName());
+      }
     }
-  }
- else   if (this.master.get()) {
-    ClusteringServerLogger.ROOT_LOGGER.electedSlave(this.singletonServiceName.getCanonicalName());
-    this.stopOldMaster();
+ else     if (this.quorum > 1) {
+      ClusteringServerLogger.ROOT_LOGGER.quorumNotReached(this.singletonServiceName.getCanonicalName(),this.quorum);
+    }
+    try {
+      if (elected != null) {
+        CacheSingletonServiceBuilder.this.dispatcher.executeOnCluster(new StopCommand<>(),elected);
+        CacheSingletonServiceBuilder.this.dispatcher.executeOnNode(new StartCommand<>(),elected);
+      }
+ else {
+        CacheSingletonServiceBuilder.this.dispatcher.executeOnCluster(new StopCommand<>());
+      }
+    }
+ catch (    Exception e) {
+      throw new IllegalStateException(e);
+    }
   }
 }
