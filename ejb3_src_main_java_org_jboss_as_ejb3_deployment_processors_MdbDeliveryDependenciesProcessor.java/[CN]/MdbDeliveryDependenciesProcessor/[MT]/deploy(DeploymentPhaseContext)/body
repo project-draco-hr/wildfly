@@ -1,0 +1,28 @@
+{
+  final DeploymentUnit deploymentUnit=phaseContext.getDeploymentUnit();
+  final EEModuleConfiguration moduleConfiguration=deploymentUnit.getAttachment(EE_MODULE_CONFIGURATION);
+  if (moduleConfiguration == null) {
+    return;
+  }
+  for (  final ComponentConfiguration configuration : moduleConfiguration.getComponentConfigurations()) {
+    ComponentDescription description=configuration.getComponentDescription();
+    if (description instanceof MessageDrivenComponentDescription) {
+      final MessageDrivenComponentDescription mdbDescription=(MessageDrivenComponentDescription)description;
+      final String deliveryGroup=mdbDescription.getDeliveryGroup();
+      if (deliveryGroup != null) {
+        final ServiceName serviceName=description.getStartServiceName();
+        final MdbDeliveryControllerService mdbDeliveryControllerService=new MdbDeliveryControllerService();
+        final ServiceName mdbDeliveryControllerServiceName=createMdbDeliveryControllerServiceName(serviceName);
+        ServiceBuilder<MdbDeliveryControllerService> builder=phaseContext.getServiceTarget().addService(mdbDeliveryControllerServiceName,mdbDeliveryControllerService).addDependency(description.getCreateServiceName(),MessageDrivenComponent.class,mdbDeliveryControllerService.getMdbComponent()).setInitialMode(Mode.PASSIVE);
+        if (deliveryGroup != null) {
+          final ServiceName deliveyGroupServiceName=MdbDeliveryGroupResourceDefinition.getDeliveryGroupServiceName(deliveryGroup);
+          if (phaseContext.getServiceRegistry().getService(deliveyGroupServiceName) == null) {
+            throw EjbLogger.DEPLOYMENT_LOGGER.missingMdbDeliveryGroup(deliveryGroup);
+          }
+          builder.addDependency(deliveyGroupServiceName);
+        }
+        builder.install();
+      }
+    }
+  }
+}
