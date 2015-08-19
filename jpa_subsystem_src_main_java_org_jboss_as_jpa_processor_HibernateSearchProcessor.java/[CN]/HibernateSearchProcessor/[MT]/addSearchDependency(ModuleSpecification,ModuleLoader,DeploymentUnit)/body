@@ -1,0 +1,34 @@
+{
+  String searchModuleName=null;
+  PersistenceUnitsInApplication persistenceUnitsInApplication=DeploymentUtils.getTopDeploymentUnit(deploymentUnit).getAttachment(PersistenceUnitsInApplication.PERSISTENCE_UNITS_IN_APPLICATION);
+  for (  PersistenceUnitMetadataHolder holder : persistenceUnitsInApplication.getPersistenceUnitHolders()) {
+    for (    PersistenceUnitMetadata pu : holder.getPersistenceUnits()) {
+      String providerModule=pu.getProperties().getProperty(Configuration.HIBERNATE_SEARCH_MODULE);
+      if (providerModule != null) {
+        if (searchModuleName == null) {
+          searchModuleName=providerModule;
+        }
+ else         if (!providerModule.equals(searchModuleName)) {
+          throw JpaLogger.ROOT_LOGGER.differentSearchModuleDependencies(deploymentUnit.getName(),searchModuleName,providerModule);
+        }
+      }
+    }
+  }
+  if (NONE.equals(searchModuleName)) {
+    ROOT_LOGGER.debugf("Not adding Hibernate Search dependency to deployment %s",deploymentUnit.getName());
+    return;
+  }
+  if (searchModuleName != null && !IGNORE.equals(searchModuleName)) {
+    ModuleIdentifier moduleIdentifier=ModuleIdentifier.fromString(searchModuleName);
+    moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,moduleIdentifier,false,true,true,false));
+    ROOT_LOGGER.debugf("added %s dependency to %s",moduleIdentifier,deploymentUnit.getName());
+  }
+ else {
+    final CompositeIndex index=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.COMPOSITE_ANNOTATION_INDEX);
+    List<AnnotationInstance> annotations=index.getAnnotations(SEARCH_INDEXED_ANNOTATION_NAME);
+    if (annotations != null && annotations.size() > 0) {
+      moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader,defaultSearchModule,false,true,true,false));
+      ROOT_LOGGER.debugf("deployment %s contains %s annotation, added %s dependency",deploymentUnit.getName(),SEARCH_INDEXED_ANNOTATION_NAME,defaultSearchModule);
+    }
+  }
+}
