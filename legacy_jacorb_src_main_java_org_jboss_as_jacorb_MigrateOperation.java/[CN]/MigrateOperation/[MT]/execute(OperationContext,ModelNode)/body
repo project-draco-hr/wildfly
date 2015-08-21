@@ -6,15 +6,49 @@
   if (context.readResourceFromRoot(subsystemsAddress).hasChild(OPENJDK_SUBSYSTEM_ELEMENT)) {
     throw new OperationFailedException("can not migrate: the new iiop-openjdk subsystem is already defined");
   }
+  final Map<PathAddress,ModelNode> migrateOperations=new LinkedHashMap<>();
   if (!context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS).hasChild(OPENJDK_EXTENSION_ELEMENT)) {
-    addOpenjdkExtension(context);
+    addOpenjdkExtension(context,migrateOperations);
   }
-  final Resource jacorbResource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
-  final ModelNode jacorbModel=Resource.Tools.readModel(jacorbResource).clone();
-  TransformUtils.checkLegacyModel(jacorbModel,true);
-  final ModelNode openjdkModel=TransformUtils.transformModel(jacorbModel);
-  final PathAddress openjdkAddress=subsystemsAddress.append(OPENJDK_SUBSYSTEM_ELEMENT);
-  addOpenjdkSubsystem(context,openjdkAddress,openjdkModel);
-  final PathAddress jacorbAddress=subsystemsAddress.append(JACORB_SUBSYSTEM_ELEMENT);
-  removeJacorbSubsystem(context,jacorbAddress);
+  context.addStep(new OperationStepHandler(){
+    @Override public void execute(    OperationContext operationContext,    ModelNode modelNode) throws OperationFailedException {
+      final Resource jacorbResource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
+      final ModelNode jacorbModel=Resource.Tools.readModel(jacorbResource).clone();
+      TransformUtils.checkLegacyModel(jacorbModel,true);
+      final ModelNode openjdkModel=TransformUtils.transformModel(jacorbModel);
+      final PathAddress openjdkAddress=subsystemsAddress.append(OPENJDK_SUBSYSTEM_ELEMENT);
+      addOpenjdkSubsystem(openjdkAddress,openjdkModel,migrateOperations);
+      final PathAddress jacorbAddress=subsystemsAddress.append(JACORB_SUBSYSTEM_ELEMENT);
+      removeJacorbSubsystem(jacorbAddress,migrateOperations);
+      if (describe) {
+        final Collection<ModelNode> values=migrateOperations.values();
+        ModelNode result=new ModelNode();
+        result.get(MIGRATION_OPERATIONS).set(values);
+        context.getResult().set(result);
+      }
+ else {
+        final Map<PathAddress,ModelNode> migrateOpResponses=migrateSubsystems(context,migrateOperations);
+        context.completeStep(new OperationContext.ResultHandler(){
+          @Override public void handleResult(          OperationContext.ResultAction resultAction,          OperationContext context,          ModelNode operation){
+            final ModelNode result=new ModelNode();
+            if (resultAction == OperationContext.ResultAction.ROLLBACK) {
+              for (              Map.Entry<PathAddress,ModelNode> entry : migrateOpResponses.entrySet()) {
+                if (entry.getValue().hasDefined(FAILURE_DESCRIPTION)) {
+                  ModelNode desc=new ModelNode();
+                  desc.get(OP).set(migrateOperations.get(entry.getKey()));
+                  desc.get(RESULT).set(entry.getValue());
+                  result.get(MIGRATION_ERROR).set(desc);
+                  break;
+                }
+              }
+              context.getFailureDescription().set(new ModelNode(JacORBLogger.ROOT_LOGGER.migrationFailed()));
+            }
+            context.getResult().set(result);
+          }
+        }
+);
+      }
+    }
+  }
+,MODEL);
 }
