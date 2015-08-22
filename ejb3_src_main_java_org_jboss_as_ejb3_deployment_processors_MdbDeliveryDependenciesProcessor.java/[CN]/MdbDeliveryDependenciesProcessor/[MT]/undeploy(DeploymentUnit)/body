@@ -4,20 +4,18 @@
     return;
   }
   final ServiceRegistry serviceRegistry=deploymentUnit.getServiceRegistry();
+  boolean clusteredSingletonFound=false;
   for (  final ComponentConfiguration configuration : moduleConfiguration.getComponentConfigurations()) {
     final ComponentDescription description=configuration.getComponentDescription();
     if (description instanceof MessageDrivenComponentDescription) {
-      final ServiceName mdbDeliveryControllerServiceName=createMdbDeliveryControllerServiceName(description.getStartServiceName());
-      final ServiceController<?> mdbDeliveryControllerService=serviceRegistry.getService(mdbDeliveryControllerServiceName);
-      if (mdbDeliveryControllerService != null) {
-        mdbDeliveryControllerService.setMode(Mode.REMOVE);
+      MessageDrivenComponentDescription mdbDescription=(MessageDrivenComponentDescription)description;
+      clusteredSingletonFound=clusteredSingletonFound || mdbDescription.isClusteredSingleton();
+      if (mdbDescription.isClusteredSingleton() || mdbDescription.getDeliveryGroup() != null) {
+        serviceRegistry.getRequiredService(createMdbDeliveryControllerServiceName(mdbDescription)).setMode(Mode.REMOVE);
       }
     }
   }
-  if (getEJBBoundClusteringMetaData(deploymentUnit) != null) {
-    final ServiceController<?> barrierDependentService=serviceRegistry.getService(createClusteredSingletonDemanderServiceName(deploymentUnit));
-    if (barrierDependentService != null) {
-      barrierDependentService.setMode(Mode.REMOVE);
-    }
+  if (clusteredSingletonFound) {
+    serviceRegistry.getRequiredService(createClusteredSingletonDemanderServiceName(deploymentUnit)).setMode(Mode.REMOVE);
   }
 }
