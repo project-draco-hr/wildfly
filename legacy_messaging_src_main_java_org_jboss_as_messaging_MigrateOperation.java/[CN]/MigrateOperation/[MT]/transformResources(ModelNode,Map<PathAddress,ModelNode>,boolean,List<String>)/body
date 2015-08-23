@@ -1,0 +1,64 @@
+{
+  for (  ModelNode legacyAddOp : legacyModelDescription.get(RESULT).asList()) {
+    final ModelNode newAddOp=legacyAddOp.clone();
+    ModelNode newAddress=transformAddress(legacyAddOp.get(OP_ADDR).clone());
+    newAddOp.get(OP_ADDR).set(newAddress);
+    PathAddress address=PathAddress.pathAddress(newAddress);
+    if (address.size() == 2 && "server".equals(address.getLastElement().getKey())) {
+      migrateServer(newAddOp,warnings);
+    }
+    if (newAddress.asList().size() > 2) {
+      String parentType=address.getElement(1).getKey();
+      String resourceType=address.getElement(2).getKey();
+      if ("server".equals(parentType)) {
+switch (resourceType) {
+case BROADCAST_GROUP:
+          migrateBroadcastGroup(newAddOp,warnings);
+        break;
+case CONNECTION_FACTORY:
+      if (addLegacyEntries) {
+        PathAddress legacyConnectionFactoryAddress=address.getParent().append("legacy-connection-factory",address.getLastElement().getValue());
+        final ModelNode addLegacyConnectionFactoryOp=legacyAddOp.clone();
+        addLegacyConnectionFactoryOp.get(OP_ADDR).set(legacyConnectionFactoryAddress.toModelNode());
+        migrateConnectionFactory(addLegacyConnectionFactoryOp,"");
+        newAddOperations.put(pathAddress(addLegacyConnectionFactoryOp.get(OP_ADDR)),addLegacyConnectionFactoryOp);
+      }
+    migrateConnectionFactory(newAddOp,addLegacyEntries ? NEW_ENTRY_SUFFIX : "");
+  break;
+case POOLED_CONNECTION_FACTORY:
+migratePooledConnectionFactory(newAddOp);
+break;
+case CLUSTER_CONNECTION:
+migrateClusterConnection(newAddOp);
+break;
+case BRIDGE:
+migrateBridge(newAddOp);
+break;
+case JMS_QUEUE:
+case JMS_TOPIC:
+if (addLegacyEntries) {
+addLegacyEntries(newAddOp);
+}
+break;
+case ACCEPTOR:
+case CONNECTOR:
+migrateGenericTransport(newAddOp);
+case HTTP_ACCEPTOR:
+case REMOTE_ACCEPTOR:
+case HTTP_CONNECTOR:
+case REMOTE_CONNECTOR:
+case CONNECTOR_SERVICE:
+if (address.size() == 4) {
+String name=address.getLastElement().getValue();
+ModelNode value=newAddOp.get(VALUE);
+ModelNode parentAddOp=newAddOperations.get(address.getParent());
+parentAddOp.get("params").add(new Property(name,value));
+continue;
+}
+break;
+}
+}
+}
+newAddOperations.put(address,newAddOp);
+}
+}
