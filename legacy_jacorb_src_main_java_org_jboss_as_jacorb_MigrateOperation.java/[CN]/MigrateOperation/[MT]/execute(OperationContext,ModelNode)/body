@@ -14,7 +14,15 @@
     @Override public void execute(    OperationContext operationContext,    ModelNode modelNode) throws OperationFailedException {
       final Resource jacorbResource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
       final ModelNode jacorbModel=Resource.Tools.readModel(jacorbResource).clone();
-      TransformUtils.checkLegacyModel(jacorbModel,true);
+      List<String> unsupportedProperties=TransformUtils.checkLegacyModel(jacorbModel);
+      if (!unsupportedProperties.isEmpty()) {
+        context.setRollbackOnly();
+        ModelNode result=new ModelNode();
+        final String error=JacORBLogger.ROOT_LOGGER.cannotEmulatePropertiesWarning(unsupportedProperties);
+        result.get(MIGRATION_ERROR).set(error);
+        context.getResult().set(result);
+        return;
+      }
       final ModelNode openjdkModel=TransformUtils.transformModel(jacorbModel);
       final PathAddress openjdkAddress=subsystemsAddress.append(OPENJDK_SUBSYSTEM_ELEMENT);
       addOpenjdkSubsystem(openjdkAddress,openjdkModel,migrateOperations);
