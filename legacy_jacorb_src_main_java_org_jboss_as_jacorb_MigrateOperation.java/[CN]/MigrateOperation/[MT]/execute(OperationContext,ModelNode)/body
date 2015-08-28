@@ -14,14 +14,13 @@
     @Override public void execute(    OperationContext operationContext,    ModelNode modelNode) throws OperationFailedException {
       final Resource jacorbResource=context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS);
       final ModelNode jacorbModel=Resource.Tools.readModel(jacorbResource).clone();
+      final List<String> warnings=new LinkedList<>();
       List<String> unsupportedProperties=TransformUtils.checkLegacyModel(jacorbModel);
       if (!unsupportedProperties.isEmpty()) {
-        context.setRollbackOnly();
-        ModelNode result=new ModelNode();
-        final String error=JacORBLogger.ROOT_LOGGER.cannotEmulatePropertiesWarning(unsupportedProperties);
-        result.get(MIGRATION_ERROR).set(error);
-        context.getResult().set(result);
-        return;
+        warnings.add(JacORBLogger.ROOT_LOGGER.cannotEmulatePropertiesWarning(unsupportedProperties));
+        for (        String unsupportedProperty : unsupportedProperties) {
+          jacorbModel.get(unsupportedProperty).clear();
+        }
       }
       final ModelNode openjdkModel=TransformUtils.transformModel(jacorbModel);
       final PathAddress openjdkAddress=subsystemsAddress.append(OPENJDK_SUBSYSTEM_ELEMENT);
@@ -32,6 +31,13 @@
         final Collection<ModelNode> values=migrateOperations.values();
         ModelNode result=new ModelNode();
         result.get(MIGRATION_OPERATIONS).set(values);
+        if (!warnings.isEmpty()) {
+          ModelNode rw=new ModelNode().setEmptyList();
+          for (          String warning : warnings) {
+            rw.add(warning);
+          }
+          result.get(MIGRATION_WARNINGS).set(rw);
+        }
         context.getResult().set(result);
       }
  else {
@@ -39,6 +45,13 @@
         context.completeStep(new OperationContext.ResultHandler(){
           @Override public void handleResult(          OperationContext.ResultAction resultAction,          OperationContext context,          ModelNode operation){
             final ModelNode result=new ModelNode();
+            if (!warnings.isEmpty()) {
+              ModelNode rw=new ModelNode().setEmptyList();
+              for (              String warning : warnings) {
+                rw.add(warning);
+              }
+              result.get(MIGRATION_WARNINGS).set(rw);
+            }
             if (resultAction == OperationContext.ResultAction.ROLLBACK) {
               for (              Map.Entry<PathAddress,ModelNode> entry : migrateOpResponses.entrySet()) {
                 if (entry.getValue().hasDefined(FAILURE_DESCRIPTION)) {
