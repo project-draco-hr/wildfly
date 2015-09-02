@@ -1,3 +1,42 @@
 {
-  registration.registerSubModel(this);
+  ManagementResourceRegistration registration=parentRegistration.registerSubModel(this);
+  ResourceDescriptor descriptor=new ResourceDescriptor(this.getResourceDescriptionResolver()).addAttributes(Attribute.class);
+  ResourceServiceHandler handler=new ChannelServiceHandler();
+  new AddStepHandler(descriptor,handler){
+    @SuppressWarnings("deprecation") @Override protected void populateModel(    OperationContext context,    ModelNode operation,    Resource resource) throws OperationFailedException {
+      if (!operation.hasDefined(Attribute.STACK.getDefinition().getName())) {
+        ModelNode parentModel=context.readResourceFromRoot(context.getCurrentAddress().getParent()).getModel();
+        if (parentModel.hasDefined(JGroupsSubsystemResourceDefinition.Attribute.DEFAULT_STACK.getDefinition().getName())) {
+          operation.get(Attribute.STACK.getDefinition().getName()).set(parentModel.get(JGroupsSubsystemResourceDefinition.Attribute.DEFAULT_STACK.getDefinition().getName()));
+        }
+      }
+      super.populateModel(context,operation,resource);
+      if (ChannelResourceDefinition.this.allowRuntimeOnlyRegistration && (context.getRunningMode() == RunningMode.NORMAL)) {
+        String name=context.getCurrentAddressValue();
+        String stack=ModelNodes.asString(Attribute.STACK.getDefinition().resolveModelAttribute(context,resource.getModel()));
+        PathAddress address=context.getCurrentAddress();
+        PathAddress subsystemAddress=address.subAddress(0,address.size() - 1);
+        PathAddress stackAddress=subsystemAddress.append(StackResourceDefinition.pathElement(stack));
+        context.addStep(new ProtocolResourceRegistrationHandler(name,stackAddress),OperationContext.Stage.MODEL);
+      }
+    }
+  }
+.register(registration);
+  new RemoveStepHandler(descriptor,handler){
+    @Override protected void performRemove(    OperationContext context,    ModelNode operation,    ModelNode model) throws OperationFailedException {
+      if (ChannelResourceDefinition.this.allowRuntimeOnlyRegistration && (context.getRunningMode() == RunningMode.NORMAL)) {
+        Resource resource=context.readResource(PathAddress.EMPTY_ADDRESS);
+        for (        ResourceEntry entry : resource.getChildren(ProtocolResourceDefinition.WILDCARD_PATH.getKey())) {
+          context.removeResource(PathAddress.pathAddress(entry.getPathElement()));
+        }
+        context.getResourceRegistrationForUpdate().unregisterOverrideModel(context.getCurrentAddressValue());
+      }
+      super.performRemove(context,operation,model);
+    }
+  }
+.register(registration);
+  if (this.allowRuntimeOnlyRegistration) {
+    new MetricHandler<>(new ChannelMetricExecutor(),ChannelMetric.class).register(registration);
+  }
+  new ForkResourceDefinition(this.allowRuntimeOnlyRegistration).register(registration);
 }

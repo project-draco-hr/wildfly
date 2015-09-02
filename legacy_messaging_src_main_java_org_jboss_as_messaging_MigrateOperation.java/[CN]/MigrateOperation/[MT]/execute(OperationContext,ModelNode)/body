@@ -1,23 +1,48 @@
 {
   if (!describe && context.getRunningMode() != RunningMode.ADMIN_ONLY) {
-    throw MessagingLogger.ROOT_LOGGER.migrateOperationAllowedOnlyInAdminOnly();
+    throw ROOT_LOGGER.migrateOperationAllowedOnlyInAdminOnly();
   }
   boolean addLegacyEntries=ADD_LEGACY_ENTRIES.resolveModelAttribute(context,operation).asBoolean();
+  final List<String> warnings=new ArrayList<>();
   final ModelNode legacyModelAddOps=new ModelNode();
   final Map<PathAddress,ModelNode> migrationOperations=new LinkedHashMap<PathAddress,ModelNode>();
   describeLegacyMessagingResources(context,legacyModelAddOps);
   addMessagingActiveMQExtension(context,migrationOperations,describe);
   context.addStep(new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
-      transformResources(legacyModelAddOps,migrationOperations,addLegacyEntries);
+      transformResources(legacyModelAddOps,migrationOperations,addLegacyEntries,warnings);
       removeMessagingSubsystem(migrationOperations);
       PathAddress parentAddress=context.getCurrentAddress().getParent();
       fixAddressesForDomainMode(parentAddress,migrationOperations);
       if (describe) {
-        context.getResult().set(migrationOperations.values());
+        final Collection<ModelNode> values=migrationOperations.values();
+        ModelNode result=new ModelNode();
+        fillWarnings(result,warnings);
+        result.get(MIGRATION_OPERATIONS).set(values);
+        context.getResult().set(result);
       }
  else {
-        migrateSubsystems(context,migrationOperations);
+        final Map<PathAddress,ModelNode> migrateOpResponses=migrateSubsystems(context,migrationOperations);
+        context.completeStep(new OperationContext.ResultHandler(){
+          @Override public void handleResult(          OperationContext.ResultAction resultAction,          OperationContext context,          ModelNode operation){
+            final ModelNode result=new ModelNode();
+            fillWarnings(result,warnings);
+            if (resultAction == OperationContext.ResultAction.ROLLBACK) {
+              for (              Map.Entry<PathAddress,ModelNode> entry : migrateOpResponses.entrySet()) {
+                if (entry.getValue().hasDefined(FAILURE_DESCRIPTION)) {
+                  ModelNode desc=new ModelNode();
+                  desc.get(OP).set(migrationOperations.get(entry.getKey()));
+                  desc.get(RESULT).set(entry.getValue());
+                  result.get(MIGRATION_ERROR).set(desc);
+                  break;
+                }
+              }
+              context.getFailureDescription().set(ROOT_LOGGER.migrationFailed());
+            }
+            context.getResult().set(result);
+          }
+        }
+);
       }
     }
   }

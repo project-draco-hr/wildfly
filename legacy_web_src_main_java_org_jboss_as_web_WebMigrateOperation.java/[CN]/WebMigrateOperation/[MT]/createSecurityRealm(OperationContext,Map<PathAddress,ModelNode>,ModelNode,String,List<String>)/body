@@ -1,0 +1,62 @@
+{
+  ModelNode legacyAddOp=findResource(pathAddress(WebExtension.SUBSYSTEM_PATH,pathElement(WebExtension.CONNECTOR_PATH.getKey(),connector),pathElement("configuration","ssl")),legacyModelAddOps);
+  if (legacyAddOp == null) {
+    return null;
+  }
+  int counter=1;
+  String realmName=REALM_NAME + counter;
+  boolean ok=false;
+  do {
+    Resource root=context.readResourceFromRoot(pathAddress(CORE_SERVICE,MANAGEMENT),false);
+    if (root.getChildrenNames(SECURITY_REALM).contains(realmName)) {
+      counter++;
+      realmName=REALM_NAME + counter;
+    }
+ else {
+      ok=true;
+    }
+  }
+ while (!ok);
+  PathAddress addres=pathAddress(pathElement(CORE_SERVICE,MANAGEMENT),pathElement(SECURITY_REALM,realmName));
+  migrationOperations.put(addres,createAddOperation(addres));
+  ModelNode keyAlias=legacyAddOp.get(WebSSLDefinition.KEY_ALIAS.getName());
+  ModelNode password=legacyAddOp.get(WebSSLDefinition.PASSWORD.getName());
+  ModelNode certificateKeyFile=legacyAddOp.get(WebSSLDefinition.CERTIFICATE_KEY_FILE.getName());
+  ModelNode cipherSuite=legacyAddOp.get(WebSSLDefinition.CIPHER_SUITE.getName());
+  ModelNode protocol=legacyAddOp.get(WebSSLDefinition.PROTOCOL.getName());
+  ModelNode verifyClient=legacyAddOp.get(WebSSLDefinition.VERIFY_CLIENT.getName());
+  ModelNode verifyDepth=legacyAddOp.get(WebSSLDefinition.VERIFY_DEPTH.getName());
+  ModelNode certificateFile=legacyAddOp.get(WebSSLDefinition.CERTIFICATE_FILE.getName());
+  ModelNode caCertificateFile=legacyAddOp.get(WebSSLDefinition.CA_CERTIFICATE_FILE.getName());
+  ModelNode caCertificatePassword=legacyAddOp.get(WebSSLDefinition.CA_CERTIFICATE_PASSWORD.getName());
+  ModelNode csRevocationURL=legacyAddOp.get(WebSSLDefinition.CA_REVOCATION_URL.getName());
+  ModelNode trustStoreType=legacyAddOp.get(WebSSLDefinition.TRUSTSTORE_TYPE.getName());
+  ModelNode keystoreType=legacyAddOp.get(WebSSLDefinition.KEYSTORE_TYPE.getName());
+  ModelNode sessionCacheSize=legacyAddOp.get(WebSSLDefinition.SESSION_CACHE_SIZE.getName());
+  ModelNode sessionTimeout=legacyAddOp.get(WebSSLDefinition.SESSION_TIMEOUT.getName());
+  ModelNode sslProtocol=legacyAddOp.get(WebSSLDefinition.SSL_PROTOCOL.getName());
+  addres=pathAddress(pathElement(CORE_SERVICE,MANAGEMENT),pathElement(SECURITY_REALM,realmName),pathElement(AUTHENTICATION,TRUSTSTORE));
+  ModelNode addOp=createAddOperation(addres);
+  addOp.get(ModelDescriptionConstants.KEYSTORE_PATH).set(caCertificateFile);
+  addOp.get(ModelDescriptionConstants.KEYSTORE_PASSWORD).set(caCertificatePassword);
+  addOp.get(ModelDescriptionConstants.KEYSTORE_PROVIDER).set(trustStoreType);
+  migrationOperations.put(addres,addOp);
+  addres=pathAddress(pathElement(CORE_SERVICE,MANAGEMENT),pathElement(SECURITY_REALM,realmName),pathElement(SERVER_IDENTITY,SSL));
+  addOp=createAddOperation(addres);
+  addOp.get(ModelDescriptionConstants.KEYSTORE_PATH).set(certificateKeyFile);
+  addOp.get(ModelDescriptionConstants.KEYSTORE_PASSWORD).set(password);
+  addOp.get(ModelDescriptionConstants.KEYSTORE_PROVIDER).set(keystoreType);
+  addOp.get(ModelDescriptionConstants.ALIAS).set(keyAlias);
+  addOp.get(PROTOCOL).set(protocol);
+  if (verifyDepth.isDefined()) {
+    warnings.add(WebLogger.ROOT_LOGGER.couldNotMigrateResource(WebSSLDefinition.VERIFY_DEPTH.getName(),pathAddress(legacyAddOp.get(ADDRESS))));
+  }
+  if (certificateFile.isDefined()) {
+    warnings.add(WebLogger.ROOT_LOGGER.couldNotMigrateResource(WebSSLDefinition.CERTIFICATE_FILE.getName(),pathAddress(legacyAddOp.get(ADDRESS))));
+  }
+  if (csRevocationURL.isDefined()) {
+    warnings.add(WebLogger.ROOT_LOGGER.couldNotMigrateResource(WebSSLDefinition.CA_REVOCATION_URL.getName(),pathAddress(legacyAddOp.get(ADDRESS))));
+  }
+  migrationOperations.put(addres,addOp);
+  return new SSLInformation(realmName,verifyClient,sessionCacheSize,sessionTimeout,sslProtocol,cipherSuite);
+}
