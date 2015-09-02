@@ -1,27 +1,46 @@
 {
-  CoarseSessionCacheEntry<L> entry=new CoarseSessionCacheEntry<>(new SimpleSessionMetaData());
-  CoarseSessionCacheEntry<L> existingEntry=this.sessionCache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).putIfAbsent(id,entry);
-  SessionAttributesCacheKey key=new SessionAttributesCacheKey(id);
+  InfinispanWebLogger.ROOT_LOGGER.infof("CoarseSessionFactory.createValue(%s)",id);
+  SessionCreationMetaDataKey creationMetaDataKey=new SessionCreationMetaDataKey(id);
+  SessionCreationMetaDataEntry<L> creationMetaDataEntry=new SessionCreationMetaDataEntry<>(new SimpleSessionCreationMetaData());
+  SessionCreationMetaDataEntry<L> existingCreationMetaDataEntry=this.creationMetaDataCache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).putIfAbsent(creationMetaDataKey,creationMetaDataEntry);
+  Mutator creationMetaDataMutator=Mutator.PASSIVE;
+  if (existingCreationMetaDataEntry != null) {
+    creationMetaDataEntry=existingCreationMetaDataEntry;
+    creationMetaDataMutator=new CacheEntryMutator<>(this.creationMetaDataCache,creationMetaDataKey,creationMetaDataEntry);
+  }
+  SessionAccessMetaDataKey accessMetaDataKey=new SessionAccessMetaDataKey(id);
+  SessionAccessMetaData accessMetaData=new SimpleSessionAccessMetaData();
+  Mutator accessMetaDataMutator=Mutator.PASSIVE;
+  if (existingCreationMetaDataEntry == null) {
+    this.accessMetaDataCache.getAdvancedCache().withFlags(Flag.IGNORE_RETURN_VALUES).put(accessMetaDataKey,accessMetaData);
+  }
+ else {
+    SessionAccessMetaData existingAccessMetaData=this.accessMetaDataCache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).putIfAbsent(accessMetaDataKey,accessMetaData);
+    if (existingAccessMetaData != null) {
+      accessMetaData=existingAccessMetaData;
+      accessMetaDataMutator=new CacheEntryMutator<>(this.accessMetaDataCache,accessMetaDataKey,accessMetaData);
+    }
+  }
+  SessionAttributesKey attributesKey=new SessionAttributesKey(id);
   Map<String,Object> attributes=new HashMap<>();
-  MutableCacheEntry<Map<String,Object>> attributesEntry=new MutableCacheEntry<>(attributes,Mutator.PASSIVE);
-  MarshalledValue<Map<String,Object>,MarshallingContext> value=this.marshaller.write(attributes);
-  if (existingEntry == null) {
-    this.attributesCache.getAdvancedCache().withFlags(Flag.IGNORE_RETURN_VALUES).put(key,value);
-    MutableCacheEntry<CoarseSessionCacheEntry<L>> sessionEntry=new MutableCacheEntry<>(entry,Mutator.PASSIVE);
-    return new CoarseSessionEntry<>(sessionEntry,attributesEntry);
+  MarshalledValue<Map<String,Object>,MarshallingContext> attributesValue=this.marshaller.write(attributes);
+  Mutator attributesMutator=Mutator.PASSIVE;
+  if (existingCreationMetaDataEntry == null) {
+    this.attributesCache.getAdvancedCache().withFlags(Flag.IGNORE_RETURN_VALUES).put(attributesKey,attributesValue);
   }
-  MutableCacheEntry<CoarseSessionCacheEntry<L>> sessionEntry=new MutableCacheEntry<>(existingEntry,new CacheEntryMutator<>(this.sessionCache,id,existingEntry));
-  MarshalledValue<Map<String,Object>,MarshallingContext> existingValue=this.attributesCache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).putIfAbsent(key,value);
-  if (existingValue != null) {
-    try {
-      Map<String,Object> existingAttributes=this.marshaller.read(existingValue);
-      MutableCacheEntry<Map<String,Object>> existingAttributesEntry=new MutableCacheEntry<>(existingAttributes,new CacheEntryMutator<>(this.attributesCache,key,existingValue));
-      return new CoarseSessionEntry<>(sessionEntry,existingAttributesEntry);
-    }
- catch (    InvalidSerializedFormException e) {
-      InfinispanWebLogger.ROOT_LOGGER.failedToActivateSession(e,id);
-      new CacheEntryMutator<>(this.attributesCache,key,value).mutate();
+ else {
+    MarshalledValue<Map<String,Object>,MarshallingContext> existingAttributesValue=this.attributesCache.getAdvancedCache().withFlags(Flag.FORCE_SYNCHRONOUS).putIfAbsent(attributesKey,attributesValue);
+    if (existingAttributesValue != null) {
+      try {
+        attributes=this.marshaller.read(existingAttributesValue);
+        attributesMutator=new CacheEntryMutator<>(this.attributesCache,attributesKey,existingAttributesValue);
+      }
+ catch (      InvalidSerializedFormException e) {
+        InfinispanWebLogger.ROOT_LOGGER.failedToActivateSession(e,id);
+        this.remove(id);
+        return this.createValue(id,context);
+      }
     }
   }
-  return new CoarseSessionEntry<>(sessionEntry,attributesEntry);
+  return new CoarseSessionEntry<>(new MutableCacheEntry<>(creationMetaDataEntry.getMetaData(),creationMetaDataMutator),new MutableCacheEntry<>(accessMetaData,accessMetaDataMutator),new MutableCacheEntry<>(attributes,attributesMutator),creationMetaDataEntry.getLocalContext());
 }
