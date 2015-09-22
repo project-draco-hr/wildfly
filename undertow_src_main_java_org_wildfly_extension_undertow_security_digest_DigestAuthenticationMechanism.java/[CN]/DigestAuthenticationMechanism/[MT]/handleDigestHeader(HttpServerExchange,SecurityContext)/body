@@ -1,0 +1,77 @@
+{
+  DigestContext context=exchange.getAttachment(DigestContext.ATTACHMENT_KEY);
+  Map<DigestAuthorizationToken,String> parsedHeader=context.getParsedHeader();
+  Set<DigestAuthorizationToken> mandatoryTokens=new HashSet<>(MANDATORY_REQUEST_TOKENS);
+  if (!supportedAlgorithms.contains(DigestAlgorithm.MD5)) {
+    mandatoryTokens.add(DigestAuthorizationToken.ALGORITHM);
+  }
+  if (!supportedQops.isEmpty() && !supportedQops.contains(DigestQop.AUTH)) {
+    mandatoryTokens.add(DigestAuthorizationToken.MESSAGE_QOP);
+  }
+  DigestQop qop=null;
+  if (parsedHeader.containsKey(DigestAuthorizationToken.MESSAGE_QOP)) {
+    qop=DigestQop.forName(parsedHeader.get(DigestAuthorizationToken.MESSAGE_QOP));
+    if (qop == null || !supportedQops.contains(qop)) {
+      REQUEST_LOGGER.invalidTokenReceived(DigestAuthorizationToken.MESSAGE_QOP.getName(),parsedHeader.get(DigestAuthorizationToken.MESSAGE_QOP));
+      return AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+    }
+    context.setQop(qop);
+    mandatoryTokens.add(DigestAuthorizationToken.CNONCE);
+    mandatoryTokens.add(DigestAuthorizationToken.NONCE_COUNT);
+  }
+  mandatoryTokens.removeAll(parsedHeader.keySet());
+  if (mandatoryTokens.size() > 0) {
+    for (    DigestAuthorizationToken currentToken : mandatoryTokens) {
+      REQUEST_LOGGER.missingAuthorizationToken(currentToken.getName());
+    }
+    return AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+  }
+  if (!realmName.equals(parsedHeader.get(DigestAuthorizationToken.REALM))) {
+    REQUEST_LOGGER.invalidTokenReceived(DigestAuthorizationToken.REALM.getName(),parsedHeader.get(DigestAuthorizationToken.REALM));
+    return AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+  }
+  if (parsedHeader.containsKey(DigestAuthorizationToken.OPAQUE)) {
+    if (!OPAQUE_VALUE.equals(parsedHeader.get(DigestAuthorizationToken.OPAQUE))) {
+      REQUEST_LOGGER.invalidTokenReceived(DigestAuthorizationToken.OPAQUE.getName(),parsedHeader.get(DigestAuthorizationToken.OPAQUE));
+      return AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+    }
+  }
+  DigestAlgorithm algorithm;
+  if (parsedHeader.containsKey(DigestAuthorizationToken.ALGORITHM)) {
+    algorithm=DigestAlgorithm.forName(parsedHeader.get(DigestAuthorizationToken.ALGORITHM));
+    if (algorithm == null || !supportedAlgorithms.contains(algorithm)) {
+      REQUEST_LOGGER.invalidTokenReceived(DigestAuthorizationToken.ALGORITHM.getName(),parsedHeader.get(DigestAuthorizationToken.ALGORITHM));
+      return AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+    }
+  }
+ else {
+    algorithm=DigestAlgorithm.MD5;
+  }
+  try {
+    context.setAlgorithm(algorithm);
+  }
+ catch (  NoSuchAlgorithmException e) {
+    REQUEST_LOGGER.exceptionProcessingRequest(e);
+    return AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+  }
+  final String userName=parsedHeader.get(DigestAuthorizationToken.USERNAME);
+  final IdentityManager identityManager=getIdentityManager(securityContext);
+  final Account account;
+  if (algorithm.isSession()) {
+    throw new IllegalStateException("Not yet implemented.");
+  }
+ else {
+    final DigestCredential credential=new DigestCredentialImpl(context);
+    account=identityManager.verify(userName,credential);
+  }
+  if (account == null) {
+    securityContext.authenticationFailed(MESSAGES.authenticationFailed(userName),mechanismName);
+    return AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+  }
+  if (!validateNonceUse(context,parsedHeader,exchange)) {
+    context.markStale();
+    return AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+  }
+  securityContext.authenticationComplete(account,mechanismName,true);
+  return AuthenticationMechanismOutcome.AUTHENTICATED;
+}
