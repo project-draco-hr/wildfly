@@ -20,12 +20,20 @@
   context.addStep(new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
       addDefaultResources(sortedMigrationOperations,legacyModelAddOps,warnings);
-      createIoSubsystem(context,sortedMigrationOperations);
+      boolean domainMode=context.getCallEnvironment().getProcessType() != ProcessType.STANDALONE_SERVER;
+      PathAddress baseAddres;
+      if (domainMode) {
+        baseAddres=pathAddress(operation.get(ADDRESS)).getParent();
+      }
+ else {
+        baseAddres=pathAddress();
+      }
+      createIoSubsystem(context,sortedMigrationOperations,baseAddres);
       createWelcomeContentHandler(sortedMigrationOperations);
-      transformResources(context,legacyModelAddOps,sortedMigrationOperations,warnings);
+      transformResources(context,legacyModelAddOps,sortedMigrationOperations,warnings,domainMode);
+      fixAddressesForDomainMode(pathAddress(operation.get(ADDRESS)),sortedMigrationOperations);
       LinkedHashMap<PathAddress,ModelNode> orderedMigrationOperations=new LinkedHashMap<>(sortedMigrationOperations);
-      removeWebSubsystem(orderedMigrationOperations,context.getProcessType() == ProcessType.STANDALONE_SERVER);
-      fixAddressesForDomainMode(pathAddress(operation.get(ADDRESS)),orderedMigrationOperations);
+      removeWebSubsystem(orderedMigrationOperations,context.getProcessType() == ProcessType.STANDALONE_SERVER,pathAddress(operation.get(ADDRESS)));
       if (describe) {
         final Collection<ModelNode> values=orderedMigrationOperations.values();
         ModelNode result=new ModelNode();
