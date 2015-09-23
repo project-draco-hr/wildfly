@@ -3,22 +3,6 @@
   if (legacyAddOp == null) {
     return null;
   }
-  int counter=1;
-  String realmName=REALM_NAME + counter;
-  boolean ok=false;
-  do {
-    Resource root=context.readResourceFromRoot(pathAddress(CORE_SERVICE,MANAGEMENT),false);
-    if (root.getChildrenNames(SECURITY_REALM).contains(realmName)) {
-      counter++;
-      realmName=REALM_NAME + counter;
-    }
- else {
-      ok=true;
-    }
-  }
- while (!ok);
-  PathAddress addres=pathAddress(pathElement(CORE_SERVICE,MANAGEMENT),pathElement(SECURITY_REALM,realmName));
-  migrationOperations.put(addres,createAddOperation(addres));
   ModelNode keyAlias=legacyAddOp.get(WebSSLDefinition.KEY_ALIAS.getName());
   ModelNode password=legacyAddOp.get(WebSSLDefinition.PASSWORD.getName());
   ModelNode certificateKeyFile=legacyAddOp.get(WebSSLDefinition.CERTIFICATE_KEY_FILE.getName());
@@ -35,19 +19,6 @@
   ModelNode sessionCacheSize=legacyAddOp.get(WebSSLDefinition.SESSION_CACHE_SIZE.getName());
   ModelNode sessionTimeout=legacyAddOp.get(WebSSLDefinition.SESSION_TIMEOUT.getName());
   ModelNode sslProvider=legacyAddOp.get(WebSSLDefinition.SSL_PROTOCOL.getName());
-  addres=pathAddress(pathElement(CORE_SERVICE,MANAGEMENT),pathElement(SECURITY_REALM,realmName),pathElement(AUTHENTICATION,TRUSTSTORE));
-  ModelNode addOp=createAddOperation(addres);
-  addOp.get(ModelDescriptionConstants.KEYSTORE_PATH).set(caCertificateFile);
-  addOp.get(ModelDescriptionConstants.KEYSTORE_PASSWORD).set(caCertificatePassword);
-  addOp.get(ModelDescriptionConstants.KEYSTORE_PROVIDER).set(trustStoreType);
-  migrationOperations.put(addres,addOp);
-  addres=pathAddress(pathElement(CORE_SERVICE,MANAGEMENT),pathElement(SECURITY_REALM,realmName),pathElement(SERVER_IDENTITY,SSL));
-  addOp=createAddOperation(addres);
-  addOp.get(ModelDescriptionConstants.KEYSTORE_PATH).set(certificateKeyFile);
-  addOp.get(ModelDescriptionConstants.KEYSTORE_PASSWORD).set(password);
-  addOp.get(ModelDescriptionConstants.KEYSTORE_PROVIDER).set(keystoreType);
-  addOp.get(ModelDescriptionConstants.ALIAS).set(keyAlias);
-  addOp.get(PROTOCOL).set(protocol);
   if (verifyDepth.isDefined()) {
     warnings.add(WebLogger.ROOT_LOGGER.couldNotMigrateResource(WebSSLDefinition.VERIFY_DEPTH.getName(),pathAddress(legacyAddOp.get(ADDRESS))));
   }
@@ -60,6 +31,50 @@
   if (csRevocationURL.isDefined()) {
     warnings.add(WebLogger.ROOT_LOGGER.couldNotMigrateResource(WebSSLDefinition.CA_REVOCATION_URL.getName(),pathAddress(legacyAddOp.get(ADDRESS))));
   }
-  migrationOperations.put(addres,addOp);
+  String realmName;
+  PathAddress managementCoreService;
+  if (domainMode) {
+    Set<String> hosts=new HashSet<>();
+    Resource hostResource=context.readResourceFromRoot(pathAddress(),false);
+    hosts.addAll(hostResource.getChildrenNames(HOST));
+    int counter=1;
+    realmName=REALM_NAME + counter;
+    while (true) {
+      boolean hostOk=true;
+      for (      String host : hosts) {
+        Resource root=context.readResourceFromRoot(pathAddress(pathElement(HOST,host),pathElement(CORE_SERVICE,MANAGEMENT)),false);
+        if (root.getChildrenNames(SECURITY_REALM).contains(realmName)) {
+          counter++;
+          realmName=REALM_NAME + counter;
+          hostOk=false;
+          break;
+        }
+      }
+      if (hostOk) {
+        break;
+      }
+    }
+    for (    String host : hosts) {
+      createHostSSLConfig(realmName,migrationOperations,keyAlias,password,certificateKeyFile,protocol,caCertificateFile,caCertificatePassword,trustStoreType,keystoreType,pathAddress(pathElement(HOST,host),pathElement(CORE_SERVICE,MANAGEMENT)));
+    }
+  }
+ else {
+    managementCoreService=pathAddress(CORE_SERVICE,MANAGEMENT);
+    int counter=1;
+    realmName=REALM_NAME + counter;
+    boolean ok=false;
+    do {
+      Resource root=context.readResourceFromRoot(managementCoreService,false);
+      if (root.getChildrenNames(SECURITY_REALM).contains(realmName)) {
+        counter++;
+        realmName=REALM_NAME + counter;
+      }
+ else {
+        ok=true;
+      }
+    }
+ while (!ok);
+    createHostSSLConfig(realmName,migrationOperations,keyAlias,password,certificateKeyFile,protocol,caCertificateFile,caCertificatePassword,trustStoreType,keystoreType,managementCoreService);
+  }
   return new SSLInformation(realmName,verifyClient,sessionCacheSize,sessionTimeout,protocol,cipherSuite);
 }
