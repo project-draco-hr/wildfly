@@ -16,6 +16,10 @@
       dependentComponents.add(component);
     }
   }
+  String servletContainerName=metaData.getServletContainerName();
+  if (servletContainerName == null) {
+    servletContainerName=defaultContainer;
+  }
   boolean componentRegistryExists=true;
   ComponentRegistry componentRegistry=deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.COMPONENT_REGISTRY);
   if (componentRegistry == null) {
@@ -77,7 +81,7 @@
   TldsMetaData tldsMetaData=deploymentUnit.getAttachment(TldsMetaData.ATTACHMENT_KEY);
   UndertowDeploymentInfoService undertowDeploymentInfoService=UndertowDeploymentInfoService.builder().setAttributes(deploymentUnit.getAttachmentList(ServletContextAttribute.ATTACHMENT_KEY)).setTopLevelDeploymentName(deploymentUnit.getParent() == null ? deploymentUnit.getName() : deploymentUnit.getParent().getName()).setContextPath(pathName).setDeploymentName(deploymentName).setDeploymentRoot(deploymentRoot).setMergedMetaData(warMetaData.getMergedJBossWebMetaData()).setModule(module).setScisMetaData(scisMetaData).setJaccContextId(jaccContextId).setSecurityDomain(securityDomain).setSharedTlds(tldsMetaData == null ? Collections.<TldMetaData>emptyList() : tldsMetaData.getSharedTlds(deploymentUnit)).setTldsMetaData(tldsMetaData).setSetupActions(setupActions).setSharedSessionManagerConfig(sharedSessionManagerConfig).setOverlays(warMetaData.getOverlays()).setExpressionFactoryWrappers(deploymentUnit.getAttachmentList(ExpressionFactoryWrapper.ATTACHMENT_KEY)).setPredicatedHandlers(deploymentUnit.getAttachment(UndertowHandlersDeploymentProcessor.PREDICATED_HANDLERS)).setInitialHandlerChainWrappers(deploymentUnit.getAttachmentList(UndertowAttachments.UNDERTOW_INITIAL_HANDLER_CHAIN_WRAPPERS)).setInnerHandlerChainWrappers(deploymentUnit.getAttachmentList(UndertowAttachments.UNDERTOW_INNER_HANDLER_CHAIN_WRAPPERS)).setOuterHandlerChainWrappers(deploymentUnit.getAttachmentList(UndertowAttachments.UNDERTOW_OUTER_HANDLER_CHAIN_WRAPPERS)).setThreadSetupActions(deploymentUnit.getAttachmentList(UndertowAttachments.UNDERTOW_THREAD_SETUP_ACTIONS)).setServletExtensions(deploymentUnit.getAttachmentList(UndertowAttachments.UNDERTOW_SERVLET_EXTENSIONS)).setExplodedDeployment(ExplodedDeploymentMarker.isExplodedDeployment(deploymentUnit)).setWebSocketDeploymentInfo(deploymentUnit.getAttachment(UndertowAttachments.WEB_SOCKET_DEPLOYMENT_INFO)).setTempDir(warMetaData.getTempDir()).setExternalResources(deploymentUnit.getAttachmentList(UndertowAttachments.EXTERNAL_RESOURCES)).createUndertowDeploymentInfoService();
   final ServiceName deploymentInfoServiceName=deploymentServiceName.append(UndertowDeploymentInfoService.SERVICE_NAME);
-  ServiceBuilder<DeploymentInfo> infoBuilder=serviceTarget.addService(deploymentInfoServiceName,undertowDeploymentInfoService).addDependency(UndertowService.SERVLET_CONTAINER.append(defaultContainer),ServletContainerService.class,undertowDeploymentInfoService.getContainer()).addDependency(UndertowService.UNDERTOW,UndertowService.class,undertowDeploymentInfoService.getUndertowService()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES)).addDependency(hostServiceName,Host.class,undertowDeploymentInfoService.getHost()).addDependency(SuspendController.SERVICE_NAME,SuspendController.class,undertowDeploymentInfoService.getSuspendControllerInjectedValue()).addDependencies(additionalDependencies);
+  ServiceBuilder<DeploymentInfo> infoBuilder=serviceTarget.addService(deploymentInfoServiceName,undertowDeploymentInfoService).addDependency(UndertowService.SERVLET_CONTAINER.append(servletContainerName),ServletContainerService.class,undertowDeploymentInfoService.getContainer()).addDependency(UndertowService.UNDERTOW,UndertowService.class,undertowDeploymentInfoService.getUndertowService()).addDependencies(deploymentUnit.getAttachmentList(Attachments.WEB_DEPENDENCIES)).addDependency(hostServiceName,Host.class,undertowDeploymentInfoService.getHost()).addDependency(SuspendController.SERVICE_NAME,SuspendController.class,undertowDeploymentInfoService.getSuspendControllerInjectedValue()).addDependencies(additionalDependencies);
   if (securityDomain != null) {
     infoBuilder.addDependency(SecurityDomainService.SERVICE_NAME.append(securityDomain),SecurityDomainContext.class,undertowDeploymentInfoService.getSecurityDomainContextValue());
   }
@@ -119,7 +123,7 @@
     infoBuilder.addDependency(deploymentUnit.getParent().getServiceName().append(SharedSessionManagerConfig.SHARED_SESSION_IDENTIFIER_CODEC_SERVICE_NAME),SessionIdentifierCodec.class,undertowDeploymentInfoService.getSessionIdentifierCodecInjector());
   }
  else {
-    ServiceName sessionManagerFactoryServiceName=installSessionManagerFactory(serviceTarget,deploymentServiceName,deploymentName,module,metaData);
+    ServiceName sessionManagerFactoryServiceName=installSessionManagerFactory(serviceTarget,deploymentServiceName,deploymentName,module,metaData,deploymentUnit.getAttachment(UndertowAttachments.SERVLET_CONTAINER_SERVICE));
     infoBuilder.addDependency(sessionManagerFactoryServiceName,SessionManagerFactory.class,undertowDeploymentInfoService.getSessionManagerFactoryInjector());
     ServiceName sessionIdentifierCodecServiceName=installSessionIdentifierCodec(serviceTarget,deploymentServiceName,deploymentName,metaData);
     infoBuilder.addDependency(sessionIdentifierCodecServiceName,SessionIdentifierCodec.class,undertowDeploymentInfoService.getSessionIdentifierCodecInjector());
