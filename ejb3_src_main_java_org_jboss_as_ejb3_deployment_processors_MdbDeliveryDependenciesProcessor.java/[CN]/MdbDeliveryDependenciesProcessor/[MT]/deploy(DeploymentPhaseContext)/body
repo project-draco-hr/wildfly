@@ -10,20 +10,17 @@
     ComponentDescription description=configuration.getComponentDescription();
     if (description instanceof MessageDrivenComponentDescription) {
       final MessageDrivenComponentDescription mdbDescription=(MessageDrivenComponentDescription)description;
-      final String deliveryGroup=mdbDescription.getDeliveryGroup();
-      final boolean clusteredSingleton=mdbDescription.isClusteredSingleton();
-      if (deliveryGroup != null || clusteredSingleton) {
+      if (mdbDescription.isDeliveryControlled()) {
         final MdbDeliveryControllerService mdbDeliveryControllerService=new MdbDeliveryControllerService();
-        final ServiceName mdbDeliveryControllerServiceName=createMdbDeliveryControllerServiceName(mdbDescription);
-        final ServiceBuilder<MdbDeliveryControllerService> builder=serviceTarget.addService(mdbDeliveryControllerServiceName,mdbDeliveryControllerService).addDependency(description.getCreateServiceName(),MessageDrivenComponent.class,mdbDeliveryControllerService.getMdbComponent()).setInitialMode(Mode.PASSIVE);
-        if (clusteredSingleton) {
+        final ServiceBuilder<MdbDeliveryControllerService> builder=serviceTarget.addService(mdbDescription.getDeliveryControllerName(),mdbDeliveryControllerService).addDependency(description.getCreateServiceName(),MessageDrivenComponent.class,mdbDeliveryControllerService.getMdbComponent()).setInitialMode(Mode.PASSIVE);
+        if (mdbDescription.isClusteredSingleton()) {
           clusteredSingletonFound=true;
           builder.addDependency(CLUSTERED_SINGLETON_CAPABILITY.getCapabilityServiceName().append("service"));
         }
-        if (deliveryGroup != null) {
-          final ServiceName deliveyGroupServiceName=MdbDeliveryGroupResourceDefinition.getDeliveryGroupServiceName(deliveryGroup);
+        if (mdbDescription.getDeliveryGroup() != null) {
+          final ServiceName deliveyGroupServiceName=MdbDeliveryGroupResourceDefinition.getDeliveryGroupServiceName(mdbDescription.getDeliveryGroup());
           if (phaseContext.getServiceRegistry().getService(deliveyGroupServiceName) == null) {
-            throw EjbLogger.DEPLOYMENT_LOGGER.missingMdbDeliveryGroup(deliveryGroup);
+            throw EjbLogger.DEPLOYMENT_LOGGER.missingMdbDeliveryGroup(mdbDescription.getDeliveryGroup());
           }
           builder.addDependency(deliveyGroupServiceName);
         }

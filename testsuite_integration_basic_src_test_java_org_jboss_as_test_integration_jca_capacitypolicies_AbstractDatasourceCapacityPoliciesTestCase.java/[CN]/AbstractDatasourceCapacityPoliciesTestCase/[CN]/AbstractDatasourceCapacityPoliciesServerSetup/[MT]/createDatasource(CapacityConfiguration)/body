@@ -1,0 +1,51 @@
+{
+  ModelNode addOperation=new ModelNode();
+  addOperation.get(OP).set(ADD);
+  addOperation.get(OP_ADDR).set(xa ? XA_DS_ADDRESS : DS_ADDRESS);
+  addOperation.get("jndi-name").set(DS_JNDI_NAME);
+  addOperation.get("driver-name").set("h2");
+  addOperation.get("statistics-enabled").set("true");
+  addOperation.get("enabled").set("false");
+  addOperation.get("min-pool-size").set(2);
+  addOperation.get("max-pool-size").set(5);
+  addOperation.get("user-name").set("sa");
+  addOperation.get("password").set("sa");
+  if (!xa)   addOperation.get("connection-url").set("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1");
+  if (capacityConfiguration != null) {
+    if (capacityConfiguration.getCapacityDecrementerClass() != null) {
+      addOperation.get("capacity-decrementer-class").set(capacityConfiguration.getCapacityDecrementerClass());
+      if (!capacityConfiguration.getCapacityDecrementerProperties().isEmpty()) {
+        Map<String,String> properties=capacityConfiguration.getCapacityDecrementerProperties();
+        for (        String key : properties.keySet()) {
+          ModelNode props=new ModelNode();
+          props.add(key,properties.get(key));
+          addOperation.get("capacity-incrementer-properties").set(props);
+        }
+      }
+    }
+    if (capacityConfiguration.getCapacityIncrementerClass() != null) {
+      addOperation.get("capacity-incrementer-class").set(capacityConfiguration.getCapacityIncrementerClass());
+      if (!capacityConfiguration.getCapacityIncrementerProperties().isEmpty()) {
+        Map<String,String> properties=capacityConfiguration.getCapacityIncrementerProperties();
+        for (        String key : properties.keySet()) {
+          ModelNode props=new ModelNode();
+          props.add(key,properties.get(key));
+          addOperation.get("capacity-incrementer-properties").set(props);
+        }
+      }
+    }
+  }
+  executeOperation(addOperation);
+  if (xa) {
+    ModelNode xaDatasourcePropertiesAddress=XA_DS_ADDRESS.clone();
+    xaDatasourcePropertiesAddress.add("xa-datasource-properties","URL");
+    xaDatasourcePropertiesAddress.protect();
+    ModelNode xaDatasourcePropertyOperation=new ModelNode();
+    xaDatasourcePropertyOperation.get(OP).set("add");
+    xaDatasourcePropertyOperation.get(OP_ADDR).set(xaDatasourcePropertiesAddress);
+    xaDatasourcePropertyOperation.get("value").set("jdbc:h2:mem:test");
+    executeOperation(xaDatasourcePropertyOperation);
+  }
+  writeAttribute(xa ? XA_DS_ADDRESS : DS_ADDRESS,ENABLED,"true");
+  reload();
+}

@@ -6,7 +6,8 @@
     final ClassLoader moduleClassLoader=module.getClassLoader();
     final ServiceTarget serviceTarget=phaseContext.getServiceTarget();
     JobRepository jobRepository=null;
-    ExecutorService executorService=null;
+    String jobRepositoryName=null;
+    String jobExecutorName=null;
     BatchEnvironmentMetaData metaData=deploymentUnit.getAttachment(BatchDeploymentDescriptorParser_1_0.ATTACHMENT_KEY);
     if (metaData == null) {
       final DeploymentUnit parent=deploymentUnit.getParent();
@@ -16,25 +17,29 @@
     }
     if (metaData != null) {
       jobRepository=metaData.getJobRepository();
-      executorService=metaData.getExecutorService();
+      jobRepositoryName=metaData.getJobRepositoryName();
+      jobExecutorName=metaData.getExecutorName();
     }
     final CapabilityServiceSupport support=deploymentUnit.getAttachment(Attachments.CAPABILITY_SERVICE_SUPPORT);
     final BatchEnvironmentService service=new BatchEnvironmentService(moduleClassLoader,WildFlyJobXmlResolver.of(moduleClassLoader,deploymentUnit),deploymentUnit.getName());
     final ServiceBuilder<BatchEnvironment> serviceBuilder=serviceTarget.addService(BatchServiceNames.batchEnvironmentServiceName(deploymentUnit),service);
-    if (executorService == null) {
-      serviceBuilder.addDependency(support.getCapabilityServiceName(Capabilities.DEFAULT_THREAD_POOL_CAPABILITY.getName()),ExecutorService.class,service.getExecutorServiceInjector());
+    if (jobExecutorName == null) {
+      serviceBuilder.addDependency(support.getCapabilityServiceName(Capabilities.DEFAULT_THREAD_POOL_CAPABILITY.getName()),JobExecutor.class,service.getJobExecutorInjector());
     }
  else {
-      service.getExecutorServiceInjector().setValue(new ImmediateValue<>(executorService));
+      serviceBuilder.addDependency(support.getCapabilityServiceName(Capabilities.THREAD_POOL_CAPABILITY.getName(),jobExecutorName),JobExecutor.class,service.getJobExecutorInjector());
     }
     serviceBuilder.addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,service.getTransactionManagerInjector());
     if (WeldDeploymentMarker.isPartOfWeldDeployment(deploymentUnit)) {
       BatchLogger.LOGGER.tracef("Adding BeanManager service dependency for deployment %s",deploymentUnit.getName());
       serviceBuilder.addDependency(BatchServiceNames.beanManagerServiceName(deploymentUnit),BeanManager.class,service.getBeanManagerInjector());
     }
-    if (jobRepository == null) {
+    if (jobRepository == null && jobRepositoryName == null) {
       final ServiceName defaultJobRepository=support.getCapabilityServiceName(Capabilities.DEFAULT_JOB_REPOSITORY_CAPABILITY.getName());
       serviceBuilder.addDependency(defaultJobRepository,JobRepository.class,service.getJobRepositoryInjector());
+    }
+ else     if (jobRepositoryName != null) {
+      serviceBuilder.addDependency(support.getCapabilityServiceName(Capabilities.JOB_REPOSITORY_CAPABILITY.getName(),jobRepositoryName),JobRepository.class,service.getJobRepositoryInjector());
     }
  else {
       service.getJobRepositoryInjector().setValue(new ImmediateValue<>(jobRepository));

@@ -1,0 +1,29 @@
+{
+  DigestContext context=exchange.getAttachment(DigestContext.ATTACHMENT_KEY);
+  boolean stale=context == null ? false : context.isStale();
+  StringBuilder rb=new StringBuilder(DIGEST_PREFIX);
+  rb.append(Headers.REALM.toString()).append("=\"").append(realmName).append("\",");
+  rb.append(Headers.DOMAIN.toString()).append("=\"").append(domain).append("\",");
+  rb.append(Headers.NONCE.toString()).append("=\"").append(nonceManager.nextNonce(null,exchange)).append("\",");
+  rb.append(Headers.OPAQUE.toString()).append("=\"00000000000000000000000000000000\"");
+  if (stale) {
+    rb.append(",stale=true");
+  }
+  if (supportedAlgorithms.size() > 0) {
+    rb.append(",").append(Headers.ALGORITHM.toString()).append("=%s");
+  }
+  if (qopString != null) {
+    rb.append(",").append(Headers.QOP.toString()).append("=\"").append(qopString).append("\"");
+  }
+  String theChallenge=rb.toString();
+  HeaderMap responseHeader=exchange.getResponseHeaders();
+  if (supportedAlgorithms.isEmpty()) {
+    responseHeader.add(WWW_AUTHENTICATE,theChallenge);
+  }
+ else {
+    for (    DigestAlgorithm current : supportedAlgorithms) {
+      responseHeader.add(WWW_AUTHENTICATE,String.format(theChallenge,current.getToken()));
+    }
+  }
+  return new ChallengeResult(true,UNAUTHORIZED);
+}
