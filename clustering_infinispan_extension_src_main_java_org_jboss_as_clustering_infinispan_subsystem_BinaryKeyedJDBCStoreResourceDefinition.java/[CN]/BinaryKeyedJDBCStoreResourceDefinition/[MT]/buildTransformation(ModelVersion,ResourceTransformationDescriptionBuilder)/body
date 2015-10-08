@@ -1,5 +1,19 @@
 {
-  ResourceTransformationDescriptionBuilder builder=InfinispanModel.VERSION_4_0_0.requiresTransformation(version) ? parent.addChildResource(PATH) : parent.addChildRedirection(PATH,LEGACY_PATH);
-  JDBCStoreResourceDefinition.buildTransformation(version,builder);
+  ResourceTransformationDescriptionBuilder builder=InfinispanModel.VERSION_4_0_0.requiresTransformation(version) ? parent.addChildRedirection(PATH,LEGACY_PATH) : parent.addChildResource(PATH);
+  if (InfinispanModel.VERSION_4_0_0.requiresTransformation(version)) {
+    builder.setCustomResourceTransformer(new ResourceTransformer(){
+      @Override public void transformResource(      ResourceTransformationContext context,      PathAddress address,      Resource resource) throws OperationFailedException {
+        final ModelNode model=resource.getModel();
+        final ModelNode binaryTableModel=Resource.Tools.readModel(resource.removeChild(BinaryTableResourceDefinition.PATH));
+        if (binaryTableModel != null && binaryTableModel.isDefined()) {
+          model.get(DeprecatedAttribute.TABLE.getDefinition().getName()).set(binaryTableModel);
+        }
+        context.addTransformedResource(PathAddress.EMPTY_ADDRESS,resource);
+        context.processChildren(resource);
+      }
+    }
+);
+  }
   BinaryTableResourceDefinition.buildTransformation(version,builder);
+  JDBCStoreResourceDefinition.buildTransformation(version,builder);
 }
