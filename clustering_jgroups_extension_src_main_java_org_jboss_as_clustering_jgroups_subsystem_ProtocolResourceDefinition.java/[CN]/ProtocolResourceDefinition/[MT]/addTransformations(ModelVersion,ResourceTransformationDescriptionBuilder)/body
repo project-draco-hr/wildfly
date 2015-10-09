@@ -9,26 +9,9 @@
     }
 ;
     builder.getAttributeBuilder().setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(Attribute.MODULE.getDefinition().getDefaultValue()),Attribute.MODULE.getDefinition()).addRejectCheck(RejectAttributeChecker.DEFINED,Attribute.MODULE.getDefinition()).setValueConverter(typeConverter,DeprecatedAttribute.TYPE.getDefinition()).end();
-    OperationTransformer getPropertyTransformer=new OperationTransformer(){
-      @Override public ModelNode transformOperation(      ModelNode operation){
-        if (operation.get(ModelDescriptionConstants.NAME).asString().equals(Attribute.PROPERTIES.getDefinition().getName())) {
-          String key=operation.get("key").asString();
-          PathAddress address=Operations.getPathAddress(operation);
-          ModelNode transformedOperation=Util.createOperation(ModelDescriptionConstants.READ_ATTRIBUTE_OPERATION,address.append(PropertyResourceDefinition.pathElement(key)));
-          transformedOperation.get(ModelDescriptionConstants.NAME).set(PropertyResourceDefinition.VALUE.getName());
-          return transformedOperation;
-        }
-        return operation;
-      }
-    }
-;
-    builder.addRawOperationTransformationOverride(MapOperations.MAP_GET_DEFINITION.getName(),new SimpleOperationTransformer(getPropertyTransformer));
-    Set<String> writeAttributeOperations=new HashSet(MapOperations.MAP_OPERATION_NAMES);
-    writeAttributeOperations.remove(MapOperations.MAP_GET_DEFINITION.getName());
-    writeAttributeOperations.add(WRITE_ATTRIBUTE_OPERATION);
-    writeAttributeOperations.add(UNDEFINE_ATTRIBUTE_OPERATION);
-    for (    String opName : writeAttributeOperations) {
-      builder.addOperationTransformationOverride(opName).inheritResourceAttributeDefinitions().setCustomOperationTransformer(PropertyResourceDefinition.PROPERTIES_OP_TRANSFORMER);
+    builder.addRawOperationTransformationOverride(MapOperations.MAP_GET_DEFINITION.getName(),new SimpleOperationTransformer(new LegacyPropertyMapGetOperationTransformer()));
+    for (    String opName : Operations.getAllWriteAttributeOperationNames()) {
+      builder.addOperationTransformationOverride(opName).inheritResourceAttributeDefinitions().setCustomOperationTransformer(new LegacyPropertyWriteOperationTransformer());
     }
   }
 }
