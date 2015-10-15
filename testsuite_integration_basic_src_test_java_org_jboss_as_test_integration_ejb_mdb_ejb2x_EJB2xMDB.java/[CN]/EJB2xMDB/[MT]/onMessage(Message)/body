@@ -2,25 +2,28 @@
   logger.info("Received message " + message + " in MDB "+ this.getClass().getName());
   try {
     if (message.getStringProperty("MessageFormat") != null)     logger.info("MessageFormat property = " + message.getStringProperty("MessageFormat"));
-    Queue destination=(Queue)message.getJMSReplyTo();
-    if (destination == null) {
+    Destination replyTo=message.getJMSReplyTo();
+    if (replyTo == null) {
       try {
-        destination=(Queue)this.ctx.lookup("jms/replyQueue");
+        System.out.println("mdbContext = " + mdbContext);
+        replyTo=(Destination)mdbContext.lookup("jms/replyQueue");
       }
- catch (      Throwable optional) {
+ catch (      Throwable e) {
+        logger.warn(e);
       }
     }
-    if (destination != null) {
-      logger.info("replying to " + destination);
-      final TextMessage tm=(TextMessage)message;
-      final String text=tm.getText() + "processed by: " + hashCode();
-      final QueueSender sender=session.createSender(destination);
-      final TextMessage reply=session.createTextMessage(text);
-      reply.setJMSCorrelationID(message.getJMSMessageID());
-      sender.send(reply);
-      sender.close();
+ else {
+      logger.info("Using replyTo from message JMSReplyTo: " + replyTo);
     }
-  }
+    if (replyTo == null) {
+      throw new EJBException("no replyTo Destination");
+    }
+    final TextMessage tm=(TextMessage)message;
+    final String reply=tm.getText() + "processed by: " + hashCode();
+    try (JMSContext context=cf.createContext()){
+      context.createProducer().setJMSCorrelationID(message.getJMSMessageID()).send(replyTo,reply);
+    }
+   }
  catch (  Exception e) {
     logger.error(e);
     throw new EJBException(e);
