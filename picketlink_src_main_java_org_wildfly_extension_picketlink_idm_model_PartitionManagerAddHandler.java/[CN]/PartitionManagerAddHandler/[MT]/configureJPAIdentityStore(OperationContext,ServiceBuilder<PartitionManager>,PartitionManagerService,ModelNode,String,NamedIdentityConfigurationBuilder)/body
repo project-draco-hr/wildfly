@@ -1,0 +1,29 @@
+{
+  JPAStoreSubsystemConfigurationBuilder storeConfig=builder.stores().add(JPAStoreSubsystemConfiguration.class,JPAStoreSubsystemConfigurationBuilder.class);
+  ModelNode jpaDataSourceNode=JPAStoreResourceDefinition.DATA_SOURCE.resolveModelAttribute(context,identityStore);
+  ModelNode jpaEntityModule=JPAStoreResourceDefinition.ENTITY_MODULE.resolveModelAttribute(context,identityStore);
+  ModelNode jpaEntityModuleUnitName=JPAStoreResourceDefinition.ENTITY_MODULE_UNIT_NAME.resolveModelAttribute(context,identityStore);
+  ModelNode jpaEntityManagerFactoryNode=JPAStoreResourceDefinition.ENTITY_MANAGER_FACTORY.resolveModelAttribute(context,identityStore);
+  if (jpaEntityModule.isDefined()) {
+    storeConfig.entityModule(jpaEntityModule.asString());
+  }
+  storeConfig.entityModuleUnitName(jpaEntityModuleUnitName.asString());
+  if (serviceBuilder != null) {
+    JPAIdentityStoreService storeService=new JPAIdentityStoreService(storeConfig);
+    ServiceName storeServiceName=PartitionManagerService.createIdentityStoreServiceName(partitionManagerService.getName(),configurationName,ModelElement.JPA_STORE.getName());
+    ServiceBuilder<JPAIdentityStoreService> storeServiceBuilder=context.getServiceTarget().addService(storeServiceName,storeService);
+    storeServiceBuilder.addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER,TransactionManager.class,storeService.getTransactionManager());
+    storeServiceBuilder.addDependency(TxnServices.JBOSS_TXN_SYNCHRONIZATION_REGISTRY,TransactionSynchronizationRegistry.class,storeService.getTransactionSynchronizationRegistry());
+    if (jpaDataSourceNode.isDefined()) {
+      storeConfig.dataSourceJndiUrl(toJndiName(jpaDataSourceNode.asString()));
+      storeServiceBuilder.addDependency(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(toJndiName(jpaDataSourceNode.asString()).split("/")));
+    }
+    if (jpaEntityManagerFactoryNode.isDefined()) {
+      storeConfig.entityManagerFactoryJndiName(jpaEntityManagerFactoryNode.asString());
+      storeServiceBuilder.addDependency(ContextNames.JAVA_CONTEXT_SERVICE_NAME.append(jpaEntityManagerFactoryNode.asString().split("/")),ValueManagedReferenceFactory.class,new InjectedValue<ValueManagedReferenceFactory>());
+    }
+    serviceBuilder.addDependency(storeServiceName);
+    ServiceController<JPAIdentityStoreService> controller=storeServiceBuilder.setInitialMode(Mode.PASSIVE).install();
+  }
+  return storeConfig;
+}
