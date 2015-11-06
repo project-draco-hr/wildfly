@@ -4,27 +4,27 @@
     final TimerImpl timer=timerService.getTimer(timerId);
     try {
       if (cancelled) {
-        ROOT_LOGGER.debugf("Timer task was cancelled for %s",timer);
+        EJB3_TIMER_LOGGER.debugf("Timer task was cancelled for %s",timer);
         return;
       }
       Date now=new Date();
-      ROOT_LOGGER.debugf("Timer task invoked at: %s for timer %s",now,timer);
+      EJB3_TIMER_LOGGER.debugf("Timer task invoked at: %s for timer %s",now,timer);
       if (timer.isInRetry()) {
-        ROOT_LOGGER.skipInvokeTimeoutDuringRetry(timer,now);
+        EJB3_TIMER_LOGGER.skipInvokeTimeoutDuringRetry(timer,now);
         timer.setNextTimeout(calculateNextTimeout(timer));
         timerService.persistTimer(timer,false);
         scheduleTimeoutIfRequired(timer);
         return;
       }
       if (timer.getState() == TimerState.IN_TIMEOUT || timer.getState() == TimerState.RETRY_TIMEOUT) {
-        ROOT_LOGGER.skipOverlappingInvokeTimeout(timer,now);
+        EJB3_TIMER_LOGGER.skipOverlappingInvokeTimeout(timer,now);
         timer.setNextTimeout(this.calculateNextTimeout(timer));
         timerService.persistTimer(timer,false);
         scheduleTimeoutIfRequired(timer);
         return;
       }
       if (!timerService.shouldRun(timer)) {
-        ROOT_LOGGER.debugf("Skipping execution of timer for %s as it is being run on another node or the execution is suppressed by configuration",timer.getTimedObjectId());
+        EJB3_TIMER_LOGGER.debugf("Skipping execution of timer for %s as it is being run on another node or the execution is suppressed by configuration",timer.getTimedObjectId());
         timer.setNextTimeout(calculateNextTimeout(timer));
         scheduleTimeoutIfRequired(timer);
         return;
@@ -32,7 +32,7 @@
       timer.lock();
       try {
         if (!timer.isActive()) {
-          ROOT_LOGGER.debug("Timer is not active, skipping this scheduled execution at: " + now + "for "+ timer);
+          EJB3_TIMER_LOGGER.debug("Timer is not active, skipping this scheduled execution at: " + now + "for "+ timer);
           return;
         }
         timer.setPreviousRun(new Date());
@@ -48,17 +48,17 @@
         this.callTimeout(timer);
       }
  catch (      BeanRemovedException e) {
-        ROOT_LOGGER.debugf("Removing timer %s as EJB has been removed ",timer);
+        EJB3_TIMER_LOGGER.debugf("Removing timer %s as EJB has been removed ",timer);
         timer.cancel();
       }
 catch (      Exception e) {
-        ROOT_LOGGER.errorInvokeTimeout(timer,e);
+        EJB3_TIMER_LOGGER.errorInvokeTimeout(timer,e);
         try {
-          ROOT_LOGGER.timerRetried(timer);
+          EJB3_TIMER_LOGGER.timerRetried(timer);
           retryTimeout(timer);
         }
  catch (        Exception retryException) {
-          ROOT_LOGGER.errorDuringRetryTimeout(timer,retryException);
+          EJB3_TIMER_LOGGER.errorDuringRetryTimeout(timer,retryException);
         }
       }
  finally {
@@ -66,7 +66,7 @@ catch (      Exception e) {
       }
     }
  catch (    Exception e) {
-      ROOT_LOGGER.exceptionRunningTimerTask(timer,timedObjectId,e);
+      EJB3_TIMER_LOGGER.exceptionRunningTimerTask(timer,timedObjectId,e);
     }
   }
   finally {
