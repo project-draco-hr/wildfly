@@ -1,2 +1,30 @@
 {
+  if (started) {
+    final Container container=Container.instance(deploymentName);
+    if (container != null && !ContainerState.SHUTDOWN.equals(container.getState())) {
+      final ExecutorService executorService=serverExecutor.getValue();
+      final Runnable task=new Runnable(){
+        @Override public void run(){
+          try {
+            WeldLogger.DEPLOYMENT_LOGGER.debugf("Attempting to perform weld container cleanup for deployment %s",deploymentName);
+            container.setState(ContainerState.SHUTDOWN);
+            container.cleanup();
+          }
+  finally {
+            context.complete();
+          }
+        }
+      }
+;
+      try {
+        executorService.execute(task);
+      }
+ catch (      RejectedExecutionException e) {
+        task.run();
+      }
+ finally {
+        context.asynchronous();
+      }
+    }
+  }
 }

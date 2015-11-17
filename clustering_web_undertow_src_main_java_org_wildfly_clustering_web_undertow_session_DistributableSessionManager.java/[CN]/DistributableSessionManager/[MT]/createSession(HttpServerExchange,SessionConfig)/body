@@ -14,11 +14,12 @@
  while (this.manager.containsSession(id));
     config.setSessionId(exchange,id);
   }
-  Batch batch=this.manager.getBatcher().createBatch();
+  Batcher<Batch> batcher=this.manager.getBatcher();
+  Batch batch=batcher.createBatch();
   try {
     Session<LocalSessionContext> session=this.manager.createSession(id);
     io.undertow.server.session.Session adapter=new DistributableSession(this,session,config,batch);
-    this.sessionListeners.sessionCreated(adapter,exchange);
+    this.listeners.sessionCreated(adapter,exchange);
     if (this.statistics != null) {
       this.statistics.record(adapter);
     }
@@ -27,5 +28,10 @@
  catch (  RuntimeException|Error e) {
     batch.discard();
     throw e;
+  }
+ finally {
+    if (batch.isActive()) {
+      batcher.suspendBatch();
+    }
   }
 }
