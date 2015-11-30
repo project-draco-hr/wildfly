@@ -13,7 +13,6 @@
   op=createOpNode("subsystem=undertow/server=default-server/http-listener=test",ADD);
   op.get("socket-binding").set("test-binding");
   result=executeOperation(op);
-  String testHost=NetworkUtils.canonize(testNic.getInetAddresses().nextElement().getHostName());
   Assert.assertTrue("Could not connect to created connector.",WebUtil.testHttpURL(new URL("http",testHost,TEST_PORT,"/").toString()));
   op=createOpNode("socket-binding-group=standard-sockets/socket-binding=test-binding",WRITE_ATTRIBUTE_OPERATION);
   op.get(NAME).set("port");
@@ -22,8 +21,7 @@
   Assert.assertEquals(SUCCESS,result.get(OUTCOME).asString());
   Assert.assertTrue(result.get(RESPONSE_HEADERS).get(PROCESS_STATE).asString().equals("reload-required"));
   logger.info("Restarting server.");
-  op=createOpNode(null,"reload");
-  result=executeOperation(op);
+  ServerReload.executeReloadAndWaitForCompletion(getModelControllerClient());
   final String testUrl=new URL("http",testHost,TEST_PORT + 1,"/").toString();
   RetryTaskExecutor<Boolean> rte=new RetryTaskExecutor<Boolean>();
   rte.retryTask(new Callable<Boolean>(){
@@ -42,11 +40,4 @@
   op=createOpNode("socket-binding-group=standard-sockets/socket-binding=test-binding",REMOVE);
   result=executeOperation(op,false);
   Assert.assertFalse("Removed socked binding with connector still using it.",SUCCESS.equals(result.get(OUTCOME).asString()));
-  op=createOpNode("subsystem=undertow/server=default-server/http-listener=test",REMOVE);
-  result=executeOperation(op);
-  Assert.assertFalse("Could not connect to created connector.",WebUtil.testHttpURL(new URL("http",testHost,TEST_PORT,"/").toString()));
-  op=createOpNode("socket-binding-group=standard-sockets/socket-binding=test-binding",REMOVE);
-  result=executeOperation(op);
-  op=createOpNode("interface=test-interface",REMOVE);
-  result=executeOperation(op);
 }
