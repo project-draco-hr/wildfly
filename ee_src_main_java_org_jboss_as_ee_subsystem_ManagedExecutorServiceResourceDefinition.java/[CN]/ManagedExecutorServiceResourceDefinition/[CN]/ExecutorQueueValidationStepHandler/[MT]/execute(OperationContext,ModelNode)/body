@@ -1,0 +1,40 @@
+{
+  final ModelNode model=context.readResource(PathAddress.EMPTY_ADDRESS).getModel();
+  final ModelNode coreThreads;
+  final ModelNode maxThreads;
+  final ModelNode queueLength;
+  if (isRuntimeStage) {
+    coreThreads=CORE_THREADS_AD.resolveModelAttribute(context,model);
+    maxThreads=MAX_THREADS_AD.resolveModelAttribute(context,model);
+    queueLength=QUEUE_LENGTH_AD.resolveModelAttribute(context,model);
+  }
+ else {
+    coreThreads=model.get(CORE_THREADS);
+    maxThreads=model.get(MAX_THREADS);
+    queueLength=model.get(QUEUE_LENGTH);
+  }
+  if (coreThreads.getType() == ModelType.EXPRESSION || maxThreads.getType() == ModelType.EXPRESSION || queueLength.getType() == ModelType.EXPRESSION) {
+    context.addStep(new ExecutorQueueValidationStepHandler(true),OperationContext.Stage.RUNTIME,true);
+    return;
+  }
+  if (!queueLength.isDefined() || queueLength.asInt() == Integer.MAX_VALUE) {
+    if (coreThreads.isDefined() && coreThreads.asInt() <= 0) {
+      throw EeLogger.ROOT_LOGGER.invalidCoreThreadsSize(coreThreads.asString());
+    }
+  }
+  if (queueLength.isDefined() && queueLength.asInt() == 0) {
+    if (coreThreads.isDefined() && coreThreads.asInt() <= 0) {
+      throw EeLogger.ROOT_LOGGER.invalidCoreThreadsSize(coreThreads.asString());
+    }
+  }
+  if (coreThreads.isDefined() && coreThreads.asInt() == 0) {
+    if (!maxThreads.isDefined() || maxThreads.asInt() <= 0) {
+      throw EeLogger.ROOT_LOGGER.invalidMaxThreads(maxThreads.isDefined() ? maxThreads.asInt() : 0,coreThreads.asInt());
+    }
+  }
+  if (coreThreads.isDefined() && maxThreads.isDefined()) {
+    if (maxThreads.asInt() < coreThreads.asInt()) {
+      throw EeLogger.ROOT_LOGGER.invalidMaxThreads(maxThreads.asInt(),coreThreads.asInt());
+    }
+  }
+}

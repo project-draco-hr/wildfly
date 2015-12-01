@@ -1,8 +1,15 @@
 {
-  String id=config.findSessionId(exchange);
-  if (id == null)   return null;
-  Batch batch=this.manager.getBatcher().createBatch();
+  if (config == null) {
+    throw UndertowMessages.MESSAGES.couldNotFindSessionCookieConfig();
+  }
+  Batcher<Batch> batcher=this.manager.getBatcher();
+  Batch batch=batcher.createBatch();
   try {
+    String id=config.findSessionId(exchange);
+    if (id == null) {
+      batch.discard();
+      return null;
+    }
     Session<LocalSessionContext> session=this.manager.findSession(id);
     if (session == null) {
       batch.discard();
@@ -11,7 +18,14 @@
     return new DistributableSession(this,session,config,batch);
   }
  catch (  RuntimeException|Error e) {
-    batch.discard();
+    if (batch.isActive()) {
+      batch.discard();
+    }
     throw e;
+  }
+ finally {
+    if (batch.isActive()) {
+      batcher.suspendBatch();
+    }
   }
 }
