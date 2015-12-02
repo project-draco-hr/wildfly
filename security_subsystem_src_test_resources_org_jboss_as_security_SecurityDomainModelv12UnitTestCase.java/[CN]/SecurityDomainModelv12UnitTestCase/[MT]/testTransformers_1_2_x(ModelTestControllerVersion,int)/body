@@ -1,0 +1,28 @@
+{
+  ModelVersion modelVersion=ModelVersion.create(1,2,micro);
+  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT).setSubsystemXmlResource("transformers.xml");
+  builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-security:" + controllerVersion.getMavenGavVersion()).configureReverseControllerCheck(AdditionalInitialization.MANAGEMENT,null).dontPersistXml();
+  KernelServices mainServices=builder.build();
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  Assert.assertTrue(mainServices.getLegacyServices(modelVersion).isSuccessfulBoot());
+  checkSubsystemModelTransformation(mainServices,modelVersion,new ModelFixer(){
+    @Override public ModelNode fixModel(    ModelNode modelNode){
+      ModelNode node=modelNode.get("security-domain","other","acl","classic").get("login-module");
+      modelNode.get("security-domain","other","acl","classic","acl-modules").add(node.get("AclThingy"));
+      return modelNode;
+    }
+  }
+);
+  ModelNode composite=Util.createEmptyOperation("composite",null);
+  ModelNode steps=composite.get(STEPS);
+  PathAddress secDomAddr=getSecurityDomainAddress("modules");
+  steps.add(Util.createEmptyOperation("add",secDomAddr));
+  steps.add(getSecurityDomainComponentAdd(secDomAddr.append(PathElement.pathElement(Constants.AUDIT,Constants.CLASSIC)),Constants.PROVIDER_MODULES));
+  steps.add(getSecurityDomainComponentAdd(secDomAddr.append(PathElement.pathElement(Constants.AUTHENTICATION,Constants.CLASSIC)),Constants.LOGIN_MODULES));
+  steps.add(getSecurityDomainComponentAdd(secDomAddr.append(PathElement.pathElement(Constants.AUTHENTICATION,Constants.JASPI)),Constants.AUTH_MODULES));
+  steps.add(getSecurityDomainComponentAdd(secDomAddr.append(PathElement.pathElement(Constants.AUTHORIZATION,Constants.CLASSIC)),Constants.POLICY_MODULES));
+  steps.add(getSecurityDomainComponentAdd(secDomAddr.append(PathElement.pathElement(Constants.IDENTITY_TRUST,Constants.CLASSIC)),Constants.TRUST_MODULES));
+  steps.add(getSecurityDomainComponentAdd(secDomAddr.append(PathElement.pathElement(Constants.MAPPING,Constants.CLASSIC)),Constants.MAPPING_MODULES));
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(composite));
+  ModelTestUtils.checkOutcome(mainServices.executeOperation(modelVersion,mainServices.transformOperation(modelVersion,composite)));
+}
