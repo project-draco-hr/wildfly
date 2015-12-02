@@ -1,0 +1,38 @@
+{
+  if (!(component instanceof EJBComponent)) {
+    throw EjbLogger.ROOT_LOGGER.unexpectedComponent(component,EJBComponent.class);
+  }
+  final EJBComponent ejbComponent=(EJBComponent)component;
+  final EJBSecurityMetaData securityMetaData=ejbComponent.getSecurityMetaData();
+  final ArrayList<Interceptor> interceptors=new ArrayList<>(2);
+  String securityDomainName=securityMetaData.getSecurityDomain();
+  if (securityDomainName == null) {
+    securityDomainName=DEFAULT_DOMAIN;
+  }
+  final Map<String,SecurityDomain> securityDomainsByName=ejbComponent.getSecurityDomainsByName();
+  final SecurityDomain securityDomain=securityDomainsByName.get(securityDomainName);
+  if (securityDomain == null) {
+    throw EjbLogger.ROOT_LOGGER.invalidSecurityForDomainSet(ejbComponent.getComponentName());
+  }
+  if (ROOT_LOGGER.isTraceEnabled()) {
+    ROOT_LOGGER.trace("Using security domain: " + securityDomainName + " for EJB "+ ejbComponent.getComponentName());
+  }
+  interceptors.add(new SecurityDomainInterceptor(securityDomain));
+  interceptors.add(new PolicyContextIdInterceptor(policyContextID));
+  final SecurityRolesMetaData securityRoles=securityMetaData.getSecurityRoles();
+  final String runAsPrincipal=securityMetaData.getRunAsPrincipal();
+  if (runAsPrincipal != null) {
+    interceptors.add(new RunAsPrincipalInterceptor(runAsPrincipal));
+    final Set<String> extraRoles=securityRoles.getSecurityRoleNamesByPrincipal(runAsPrincipal);
+    if (!extraRoles.isEmpty()) {
+      interceptors.add(new RoleAddingInterceptor("ejb",RoleMapper.constant(extraRoles)));
+    }
+  }
+  final String runAs=securityMetaData.getRunAs();
+  if (runAs != null) {
+    interceptors.add(new RoleAddingInterceptor("ejb",RoleMapper.constant(Collections.singleton(runAs))));
+  }
+  final Set<String> declaredRoles=securityMetaData.getDeclaredRoles();
+  RoleMapper.constant(declaredRoles);
+  return Interceptors.getChainedInterceptor(interceptors);
+}

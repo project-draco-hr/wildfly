@@ -2,11 +2,13 @@
   if (componentConfiguration.getComponentDescription() instanceof EJBComponentDescription == false) {
     throw EjbLogger.ROOT_LOGGER.invalidEjbComponent(componentConfiguration.getComponentName(),componentConfiguration.getComponentClass());
   }
-  if (!context.getDeploymentUnit().hasAttachment(SecurityAttachments.SECURITY_ENABLED)) {
+  final DeploymentUnit deploymentUnit=context.getDeploymentUnit();
+  final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)componentConfiguration.getComponentDescription();
+  final boolean isSecurityDomainsConfigured=ejbComponentDescription.isSecurityDomainsConfigured();
+  if ((!deploymentUnit.hasAttachment(SecurityAttachments.SECURITY_ENABLED)) && (!isSecurityDomainsConfigured)) {
     return;
   }
-  final DeploymentReflectionIndex deploymentReflectionIndex=context.getDeploymentUnit().getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
-  final EJBComponentDescription ejbComponentDescription=(EJBComponentDescription)componentConfiguration.getComponentDescription();
+  final DeploymentReflectionIndex deploymentReflectionIndex=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.REFLECTION_INDEX);
   if (ejbComponentDescription.getSecurityDomain() == null || ejbComponentDescription.getSecurityDomain().isEmpty()) {
     if (ROOT_LOGGER.isDebugEnabled()) {
       ROOT_LOGGER.debug("Security is *not* enabled on EJB: " + ejbComponentDescription.getEJBName() + ", since no explicit security domain is configured for the bean, nor is there any default security domain configured in the EJB3 subsystem");
@@ -15,7 +17,10 @@
   }
   final String viewClassName=viewDescription.getViewClassName();
   final EJBViewDescription ejbViewDescription=(EJBViewDescription)viewDescription;
-  String contextID=SecurityContextInterceptorFactory.contextIdForDeployment(context.getDeploymentUnit());
+  String contextID=deploymentUnit.getName();
+  if (deploymentUnit.getParent() != null) {
+    contextID=deploymentUnit.getParent().getName() + "!" + contextID;
+  }
   final EJBViewMethodSecurityAttributesService.Builder viewMethodSecurityAttributesServiceBuilder;
   final ServiceName viewMethodSecurityAttributesServiceName;
   if (ejbComponentDescription instanceof SessionBeanComponentDescription && MethodIntf.SERVICE_ENDPOINT == ejbViewDescription.getMethodIntf() && ((SessionBeanComponentDescription)ejbComponentDescription).hasNoInterfaceView()) {
@@ -37,9 +42,9 @@
       continue;
     }
     final ApplicableMethodInformation<EJBMethodSecurityAttribute> permissions=ejbComponentDescription.getDescriptorMethodPermissions();
-    boolean methodHasSecurityMetadata=handlePermissions(contextID,componentConfiguration,viewConfiguration,deploymentReflectionIndex,viewClassName,ejbViewDescription,viewMethod,permissions,false,viewMethodSecurityAttributesServiceBuilder);
+    boolean methodHasSecurityMetadata=handlePermissions(contextID,componentConfiguration,viewConfiguration,deploymentReflectionIndex,viewClassName,ejbViewDescription,viewMethod,permissions,false,viewMethodSecurityAttributesServiceBuilder,isSecurityDomainsConfigured);
     if (!methodHasSecurityMetadata) {
-      methodHasSecurityMetadata=handlePermissions(contextID,componentConfiguration,viewConfiguration,deploymentReflectionIndex,viewClassName,ejbViewDescription,viewMethod,ejbComponentDescription.getAnnotationMethodPermissions(),true,viewMethodSecurityAttributesServiceBuilder);
+      methodHasSecurityMetadata=handlePermissions(contextID,componentConfiguration,viewConfiguration,deploymentReflectionIndex,viewClassName,ejbViewDescription,viewMethod,ejbComponentDescription.getAnnotationMethodPermissions(),true,viewMethodSecurityAttributesServiceBuilder,isSecurityDomainsConfigured);
     }
     if (methodHasSecurityMetadata) {
       beanHasMethodLevelSecurityMetadata=true;
@@ -49,29 +54,31 @@
     }
   }
   final boolean securityRequired=beanHasMethodLevelSecurityMetadata || ejbComponentDescription.hasBeanLevelSecurityMetadata();
-  viewConfiguration.addViewInterceptor(new SecurityContextInterceptorFactory(securityRequired,true,contextID),InterceptorOrder.View.SECURITY_CONTEXT);
+  if (isSecurityDomainsConfigured) {
+    viewConfiguration.addViewInterceptor(new ElytronInterceptorFactory(contextID),InterceptorOrder.View.SECURITY_CONTEXT);
+  }
+ else {
+    viewConfiguration.addViewInterceptor(new SecurityContextInterceptorFactory(securityRequired,true,contextID),InterceptorOrder.View.SECURITY_CONTEXT);
+  }
   if (securityRequired) {
     final Boolean denyAccessToMethodsMissingPermissions=((EJBComponentDescription)componentConfiguration.getComponentDescription()).isMissingMethodPermissionsDeniedAccess();
-    if (denyAccessToMethodsMissingPermissions == null || denyAccessToMethodsMissingPermissions == true) {
+    if (denyAccessToMethodsMissingPermissions != Boolean.FALSE) {
       for (      final Method viewMethod : methodsWithoutExplicitSecurityConfiguration) {
         if (viewMethodSecurityAttributesServiceBuilder != null) {
           viewMethodSecurityAttributesServiceBuilder.addMethodSecurityMetadata(viewMethod,EJBMethodSecurityAttribute.denyAll());
         }
-        final Interceptor authorizationInterceptor=new AuthorizationInterceptor(EJBMethodSecurityAttribute.denyAll(),viewClassName,viewMethod,contextID);
-        viewConfiguration.addViewInterceptor(viewMethod,new ImmediateInterceptorFactory(authorizationInterceptor),InterceptorOrder.View.EJB_SECURITY_AUTHORIZATION_INTERCEPTOR);
+        if (isSecurityDomainsConfigured) {
+          viewConfiguration.addViewInterceptor(viewMethod,new ImmediateInterceptorFactory(RolesAllowedInterceptor.DENY_ALL),InterceptorOrder.View.EJB_SECURITY_AUTHORIZATION_INTERCEPTOR);
+        }
+ else {
+          final Interceptor authorizationInterceptor=new AuthorizationInterceptor(EJBMethodSecurityAttribute.denyAll(),viewClassName,viewMethod,contextID);
+          viewConfiguration.addViewInterceptor(viewMethod,new ImmediateInterceptorFactory(authorizationInterceptor),InterceptorOrder.View.EJB_SECURITY_AUTHORIZATION_INTERCEPTOR);
+        }
       }
     }
-    if (viewMethodSecurityAttributesServiceBuilder != null) {
-      final EJBViewMethodSecurityAttributesService viewMethodSecurityAttributesService=viewMethodSecurityAttributesServiceBuilder.build();
-      context.getServiceTarget().addService(viewMethodSecurityAttributesServiceName,viewMethodSecurityAttributesService).install();
-    }
   }
- else {
-    ROOT_LOGGER.debugf("Security is *not* enabled on EJB: %s, no security interceptors will apply",ejbComponentDescription.getEJBName());
-    if (viewMethodSecurityAttributesServiceBuilder != null) {
-      final EJBViewMethodSecurityAttributesService viewMethodSecurityAttributesService=viewMethodSecurityAttributesServiceBuilder.build();
-      context.getServiceTarget().addService(viewMethodSecurityAttributesServiceName,viewMethodSecurityAttributesService).install();
-    }
-    return;
+  if (viewMethodSecurityAttributesServiceBuilder != null) {
+    final EJBViewMethodSecurityAttributesService viewMethodSecurityAttributesService=viewMethodSecurityAttributesServiceBuilder.build();
+    context.getServiceTarget().addService(viewMethodSecurityAttributesServiceName,viewMethodSecurityAttributesService).install();
   }
 }
