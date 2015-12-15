@@ -1,0 +1,18 @@
+{
+  String subsystemXml=readResource("full-expressions-transform.xml");
+  KernelServicesBuilder builder=createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT).setSubsystemXml(subsystemXml);
+  builder.createLegacyKernelServicesBuilder(null,controllerVersion,modelVersion).addMavenResourceURL("org.jboss.as:jboss-as-transactions:" + controllerVersion.getMavenGavVersion()).addSingleChildFirstClass(RemoveProcessUUIDOperationFixer.class).configureReverseControllerCheck(AdditionalInitialization.MANAGEMENT,ADD_REMOVED_HORNETQ_STORE_ENABLE_ASYNC_IO,RemoveProcessUUIDOperationFixer.INSTANCE).excludeFromParent(SingleClassFilter.createFilter(TransactionLogger.class));
+  KernelServices mainServices=builder.build();
+  KernelServices legacyServices=mainServices.getLegacyServices(modelVersion);
+  Assert.assertTrue(mainServices.isSuccessfulBoot());
+  Assert.assertTrue(legacyServices.isSuccessfulBoot());
+  checkSubsystemModelTransformation(mainServices,modelVersion,new ModelFixer(){
+    @Override public ModelNode fixModel(    ModelNode modelNode){
+      modelNode.remove("path");
+      modelNode.remove("relative-to");
+      modelNode.get("process-id-uuid").set(false);
+      return modelNode;
+    }
+  }
+);
+}
