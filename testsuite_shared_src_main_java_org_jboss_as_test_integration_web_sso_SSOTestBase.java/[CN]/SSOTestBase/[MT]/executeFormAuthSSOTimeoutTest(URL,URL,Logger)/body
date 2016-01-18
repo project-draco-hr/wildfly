@@ -1,0 +1,21 @@
+{
+  URL warA1=new URL(serverA,"/war1/");
+  URL warB2=new URL(serverB,"/war2/");
+  CookieStore store=new BasicCookieStore();
+  HttpClient httpclient=TestHttpClientUtils.promiscuousCookieHttpClientBuilder().setDefaultCookieStore(store).disableRedirectHandling().build();
+  try {
+    checkAccessDenied(httpclient,warA1 + "index.html");
+    log.debug("Saw JSESSIONID=" + getSessionIdValueFromState(store));
+    executeFormLogin(httpclient,warA1);
+    String ssoID=processSSOCookie(store,serverA.toString(),serverB.toString());
+    log.debug("Saw JSESSIONIDSSO=" + ssoID);
+    checkAccessAllowed(httpclient,warA1 + "set_session_timeout.jsp");
+    checkAccessAllowed(httpclient,warB2 + "set_session_timeout.jsp");
+    Thread.sleep((5 + 1) * 1000);
+    checkAccessDenied(httpclient,warA1 + "index.html");
+    checkAccessDenied(httpclient,warB2 + "index.html");
+  }
+  finally {
+    HttpClientUtils.closeQuietly(httpclient);
+  }
+}

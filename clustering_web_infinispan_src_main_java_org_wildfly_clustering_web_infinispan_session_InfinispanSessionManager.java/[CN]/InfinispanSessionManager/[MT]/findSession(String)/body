@@ -1,19 +1,19 @@
 {
-  V value=this.factory.findValue(id);
+  Map.Entry<MV,AV> value=this.factory.findValue(id);
   if (value == null) {
     InfinispanWebLogger.ROOT_LOGGER.tracef("Session %s not found",id);
     return null;
   }
-  Session<L> session=this.factory.createSession(id,value);
+  ImmutableSession session=this.factory.createImmutableSession(id,value);
   if (session.getMetaData().isExpired()) {
     InfinispanWebLogger.ROOT_LOGGER.tracef("Session %s was found, but has expired",id);
-    session.invalidate();
+    this.expirationListener.sessionExpired(session);
+    this.factory.remove(id);
     return null;
   }
-  ImmutableSession immutableSession=this.persistent ? this.factory.createImmutableSession(id,value) : session;
-  this.cancel(immutableSession);
+  this.cancel(id);
   if (this.persistent) {
-    triggerPostActivationEvents(immutableSession);
+    this.triggerPostActivationEvents(session);
   }
-  return new SchedulableSession(session,immutableSession);
+  return new SchedulableSession(this.factory.createSession(id,value),session);
 }

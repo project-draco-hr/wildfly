@@ -14,6 +14,8 @@
       String pagingPath=PATHS.get(PAGING_DIRECTORY).resolveModelAttribute(context,model.get(PATH,PAGING_DIRECTORY)).asString();
       String pagingRelativeToPath=RELATIVE_TO.resolveModelAttribute(context,model.get(PATH,PAGING_DIRECTORY)).asString();
       final ActiveMQServerService serverService=new ActiveMQServerService(configuration,new ActiveMQServerService.PathConfig(bindingsPath,bindingsRelativeToPath,journalPath,journalRelativeToPath,largeMessagePath,largeMessageRelativeToPath,pagingPath,pagingRelativeToPath));
+      processIncomingInterceptors(INCOMING_INTERCEPTORS.resolveModelAttribute(context,operation),serverService);
+      processOutgoingInterceptors(OUTGOING_INTERCEPTORS.resolveModelAttribute(context,operation),serverService);
       ServiceName activeMQServiceName=MessagingServices.getActiveMQServiceName(serverName);
       final ServiceBuilder<ActiveMQServer> serviceBuilder=serviceTarget.addService(activeMQServiceName,serverService);
       if (context.hasOptionalCapability(JMX_CAPABILITY,ACTIVEMQ_SERVER_CAPABILITY.getDynamicName(serverName),null)) {
@@ -53,10 +55,11 @@
           final String name=config.getName();
           final String key="broadcast" + name;
           ModelNode broadcastGroupModel=model.get(BROADCAST_GROUP,name);
-          if (broadcastGroupModel.hasDefined(JGROUPS_STACK.getName())) {
-            String jgroupsStack=JGROUPS_STACK.resolveModelAttribute(context,broadcastGroupModel).asString();
+          if (broadcastGroupModel.hasDefined(JGROUPS_CHANNEL.getName())) {
+            ModelNode channelFactory=JGROUPS_STACK.resolveModelAttribute(context,broadcastGroupModel);
+            ServiceName channelFactoryServiceName=channelFactory.isDefined() ? ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(channelFactory.asString()) : ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName();
             String channelName=JGROUPS_CHANNEL.resolveModelAttribute(context,broadcastGroupModel).asString();
-            serviceBuilder.addDependency(ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(jgroupsStack),ChannelFactory.class,serverService.getJGroupsInjector(key));
+            serviceBuilder.addDependency(channelFactoryServiceName,ChannelFactory.class,serverService.getJGroupsInjector(key));
             serverService.getJGroupsChannels().put(key,channelName);
           }
  else {
@@ -70,10 +73,11 @@
           final String name=config.getName();
           final String key="discovery" + name;
           ModelNode discoveryGroupModel=model.get(DISCOVERY_GROUP,name);
-          if (discoveryGroupModel.hasDefined(JGROUPS_STACK.getName())) {
-            String jgroupsStack=JGROUPS_STACK.resolveModelAttribute(context,discoveryGroupModel).asString();
+          if (discoveryGroupModel.hasDefined(JGROUPS_CHANNEL.getName())) {
+            ModelNode channelFactory=JGROUPS_STACK.resolveModelAttribute(context,discoveryGroupModel);
+            ServiceName channelFactoryServiceName=channelFactory.isDefined() ? ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(channelFactory.asString()) : ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName();
             String channelName=JGROUPS_CHANNEL.resolveModelAttribute(context,discoveryGroupModel).asString();
-            serviceBuilder.addDependency(ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(jgroupsStack),ChannelFactory.class,serverService.getJGroupsInjector(key));
+            serviceBuilder.addDependency(channelFactoryServiceName,ChannelFactory.class,serverService.getJGroupsInjector(key));
             serverService.getJGroupsChannels().put(key,channelName);
           }
  else {

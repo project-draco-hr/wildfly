@@ -1,0 +1,55 @@
+{
+  super(ejbComponentCreateService);
+  StatelessObjectFactory<MessageDrivenComponentInstance> factory=new StatelessObjectFactory<MessageDrivenComponentInstance>(){
+    @Override public MessageDrivenComponentInstance create(){
+      return (MessageDrivenComponentInstance)createInstance();
+    }
+    @Override public void destroy(    MessageDrivenComponentInstance obj){
+      obj.destroy();
+    }
+  }
+;
+  final PoolConfig poolConfig=ejbComponentCreateService.getPoolConfig();
+  if (poolConfig == null) {
+    ROOT_LOGGER.debugf("Pooling is disabled for MDB %s",ejbComponentCreateService.getComponentName());
+    this.pool=null;
+    this.poolName=null;
+  }
+ else {
+    ROOT_LOGGER.debugf("Using pool config %s to create pool for MDB %s",poolConfig,ejbComponentCreateService.getComponentName());
+    this.pool=poolConfig.createPool(factory);
+    this.poolName=poolConfig.getPoolName();
+  }
+  this.classLoader=ejbComponentCreateService.getModuleClassLoader();
+  this.suspendController=ejbComponentCreateService.getSuspendControllerInjectedValue().getValue();
+  this.activationSpec=activationSpec;
+  final ClassLoader componentClassLoader=doPrivileged(new GetClassLoaderAction(ejbComponentCreateService.getComponentClass()));
+  final MessageEndpointService<?> service=new MessageEndpointService<Object>(){
+    @Override public Class<Object> getMessageListenerInterface(){
+      return (Class<Object>)messageListenerInterface;
+    }
+    @Override public TransactionManager getTransactionManager(){
+      return MessageDrivenComponent.this.getTransactionManager();
+    }
+    @Override public boolean isDeliveryTransacted(    Method method) throws NoSuchMethodException {
+      if (isBeanManagedTransaction())       return false;
+      return getTransactionAttributeType(MESSAGE_ENDPOINT,method) == REQUIRED;
+    }
+    @Override public String getActivationName(){
+      return activationName;
+    }
+    @Override public Object obtain(    long timeout,    TimeUnit unit){
+      return createViewInstanceProxy(getComponentClass(),emptyMap());
+    }
+    @Override public void release(    Object obj){
+    }
+    @Override public ClassLoader getClassLoader(){
+      return componentClassLoader;
+    }
+  }
+;
+  this.endpointFactory=new JBossMessageEndpointFactory(componentClassLoader,service,(Class<Object>)getComponentClass(),messageListenerInterface);
+  this.started=false;
+  this.deliveryActive=deliveryActive;
+  this.deliveryControllerName=deliveryControllerName;
+}

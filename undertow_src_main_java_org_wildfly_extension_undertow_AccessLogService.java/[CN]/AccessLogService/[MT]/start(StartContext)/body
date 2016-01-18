@@ -6,14 +6,25 @@
     if (pathRelativeTo != null) {
       callbackHandle=pathManager.getValue().registerCallback(pathRelativeTo,PathManager.ReloadServerCallback.create(),PathManager.Event.UPDATED,PathManager.Event.REMOVED);
     }
-    directory=new File(pathManager.getValue().resolveRelativePathEntry(path,pathRelativeTo));
-    if (!directory.exists()) {
-      if (!directory.mkdirs()) {
-        throw UndertowLogger.ROOT_LOGGER.couldNotCreateLogDirectory(directory);
+    directory=Paths.get(pathManager.getValue().resolveRelativePathEntry(path,pathRelativeTo));
+    if (!Files.exists(directory)) {
+      try {
+        Files.createDirectories(directory);
+      }
+ catch (      IOException e) {
+        throw UndertowLogger.ROOT_LOGGER.couldNotCreateLogDirectory(directory,e);
       }
     }
     try {
-      logReceiver=new DefaultAccessLogReceiver(worker.getValue(),directory,filePrefix,fileSuffix,rotate);
+      DefaultAccessLogReceiver.Builder builder=DefaultAccessLogReceiver.builder().setLogWriteExecutor(worker.getValue()).setOutputDirectory(directory).setLogBaseName(filePrefix).setLogNameSuffix(fileSuffix).setRotate(rotate);
+      if (extended) {
+        builder.setLogFileHeaderGenerator(new ExtendedAccessLogParser.ExtendedAccessLogHeaderGenerator(pattern));
+        extendedPattern=new ExtendedAccessLogParser(getClass().getClassLoader()).parse(pattern);
+      }
+ else {
+        extendedPattern=null;
+      }
+      logReceiver=builder.build();
     }
  catch (    IllegalStateException e) {
       throw new StartException(e);

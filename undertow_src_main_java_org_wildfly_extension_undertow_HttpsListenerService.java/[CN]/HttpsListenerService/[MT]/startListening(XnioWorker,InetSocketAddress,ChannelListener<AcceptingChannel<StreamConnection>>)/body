@@ -1,11 +1,18 @@
 {
   SSLContext sslContext=securityRealm.getValue().getSSLContext();
+  if (sslContext == null) {
+    throw UndertowLogger.ROOT_LOGGER.noSslContextInSecurityRealm();
+  }
   Builder builder=OptionMap.builder().addAll(commonOptions);
   builder.addAll(socketOptions);
   builder.set(Options.USE_DIRECT_BUFFERS,true);
+  if (cipherSuites != null) {
+    String[] cipherList=CipherSuiteSelector.fromString(cipherSuites).evaluate(sslContext.getSupportedSSLParameters().getCipherSuites());
+    builder.setSequence((Option<Sequence<String>>)HttpsListenerResourceDefinition.ENABLED_CIPHER_SUITES.getOption(),cipherList);
+  }
   OptionMap combined=builder.getMap();
   XnioSsl xnioSsl=new UndertowXnioSsl(worker.getXnio(),combined,sslContext);
   sslServer=xnioSsl.createSslConnectionServer(worker,socketAddress,(ChannelListener)acceptListener,combined);
   sslServer.resumeAccepts();
-  UndertowLogger.ROOT_LOGGER.listenerStarted("HTTPS",getName(),socketAddress);
+  UndertowLogger.ROOT_LOGGER.listenerStarted("HTTPS",getName(),NetworkUtils.formatIPAddressForURI(socketAddress.getAddress()),socketAddress.getPort());
 }

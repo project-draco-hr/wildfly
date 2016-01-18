@@ -1,3 +1,80 @@
 {
-  registration.registerSubModel(this);
+  ManagementResourceRegistration registration=parentRegistration.registerSubModel(this);
+  ResourceDescriptor descriptor=new ResourceDescriptor(this.getResourceDescriptionResolver()).addExtraParameters(TRANSPORT,PROTOCOLS);
+  ResourceServiceHandler handler=new StackServiceHandler(this.builderFactory);
+  new AddStepHandler(descriptor,handler){
+    @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
+      PathAddress address=context.getCurrentAddress();
+      if (operation.hasDefined(TRANSPORT.getName())) {
+        ModelNode transport=operation.get(TRANSPORT.getName());
+        String type=ProtocolResourceDefinition.DeprecatedAttribute.TYPE.getDefinition().resolveModelAttribute(context,transport).asString();
+        PathElement transportPath=TransportResourceDefinition.pathElement(type);
+        PathAddress transportAddress=address.append(transportPath);
+        ModelNode transportOperation=Util.createAddOperation(transportAddress);
+        for (        TransportResourceDefinition.Attribute attribute : TransportResourceDefinition.Attribute.values()) {
+          String name=attribute.getDefinition().getName();
+          if (transport.hasDefined(name)) {
+            transportOperation.get(name).set(transport.get(name));
+          }
+        }
+        context.addStep(transportOperation,context.getResourceRegistration().getOperationHandler(PathAddress.pathAddress(transportPath),ModelDescriptionConstants.ADD),OperationContext.Stage.MODEL);
+      }
+      if (operation.hasDefined(PROTOCOLS.getName())) {
+        for (        ModelNode protocol : operation.get(PROTOCOLS.getName()).asList()) {
+          String type=ProtocolResourceDefinition.DeprecatedAttribute.TYPE.getDefinition().resolveModelAttribute(context,protocol).asString();
+          PathElement protocolPath=ProtocolResourceDefinition.pathElement(type);
+          PathAddress protocolAddress=address.append(protocolPath);
+          ModelNode protocolOperation=Util.createAddOperation(protocolAddress);
+          for (          ProtocolResourceDefinition.Attribute attribute : ProtocolResourceDefinition.Attribute.values()) {
+            String name=attribute.getDefinition().getName();
+            if (protocol.hasDefined(name)) {
+              protocolOperation.get(name).set(protocol.get(name));
+            }
+          }
+          context.addStep(protocolOperation,context.getResourceRegistration().getOperationHandler(PathAddress.pathAddress(protocolPath),ModelDescriptionConstants.ADD),OperationContext.Stage.MODEL);
+        }
+      }
+      super.execute(context,operation);
+    }
+  }
+.register(registration);
+  new RemoveStepHandler(descriptor,handler).register(registration);
+  OperationDefinition legacyAddProtocolOperation=new SimpleOperationDefinitionBuilder("add-protocol",this.getResourceDescriptionResolver()).setParameters(ProtocolResourceDefinition.Attribute.SOCKET_BINDING.getDefinition()).addParameter(ProtocolResourceDefinition.DeprecatedAttribute.TYPE.getDefinition()).addParameter(ProtocolResourceDefinition.Attribute.PROPERTIES.getDefinition()).setDeprecated(JGroupsModel.VERSION_3_0_0.getVersion()).build();
+  OperationStepHandler legacyAddProtocolHandler=new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation){
+      PathAddress address=context.getCurrentAddress();
+      String protocol=operation.require(ProtocolResourceDefinition.DeprecatedAttribute.TYPE.getDefinition().getName()).asString();
+      PathElement protocolPath=ProtocolResourceDefinition.pathElement(protocol);
+      PathAddress protocolAddress=address.append(protocolPath);
+      ModelNode protocolOperation=Util.createAddOperation(protocolAddress);
+      for (      ProtocolResourceDefinition.Attribute attribute : ProtocolResourceDefinition.Attribute.values()) {
+        String name=attribute.getDefinition().getName();
+        if (operation.hasDefined(name)) {
+          protocolOperation.get(name).set(operation.get(name));
+        }
+      }
+      context.addStep(protocolOperation,context.getResourceRegistration().getOperationHandler(PathAddress.pathAddress(protocolPath),ModelDescriptionConstants.ADD),OperationContext.Stage.MODEL);
+    }
+  }
+;
+  registration.registerOperationHandler(legacyAddProtocolOperation,legacyAddProtocolHandler);
+  OperationDefinition legacyRemoveProtocolOperation=new SimpleOperationDefinitionBuilder("remove-protocol",this.getResourceDescriptionResolver()).setParameters(ProtocolResourceDefinition.DeprecatedAttribute.TYPE.getDefinition()).setDeprecated(JGroupsModel.VERSION_3_0_0.getVersion()).build();
+  OperationStepHandler legacyRemoveProtocolHandler=new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation){
+      PathAddress address=context.getCurrentAddress();
+      String protocol=operation.require(ProtocolResourceDefinition.DeprecatedAttribute.TYPE.getDefinition().getName()).asString();
+      PathElement protocolPath=ProtocolResourceDefinition.pathElement(protocol);
+      PathAddress protocolAddress=address.append(protocolPath);
+      ModelNode removeOperation=Util.createRemoveOperation(protocolAddress);
+      context.addStep(removeOperation,context.getResourceRegistration().getOperationHandler(PathAddress.pathAddress(protocolPath),ModelDescriptionConstants.REMOVE),context.getCurrentStage());
+    }
+  }
+;
+  registration.registerOperationHandler(legacyRemoveProtocolOperation,legacyRemoveProtocolHandler);
+  if (this.allowRuntimeOnlyRegistration) {
+    new OperationHandler<>(new StackOperationExecutor(),StackOperation.class).register(registration);
+  }
+  new TransportResourceDefinition(this.builderFactory).register(registration);
+  new StackProtocolResourceDefinition(this.builderFactory).register(registration);
+  new RelayResourceDefinition(this.builderFactory).register(registration);
 }

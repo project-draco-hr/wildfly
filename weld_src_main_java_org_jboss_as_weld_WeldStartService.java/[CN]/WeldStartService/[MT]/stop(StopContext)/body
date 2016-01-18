@@ -1,2 +1,18 @@
 {
+  final WeldBootstrapService bootstrapService=bootstrap.getValue();
+  if (!bootstrapService.isStarted()) {
+    throw WeldLogger.ROOT_LOGGER.notStarted("WeldContainer");
+  }
+  WeldLogger.DEPLOYMENT_LOGGER.stoppingWeldService(bootstrapService.getDeploymentName());
+  ClassLoader oldTccl=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
+  try {
+    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(bootstrapService.getDeployment().getModule().getClassLoader());
+    WeldProvider.containerShutDown(Container.instance(bootstrapService.getDeploymentName()));
+    bootstrapService.getBootstrap().shutdown();
+  }
+  finally {
+    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(oldTccl);
+    ModuleGroupSingletonProvider.removeClassLoader(bootstrapService.getDeployment().getModule().getClassLoader());
+  }
+  bootstrapService.setStarted(false);
 }

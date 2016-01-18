@@ -1,5 +1,5 @@
 {
-  final boolean rcPresent=context.getOriginalRootResource().hasChild(PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,RequestControllerExtension.SUBSYSTEM_NAME));
+  final boolean rcPresent=context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS).hasChild(PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,RequestControllerExtension.SUBSYSTEM_NAME));
   context.addStep(new AbstractDeploymentChainStep(){
     public void execute(    DeploymentProcessorTarget processorTarget){
       processorTarget.addDeploymentProcessor(BatchSubsystemDefinition.NAME,Phase.DEPENDENCIES,Phase.DEPENDENCIES_BATCH,new BatchDependencyProcessor());
@@ -8,6 +8,11 @@
     }
   }
 ,OperationContext.Stage.RUNTIME);
+  final ServiceTarget target=context.getServiceTarget();
+  final JobExecutorService service=new JobExecutorService();
+  target.addService(BatchServiceNames.BATCH_JOB_EXECUTOR_NAME,service).addDependency(BatchServiceNames.BATCH_THREAD_POOL_NAME,ManagedJBossThreadPoolExecutorService.class,service.getThreadPoolInjector()).install();
   final String repositoryType=JOB_REPOSITORY_TYPE.resolveModelAttribute(context,model).asString();
   JobRepositoryFactory.getInstance().setJobRepositoryType(repositoryType);
+  final DefaultConfigurationService configurationService=new DefaultConfigurationService();
+  target.addService(context.getCapabilityServiceName(Capabilities.BATCH_CONFIGURATION_CAPABILITY.getName(),BatchConfiguration.class),configurationService).addDependency(BatchServiceNames.BATCH_JOB_EXECUTOR_NAME,JobExecutor.class,configurationService.getJobExecutorInjector()).install();
 }

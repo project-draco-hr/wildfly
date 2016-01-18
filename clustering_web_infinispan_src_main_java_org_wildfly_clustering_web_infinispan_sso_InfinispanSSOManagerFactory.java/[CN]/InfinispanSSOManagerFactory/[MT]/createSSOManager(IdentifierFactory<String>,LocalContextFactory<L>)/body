@@ -1,13 +1,12 @@
 {
-  MarshallingContext marshallingContext=new SimpleMarshallingContextFactory().createMarshallingContext(new AuthenticationMarshallingContext(this.configuration.getModuleLoader()),null);
+  MarshallingContext marshallingContext=new SimpleMarshallingContextFactory().createMarshallingContext(new SimpleMarshallingConfigurationRepository(MarshallingVersion.class,MarshallingVersion.CURRENT,this.configuration.getModuleLoader()),null);
   MarshalledValueFactory<MarshallingContext> marshalledValueFactory=new SimpleMarshalledValueFactory(marshallingContext);
-  Marshaller<A,MarshalledValue<A,MarshallingContext>> marshaller=new MarshalledValueMarshaller<>(marshalledValueFactory,marshallingContext);
-  Cache<String,CoarseAuthenticationEntry<A,D,L>> authenticationCache=this.configuration.getCache();
-  Configuration config=authenticationCache.getCacheConfiguration();
+  Marshaller<A,MarshalledValue<A,MarshallingContext>,MarshallingContext> marshaller=new MarshalledValueMarshaller<>(marshalledValueFactory,marshallingContext);
+  Cache<Key<String>,?> cache=this.configuration.getCache();
+  Configuration config=cache.getCacheConfiguration();
   boolean lockOnRead=config.transaction().transactionMode().isTransactional() && (config.transaction().lockingMode() == LockingMode.PESSIMISTIC) && config.locking().isolationLevel() == IsolationLevel.REPEATABLE_READ;
-  Cache<CoarseSessionsKey,Map<D,String>> sessionsCache=this.configuration.getCache();
-  SSOFactory<CoarseSSOEntry<A,D,L>,A,D,L> factory=new CoarseSSOFactory<>(lockOnRead ? authenticationCache.getAdvancedCache().withFlags(Flag.FORCE_WRITE_LOCK) : authenticationCache,sessionsCache,marshaller,localContextFactory);
-  IdentifierFactory<String> idFactory=new AffinityIdentifierFactory<>(identifierFactory,authenticationCache,this.configuration.getKeyAffinityServiceFactory());
-  Batcher<TransactionBatch> batcher=new InfinispanBatcher(authenticationCache);
+  SSOFactory<CoarseSSOEntry<A,D,L>,A,D,L> factory=new CoarseSSOFactory<>(cache,marshaller,localContextFactory,lockOnRead);
+  IdentifierFactory<String> idFactory=new AffinityIdentifierFactory<>(identifierFactory,cache,this.configuration.getKeyAffinityServiceFactory());
+  Batcher<TransactionBatch> batcher=new InfinispanBatcher(cache);
   return new InfinispanSSOManager<>(factory,idFactory,batcher);
 }

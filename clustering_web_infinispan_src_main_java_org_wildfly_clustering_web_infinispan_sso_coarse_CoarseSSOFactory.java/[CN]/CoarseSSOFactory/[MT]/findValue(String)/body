@@ -1,14 +1,21 @@
 {
-  CoarseAuthenticationEntry<A,D,L> entry=this.authenticationCache.get(id);
-  if (entry == null)   return null;
-  Map<D,String> map=this.sessionsCache.get(new CoarseSessionsKey(id));
-  if (map == null)   return null;
-  try {
-    A authentication=this.marshaller.read(entry.getAuthentication());
-    return new CoarseSSOEntry<>(authentication,entry.getLocalContext(),map);
+  AuthenticationKey key=new AuthenticationKey(id);
+  if (this.lockOnRead) {
+    this.findAuthenticationCache.getAdvancedCache().lock(key);
   }
- catch (  InvalidSerializedFormException e) {
-    InfinispanWebLogger.ROOT_LOGGER.failedToActivateAuthentication(e,id);
-    return null;
+  AuthenticationEntry<A,D,L> entry=this.findAuthenticationCache.get(key);
+  if (entry != null) {
+    Map<D,String> map=this.sessionsCache.get(new CoarseSessionsKey(id));
+    if (map != null) {
+      try {
+        A authentication=this.marshaller.read(entry.getAuthentication());
+        return new CoarseSSOEntry<>(authentication,entry.getLocalContext(),map);
+      }
+ catch (      InvalidSerializedFormException e) {
+        InfinispanWebLogger.ROOT_LOGGER.failedToActivateAuthentication(e,id);
+        this.remove(id);
+      }
+    }
   }
+  return null;
 }

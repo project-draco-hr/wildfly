@@ -1,0 +1,21 @@
+{
+  final EEModuleConfiguration moduleConfiguration=deploymentUnit.getAttachment(EE_MODULE_CONFIGURATION);
+  if (moduleConfiguration == null) {
+    return;
+  }
+  final ServiceRegistry serviceRegistry=deploymentUnit.getServiceRegistry();
+  boolean clusteredSingletonFound=false;
+  for (  final ComponentConfiguration configuration : moduleConfiguration.getComponentConfigurations()) {
+    final ComponentDescription description=configuration.getComponentDescription();
+    if (description instanceof MessageDrivenComponentDescription) {
+      MessageDrivenComponentDescription mdbDescription=(MessageDrivenComponentDescription)description;
+      clusteredSingletonFound=clusteredSingletonFound || mdbDescription.isClusteredSingleton();
+      if (mdbDescription.isClusteredSingleton() || mdbDescription.getDeliveryGroup() != null) {
+        serviceRegistry.getRequiredService(mdbDescription.getDeliveryControllerName()).setMode(Mode.REMOVE);
+      }
+    }
+  }
+  if (clusteredSingletonFound) {
+    serviceRegistry.getRequiredService(createClusteredSingletonDemanderServiceName(deploymentUnit)).setMode(Mode.REMOVE);
+  }
+}

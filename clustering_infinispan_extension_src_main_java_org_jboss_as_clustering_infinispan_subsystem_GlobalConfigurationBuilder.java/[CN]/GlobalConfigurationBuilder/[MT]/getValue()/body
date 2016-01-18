@@ -8,14 +8,21 @@
     ClassLoader loader=moduleLoader.loadModule(this.module).getClassLoader();
     builder.classLoader(loader);
     int id=Ids.MAX_ID;
-    for (    SimpleExternalizer<?> externalizer : ServiceLoader.load(SimpleExternalizer.class,loader)) {
+    for (    Externalizer<?> externalizer : ServiceLoader.load(Externalizer.class,loader)) {
       InfinispanLogger.ROOT_LOGGER.debugf("Cache container %s will use an externalizer for %s",this.name,externalizer.getTargetClass().getName());
-      builder.serialization().addAdvancedExternalizer(id++,externalizer);
+      builder.serialization().addAdvancedExternalizer(id++,new AdvancedExternalizerAdapter<>(externalizer));
     }
   }
  catch (  ModuleLoadException e) {
     throw new IllegalStateException(e);
   }
+  builder.transport().transportThreadPool().read(this.transportThreadPool.getValue());
+  builder.transport().remoteCommandThreadPool().read(this.remoteCommandThreadPool.getValue());
+  builder.asyncThreadPool().read(this.asyncOperationsThreadPool.getValue());
+  builder.expirationThreadPool().read(this.expirationThreadPool.getValue());
+  builder.listenerThreadPool().read(this.listenerThreadPool.getValue());
+  builder.stateTransferThreadPool().read(this.stateTransferThreadPool.getValue());
+  builder.persistenceThreadPool().read(this.persistenceThreadPool.getValue());
   builder.shutdown().hookBehavior(ShutdownHookBehavior.DONT_REGISTER);
   builder.globalJmxStatistics().enabled(this.statisticsEnabled).cacheManagerName(this.name).mBeanServerLookup(new MBeanServerProvider(this.server.getValue())).jmxDomain(CacheContainerServiceName.CACHE_CONTAINER.getServiceName(CacheServiceName.DEFAULT_CACHE).getParent().getCanonicalName()).allowDuplicateDomains(true);
   return builder.build();

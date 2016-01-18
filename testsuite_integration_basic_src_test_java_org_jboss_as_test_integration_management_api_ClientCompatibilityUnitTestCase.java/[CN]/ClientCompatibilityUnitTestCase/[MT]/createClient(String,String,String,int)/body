@@ -5,16 +5,26 @@
   classLoaderBuilder.addParentFirstClassPattern("org.jboss.as.controller.client.ModelControllerClient");
   classLoaderBuilder.addParentFirstClassPattern("org.jboss.as.controller.client.OperationMessageHandler");
   classLoaderBuilder.addParentFirstClassPattern("org.jboss.as.controller.client.Operation");
+  classLoaderBuilder.addParentFirstClassPattern("org.jboss.as.controller.client.OperationResponse*");
   final ClassLoader classLoader=classLoaderBuilder.build();
   final Class<?> factoryClass=classLoader.loadClass("org.jboss.as.controller.client.ModelControllerClient$Factory");
   final Method factory=factoryClass.getMethod("create",String.class,int.class);
-  final Object client=factory.invoke(null,host,port);
-  final InvocationHandler invocationHandler=new InvocationHandler(){
-    @Override public Object invoke(    Object proxy,    Method method,    Object[] args) throws Throwable {
-      return method.invoke(client,args);
+  try {
+    final Object client=factory.invoke(null,host,port);
+    final InvocationHandler invocationHandler=new InvocationHandler(){
+      @Override public Object invoke(      Object proxy,      Method method,      Object[] args) throws Throwable {
+        return method.invoke(client,args);
+      }
     }
-  }
 ;
-  final Class<?>[] interfaces=new Class<?>[]{ModelControllerClient.class};
-  return (ModelControllerClient)Proxy.newProxyInstance(classLoader,interfaces,invocationHandler);
+    final Class<?>[] interfaces=new Class<?>[]{ModelControllerClient.class};
+    return (ModelControllerClient)Proxy.newProxyInstance(classLoader,interfaces,invocationHandler);
+  }
+ catch (  InvocationTargetException e) {
+    Throwable t=e.getCause();
+    if (t == null) {
+      throw e;
+    }
+    throw t instanceof Exception ? (Exception)t : new RuntimeException(t);
+  }
 }
