@@ -1,13 +1,24 @@
 {
-  SessionCreationMetaDataKey creationMetaDataKey=new SessionCreationMetaDataKey(id);
-  SessionCreationMetaDataEntry<L> creationMetaDataEntry=creationMetaDataCache.get(creationMetaDataKey);
+  SessionCreationMetaDataKey key=new SessionCreationMetaDataKey(id);
+  if (this.lockOnRead) {
+    try {
+      if (creationMetaDataCache.getAdvancedCache().getTransactionManager().getStatus() == Status.STATUS_ACTIVE) {
+        if (!creationMetaDataCache.getAdvancedCache().lock(key)) {
+          return null;
+        }
+      }
+    }
+ catch (    SystemException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+  SessionCreationMetaDataEntry<L> creationMetaDataEntry=creationMetaDataCache.get(key);
   if (creationMetaDataEntry != null) {
-    SessionAccessMetaDataKey accessMetaDataKey=new SessionAccessMetaDataKey(id);
-    SessionAccessMetaData accessMetaData=this.accessMetaDataCache.get(accessMetaDataKey);
+    SessionAccessMetaData accessMetaData=this.accessMetaDataCache.get(new SessionAccessMetaDataKey(id));
     if (accessMetaData != null) {
       return new InfinispanSessionMetaData<>(creationMetaDataEntry.getMetaData(),accessMetaData,creationMetaDataEntry.getLocalContext());
     }
-    this.creationMetaDataCache.getAdvancedCache().withFlags(Flag.IGNORE_RETURN_VALUES,Flag.SKIP_LISTENER_NOTIFICATION).remove(creationMetaDataKey);
+    creationMetaDataCache.getAdvancedCache().withFlags(Flag.IGNORE_RETURN_VALUES,Flag.SKIP_LISTENER_NOTIFICATION).remove(key);
   }
   return null;
 }

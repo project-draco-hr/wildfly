@@ -1,0 +1,33 @@
+{
+  if (isRestartOnResume() && jobsRestarted.compareAndSet(false,true)) {
+    final ClassLoader current=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
+    try {
+      WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(classLoader);
+      final Collection<Long> ids=new ArrayList<>();
+synchronized (stoppedIds) {
+        ids.addAll(stoppedIds);
+        stoppedIds.clear();
+      }
+      final JobOperator jobOperator=BatchRuntime.getJobOperator();
+      for (      Long id : ids) {
+        String jobName=null;
+        try {
+          jobName=jobOperator.getJobInstance(id).getJobName();
+        }
+ catch (        Exception ignore) {
+        }
+        try {
+          final long newId=jobOperator.restart(id,RESTART_PROPS);
+          BatchLogger.LOGGER.restartingJob(jobName,id,newId);
+        }
+ catch (        Exception e) {
+          BatchLogger.LOGGER.failedRestartingJob(e,id,jobName,deploymentName);
+        }
+      }
+    }
+  finally {
+      WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(current);
+      jobsRestarted.set(false);
+    }
+  }
+}
