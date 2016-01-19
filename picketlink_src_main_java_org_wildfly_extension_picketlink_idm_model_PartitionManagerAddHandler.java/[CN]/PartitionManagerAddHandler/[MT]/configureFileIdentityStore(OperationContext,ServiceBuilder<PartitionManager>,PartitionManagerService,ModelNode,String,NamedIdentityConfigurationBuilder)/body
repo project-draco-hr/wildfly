@@ -1,0 +1,20 @@
+{
+  FileStoreConfigurationBuilder fileStoreBuilder=builder.stores().file();
+  String workingDir=FileStoreResourceDefinition.WORKING_DIR.resolveModelAttribute(context,resource).asString();
+  String relativeTo=FileStoreResourceDefinition.RELATIVE_TO.resolveModelAttribute(context,resource).asString();
+  ModelNode alwaysCreateFiles=FileStoreResourceDefinition.ALWAYS_CREATE_FILE.resolveModelAttribute(context,resource);
+  ModelNode asyncWrite=FileStoreResourceDefinition.ASYNC_WRITE.resolveModelAttribute(context,resource);
+  ModelNode asyncWriteThreadPool=FileStoreResourceDefinition.ASYNC_WRITE_THREAD_POOL.resolveModelAttribute(context,resource);
+  fileStoreBuilder.preserveState(!alwaysCreateFiles.asBoolean());
+  fileStoreBuilder.asyncWrite(asyncWrite.asBoolean());
+  fileStoreBuilder.asyncWriteThreadPool(asyncWriteThreadPool.asInt());
+  if (serviceBuilder != null) {
+    FileIdentityStoreService storeService=new FileIdentityStoreService(fileStoreBuilder,workingDir,relativeTo);
+    ServiceName storeServiceName=PartitionManagerService.createIdentityStoreServiceName(partitionManagerService.getName(),configurationName,ModelElement.FILE_STORE.getName());
+    ServiceBuilder<FileIdentityStoreService> storeServiceBuilder=context.getServiceTarget().addService(storeServiceName,storeService);
+    storeServiceBuilder.addDependency(PathManagerService.SERVICE_NAME,PathManager.class,storeService.getPathManager());
+    serviceBuilder.addDependency(storeServiceName);
+    ServiceController<FileIdentityStoreService> controller=storeServiceBuilder.setInitialMode(Mode.PASSIVE).install();
+  }
+  return fileStoreBuilder;
+}

@@ -1,0 +1,55 @@
+{
+  exchange.putAttachment(AUTH_RUN,true);
+  final ServletRequestContext requestContext=exchange.getAttachment(ServletRequestContext.ATTACHMENT_KEY);
+  final JASPIServerAuthenticationManager sam=createJASPIAuthenticationManager();
+  final GenericMessageInfo messageInfo=createMessageInfo(exchange,sc);
+  final String applicationIdentifier=buildApplicationIdentifier(requestContext);
+  final JASPICallbackHandler cbh=new JASPICallbackHandler();
+  exchange.putAttachment(JASPICContext.ATTACHMENT_KEY,new JASPICContext(messageInfo,sam,cbh));
+  UndertowLogger.ROOT_LOGGER.debugf("validateRequest for layer [%s] and applicationContextIdentifier [%s]",JASPI_HTTP_SERVLET_LAYER,applicationIdentifier);
+  Account cachedAccount=null;
+  final JASPICSecurityContext jaspicSecurityContext=(JASPICSecurityContext)exchange.getSecurityContext();
+  final AuthenticatedSessionManager sessionManager=exchange.getAttachment(AuthenticatedSessionManager.ATTACHMENT_KEY);
+  if (sessionManager != null) {
+    AuthenticatedSessionManager.AuthenticatedSession authSession=sessionManager.lookupSession(exchange);
+    if (authSession != null) {
+      cachedAccount=authSession.getAccount();
+      if (cachedAccount != null) {
+        jaspicSecurityContext.setCachedAuthenticatedAccount(cachedAccount);
+      }
+    }
+  }
+  AuthenticationMechanismOutcome outcome=AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+  Account authenticatedAccount=null;
+  boolean isValid=sam.isValid(messageInfo,new Subject(),JASPI_HTTP_SERVLET_LAYER,applicationIdentifier,cbh);
+  jaspicSecurityContext.setCachedAuthenticatedAccount(null);
+  if (isValid) {
+    org.jboss.security.SecurityContext jbossSct=SecurityActions.getSecurityContext();
+    authenticatedAccount=createAccount(cachedAccount,jbossSct);
+  }
+  String authType=(String)messageInfo.getMap().get(JASPI_AUTH_TYPE);
+  if (authType == null)   authType=this.configuredAuthMethod != null ? this.configuredAuthMethod : MECHANISM_NAME;
+  if (isValid && authenticatedAccount != null) {
+    outcome=AuthenticationMechanismOutcome.AUTHENTICATED;
+    Object registerObj=messageInfo.getMap().get(JASPI_REGISTER_SESSION);
+    boolean cache=false;
+    if (registerObj != null && (registerObj instanceof String)) {
+      cache=Boolean.valueOf((String)registerObj);
+    }
+    sc.authenticationComplete(authenticatedAccount,authType,cache);
+  }
+ else   if (isValid && authenticatedAccount == null && !isMandatory(requestContext)) {
+    outcome=AuthenticationMechanismOutcome.NOT_ATTEMPTED;
+  }
+ else {
+    outcome=AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+    sc.authenticationFailed("JASPIC authentication failed.",authType);
+    if (wasAuthExceptionThrown(exchange) && !statusIndicatesError(exchange)) {
+      exchange.setResponseCode(DEFAULT_ERROR_CODE);
+    }
+  }
+  ServletRequestContext servletRequestContext=exchange.getAttachment(ServletRequestContext.ATTACHMENT_KEY);
+  servletRequestContext.setServletRequest((HttpServletRequest)messageInfo.getRequestMessage());
+  servletRequestContext.setServletResponse((HttpServletResponse)messageInfo.getResponseMessage());
+  return outcome;
+}

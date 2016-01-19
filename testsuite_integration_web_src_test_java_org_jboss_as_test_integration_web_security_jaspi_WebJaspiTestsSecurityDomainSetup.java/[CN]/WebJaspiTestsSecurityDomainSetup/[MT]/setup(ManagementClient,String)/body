@@ -1,0 +1,28 @@
+{
+  log.debug("start of the domain creation");
+  final ModelNode compositeOp=new ModelNode();
+  compositeOp.get(OP).set(COMPOSITE);
+  compositeOp.get(OP_ADDR).setEmptyList();
+  ModelNode steps=compositeOp.get(STEPS);
+  PathAddress address=PathAddress.pathAddress().append(SUBSYSTEM,"security").append(SECURITY_DOMAIN,getSecurityDomainName());
+  steps.add(Util.createAddOperation(address));
+  address=address.append(Constants.AUTHENTICATION,"jaspi");
+  steps.add(Util.createAddOperation(address));
+  ModelNode loginModuleStack=Util.createAddOperation(address.append(LOGIN_MODULE_STACK,"lm-stack"));
+  loginModuleStack.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  steps.add(loginModuleStack);
+  ModelNode loginModule=Util.createAddOperation(address.append(LOGIN_MODULE_STACK,"lm-stack").append(LOGIN_MODULE,"UsersRoles"));
+  loginModule.get(CODE).set("UsersRoles");
+  loginModule.get(FLAG).set("required");
+  loginModule.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  steps.add(loginModule);
+  final ModelNode authModule=Util.createAddOperation(address.append(AUTH_MODULE,authModuleClassName));
+  authModule.get(CODE).set(authModuleClassName);
+  authModule.get(MODULE).set("org.wildfly.extension.undertow");
+  authModule.get(LOGIN_MODULE_STACK_REF).set("lm-stack");
+  authModule.get(FLAG).set("required");
+  authModule.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  steps.add(authModule);
+  applyUpdates(managementClient.getControllerClient(),Arrays.asList(compositeOp));
+  log.debug("end of the domain creation");
+}

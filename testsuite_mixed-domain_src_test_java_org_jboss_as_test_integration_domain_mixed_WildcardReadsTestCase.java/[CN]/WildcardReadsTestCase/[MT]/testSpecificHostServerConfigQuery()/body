@@ -1,0 +1,30 @@
+{
+  ModelNode op=Util.createEmptyOperation(QUERY,PathAddress.pathAddress(HOST_SLAVE,SERVER_CONFIG_WILD));
+  ModelNode resp=executeForResult(op);
+  assertEquals(resp.toString(),2,resp.asInt());
+  Set<ModelNode> autoStarts=new HashSet<>();
+  for (  ModelNode item : resp.asList()) {
+    assertFalse(resp.toString(),isMasterItem(item,2));
+    ModelNode result=item.get(RESULT);
+    assertTrue(item.toString(),result.has(AUTO_START));
+    if (result.hasDefined(AUTO_START) && !result.get(AUTO_START).asBoolean()) {
+      autoStarts.add(result);
+    }
+    assertTrue(item.toString(),result.hasDefined(GROUP));
+    assertTrue(item.toString(),result.hasDefined("status"));
+  }
+  op.get(WHERE,AUTO_START).set(false);
+  resp=executeForResult(op);
+  assertEquals(resp.toString(),1,resp.asInt());
+  for (  ModelNode item : resp.asList()) {
+    assertTrue(resp.toString(),autoStarts.contains(item.get(RESULT)));
+  }
+  op.get(SELECT).add(GROUP);
+  resp=executeForResult(op);
+  assertEquals(resp.toString(),1,resp.asInt());
+  for (  ModelNode item : resp.asList()) {
+    ModelNode result=item.get(RESULT);
+    assertEquals(resp.toString(),1,result.keys().size());
+    assertEquals(resp.toString(),"other-server-group",result.get(GROUP).asString());
+  }
+}
