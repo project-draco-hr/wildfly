@@ -8,14 +8,10 @@
 ;
   final JChannel channel=WildFlySecurityManager.doChecked(action);
   ProtocolStack stack=channel.getProtocolStack();
-  TP transport=stack.getTransport();
-  if (transport.isSingleton()) {
-synchronized (transport) {
-      this.init(transport);
-    }
-  }
- else {
-    this.init(transport);
+  TransportConfiguration transportConfig=this.configuration.getTransport();
+  SocketBinding binding=transportConfig.getSocketBinding();
+  if (binding != null) {
+    channel.setSocketFactory(new ManagedSocketFactory(binding.getSocketBindings()));
   }
   RelayConfiguration relayConfig=this.configuration.getRelay();
   if (relayConfig != null) {
@@ -48,8 +44,9 @@ synchronized (transport) {
         }
       }
     }
-    Configurator.resolveAndAssignFields(relay,relayConfig.getProperties());
-    Configurator.resolveAndInvokePropertyMethods(relay,relayConfig.getProperties());
+    Map<String,String> relayProperties=new HashMap<>(relayConfig.getProperties());
+    Configurator.resolveAndAssignFields(relay,relayProperties);
+    Configurator.resolveAndInvokePropertyMethods(relay,relayProperties);
     stack.addProtocol(relay);
     relay.init();
   }

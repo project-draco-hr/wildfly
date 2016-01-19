@@ -1,9 +1,10 @@
 {
   if (!describe && context.getRunningMode() != RunningMode.ADMIN_ONLY) {
-    throw UndertowLogger.ROOT_LOGGER.migrateOperationAllowedOnlyInAdminOnly();
+    throw WebLogger.ROOT_LOGGER.migrateOperationAllowedOnlyInAdminOnly();
   }
+  final List<String> warnings=new ArrayList<>();
   final ModelNode legacyModelAddOps=new ModelNode();
-  final Map<PathAddress,ModelNode> migrationOperations=new TreeMap<>(new Comparator<PathAddress>(){
+  final Map<PathAddress,ModelNode> sortedMigrationOperations=new TreeMap<>(new Comparator<PathAddress>(){
     @Override public int compare(    PathAddress o1,    PathAddress o2){
       final int compare=Integer.compare(o1.size(),o2.size());
       if (compare != 0) {
@@ -14,21 +15,64 @@
   }
 );
   describeLegacyWebResources(context,legacyModelAddOps);
-  addExtension(context,migrationOperations,describe,UNDERTOW_EXTENSION);
-  addExtension(context,migrationOperations,describe,IO_EXTENSION);
+  addExtension(context,sortedMigrationOperations,describe,UNDERTOW_EXTENSION);
+  addExtension(context,sortedMigrationOperations,describe,IO_EXTENSION);
   context.addStep(new OperationStepHandler(){
     @Override public void execute(    OperationContext context,    ModelNode operation) throws OperationFailedException {
-      addDefaultResources(migrationOperations,legacyModelAddOps);
-      createIoSubsystem(context,migrationOperations);
-      createWelcomeContentHandler(migrationOperations);
-      transformResources(context,legacyModelAddOps,migrationOperations);
-      removeWebSubsystem(migrationOperations);
-      fixAddressesForDomainMode(pathAddress(operation.get(ADDRESS)),migrationOperations);
-      if (describe) {
-        context.getResult().set(migrationOperations.values());
+      addDefaultResources(sortedMigrationOperations,legacyModelAddOps,warnings);
+      boolean domainMode=context.getCallEnvironment().getProcessType() != ProcessType.STANDALONE_SERVER;
+      PathAddress baseAddres;
+      if (domainMode) {
+        baseAddres=pathAddress(operation.get(ADDRESS)).getParent();
       }
  else {
-        migrateSubsystems(context,migrationOperations);
+        baseAddres=pathAddress();
+      }
+      createIoSubsystem(context,sortedMigrationOperations,baseAddres);
+      createWelcomeContentHandler(sortedMigrationOperations);
+      transformResources(context,legacyModelAddOps,sortedMigrationOperations,warnings,domainMode);
+      fixAddressesForDomainMode(pathAddress(operation.get(ADDRESS)),sortedMigrationOperations);
+      LinkedHashMap<PathAddress,ModelNode> orderedMigrationOperations=new LinkedHashMap<>(sortedMigrationOperations);
+      removeWebSubsystem(orderedMigrationOperations,context.getProcessType() == ProcessType.STANDALONE_SERVER,pathAddress(operation.get(ADDRESS)));
+      if (describe) {
+        final Collection<ModelNode> values=orderedMigrationOperations.values();
+        ModelNode result=new ModelNode();
+        if (!warnings.isEmpty()) {
+          ModelNode rw=new ModelNode().setEmptyList();
+          for (          String warning : warnings) {
+            rw.add(warning);
+          }
+          result.get(MIGRATION_WARNINGS).set(rw);
+        }
+        result.get(MIGRATION_OPERATIONS).set(values);
+        context.getResult().set(result);
+      }
+ else {
+        final Map<PathAddress,ModelNode> migrateOpResponses=migrateSubsystems(context,orderedMigrationOperations);
+        context.completeStep(new OperationContext.ResultHandler(){
+          @Override public void handleResult(          OperationContext.ResultAction resultAction,          OperationContext context,          ModelNode operation){
+            final ModelNode result=new ModelNode();
+            ModelNode rw=new ModelNode().setEmptyList();
+            for (            String warning : warnings) {
+              rw.add(warning);
+            }
+            result.get(MIGRATION_WARNINGS).set(rw);
+            if (resultAction == OperationContext.ResultAction.ROLLBACK) {
+              for (              Map.Entry<PathAddress,ModelNode> entry : migrateOpResponses.entrySet()) {
+                if (entry.getValue().hasDefined(FAILURE_DESCRIPTION)) {
+                  ModelNode desc=new ModelNode();
+                  desc.get(OP).set(orderedMigrationOperations.get(entry.getKey()));
+                  desc.get(RESULT).set(entry.getValue());
+                  result.get(MIGRATION_ERROR).set(desc);
+                  break;
+                }
+              }
+              context.getFailureDescription().set(new ModelNode(WebLogger.ROOT_LOGGER.migrationFailed()));
+            }
+            context.getResult().set(result);
+          }
+        }
+);
       }
     }
   }

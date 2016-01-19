@@ -1,0 +1,30 @@
+{
+  ModelNode op=Util.createEmptyOperation(QUERY,PathAddress.pathAddress(HOST_SLAVE,SERVER_WILD));
+  ModelNode resp=executeForResult(op);
+  assertEquals(resp.toString(),expectUnstartedServerResource() ? 2 : 1,resp.asInt());
+  Set<ModelNode> running=new HashSet<>();
+  for (  ModelNode item : resp.asList()) {
+    assertFalse(resp.toString(),isMasterItem(item,2));
+    ModelNode result=item.get(RESULT);
+    assertTrue(item.toString(),result.hasDefined("server-state"));
+    if (result.get("server-state").asString().toLowerCase(Locale.ENGLISH).equals("running")) {
+      assertEquals(resp.toString(),"slave",result.get(HOST).asString());
+      running.add(result);
+    }
+  }
+  assertEquals(resp.toString(),1,running.size());
+  op.get(WHERE,"server-state").set("running");
+  resp=executeForResult(op);
+  assertEquals(resp.toString(),1,resp.asInt());
+  for (  ModelNode item : resp.asList()) {
+    assertTrue(resp.toString(),running.contains(item.get(RESULT)));
+  }
+  op.get(SELECT).add(SERVER_GROUP);
+  resp=executeForResult(op);
+  assertEquals(resp.toString(),1,resp.asInt());
+  for (  ModelNode item : resp.asList()) {
+    ModelNode result=item.get(RESULT);
+    assertEquals(resp.toString(),1,result.keys().size());
+    assertEquals(resp.toString(),"other-server-group",result.get(SERVER_GROUP).asString());
+  }
+}

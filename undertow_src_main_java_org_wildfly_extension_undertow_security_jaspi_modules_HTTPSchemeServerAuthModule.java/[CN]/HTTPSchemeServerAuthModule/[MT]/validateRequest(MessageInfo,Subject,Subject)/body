@@ -1,6 +1,6 @@
 {
-  HttpServerExchange exchange=(HttpServerExchange)messageInfo.getMap().get(JASPIAuthenticationMechanism.HTTP_SERVER_EXCHANGE_ATTACHMENT_KEY);
-  SecurityContext securityContext=(SecurityContext)messageInfo.getMap().get(JASPIAuthenticationMechanism.SECURITY_CONTEXT_ATTACHMENT_KEY);
+  HttpServerExchange exchange=(HttpServerExchange)messageInfo.getMap().get(JASPICAuthenticationMechanism.HTTP_SERVER_EXCHANGE_ATTACHMENT_KEY);
+  SecurityContext securityContext=(SecurityContext)messageInfo.getMap().get(JASPICAuthenticationMechanism.SECURITY_CONTEXT_ATTACHMENT_KEY);
   ServletRequestContext src=exchange.getAttachment(ServletRequestContext.ATTACHMENT_KEY);
   List<AuthenticationMechanism> mechanisms=src.getDeployment().getAuthenticationMechanisms();
   try {
@@ -16,16 +16,22 @@
       }
     }
     if (!success) {
-      for (      AuthenticationMechanism mechanism : mechanisms) {
-        AuthenticationMechanism.ChallengeResult challengeResult=mechanism.sendChallenge(exchange,securityContext);
-        if (challengeResult.getDesiredResponseCode() != null) {
-          exchange.setResponseCode(challengeResult.getDesiredResponseCode());
-        }
-        if (exchange.isResponseComplete()) {
-          break;
-        }
+      String mandatory=(String)messageInfo.getMap().get("javax.security.auth.message.MessagePolicy.isMandatory");
+      if (mandatory != null && mandatory.toLowerCase().equals("false")) {
+        return SUCCESS;
       }
-      return SEND_CONTINUE;
+ else {
+        for (        AuthenticationMechanism mechanism : mechanisms) {
+          AuthenticationMechanism.ChallengeResult challengeResult=mechanism.sendChallenge(exchange,securityContext);
+          if (challengeResult.getDesiredResponseCode() != null) {
+            exchange.setResponseCode(challengeResult.getDesiredResponseCode());
+          }
+          if (exchange.isResponseComplete()) {
+            break;
+          }
+        }
+        return SEND_CONTINUE;
+      }
     }
   }
  catch (  Exception e) {

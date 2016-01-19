@@ -1,3 +1,46 @@
 {
-  registration.registerSubModel(this);
+  ManagementResourceRegistration registration=parentRegistration.registerSubModel(this);
+  AbstractAddStepHandler addHandler=new AbstractAddStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation){
+      this.createResource(context);
+      String name=context.getCurrentAddressValue();
+      String value=operation.get(VALUE.getName()).asString();
+      PathAddress storeAddress=context.getCurrentAddress().getParent();
+      ModelNode putOperation=Operations.createMapPutOperation(storeAddress,ProtocolResourceDefinition.Attribute.PROPERTIES,name,value);
+      context.addStep(putOperation,MapOperations.MAP_PUT_HANDLER,context.getCurrentStage());
+    }
+  }
+;
+  this.registerAddOperation(registration,addHandler);
+  AbstractRemoveStepHandler removeHandler=new AbstractRemoveStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation){
+      context.removeResource(PathAddress.EMPTY_ADDRESS);
+      String name=context.getCurrentAddressValue();
+      PathAddress storeAddress=context.getCurrentAddress().getParent();
+      ModelNode putOperation=Operations.createMapRemoveOperation(storeAddress,ProtocolResourceDefinition.Attribute.PROPERTIES,name);
+      context.addStep(putOperation,MapOperations.MAP_REMOVE_HANDLER,context.getCurrentStage());
+    }
+  }
+;
+  this.registerRemoveOperation(registration,removeHandler);
+  OperationStepHandler readHandler=new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation){
+      PathAddress address=context.getCurrentAddress().getParent();
+      String key=context.getCurrentAddressValue();
+      ModelNode getOperation=Operations.createMapGetOperation(address,ProtocolResourceDefinition.Attribute.PROPERTIES,key);
+      context.addStep(getOperation,MapOperations.MAP_GET_HANDLER,context.getCurrentStage());
+    }
+  }
+;
+  OperationStepHandler writeHandler=new OperationStepHandler(){
+    @Override public void execute(    OperationContext context,    ModelNode operation){
+      PathAddress address=context.getCurrentAddress().getParent();
+      String key=context.getCurrentAddressValue();
+      String value=Operations.getAttributeValue(operation).asString();
+      ModelNode putOperation=Operations.createMapPutOperation(address,ProtocolResourceDefinition.Attribute.PROPERTIES,key,value);
+      context.addStep(putOperation,MapOperations.MAP_PUT_HANDLER,context.getCurrentStage());
+    }
+  }
+;
+  registration.registerReadWriteAttribute(VALUE,readHandler,writeHandler);
 }

@@ -4,21 +4,31 @@
   KernelServices services=createKernelServicesBuilder(additionalInitialization).setSubsystemXml(subsystemXml).build();
   ModelNode model=services.readWholeModel();
   assertFalse(additionalInitialization.extensionAdded);
-  assertTrue(model.get(SUBSYSTEM,MessagingExtension.SUBSYSTEM_NAME).isDefined());
+  assertTrue(model.get(SUBSYSTEM,SUBSYSTEM_NAME).isDefined());
   assertFalse(model.get(SUBSYSTEM,MESSAGING_ACTIVEMQ_SUBSYSTEM_NAME).isDefined());
   ModelNode migrateOp=new ModelNode();
   migrateOp.get(OP).set("migrate");
   migrateOp.get("add-legacy-entries").set(addLegacyEntries);
-  migrateOp.get(OP_ADDR).add(SUBSYSTEM,MessagingExtension.SUBSYSTEM_NAME);
-  checkOutcome(services.executeOperation(migrateOp));
+  migrateOp.get(OP_ADDR).add(SUBSYSTEM,SUBSYSTEM_NAME);
+  ModelNode response=services.executeOperation(migrateOp);
+  System.out.println("response = " + response);
+  checkOutcome(response);
+  ModelNode warnings=response.get(RESULT,"migration-warnings");
+  int expectedNumberOfWarnings=6 + 2 + 5+ 2+ 2+ 1+ 1+ 1;
+  if (addLegacyEntries) {
+    expectedNumberOfWarnings+=1;
+  }
+  assertEquals(warnings.toString(),expectedNumberOfWarnings,warnings.asList().size());
   model=services.readWholeModel();
   assertTrue(additionalInitialization.extensionAdded);
-  assertFalse(model.get(SUBSYSTEM,MessagingExtension.SUBSYSTEM_NAME).isDefined());
+  assertFalse(model.get(SUBSYSTEM,SUBSYSTEM_NAME).isDefined());
   assertTrue(model.get(SUBSYSTEM,MESSAGING_ACTIVEMQ_SUBSYSTEM_NAME).isDefined());
   ModelNode newSubsystem=model.get(SUBSYSTEM,MESSAGING_ACTIVEMQ_SUBSYSTEM_NAME);
   ModelNode newServer=newSubsystem.get("server","default");
   assertNotNull(newServer);
   assertTrue(newServer.isDefined());
+  assertEquals("STRICT",newServer.get("cluster-connection","cc2","message-load-balancing-type").asString());
+  assertEquals("ON_DEMAND",newServer.get("cluster-connection","cc3","message-load-balancing-type").asString());
   if (addLegacyEntries) {
     ModelNode jmsQueueLegacyEntries=newServer.get("jms-queue","testQueue","legacy-entries");
     assertTrue(jmsQueueLegacyEntries.toJSONString(true),jmsQueueLegacyEntries.isDefined());

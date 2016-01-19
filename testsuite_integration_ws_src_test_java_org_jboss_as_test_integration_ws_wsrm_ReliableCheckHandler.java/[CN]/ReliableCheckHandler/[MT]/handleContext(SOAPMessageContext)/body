@@ -1,0 +1,71 @@
+{
+  Boolean outboundProperty=(Boolean)smc.get(MessageContext.MESSAGE_OUTBOUND_PROPERTY);
+  SOAPMessage message=smc.getMessage();
+  if (outboundProperty.booleanValue()) {
+    log.debug("Outgoing message:");
+  }
+ else {
+    log.debug("Incoming message:");
+  }
+  log.debug("-----------");
+  try {
+    JBossLoggingOutputStream os=new JBossLoggingOutputStream(log,Level.DEBUG);
+    message.writeTo(os);
+    os.flush();
+    log.debug("");
+  }
+ catch (  Exception e) {
+    log.debug("Exception in handler: " + e);
+  }
+  log.debug("-----------");
+  SOAPElement firstBodyElement;
+  try {
+switch (status % 4) {
+case 0:
+      @SuppressWarnings("unchecked") Iterator<SOAPElement> it=(Iterator<SOAPElement>)message.getSOAPBody().getChildElements();
+    if (it.hasNext()) {
+      firstBodyElement=it.next();
+      final QName createSequenceQName=new QName("http://schemas.xmlsoap.org/ws/2005/02/rm","CreateSequence");
+      if (!createSequenceQName.equals(firstBodyElement.getElementQName())) {
+        throw new WebServiceException("CreateSequence in soap body was expected, but it contains '" + firstBodyElement.getElementQName() + "'");
+      }
+      status++;
+    }
+ else {
+      verifySequenceAcknowledgement(message);
+    }
+  break;
+case 1:
+firstBodyElement=(SOAPElement)message.getSOAPBody().getChildElements().next();
+final QName createSequenceResponseQName=new QName("http://schemas.xmlsoap.org/ws/2005/02/rm","CreateSequenceResponse");
+if (!createSequenceResponseQName.equals(firstBodyElement.getElementQName())) {
+throw new WebServiceException("CreateSequenceResponse in soap body was expected, but it contains '" + firstBodyElement.getElementQName() + "'");
+}
+status++;
+break;
+case 2:
+Iterator headerElements=message.getSOAPHeader().getChildElements();
+boolean found=false;
+final QName sequenceQName=new QName("http://schemas.xmlsoap.org/ws/2005/02/rm","Sequence");
+while (headerElements.hasNext()) {
+SOAPElement soapElement=(SOAPElement)headerElements.next();
+if (sequenceQName.equals(soapElement.getElementQName())) {
+found=true;
+}
+}
+if (!found) {
+throw new WebServiceException("wsrm:Sequence is not present in soap header");
+}
+status++;
+break;
+case 3:
+if (verifySequenceAcknowledgement(message)) {
+status++;
+}
+break;
+}
+}
+ catch (SOAPException ex) {
+throw new WebServiceException(ex.getMessage(),ex);
+}
+}

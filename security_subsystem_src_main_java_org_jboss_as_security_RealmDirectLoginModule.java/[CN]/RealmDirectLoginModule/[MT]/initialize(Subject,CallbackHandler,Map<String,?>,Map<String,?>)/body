@@ -17,29 +17,34 @@
     chosenMech=AuthMechanism.PLAIN;
   }
  else {
-    throw SecurityLogger.ROOT_LOGGER.noPasswordValidationAvailable(realm);
+    chosenMech=authMechs.iterator().next();
   }
-  Map<String,String> mechOpts=securityRealm.getMechanismConfig(chosenMech);
-  if (mechOpts.containsKey(VERIFY_PASSWORD_CALLBACK_SUPPORTED) && Boolean.parseBoolean(mechOpts.get(VERIFY_PASSWORD_CALLBACK_SUPPORTED))) {
-    validationMode=ValidationMode.VALIDATION;
-  }
+  if (chosenMech == AuthMechanism.DIGEST || chosenMech == AuthMechanism.PLAIN) {
+    Map<String,String> mechOpts=securityRealm.getMechanismConfig(chosenMech);
+    if (mechOpts.containsKey(VERIFY_PASSWORD_CALLBACK_SUPPORTED) && Boolean.parseBoolean(mechOpts.get(VERIFY_PASSWORD_CALLBACK_SUPPORTED))) {
+      validationMode=ValidationMode.VALIDATION;
+    }
  else {
-    if (chosenMech == AuthMechanism.DIGEST) {
-      if (mechOpts.containsKey(DIGEST_PLAIN_TEXT) && Boolean.parseBoolean(mechOpts.get(DIGEST_PLAIN_TEXT))) {
+      if (chosenMech == AuthMechanism.DIGEST) {
+        if (mechOpts.containsKey(DIGEST_PLAIN_TEXT) && Boolean.parseBoolean(mechOpts.get(DIGEST_PLAIN_TEXT))) {
+          validationMode=ValidationMode.PASSWORD;
+        }
+ else {
+          validationMode=ValidationMode.DIGEST;
+          try {
+            hashUtil=new UsernamePasswordHashUtil();
+          }
+ catch (          NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+          }
+        }
+      }
+ else {
         validationMode=ValidationMode.PASSWORD;
       }
- else {
-        validationMode=ValidationMode.DIGEST;
-        try {
-          hashUtil=new UsernamePasswordHashUtil();
-        }
- catch (        NoSuchAlgorithmException e) {
-          throw new IllegalStateException(e);
-        }
-      }
     }
+  }
  else {
-      validationMode=ValidationMode.PASSWORD;
-    }
+    validationMode=ValidationMode.NONE;
   }
 }
