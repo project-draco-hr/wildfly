@@ -1,0 +1,29 @@
+{
+  if (jobsStopped.compareAndSet(false,true)) {
+    final ClassLoader current=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
+    try {
+      WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(classLoader);
+      final JobOperator jobOperator=BatchRuntime.getJobOperator();
+      final Collection<String> jobNames=getJobNames(jobOperator);
+      for (      String jobName : jobNames) {
+        final List<Long> runningJobs=jobOperator.getRunningExecutions(jobName);
+        for (        Long id : runningJobs) {
+          try {
+            BatchLogger.LOGGER.stoppingJob(id,jobName,deploymentName);
+            jobOperator.stop(id);
+            if (queueForRestart) {
+              stoppedIds.add(id);
+            }
+          }
+ catch (          Exception e) {
+            BatchLogger.LOGGER.stoppingJobFailed(e,id,jobName,deploymentName);
+          }
+        }
+      }
+    }
+  finally {
+      WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(current);
+      jobsStopped.set(false);
+    }
+  }
+}
