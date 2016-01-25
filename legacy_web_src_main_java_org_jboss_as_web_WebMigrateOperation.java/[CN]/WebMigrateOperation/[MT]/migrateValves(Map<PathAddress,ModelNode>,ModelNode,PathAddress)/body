@@ -1,7 +1,28 @@
 {
   if (newAddOp.hasDefined(WebValveDefinition.CLASS_NAME.getName())) {
     String valveClassName=newAddOp.get(WebValveDefinition.CLASS_NAME.getName()).asString();
-    if (VALVES_TO_FILTERS.containsKey(valveClassName)) {
+    if (valveClassName.equals("org.apache.catalina.valves.CrawlerSessionManagerValve")) {
+      PathAddress crawlerAddress=pathAddress(pathElement(SUBSYSTEM,UndertowExtension.SUBSYSTEM_NAME),pathElement(Constants.SERVLET_CONTAINER,"default"),pathElement(Constants.SETTING,Constants.CRAWLER_SESSION_MANAGEMENT));
+      ModelNode crawlerAdd=createAddOperation(crawlerAddress);
+      if (newAddOp.hasDefined(WebValveDefinition.PARAMS.getName())) {
+        ModelNode params=newAddOp.get(WebValveDefinition.PARAMS.getName());
+        if (params.hasDefined("crawlerUserAgents")) {
+          crawlerAdd.get(Constants.USER_AGENTS).set(params.get("crawlerUserAgents"));
+        }
+        if (params.hasDefined("sessionInactiveInterval")) {
+          crawlerAdd.get(Constants.SESSION_TIMEOUT).set(params.get("sessionInactiveInterval"));
+        }
+      }
+      newAddOperations.put(crawlerAddress,crawlerAdd);
+    }
+ else     if (valveClassName.equals("org.apache.catalina.valves.RequestDumperValve")) {
+      newAddOperations.putIfAbsent(pathAddress(UndertowExtension.SUBSYSTEM_PATH,PATH_FILTERS),createAddOperation(pathAddress(UndertowExtension.SUBSYSTEM_PATH,PATH_FILTERS)));
+      PathAddress filterAddress=pathAddress(UndertowExtension.SUBSYSTEM_PATH,PATH_FILTERS,pathElement(ExpressionFilterDefinition.INSTANCE.getPathElement().getKey(),address.getLastElement().getValue()));
+      ModelNode filterAdd=createAddOperation(filterAddress);
+      filterAdd.get(ExpressionFilterDefinition.EXPRESSION.getName()).set("dump-request");
+      newAddOperations.put(filterAddress,filterAdd);
+    }
+ else     if (VALVES_TO_FILTERS.containsKey(valveClassName)) {
       newAddOperations.putIfAbsent(pathAddress(UndertowExtension.SUBSYSTEM_PATH,PATH_FILTERS),createAddOperation(pathAddress(UndertowExtension.SUBSYSTEM_PATH,PATH_FILTERS)));
       PathAddress filterAddress=pathAddress(UndertowExtension.SUBSYSTEM_PATH,PATH_FILTERS,pathElement(CustomFilterDefinition.INSTANCE.getPathElement().getKey(),address.getLastElement().getValue()));
       if (!newAddOperations.containsKey(filterAddress)) {
