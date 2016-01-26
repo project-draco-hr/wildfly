@@ -1,33 +1,25 @@
 {
-  boolean newGroup=false;
-  boolean success=false;
   UUID group=CURRENT_GROUP.get();
-  Batch batch=this.manager.getBatcher().createBatch();
-  try {
-    if (group == null) {
-      newGroup=true;
-      group=this.manager.getGroupIdentifierFactory().createIdentifier();
-      CURRENT_GROUP.set(group);
-    }
+  boolean newGroup=(group == null);
+  if (newGroup) {
+    group=this.manager.getGroupIdentifierFactory().createIdentifier();
+    CURRENT_GROUP.set(group);
+  }
+  try (Batch batch=this.manager.getBatcher().createBatch()){
     try {
       V instance=this.factory.createInstance();
       K id=instance.getId();
       this.manager.createBean(id,group,instance).close();
-      success=true;
       return instance;
     }
-  finally {
-      if (newGroup) {
-        CURRENT_GROUP.remove();
-      }
+ catch (    RuntimeException|Error e) {
+      batch.discard();
+      throw e;
     }
   }
   finally {
-    if (success) {
-      batch.close();
-    }
- else {
-      batch.discard();
+    if (newGroup) {
+      CURRENT_GROUP.remove();
     }
   }
 }
