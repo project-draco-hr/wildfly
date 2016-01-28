@@ -3,7 +3,7 @@
     throw UndertowMessages.MESSAGES.couldNotFindSessionCookieConfig();
   }
   Batcher<Batch> batcher=this.manager.getBatcher();
-  Batch batch=batcher.createBatch();
+  @SuppressWarnings("resource") Batch batch=batcher.createBatch();
   try {
     String id=config.findSessionId(exchange);
     if (id == null) {
@@ -15,18 +15,11 @@
       batch.close();
       return null;
     }
-    return new DistributableSession(this,session,config,batch);
+    return new DistributableSession(this,session,config,batcher.suspendBatch());
   }
  catch (  RuntimeException|Error e) {
-    if (batch.isActive()) {
-      batch.discard();
-      batch.close();
-    }
+    batch.discard();
+    batch.close();
     throw e;
-  }
- finally {
-    if (batch.isActive()) {
-      batcher.suspendBatch();
-    }
   }
 }
