@@ -1,23 +1,17 @@
 {
   Batcher<Batch> batcher=this.manager.getBatcher();
-  Batch batch=batcher.createBatch();
+  @SuppressWarnings("resource") Batch batch=batcher.createBatch();
   try {
     SSO<AuthenticatedSession,String,Void> sso=this.manager.findSSO(id);
     if (sso == null) {
-      batch.discard();
+      batch.close();
       return null;
     }
-    return new DistributableSingleSignOn(sso,this.registry,batcher,batch);
+    return new DistributableSingleSignOn(sso,this.registry,batcher,batcher.suspendBatch());
   }
  catch (  RuntimeException|Error e) {
-    if (batch.isActive()) {
-      batch.discard();
-    }
+    batch.discard();
+    batch.close();
     throw e;
-  }
- finally {
-    if (batch.isActive()) {
-      batcher.suspendBatch();
-    }
   }
 }
