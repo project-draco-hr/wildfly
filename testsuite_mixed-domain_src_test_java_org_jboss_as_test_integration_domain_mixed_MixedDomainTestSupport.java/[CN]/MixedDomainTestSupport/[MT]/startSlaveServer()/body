@@ -1,0 +1,34 @@
+{
+  DomainClient client=getDomainMasterLifecycleUtil().getDomainClient();
+  PathElement hostElement=PathElement.pathElement("host","slave");
+  try {
+    PathAddress pa=PathAddress.pathAddress(hostElement,PathElement.pathElement("server-config","server-one"));
+    DomainTestUtils.executeForResult(Util.getUndefineAttributeOperation(pa,"auto-start"),client);
+    DomainTestUtils.executeForResult(Util.createEmptyOperation("start",pa),client);
+  }
+ catch (  IOException|MgmtOperationException e) {
+    throw new RuntimeException(e);
+  }
+  long timeout=TimeoutUtil.adjust(20000);
+  long expired=System.currentTimeMillis() + timeout;
+  ModelNode op=Util.getReadAttributeOperation(PathAddress.pathAddress(hostElement,PathElement.pathElement("server","server-one")),"server-state");
+  do {
+    try {
+      ModelNode state=DomainTestUtils.executeForResult(op,client);
+      if ("running".equalsIgnoreCase(state.asString())) {
+        return;
+      }
+    }
+ catch (    IOException|MgmtOperationException e) {
+    }
+    try {
+      TimeUnit.MILLISECONDS.sleep(250L);
+    }
+ catch (    InterruptedException e) {
+      Thread.currentThread().interrupt();
+      Assert.fail();
+    }
+  }
+ while (System.currentTimeMillis() < expired);
+  Assert.fail("Slave server-one did not start within " + timeout + " ms");
+}
