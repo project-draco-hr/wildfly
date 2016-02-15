@@ -24,6 +24,23 @@ ModelNode filterAdd=createAddOperation(filterAddress);
 filterAdd.get(ExpressionFilterDefinition.EXPRESSION.getName()).set("dump-request");
 newAddOperations.put(filterAddress,filterAdd);
 break;
+case "org.apache.catalina.valves.StuckThreadDetectionValve":
+newAddOperations.putIfAbsent(pathAddress(UndertowExtension.SUBSYSTEM_PATH,PATH_FILTERS),createAddOperation(pathAddress(UndertowExtension.SUBSYSTEM_PATH,PATH_FILTERS)));
+PathAddress filterAddressStuckThread=pathAddress(UndertowExtension.SUBSYSTEM_PATH,PATH_FILTERS,pathElement(ExpressionFilterDefinition.INSTANCE.getPathElement().getKey(),valveName));
+ModelNode filterAddStuckThread=createAddOperation(filterAddressStuckThread);
+StringBuilder expressionStruckThread=new StringBuilder("stuck-thread-detector");
+if (newAddOp.hasDefined(WebValveDefinition.PARAMS.getName())) {
+ModelNode params=newAddOp.get(WebValveDefinition.PARAMS.getName());
+if (params.hasDefined("threshold")) {
+expressionStruckThread.append("(threshhold='").append(params.get("threshold").asInt()).append("')");
+}
+if (params.hasDefined("interruptThreadThreshold")) {
+warnings.add(WebLogger.ROOT_LOGGER.couldNotMigrateValveAttribute("interruptThreadThreshold",valveName));
+}
+}
+filterAddStuckThread.get(ExpressionFilterDefinition.EXPRESSION.getName()).set(expressionStruckThread.toString());
+newAddOperations.put(filterAddressStuckThread,filterAddStuckThread);
+break;
 case "org.apache.catalina.valves.AccessLogValve":
 newAddOp.get(WebAccessLogDefinition.EXTENDED.getName()).set(false);
 migrateAccessLogValve(newAddOperations,newAddOp,valveName,warnings);
@@ -54,9 +71,15 @@ warnings.add(WebLogger.ROOT_LOGGER.couldNotMigrateValveAttribute("httpServerPort
 if (params.hasDefined("httpsServerPort")) {
 warnings.add(WebLogger.ROOT_LOGGER.couldNotMigrateValveAttribute("httpsServerPort",valveName));
 }
+if (params.hasDefined("proxiesHeader")) {
+warnings.add(WebLogger.ROOT_LOGGER.couldNotMigrateValveAttribute("proxiesHeader",valveName));
+}
+if (params.hasDefined("protocolHeaderHttpsValue")) {
+warnings.add(WebLogger.ROOT_LOGGER.couldNotMigrateValveAttribute("protocolHeaderHttpsValue",valveName));
+}
 boolean trustedProxies=false;
 if (params.hasDefined("trustedProxies")) {
-expression.append("regexp(pattern=\"").append(params.get("trustedProxies").asString()).append("\", value=%{i, x-forwarded-for}, full-match=true)");
+expression.append("regex(pattern=\"").append(params.get("trustedProxies").asString()).append("\", value=%{i,x-forwarded-for}, full-match=true)");
 trustedProxies=true;
 }
 String internalProxies;
@@ -69,8 +92,8 @@ internalProxies="10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{
 if (trustedProxies) {
 expression.append(" and ");
 }
-expression.append("regexp(pattern=\"").append(internalProxies).append("\", value=%{i, x-forwarded-for}, full-match=true)");
-expression.append(" -> { proxy-peer-address(); }");
+expression.append("regex(pattern=\"").append(internalProxies).append("\", value=%{i,x-forwarded-for}, full-match=true)");
+expression.append(" -> proxy-peer-address");
 createExpressionFilter(newAddOperations,valveName,expression.toString());
 }
 break;
