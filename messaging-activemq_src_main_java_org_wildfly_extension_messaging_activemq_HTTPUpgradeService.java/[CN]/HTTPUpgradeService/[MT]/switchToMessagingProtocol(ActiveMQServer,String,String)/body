@@ -3,14 +3,19 @@
     @Override public void handleEvent(    final StreamConnection connection){
       MessagingLogger.ROOT_LOGGER.debugf("Switching to %s protocol for %s http-acceptor",protocolName,acceptorName);
       RemotingService remotingService=activemqServer.getRemotingService();
-      if (!remotingService.isStarted()) {
+      if (!remotingService.isStarted() || remotingService.isPaused()) {
         IoUtils.safeClose(connection);
         return;
       }
       NettyAcceptor acceptor=(NettyAcceptor)remotingService.getAcceptor(acceptorName);
       SocketChannel channel=new WrappingXnioSocketChannel(connection);
-      acceptor.transfer(channel);
-      connection.getSourceChannel().resumeReads();
+      try {
+        acceptor.transfer(channel);
+        connection.getSourceChannel().resumeReads();
+      }
+ catch (      IllegalStateException e) {
+        IoUtils.safeClose(connection);
+      }
     }
   }
 ;
