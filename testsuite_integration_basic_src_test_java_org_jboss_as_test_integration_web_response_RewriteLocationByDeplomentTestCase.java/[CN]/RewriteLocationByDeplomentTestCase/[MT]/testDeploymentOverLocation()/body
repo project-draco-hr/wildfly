@@ -1,0 +1,30 @@
+{
+  HttpResponse response=getResponse("/test");
+  Assert.assertEquals(404,response.getStatusLine().getStatusCode());
+  ModelNode op=ModelUtil.createOpNode("subsystem=undertow/server=default-server/host=default-host","add");
+  op.get("address").add("location","/test");
+  op.get("handler").set("welcome-content");
+  executeOperation(op);
+  try {
+    ServerReload.executeReloadAndWaitForCompletion(getModelControllerClient());
+    response=getResponse("/test");
+    Assert.assertEquals(200,response.getStatusLine().getStatusCode());
+    Assert.assertTrue("Expected to receive welcome page, but content length is 0",response.getEntity().getContentLength() > 0);
+    deployer.deploy("app");
+    response=getResponse("/test");
+    Assert.assertEquals(200,response.getStatusLine().getStatusCode());
+    Assert.assertTrue("Expected to receive servlet response without any content",response.getEntity().getContentLength() == 0);
+    deployer.undeploy("app");
+    response=getResponse("/test");
+    Assert.assertEquals(200,response.getStatusLine().getStatusCode());
+    Assert.assertTrue("Expected to receive welcome page, but content length is 0",response.getEntity().getContentLength() > 0);
+  }
+  finally {
+    op=ModelUtil.createOpNode("subsystem=undertow/server=default-server/host=default-host","remove");
+    op.get("address").add("location","/test");
+    executeOperation(op);
+    ServerReload.executeReloadAndWaitForCompletion(getModelControllerClient());
+    response=getResponse("/test");
+    Assert.assertEquals(404,response.getStatusLine().getStatusCode());
+  }
+}
