@@ -1,2 +1,32 @@
 {
+  PathAddress newAddress=pathAddress(UndertowExtension.SUBSYSTEM_PATH,DEFAULT_SERVER_PATH,pathElement(Constants.HOST,address.getLastElement().getValue()));
+  ModelNode add=createAddOperation(newAddress);
+  if (newAddOp.hasDefined(WebVirtualHostDefinition.ENABLE_WELCOME_ROOT.getName()) && newAddOp.get(WebVirtualHostDefinition.ENABLE_WELCOME_ROOT.getName()).asBoolean()) {
+    PathAddress welcomeAddress=pathAddress(newAddress,pathElement(Constants.LOCATION,"/"));
+    ModelNode welcomeAdd=createAddOperation(welcomeAddress);
+    welcomeAdd.get(Constants.HANDLER).set("welcome-content");
+    newAddOperations.put(welcomeAddress,welcomeAdd);
+  }
+  add.get(Constants.ALIAS).set(newAddOp.get(WebVirtualHostDefinition.ALIAS.getName()).clone());
+  add.get(Constants.DEFAULT_WEB_MODULE).set(newAddOp.get(WebVirtualHostDefinition.DEFAULT_WEB_MODULE.getName()));
+  newAddOperations.put(newAddress,add);
+  final PathAddress customFilterAddresses=pathAddress(UndertowExtension.SUBSYSTEM_PATH,PATH_FILTERS,pathElement(CustomFilterDefinition.INSTANCE.getPathElement().getKey()));
+  final PathAddress expressionFilterAddresses=pathAddress(UndertowExtension.SUBSYSTEM_PATH,PATH_FILTERS,pathElement(ExpressionFilterDefinition.INSTANCE.getPathElement().getKey()));
+  List<PathAddress> filterAddresses=new ArrayList<>();
+  for (  PathAddress a : newAddOperations.keySet()) {
+    if (wildcardEquals(customFilterAddresses,a) || wildcardEquals(expressionFilterAddresses,a)) {
+      filterAddresses.add(a);
+    }
+  }
+  for (  PathAddress filterAddress : filterAddresses) {
+    PathAddress filterRefAddress=pathAddress(newAddress,pathElement(Constants.FILTER_REF,filterAddress.getLastElement().getValue()));
+    ModelNode filterRefAdd=createAddOperation(filterRefAddress);
+    newAddOperations.put(filterRefAddress,filterRefAdd);
+  }
+  PathAddress accessLogAddress=pathAddress(UndertowExtension.SUBSYSTEM_PATH,DEFAULT_SERVER_PATH,pathElement(Constants.HOST,address.getLastElement().getValue()),UndertowExtension.PATH_ACCESS_LOG);
+  if (newAddOperations.containsKey(VALVE_ACCESS_LOG_ADDRESS) && !newAddOperations.containsKey(accessLogAddress)) {
+    ModelNode operation=newAddOperations.get(VALVE_ACCESS_LOG_ADDRESS).clone();
+    operation.get(OP_ADDR).set(accessLogAddress.toModelNode());
+    newAddOperations.put(accessLogAddress,operation);
+  }
 }
