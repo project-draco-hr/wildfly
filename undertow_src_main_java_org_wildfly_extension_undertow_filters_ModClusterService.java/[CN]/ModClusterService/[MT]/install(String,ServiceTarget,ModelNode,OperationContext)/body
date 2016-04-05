@@ -14,13 +14,25 @@
     managementAccessPredicate=PredicateParser.parse(managementAccessPredicateString,ModClusterService.class.getClassLoader());
   }
   final ModelNode securityRealm=ModClusterDefinition.SECURITY_REALM.resolveModelAttribute(operationContext,model);
-  ModClusterService service=new ModClusterService(model,ModClusterDefinition.HEALTH_CHECK_INTERVAL.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.MAX_REQUEST_TIME.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.BROKEN_NODE_TIMEOUT.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.ADVERTISE_FREQUENCY.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.ADVERTISE_PATH.resolveModelAttribute(operationContext,model).asString(),ModClusterDefinition.ADVERTISE_PROTOCOL.resolveModelAttribute(operationContext,model).asString(),securityKey,managementAccessPredicate,ModClusterDefinition.CONNECTIONS_PER_THREAD.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.CACHED_CONNECTIONS_PER_THREAD.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.CONNECTION_IDLE_TIMEOUT.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.REQUEST_QUEUE_SIZE.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.USE_ALIAS.resolveModelAttribute(operationContext,model).asBoolean(),ModClusterDefinition.ENABLE_HTTP2.resolveModelAttribute(operationContext,model).asBoolean());
-  ServiceBuilder<FilterService> builder=serviceTarget.addService(UndertowService.FILTER.append(name),service);
-  builder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(ModClusterDefinition.MANAGEMENT_SOCKET_BINDING.resolveModelAttribute(operationContext,model).asString()),SocketBinding.class,service.managementSocketBinding);
-  builder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(ModClusterDefinition.ADVERTISE_SOCKET_BINDING.resolveModelAttribute(operationContext,model).asString()),SocketBinding.class,service.advertiseSocketBinding);
-  builder.addDependency(IOServices.WORKER.append(ModClusterDefinition.WORKER.resolveModelAttribute(operationContext,model).asString()),XnioWorker.class,service.workerInjectedValue);
-  if (securityRealm.isDefined()) {
-    SecurityRealm.ServiceUtil.addDependency(builder,service.securityRealm,securityRealm.asString(),false);
+  final ModelNode packetSizeNode=ModClusterDefinition.MAX_AJP_PACKET_SIZE.resolveModelAttribute(operationContext,model);
+  OptionMap.Builder builder=OptionMap.builder();
+  if (packetSizeNode.isDefined()) {
+    builder.set(UndertowOptions.MAX_AJP_PACKET_SIZE,packetSizeNode.asInt());
   }
-  return builder.install();
+  builder.set(UndertowOptions.ENABLE_HTTP2,ModClusterDefinition.ENABLE_HTTP2.resolveModelAttribute(operationContext,model).asBoolean());
+  ModClusterDefinition.HTTP2_ENABLE_PUSH.resolveOption(operationContext,model,builder);
+  ModClusterDefinition.HTTP2_HEADER_TABLE_SIZE.resolveOption(operationContext,model,builder);
+  ModClusterDefinition.HTTP2_INITIAL_WINDOW_SIZE.resolveOption(operationContext,model,builder);
+  ModClusterDefinition.HTTP2_MAX_CONCURRENT_STREAMS.resolveOption(operationContext,model,builder);
+  ModClusterDefinition.HTTP2_MAX_FRAME_SIZE.resolveOption(operationContext,model,builder);
+  ModClusterDefinition.HTTP2_MAX_HEADER_LIST_SIZE.resolveOption(operationContext,model,builder);
+  ModClusterService service=new ModClusterService(model,ModClusterDefinition.HEALTH_CHECK_INTERVAL.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.MAX_REQUEST_TIME.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.BROKEN_NODE_TIMEOUT.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.ADVERTISE_FREQUENCY.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.ADVERTISE_PATH.resolveModelAttribute(operationContext,model).asString(),ModClusterDefinition.ADVERTISE_PROTOCOL.resolveModelAttribute(operationContext,model).asString(),securityKey,managementAccessPredicate,ModClusterDefinition.CONNECTIONS_PER_THREAD.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.CACHED_CONNECTIONS_PER_THREAD.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.CONNECTION_IDLE_TIMEOUT.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.REQUEST_QUEUE_SIZE.resolveModelAttribute(operationContext,model).asInt(),ModClusterDefinition.USE_ALIAS.resolveModelAttribute(operationContext,model).asBoolean(),builder.getMap());
+  ServiceBuilder<FilterService> serviceBuilder=serviceTarget.addService(UndertowService.FILTER.append(name),service);
+  serviceBuilder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(ModClusterDefinition.MANAGEMENT_SOCKET_BINDING.resolveModelAttribute(operationContext,model).asString()),SocketBinding.class,service.managementSocketBinding);
+  serviceBuilder.addDependency(SocketBinding.JBOSS_BINDING_NAME.append(ModClusterDefinition.ADVERTISE_SOCKET_BINDING.resolveModelAttribute(operationContext,model).asString()),SocketBinding.class,service.advertiseSocketBinding);
+  serviceBuilder.addDependency(IOServices.WORKER.append(ModClusterDefinition.WORKER.resolveModelAttribute(operationContext,model).asString()),XnioWorker.class,service.workerInjectedValue);
+  if (securityRealm.isDefined()) {
+    SecurityRealm.ServiceUtil.addDependency(serviceBuilder,service.securityRealm,securityRealm.asString(),false);
+  }
+  return serviceBuilder.install();
 }
