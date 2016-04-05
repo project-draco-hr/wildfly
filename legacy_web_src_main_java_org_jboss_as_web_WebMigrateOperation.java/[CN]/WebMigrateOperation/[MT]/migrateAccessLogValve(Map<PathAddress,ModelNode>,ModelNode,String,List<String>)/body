@@ -1,0 +1,31 @@
+{
+  ModelNode add=createAddOperation(VALVE_ACCESS_LOG_ADDRESS);
+  final ModelNode params=newAddOp.get(WebValveDefinition.PARAMS.getName());
+  final ModelNode patternNode=params.get(Constants.PATTERN);
+  if (patternNode.isDefined()) {
+    add.get(Constants.PATTERN).set(migrateAccessLogPattern(patternNode.asString()));
+  }
+  add.get(Constants.PREFIX).set(params.get(Constants.PREFIX).clone());
+  add.get(Constants.SUFFIX).set(params.get(Constants.SUFFIX).clone());
+  add.get(Constants.ROTATE).set(params.get("rotatable").clone());
+  add.get(Constants.EXTENDED).set(newAddOp.get(Constants.EXTENDED).clone());
+  if (params.hasDefined(Constants.DIRECTORY)) {
+    add.get(Constants.DIRECTORY).set(params.get(Constants.DIRECTORY).clone());
+  }
+  if (params.hasDefined("conditionIf")) {
+    add.get(Constants.PREDICATE).set("exists(%{r," + params.get("conditionIf").asString() + "})");
+  }
+  if (params.hasDefined("conditionUnless")) {
+    add.get(Constants.PREDICATE).set("not exists(%{r," + params.get("conditionUnless").asString() + "})");
+  }
+  if (params.hasDefined("condition")) {
+    add.get(Constants.PREDICATE).set("not exists(%{r," + params.get("condition").asString() + "})");
+  }
+  final String[] unsupportedConfigParams=new String[]{"resolveHosts","fileDateFormat","renameOnRotate","encoding","locale","requestAttributesEnabled","buffered"};
+  for (  String unsupportedConfigParam : unsupportedConfigParams) {
+    if (params.hasDefined(unsupportedConfigParam)) {
+      warnings.add(WebLogger.ROOT_LOGGER.couldNotMigrateValveAttribute(unsupportedConfigParam,valveName));
+    }
+  }
+  newAddOperations.put(VALVE_ACCESS_LOG_ADDRESS,add);
+}

@@ -4,9 +4,21 @@
   if (maximumSet.isEmpty()) {
     maximumSet.add(new ImmediatePermissionFactory(new AllPermission()));
   }
+  final FactoryPermissionCollection maxPermissionCollection=new FactoryPermissionCollection(maximumSet.toArray(new PermissionFactory[maximumSet.size()]));
+  final StringBuilder failedPermissions=new StringBuilder();
+  for (  PermissionFactory factory : minimumSet) {
+    Permission permission=factory.construct();
+    if (!maxPermissionCollection.implies(permission)) {
+      failedPermissions.append("\n\t\t" + permission);
+    }
+  }
+  if (failedPermissions.length() > 0) {
+    throw SecurityManagerLogger.ROOT_LOGGER.invalidSubsystemConfiguration(failedPermissions);
+  }
   context.addStep(new AbstractDeploymentChainStep(){
     protected void execute(    DeploymentProcessorTarget processorTarget){
-      processorTarget.addDeploymentProcessor(Constants.SUBSYSTEM_NAME,Phase.PARSE,Phase.PARSE_PERMISSIONS,new PermissionsParseProcessor(minimumSet,maximumSet));
+      processorTarget.addDeploymentProcessor(Constants.SUBSYSTEM_NAME,Phase.PARSE,Phase.PARSE_PERMISSIONS,new PermissionsParserProcessor(minimumSet));
+      processorTarget.addDeploymentProcessor(Constants.SUBSYSTEM_NAME,Phase.POST_MODULE,Phase.POST_MODULE_PERMISSIONS_VALIDATION,new PermissionsValidationProcessor(maximumSet));
     }
   }
 ,OperationContext.Stage.RUNTIME);
