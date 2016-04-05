@@ -3,7 +3,28 @@
   for (  AttributeDefinition attr : EJB3SubsystemRootResourceDefinition.ATTRIBUTES) {
     attr.validateAndSet(operation,model);
   }
-  if (context.getProcessType().isServer()) {
-    context.addStep(new ValidateClusteredCacheRefHandler(),OperationContext.Stage.MODEL);
+  ModelNode defClustered=DEFAULT_CLUSTERED_SFSB_CACHE.validateOperation(operation);
+  if (defClustered.isDefined()) {
+    boolean setDefaultSfsbCache=true;
+    if (model.hasDefined(DEFAULT_SFSB_CACHE)) {
+      if (model.hasDefined(DEFAULT_SFSB_PASSIVATION_DISABLED_CACHE)) {
+        if (!defClustered.equals(model.get(DEFAULT_SFSB_CACHE))) {
+          if (context.getRunningMode() == RunningMode.ADMIN_ONLY) {
+            EjbLogger.ROOT_LOGGER.logInconsistentAttributeNotSupported(DEFAULT_CLUSTERED_SFSB_CACHE.getName(),DEFAULT_SFSB_CACHE);
+            setDefaultSfsbCache=false;
+          }
+ else {
+            throw EjbLogger.ROOT_LOGGER.inconsistentAttributeNotSupported(DEFAULT_CLUSTERED_SFSB_CACHE.getName(),DEFAULT_SFSB_CACHE);
+          }
+        }
+      }
+ else {
+        model.get(DEFAULT_SFSB_PASSIVATION_DISABLED_CACHE).set(model.get(DEFAULT_SFSB_CACHE));
+      }
+    }
+    if (setDefaultSfsbCache) {
+      model.get(DEFAULT_SFSB_CACHE).set(defClustered);
+      EjbLogger.ROOT_LOGGER.remappingCacheAttributes(context.getCurrentAddress().toCLIStyleString(),defClustered,model.get(DEFAULT_SFSB_PASSIVATION_DISABLED_CACHE));
+    }
   }
 }
