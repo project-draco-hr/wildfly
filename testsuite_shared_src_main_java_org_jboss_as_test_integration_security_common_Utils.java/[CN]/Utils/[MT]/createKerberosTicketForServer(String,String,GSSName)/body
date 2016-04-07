@@ -1,0 +1,27 @@
+{
+  Objects.requireNonNull(serverName);
+  final Krb5LoginConfiguration krb5Configuration=new Krb5LoginConfiguration(getLoginConfiguration());
+  try {
+    Configuration.setConfiguration(krb5Configuration);
+    final LoginContext lc=loginWithKerberos(krb5Configuration,user,pass);
+    try {
+      return Subject.doAs(lc.getSubject(),new PrivilegedExceptionAction<byte[]>(){
+        public byte[] run() throws Exception {
+          final GSSManager manager=GSSManager.getInstance();
+          final Oid oid=new Oid(OID_KERBEROS_V5);
+          final GSSContext gssContext=manager.createContext(serverName.canonicalize(oid),oid,null,60);
+          gssContext.requestMutualAuth(true);
+          gssContext.requestCredDeleg(true);
+          return gssContext.initSecContext(new byte[0],0,0);
+        }
+      }
+);
+    }
+  finally {
+      lc.logout();
+    }
+  }
+  finally {
+    krb5Configuration.resetConfiguration();
+  }
+}
