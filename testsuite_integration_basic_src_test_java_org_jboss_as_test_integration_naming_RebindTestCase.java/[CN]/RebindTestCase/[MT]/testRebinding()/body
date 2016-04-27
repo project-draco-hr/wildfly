@@ -1,0 +1,70 @@
+{
+  final String name="java:global/rebind";
+  final String lookup="java:global/lookup";
+  final ModelNode address=new ModelNode();
+  address.add(SUBSYSTEM,NamingExtension.SUBSYSTEM_NAME);
+  address.add(BINDING,name);
+  final ModelNode lookupAddress=new ModelNode();
+  lookupAddress.add(SUBSYSTEM,NamingExtension.SUBSYSTEM_NAME);
+  lookupAddress.add(BINDING,lookup);
+  ModelNode operation=new ModelNode();
+  operation.get(OP).set(ADD);
+  operation.get(OP_ADDR).set(address);
+  operation.get(BINDING_TYPE).set(SIMPLE);
+  operation.get(VALUE).set("http://localhost");
+  operation.get(TYPE).set(URL.class.getName());
+  try {
+    ModelNode addResult=managementClient.getControllerClient().execute(operation);
+    Assert.assertFalse(addResult.get(FAILURE_DESCRIPTION).toString(),addResult.get(FAILURE_DESCRIPTION).isDefined());
+    Assert.assertEquals("http://localhost",bean.lookupBind(name).toString());
+    operation=new ModelNode();
+    operation.get(OP).set("rebind");
+    operation.get(OP_ADDR).set(address);
+    operation.get(BINDING_TYPE).set(SIMPLE);
+    operation.get(VALUE).set("http://localhost2");
+    operation.get(TYPE).set(URL.class.getName());
+    addResult=managementClient.getControllerClient().execute(operation);
+    Assert.assertFalse(addResult.get(FAILURE_DESCRIPTION).toString(),addResult.get(FAILURE_DESCRIPTION).isDefined());
+    Assert.assertEquals("http://localhost2",bean.lookupBind(name).toString());
+    operation=new ModelNode();
+    operation.get(OP).set("rebind");
+    operation.get(OP_ADDR).set(address);
+    operation.get(BINDING_TYPE).set(SIMPLE);
+    operation.get(VALUE).set("2");
+    operation.get(TYPE).set(Integer.class.getName());
+    addResult=managementClient.getControllerClient().execute(operation);
+    Assert.assertFalse(addResult.get(FAILURE_DESCRIPTION).toString(),addResult.get(FAILURE_DESCRIPTION).isDefined());
+    Assert.assertEquals(2,bean.lookupBind(name));
+    operation=new ModelNode();
+    operation.get(OP).set(ADD);
+    operation.get(OP_ADDR).set(lookupAddress);
+    operation.get(BINDING_TYPE).set(SIMPLE);
+    String lookedUp="looked up";
+    operation.get(VALUE).set(lookedUp);
+    operation.get(TYPE).set(String.class.getName());
+    addResult=managementClient.getControllerClient().execute(operation);
+    Assert.assertFalse(addResult.get(FAILURE_DESCRIPTION).toString(),addResult.get(FAILURE_DESCRIPTION).isDefined());
+    operation=new ModelNode();
+    operation.get(OP).set("rebind");
+    operation.get(OP_ADDR).set(address);
+    operation.get(BINDING_TYPE).set(LOOKUP);
+    operation.get(LOOKUP).set(lookup);
+    addResult=managementClient.getControllerClient().execute(operation);
+    Assert.assertFalse(addResult.get(FAILURE_DESCRIPTION).toString(),addResult.get(FAILURE_DESCRIPTION).isDefined());
+    Assert.assertEquals(lookedUp,bean.lookupBind(name));
+    operation=new ModelNode();
+    operation.get(OP).set(READ_RESOURCE_OPERATION);
+    operation.get(OP_ADDR).set(address);
+    addResult=managementClient.getControllerClient().execute(operation);
+    Assert.assertFalse(addResult.get(FAILURE_DESCRIPTION).toString(),addResult.get(FAILURE_DESCRIPTION).isDefined());
+    Assert.assertEquals("java:global/lookup",addResult.get(RESULT).get(LOOKUP).asString());
+  }
+  finally {
+    final ModelNode bindingRemove=new ModelNode();
+    bindingRemove.get(OP).set(REMOVE);
+    bindingRemove.get(OP_ADDR).set(address);
+    bindingRemove.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+    final ModelNode removeResult=managementClient.getControllerClient().execute(bindingRemove);
+    Assert.assertFalse(removeResult.get(FAILURE_DESCRIPTION).toString(),removeResult.get(FAILURE_DESCRIPTION).isDefined());
+  }
+}
