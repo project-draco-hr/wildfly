@@ -1,14 +1,11 @@
 {
   String name=context.getCurrentAddress().getParent().getLastElement().getValue();
   ServiceTarget target=context.getServiceTarget();
-  String channel=ModelNodes.asString(CHANNEL.getDefinition().resolveModelAttribute(context,model),GroupServiceNameFactory.DEFAULT_GROUP);
+  String channel=ModelNodes.asString(CHANNEL.getDefinition().resolveModelAttribute(context,model));
   new JGroupsTransportBuilder(name).configure(context,model).build(target).setInitialMode(ServiceController.Mode.PASSIVE).install();
   new SiteBuilder(name).configure(context,model).build(target).setInitialMode(ServiceController.Mode.PASSIVE).install();
-  new BinderServiceBuilder<>(JGroupsBindingFactory.createChannelBinding(name),ChannelServiceName.CHANNEL.getServiceName(name),Channel.class).build(target).install();
-  new ChannelBuilder(name).build(target).setInitialMode(ServiceController.Mode.PASSIVE).install();
-  new AliasServiceBuilder<>(ChannelServiceName.FACTORY.getServiceName(name),ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(channel),ChannelFactory.class).build(target).setInitialMode(ServiceController.Mode.PASSIVE).install();
   for (  GroupAliasBuilderProvider provider : ServiceLoader.load(GroupAliasBuilderProvider.class,GroupAliasBuilderProvider.class.getClassLoader())) {
-    for (    Builder<?> builder : provider.getBuilders(name,channel)) {
+    for (    Builder<?> builder : provider.getBuilders(context.getCapabilityServiceSupport(),name,channel)) {
       builder.build(target).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
     }
   }

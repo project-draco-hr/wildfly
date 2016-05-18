@@ -2,50 +2,8 @@
   ResourceTransformationDescriptionBuilder builder=TransformationDescriptionBuilder.Factory.createSubsystemInstance();
   if (JGroupsModel.VERSION_3_0_0.requiresTransformation(version)) {
     builder.getAttributeBuilder().setDiscard(DiscardAttributeChecker.ALWAYS,Attribute.DEFAULT_CHANNEL.getDefinition()).end();
-    DynamicDiscardPolicy channelDiscardRejectPolicy=new DynamicDiscardPolicy(){
-      @Override public DiscardPolicy checkResource(      TransformationContext context,      PathAddress address){
-        String channelName=address.getLastElement().getValue();
-        PathAddress rootAddress=address.subAddress(0,address.size() - 2);
-        PathAddress subsystemAddress=rootAddress.append(PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM,"infinispan"));
-        Resource infinispanResource;
-        try {
-          infinispanResource=context.readResourceFromRoot(subsystemAddress);
-        }
- catch (        Resource.NoSuchResourceException ex) {
-          return DiscardPolicy.REJECT_AND_WARN;
-        }
-        ModelNode infinispanModel=Resource.Tools.readModel(infinispanResource);
-        if (infinispanModel.hasDefined("cache-container")) {
-          for (          ModelNode container : infinispanModel.get("cache-container").asList()) {
-            ModelNode cacheContainer=container.get(0);
-            if (cacheContainer.hasDefined("transport")) {
-              ModelNode transport=cacheContainer.get("transport").get("jgroups");
-              if (transport.hasDefined("channel")) {
-                String channel=transport.get("channel").asString();
-                if (channel.equals(channelName)) {
-                  return DiscardPolicy.SILENT;
-                }
-              }
- else {
-                ModelNode subsystem=context.readResourceFromRoot(address.subAddress(0,address.size() - 1)).getModel();
-                if (subsystem.hasDefined(Attribute.DEFAULT_CHANNEL.getDefinition().getName())) {
-                  if (subsystem.get(Attribute.DEFAULT_CHANNEL.getDefinition().getName()).asString().equals(channelName)) {
-                    return DiscardPolicy.SILENT;
-                  }
-                }
-              }
-            }
-          }
-        }
-        return DiscardPolicy.REJECT_AND_WARN;
-      }
-    }
-;
-    builder.addChildResource(ChannelResourceDefinition.WILDCARD_PATH,channelDiscardRejectPolicy);
   }
- else {
-    ChannelResourceDefinition.buildTransformation(version,builder);
-  }
+  ChannelResourceDefinition.buildTransformation(version,builder);
   StackResourceDefinition.buildTransformation(version,builder);
   return builder.build();
 }
