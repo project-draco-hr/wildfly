@@ -4,17 +4,12 @@
   builder.transport().transport(transport.transport()).distributedSyncTimeout(transport.distributedSyncTimeout()).clusterName(transport.clusterName()).machineId(transport.machineId()).rackId(transport.rackId()).siteId(transport.siteId());
   ModuleLoader moduleLoader=this.loader.getValue();
   builder.serialization().classResolver(ModularClassResolver.getInstance(moduleLoader));
-  try {
-    ClassLoader loader=moduleLoader.loadModule(this.module).getClassLoader();
-    builder.classLoader(loader);
-    int id=Ids.MAX_ID;
-    for (    Externalizer<?> externalizer : ServiceLoader.load(Externalizer.class,loader)) {
-      InfinispanLogger.ROOT_LOGGER.debugf("Cache container %s will use an externalizer for %s",this.name,externalizer.getTargetClass().getName());
-      builder.serialization().addAdvancedExternalizer(id++,new AdvancedExternalizerAdapter<>(externalizer));
-    }
-  }
- catch (  ModuleLoadException e) {
-    throw new IllegalStateException(e);
+  Module module=this.module.getValue();
+  builder.classLoader(module.getClassLoader());
+  int id=Ids.MAX_ID;
+  for (  Externalizer<?> externalizer : module.loadService(Externalizer.class)) {
+    InfinispanLogger.ROOT_LOGGER.debugf("Cache container %s will use an externalizer for %s",this.name,externalizer.getTargetClass().getName());
+    builder.serialization().addAdvancedExternalizer(id++,new AdvancedExternalizerAdapter<>(externalizer));
   }
   builder.transport().transportThreadPool().read(this.pools.get(ThreadPoolResourceDefinition.TRANSPORT).getValue());
   builder.transport().remoteCommandThreadPool().read(this.pools.get(ThreadPoolResourceDefinition.REMOTE_COMMAND).getValue());
@@ -24,6 +19,7 @@
   builder.stateTransferThreadPool().read(this.pools.get(ThreadPoolResourceDefinition.STATE_TRANSFER).getValue());
   builder.persistenceThreadPool().read(this.pools.get(ThreadPoolResourceDefinition.PERSISTENCE).getValue());
   builder.shutdown().hookBehavior(ShutdownHookBehavior.DONT_REGISTER);
-  builder.globalJmxStatistics().enabled(this.statisticsEnabled).cacheManagerName(this.name).mBeanServerLookup(new MBeanServerProvider(this.server.getValue())).jmxDomain(CacheContainerServiceName.CACHE_CONTAINER.getServiceName(CacheServiceName.DEFAULT_CACHE).getParent().getCanonicalName()).allowDuplicateDomains(true);
+  builder.globalJmxStatistics().enabled(this.statisticsEnabled).cacheManagerName(this.name).mBeanServerLookup(new MBeanServerProvider(this.server.getValue())).jmxDomain("org.wildfly.clustering.infinispan").allowDuplicateDomains(true);
+  builder.site().read(this.site.getValue());
   return builder.build();
 }

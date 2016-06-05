@@ -4,17 +4,26 @@
   String containerName=containerAddress.getLastElement().getValue();
   String cacheName=cacheAddress.getLastElement().getValue();
   ServiceTarget target=context.getServiceTarget();
+  CapabilityServiceSupport support=context.getCapabilityServiceSupport();
+  ServiceName moduleServiceName=CacheComponent.MODULE.getServiceName(cacheAddress);
+  if (model.hasDefined(MODULE.getDefinition().getName())) {
+    new ModuleBuilder(moduleServiceName,MODULE).configure(context,model).build(target).install();
+  }
+ else {
+    new AliasServiceBuilder<>(moduleServiceName,CacheContainerComponent.MODULE.getServiceName(containerAddress),Module.class).build(target).install();
+  }
   this.builderFactory.createBuilder(cacheAddress).configure(context,model).build(target).setInitialMode(ServiceController.Mode.PASSIVE).install();
-  new CacheBuilder<>(containerName,cacheName).build(target).install();
-  new XAResourceRecoveryBuilder(containerName,cacheName).build(target).install();
-  BinderServiceBuilder<?> bindingBuilder=new BinderServiceBuilder<>(InfinispanBindingFactory.createCacheBinding(containerName,cacheName),CacheServiceName.CACHE.getServiceName(containerName,cacheName),Cache.class);
+  new CacheBuilder<>(CACHE.getServiceName(cacheAddress),containerName,cacheName).configure(context).build(target).install();
+  new XAResourceRecoveryBuilder(cacheAddress).build(target).install();
+  new BinderServiceBuilder<>(InfinispanBindingFactory.createCacheConfigurationBinding(containerName,cacheName),CONFIGURATION.getServiceName(cacheAddress),Configuration.class).build(target).install();
+  BinderServiceBuilder<?> bindingBuilder=new BinderServiceBuilder<>(InfinispanBindingFactory.createCacheBinding(containerName,cacheName),CACHE.getServiceName(cacheAddress),Cache.class);
   String jndiName=ModelNodes.asString(CacheResourceDefinition.Attribute.JNDI_NAME.getDefinition().resolveModelAttribute(context,model));
   if (jndiName != null) {
     bindingBuilder.alias(ContextNames.bindInfoFor(JndiNameFactory.parse(jndiName).getAbsoluteName()));
   }
   bindingBuilder.build(target).install();
   for (  CacheGroupBuilderProvider provider : ServiceLoader.load(this.providerClass,this.providerClass.getClassLoader())) {
-    for (    Builder<?> builder : provider.getBuilders(containerName,cacheName)) {
+    for (    Builder<?> builder : provider.getBuilders(support,containerName,cacheName)) {
       builder.build(target).install();
     }
   }
