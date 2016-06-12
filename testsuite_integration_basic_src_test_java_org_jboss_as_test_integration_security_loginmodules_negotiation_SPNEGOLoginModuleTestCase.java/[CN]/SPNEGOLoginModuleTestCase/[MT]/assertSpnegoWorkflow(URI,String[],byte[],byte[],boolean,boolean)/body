@@ -1,0 +1,30 @@
+{
+  try (final CloseableHttpClient httpClient=HttpClientBuilder.create().build()){
+    final HttpGet httpGet=new HttpGet(uri);
+    HttpResponse response=httpClient.execute(httpGet);
+    assertEquals(HttpServletResponse.SC_UNAUTHORIZED,response.getStatusLine().getStatusCode());
+    assertHttpHeader(response,HEADER_WWW_AUTHENTICATE,"Negotiate");
+    EntityUtils.consume(response.getEntity());
+    byte[] spnegoInitToken=KerberosTestUtils.generateSpnegoTokenInit(initMechToken,mechTypesOids);
+    httpGet.setHeader(HEADER_AUTHORIZATION,"Negotiate " + Base64.getEncoder().encodeToString(spnegoInitToken));
+    response=httpClient.execute(httpGet);
+    LOGGER.info("Negotiate response in HTTP header:\n" + KerberosTestUtils.dumpNegotiateHeader(response));
+    if (continuationExpected) {
+      assertEquals(HttpServletResponse.SC_UNAUTHORIZED,response.getStatusLine().getStatusCode());
+      assertHttpHeader(response,HEADER_WWW_AUTHENTICATE,HEADER_VAL_SELECT_KERBEROS_MECH);
+      EntityUtils.consume(response.getEntity());
+      byte[] spnegoRespToken=KerberosTestUtils.generateSpnegoTokenResp(responseToken);
+      httpGet.setHeader(HEADER_AUTHORIZATION,"Negotiate " + Base64.getEncoder().encodeToString(spnegoRespToken));
+      response=httpClient.execute(httpGet);
+      LOGGER.info("Negotiate response in HTTP header:\n" + KerberosTestUtils.dumpNegotiateHeader(response));
+    }
+    if (successExpected) {
+      assertEquals(HttpServletResponse.SC_OK,response.getStatusLine().getStatusCode());
+      assertEquals("Unexpected response body",SimpleSecuredServlet.RESPONSE_BODY,EntityUtils.toString(response.getEntity()));
+    }
+ else {
+      assertEquals(HttpServletResponse.SC_UNAUTHORIZED,response.getStatusLine().getStatusCode());
+      assertHttpHeader(response,HEADER_WWW_AUTHENTICATE,"Negotiate" + (continuationExpected ? "" : " oQcwBaADCgEC"));
+    }
+  }
+ }

@@ -1,0 +1,26 @@
+{
+  final DomainClient masterClient=support.getDomainMasterLifecycleUtil().createDomainClient();
+  final DomainClient slaveClient=support.getDomainSlaveLifecycleUtil().createDomainClient();
+  try {
+    final PathAddress newProfileAddress=PathAddress.pathAddress(PROFILE,"new-profile");
+    DomainTestUtils.executeForResult(Util.createAddOperation(newProfileAddress),masterClient);
+    final ModelNode clone=Util.createEmptyOperation(CLONE,newProfileAddress);
+    clone.get(TO_PROFILE).set("cloned");
+    DomainTestUtils.executeForResult(clone,masterClient);
+    final ModelNode readChildrenNames=Util.createEmptyOperation(READ_CHILDREN_NAMES_OPERATION,PathAddress.EMPTY_ADDRESS);
+    readChildrenNames.get(CHILD_TYPE).set(PROFILE);
+    ModelNode result=DomainTestUtils.executeForResult(readChildrenNames,slaveClient);
+    List<ModelNode> list=result.asList();
+    Assert.assertEquals(1,list.size());
+    Assert.assertEquals(list.toString(),"full-ha",list.get(0).asString());
+    DomainTestUtils.executeForResult(Util.getWriteAttributeOperation(PathAddress.pathAddress(SERVER_GROUP,"other-server-group"),PROFILE,"new-profile"),masterClient);
+    result=DomainTestUtils.executeForResult(readChildrenNames,slaveClient);
+    list=result.asList();
+    Assert.assertEquals(1,list.size());
+    Assert.assertEquals(list.toString(),"new-profile",list.get(0).asString());
+  }
+  finally {
+    IoUtils.safeClose(slaveClient);
+    IoUtils.safeClose(masterClient);
+  }
+}
