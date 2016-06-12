@@ -1,0 +1,42 @@
+{
+  PathAddress serverAddress=PathAddress.pathAddress(serverAddOperation.get(OP_ADDR));
+  ModelNode sharedStoreAttr=serverAddOperation.get(SHARED_STORE.getName());
+  ModelNode backupAttr=serverAddOperation.get(BACKUP.getName());
+  if (sharedStoreAttr.getType() == EXPRESSION || backupAttr.getType() == EXPRESSION) {
+    warnings.add(ROOT_LOGGER.couldNotMigrateHA(legacyAddress));
+    return;
+  }
+  boolean sharedStore=sharedStoreAttr.isDefined() ? sharedStoreAttr.asBoolean() : SHARED_STORE.getDefaultValue().asBoolean();
+  boolean backup=backupAttr.isDefined() ? backupAttr.asBoolean() : BACKUP.getDefaultValue().asBoolean();
+  ModelNode haPolicyAddOperation=createAddOperation();
+  final PathAddress haPolicyAddress;
+  if (sharedStore) {
+    if (backup) {
+      haPolicyAddress=serverAddress.append(HA_POLICY,"shared-store-slave");
+      setAndDiscard(haPolicyAddOperation,serverAddOperation,ALLOW_FAILBACK,"allow-failback");
+      setAndDiscard(haPolicyAddOperation,serverAddOperation,FAILOVER_ON_SHUTDOWN,"failover-on-server-shutdown");
+      discardFailbackDelay(serverAddOperation,warnings);
+    }
+ else {
+      haPolicyAddress=serverAddress.append(HA_POLICY,"shared-store-master");
+      setAndDiscard(haPolicyAddOperation,serverAddOperation,FAILOVER_ON_SHUTDOWN,"failover-on-server-shutdown");
+      discardFailbackDelay(serverAddOperation,warnings);
+    }
+  }
+ else {
+    if (backup) {
+      haPolicyAddress=serverAddress.append(HA_POLICY,"replication-slave");
+      setAndDiscard(haPolicyAddOperation,serverAddOperation,ALLOW_FAILBACK,"allow-failback");
+      setAndDiscard(haPolicyAddOperation,serverAddOperation,MAX_SAVED_REPLICATED_JOURNAL_SIZE,"max-saved-replicated-journal-size");
+      setAndDiscard(haPolicyAddOperation,serverAddOperation,BACKUP_GROUP_NAME,"group-name");
+      discardFailbackDelay(serverAddOperation,warnings);
+    }
+ else {
+      haPolicyAddress=serverAddress.append(HA_POLICY,"replication-master");
+      setAndDiscard(haPolicyAddOperation,serverAddOperation,CHECK_FOR_LIVE_SERVER,"check-for-live-server");
+      setAndDiscard(haPolicyAddOperation,serverAddOperation,BACKUP_GROUP_NAME,"group-name");
+    }
+  }
+  haPolicyAddOperation.get(OP_ADDR).set(haPolicyAddress.toModelNode());
+  newAddOperations.put(haPolicyAddress,haPolicyAddOperation);
+}
