@@ -3,9 +3,11 @@
   final StatefulSessionComponentInstance instance=getComponentInstance(context);
   final OwnableReentrantLock lock=instance.getLock();
   final Object threadLock=instance.getThreadLock();
+  final AtomicInteger invocationSyncState=instance.getInvocationSynchState();
   final TransactionSynchronizationRegistry transactionSynchronizationRegistry=component.getTransactionSynchronizationRegistry();
   final Object lockOwner=getLockOwner(transactionSynchronizationRegistry);
   final AccessTimeoutDetails timeout=component.getAccessTimeout(context.getMethod());
+  boolean toDiscard=false;
   if (ROOT_LOGGER.isTraceEnabled()) {
     ROOT_LOGGER.trace("Trying to acquire lock: " + lock + " for stateful component instance: "+ instance+ " during invocation: "+ context);
   }
@@ -14,6 +16,7 @@
     throw EjbLogger.ROOT_LOGGER.failToObtainLock(component.getComponentName(),timeout.getValue(),timeout.getTimeUnit());
   }
 synchronized (threadLock) {
+    invocationSyncState.set(SYNC_STATE_INVOCATION_IN_PROGRESS);
     if (ROOT_LOGGER.isTraceEnabled()) {
       ROOT_LOGGER.trace("Acquired lock: " + lock + " for stateful component instance: "+ instance+ " during invocation: "+ context);
     }
@@ -25,7 +28,7 @@ synchronized (threadLock) {
           currentTransactionKey=transactionSynchronizationRegistry.getTransactionKey();
           final int status=transactionSynchronizationRegistry.getTransactionStatus();
           if (currentTransactionKey != null && status != Status.STATUS_COMMITTED && status != Status.STATUS_ROLLEDBACK) {
-            final Synchronization statefulSessionSync=new StatefulSessionSynchronization(instance,lockOwner);
+            final Synchronization statefulSessionSync=new StatefulSessionSynchronization(instance);
             transactionSynchronizationRegistry.registerInterposedSynchronization(statefulSessionSync);
             wasTxSyncRegistered=true;
             if (ROOT_LOGGER.isTraceEnabled()) {
@@ -40,7 +43,15 @@ synchronized (threadLock) {
           context.putPrivateData(StatefulTransactionMarker.class,StatefulTransactionMarker.of(false));
         }
       }
-      return context.proceed();
+      try {
+        return context.proceed();
+      }
+ catch (      Exception e) {
+        if (component.shouldDiscard(e,context.getMethod())) {
+          toDiscard=true;
+        }
+        throw e;
+      }
     }
   finally {
       if (!wasTxSyncRegistered && !instance.isSynchronizationRegistered()) {
@@ -50,6 +61,24 @@ synchronized (threadLock) {
         releaseLock(instance);
         if (!instance.isDiscarded()) {
           instance.getComponent().getCache().release(instance);
+        }
+      }
+      for (; ; ) {
+        int state=invocationSyncState.get();
+        if (state == SYNC_STATE_INVOCATION_IN_PROGRESS && invocationSyncState.compareAndSet(SYNC_STATE_INVOCATION_IN_PROGRESS,SYNC_STATE_NO_INVOCATION)) {
+          break;
+        }
+ else         if (state == SYNC_STATE_AFTER_COMPLETE_DELAYED_COMMITTED || state == SYNC_STATE_AFTER_COMPLETE_DELAYED_NO_COMMIT) {
+          try {
+            handleAfterCompletion(state == SYNC_STATE_AFTER_COMPLETE_DELAYED_COMMITTED,instance,toDiscard);
+          }
+  finally {
+            invocationSyncState.set(SYNC_STATE_NO_INVOCATION);
+          }
+        }
+ else {
+          EjbLogger.ROOT_LOGGER.unexpectedInvocationState(state);
+          break;
         }
       }
     }
