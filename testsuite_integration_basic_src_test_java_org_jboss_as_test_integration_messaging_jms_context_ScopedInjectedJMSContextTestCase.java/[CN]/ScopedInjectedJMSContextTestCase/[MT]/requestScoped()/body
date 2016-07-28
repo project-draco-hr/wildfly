@@ -1,0 +1,18 @@
+{
+  String text=UUID.randomUUID().toString();
+  try (JMSContext context=factory.createContext()){
+    TemporaryQueue tempQueue=context.createTemporaryQueue();
+    context.createProducer().setJMSReplyTo(tempQueue).setDeliveryMode(NON_PERSISTENT).send(queueForRequestScope,text);
+    JMSConsumer consumer=context.createConsumer(tempQueue);
+    String reply=consumer.receiveBody(String.class,1000);
+    assertNotNull(reply);
+    JMSConsumer consumerInMDB=RequestScopedMDB.consumer;
+    assertNotNull(consumerInMDB);
+    try {
+      consumerInMDB.receiveBody(String.class);
+      fail("the EJB must throw an exception as its injected JMSContext must be closed after the MDB handled the message");
+    }
+ catch (    Exception e) {
+    }
+  }
+ }
