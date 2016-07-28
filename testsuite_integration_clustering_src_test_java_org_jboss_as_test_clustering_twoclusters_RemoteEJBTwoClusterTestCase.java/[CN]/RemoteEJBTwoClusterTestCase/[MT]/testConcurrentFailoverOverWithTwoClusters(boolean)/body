@@ -1,0 +1,72 @@
+{
+  ContextSelector<EJBClientContext> selector=EJBClientContextSelector.setup(FORWARDER_CLIENT_PROPERTIES);
+  try {
+    try {
+      RemoteStatefulSB bean=null;
+      if (useTransactions)       bean=txnBeanDirectory.lookupStateful(ForwardingStatefulSBImpl.class,RemoteStatefulSB.class);
+ else       bean=beanDirectory.lookupStateful(NonTxForwardingStatefulSBImpl.class,RemoteStatefulSB.class);
+      AtomicInteger count=new AtomicInteger();
+      logger.info("Waiting for clusters to form:");
+      Thread.sleep(CLIENT_TOPOLOGY_UPDATE_WAIT);
+      int newSerialValue=bean.getSerialAndIncrement();
+      int newCountValue=count.getAndIncrement();
+      logger.info("First invocation: count = " + newCountValue + ", serial = "+ newSerialValue);
+      ScheduledExecutorService executor=Executors.newSingleThreadScheduledExecutor();
+      CountDownLatch latch=new CountDownLatch(1);
+      ClientInvocationTask client=new ClientInvocationTask(bean,latch,count);
+      try {
+        Future<?> future=executor.scheduleWithFixedDelay(client,0,INVOCATION_WAIT,TimeUnit.MILLISECONDS);
+        latch.await();
+        Thread.sleep(FAILURE_FREE_TIME);
+        logger.info("------ Shutdown clusterA-node0 -----");
+        stop(CONTAINER_1);
+        Thread.sleep(SERVER_DOWN_TIME);
+        logger.info("------ Startup clusterA-node0 -----");
+        start(CONTAINER_1);
+        Thread.sleep(FAILURE_FREE_TIME);
+        logger.info("----- Shutdown clusterA-node1 -----");
+        stop(CONTAINER_2);
+        Thread.sleep(SERVER_DOWN_TIME);
+        logger.info("------ Startup clusterA-node1 -----");
+        start(CONTAINER_2);
+        Thread.sleep(FAILURE_FREE_TIME);
+        logger.info("----- Shutdown clusterB-node0 -----");
+        stop(CONTAINER_3);
+        Thread.sleep(SERVER_DOWN_TIME);
+        logger.info("------ Startup clusterB-node0 -----");
+        start(CONTAINER_3);
+        Thread.sleep(FAILURE_FREE_TIME);
+        logger.info("----- Shutdown clusterB-node1 -----");
+        stop(CONTAINER_4);
+        Thread.sleep(SERVER_DOWN_TIME);
+        logger.info("------ Startup clusterB-node1 -----");
+        start(CONTAINER_4);
+        Thread.sleep(FAILURE_FREE_TIME);
+        future.cancel(false);
+        try {
+          future.get();
+        }
+ catch (        CancellationException e) {
+          logger.info("Could not cancel future: " + e.toString());
+        }
+        double invocations=client.getInvocationCount();
+        double exceptions=client.getExceptionCount();
+        logger.info("Total invocations = " + invocations + ", total exceptions = "+ exceptions);
+        Assert.assertTrue("Too many exceptions! percentage = " + 100 * (exceptions / invocations),(exceptions / invocations) < EXCEPTION_PERCENTAGE);
+      }
+ catch (      Exception e) {
+        Assert.fail("Exception occurred on client: " + e.getMessage() + ", test did not complete successfully (inner)");
+      }
+ finally {
+        logger.info("Shutting down executor");
+        executor.shutdownNow();
+      }
+    }
+ catch (    Exception e) {
+      Assert.fail("Exception occurred on client: " + e.getMessage() + ", test did not complete successfully (outer)");
+    }
+  }
+  finally {
+    EJBClientContext.setSelector(selector);
+  }
+}

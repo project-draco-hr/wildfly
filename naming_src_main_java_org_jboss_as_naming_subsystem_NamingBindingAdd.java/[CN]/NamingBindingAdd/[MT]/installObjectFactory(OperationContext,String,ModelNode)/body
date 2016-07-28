@@ -1,71 +1,10 @@
 {
-  final ModuleIdentifier moduleID=ModuleIdentifier.fromString(NamingBindingResourceDefinition.MODULE.resolveModelAttribute(context,model).asString());
-  final String className=NamingBindingResourceDefinition.CLASS.resolveModelAttribute(context,model).asString();
-  final Module module;
-  try {
-    module=Module.getBootModuleLoader().loadModule(moduleID);
-  }
- catch (  ModuleLoadException e) {
-    throw NamingLogger.ROOT_LOGGER.couldNotLoadModule(moduleID);
-  }
-  final ObjectFactory objectFactoryClassInstance;
-  final ClassLoader cl=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
-  try {
-    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(module.getClassLoader());
-    final Class<?> clazz=module.getClassLoader().loadClass(className);
-    objectFactoryClassInstance=(ObjectFactory)clazz.newInstance();
-  }
- catch (  ClassNotFoundException e) {
-    throw NamingLogger.ROOT_LOGGER.couldNotLoadClassFromModule(className,moduleID);
-  }
-catch (  InstantiationException e) {
-    throw NamingLogger.ROOT_LOGGER.couldNotInstantiateClassInstanceFromModule(className,moduleID);
-  }
-catch (  IllegalAccessException e) {
-    throw NamingLogger.ROOT_LOGGER.couldNotInstantiateClassInstanceFromModule(className,moduleID);
-  }
-catch (  ClassCastException e) {
-    throw NamingLogger.ROOT_LOGGER.notAnInstanceOfObjectFactory(className,moduleID);
-  }
- finally {
-    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(cl);
-  }
+  final ObjectFactory objectFactoryClassInstance=createObjectFactory(context,model);
+  final Hashtable<String,String> environment=getObjectFactoryEnvironment(context,model);
+  ContextListAndJndiViewManagedReferenceFactory factory=new ObjectFactoryManagedReference(objectFactoryClassInstance,name,environment);
   final ServiceTarget serviceTarget=context.getServiceTarget();
   final ContextNames.BindInfo bindInfo=ContextNames.bindInfoFor(name);
-  final Hashtable<String,String> environment=getObjectFactoryEnvironment(context,model);
   final BinderService binderService=new BinderService(name,objectFactoryClassInstance);
-  binderService.getManagedObjectInjector().inject(new ContextListAndJndiViewManagedReferenceFactory(){
-    @Override public ManagedReference getReference(){
-      try {
-        final Object value=objectFactoryClassInstance.getObjectInstance(name,null,null,environment);
-        return new ImmediateManagedReference(value);
-      }
- catch (      Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-    @Override public String getInstanceClassName(){
-      final ClassLoader cl=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
-      try {
-        WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(objectFactoryClassInstance.getClass().getClassLoader());
-        final Object value=getReference().getInstance();
-        return value != null ? value.getClass().getName() : ContextListManagedReferenceFactory.DEFAULT_INSTANCE_CLASS_NAME;
-      }
-  finally {
-        WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(cl);
-      }
-    }
-    @Override public String getJndiViewInstanceValue(){
-      final ClassLoader cl=WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
-      try {
-        WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(objectFactoryClassInstance.getClass().getClassLoader());
-        return String.valueOf(getReference().getInstance());
-      }
-  finally {
-        WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(cl);
-      }
-    }
-  }
-);
+  binderService.getManagedObjectInjector().inject(new MutableManagedReferenceFactory(factory));
   serviceTarget.addService(bindInfo.getBinderServiceName(),binderService).addDependency(bindInfo.getParentContextServiceName(),ServiceBasedNamingStore.class,binderService.getNamingStoreInjector()).install();
 }

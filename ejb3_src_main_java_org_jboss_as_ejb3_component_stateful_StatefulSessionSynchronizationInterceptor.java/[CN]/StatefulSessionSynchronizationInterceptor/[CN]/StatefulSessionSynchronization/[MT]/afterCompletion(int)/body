@@ -1,23 +1,14 @@
 {
-  boolean committed=status == Status.STATUS_COMMITTED;
-  try {
-    if (ROOT_LOGGER.isTraceEnabled()) {
-      ROOT_LOGGER.trace("After completion callback invoked on Transaction synchronization: " + this + " of stateful component instance: "+ statefulSessionComponentInstance);
+  AtomicInteger state=statefulSessionComponentInstance.getInvocationSynchState();
+  final boolean committed=status == Status.STATUS_COMMITTED;
+  for (; ; ) {
+    int s=state.get();
+    if (s == SYNC_STATE_NO_INVOCATION) {
+      handleAfterCompletion(committed,statefulSessionComponentInstance,false);
+      break;
     }
-    if (!statefulSessionComponentInstance.isDiscarded()) {
-      statefulSessionComponentInstance.afterCompletion(committed);
-    }
-  }
- catch (  Throwable t) {
-    handleThrowable(t);
-  }
-  if (statefulSessionComponentInstance.isRemoved() && !statefulSessionComponentInstance.isDiscarded()) {
-    try {
-      statefulSessionComponentInstance.destroy();
-    }
- catch (    Throwable t) {
-      handleThrowable(t);
+ else     if (s == SYNC_STATE_INVOCATION_IN_PROGRESS && state.compareAndSet(SYNC_STATE_INVOCATION_IN_PROGRESS,committed ? SYNC_STATE_AFTER_COMPLETE_DELAYED_COMMITTED : SYNC_STATE_AFTER_COMPLETE_DELAYED_NO_COMMIT)) {
+      break;
     }
   }
-  releaseInstance(statefulSessionComponentInstance);
 }
