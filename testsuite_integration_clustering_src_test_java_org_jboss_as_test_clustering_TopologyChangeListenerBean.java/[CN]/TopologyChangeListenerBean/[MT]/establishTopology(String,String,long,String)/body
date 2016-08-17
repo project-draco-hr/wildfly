@@ -1,12 +1,12 @@
 {
-  Set<String> expectedMembers=new TreeSet<>(Arrays.asList(nodes));
+  Set<String> expectedMembers=Stream.of(nodes).sorted().collect(Collectors.toSet());
   ServiceRegistry registry=CurrentServiceContainer.getServiceContainer();
   ServiceName name=ServiceName.JBOSS.append("infinispan",containerName);
   EmbeddedCacheManager cacheContainer=ServiceContainerHelper.findValue(registry,name);
   if (cacheContainer == null) {
     throw new IllegalStateException(String.format("Failed to locate %s",name));
   }
-  Cache cache=cacheContainer.getCache(cacheName);
+  Cache<?,?> cache=cacheContainer.getCache(cacheName);
   if (cache == null) {
     throw new IllegalStateException(String.format("Cache %s not found",cacheName));
   }
@@ -16,17 +16,20 @@
     long now=start;
     long endTime=start + timeout;
 synchronized (this) {
-      Set<String> members=getMembers(cache);
+      StateTransferManager transfer=cache.getAdvancedCache().getComponentRegistry().getStateTransferManager();
+      CacheTopology topology=transfer.getCacheTopology();
+      Set<String> members=getMembers(topology);
       while (!expectedMembers.equals(members)) {
-        System.out.println(String.format("%s != %s, waiting for a topology change event...",expectedMembers,members));
+        System.out.println(String.format("%s != %s, waiting for a topology change event. Current topology id = %d",expectedMembers,members,topology.getTopologyId()));
         this.wait(endTime - now);
         now=System.currentTimeMillis();
         if (now >= endTime) {
           throw new InterruptedException(String.format("Cache %s/%s failed to establish view %s within %d ms.  Current view is: %s",containerName,cacheName,expectedMembers,timeout,members));
         }
-        members=getMembers(cache);
+        topology=transfer.getCacheTopology();
+        members=getMembers(topology);
       }
-      System.out.println(String.format("Cache %s/%s successfully established view %s within %d ms.",containerName,cacheName,expectedMembers,now - start));
+      System.out.println(String.format("Cache %s/%s successfully established view %s within %d ms. Topology id = %d",containerName,cacheName,expectedMembers,now - start,topology.getTopologyId()));
     }
   }
   finally {
