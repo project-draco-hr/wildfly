@@ -1,0 +1,21 @@
+{
+  container.startInAdminMode();
+  ModelNode op=createOpNode("socket-binding-group=standard-sockets/socket-binding=my-test-binding",ADD);
+  op.get("interface").set("public");
+  op.get("port").set(TEST_PORT);
+  container.getClient().executeForResult(op);
+  op=createOpNode("subsystem=undertow/server=default-server/http-listener=my-test",ADD);
+  op.get("socket-binding").set("my-test-binding");
+  container.getClient().executeForResult(op);
+  container.reload();
+  Assert.assertTrue("Could not connect to created connector.",WebUtil.testHttpURL(new URL("http",TestSuiteEnvironment.getHttpAddress(),TEST_PORT,"/").toString()));
+  op=createOpNode("subsystem=undertow/server=default-server/http-listener=my-test",REMOVE);
+  op.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  container.getClient().executeForResult(op);
+  op=createOpNode("socket-binding-group=standard-sockets/socket-binding=my-test-binding",REMOVE);
+  op.get(OPERATION_HEADERS).get(ALLOW_RESOURCE_SERVICE_RESTART).set(true);
+  ModelNode result=container.getClient().getControllerClient().execute(op);
+  if (result.hasDefined(RESPONSE_HEADERS) && result.get(RESPONSE_HEADERS).hasDefined(PROCESS_STATE)) {
+    Assert.assertFalse("reload-required".equals(result.get(RESPONSE_HEADERS).get(PROCESS_STATE).asString()));
+  }
+}
