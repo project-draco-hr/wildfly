@@ -1,0 +1,40 @@
+{
+  final KeyPairGenerator keyPairGenerator=KeyPairGenerator.getInstance("RSA");
+  keyPairGenerator.initialize(1024);
+  final KeyPair keyPair=keyPairGenerator.generateKeyPair();
+  final X509V3CertificateGenerator v3CertGen=new X509V3CertificateGenerator();
+  final long now=System.currentTimeMillis();
+  v3CertGen.setNotBefore(new Date(now - 1000L * 60 * 60* 24* 30));
+  v3CertGen.setNotAfter(new Date(now + 1000L * 60 * 60* 24* 365));
+  final X509Principal dn=new X509Principal("CN=" + name);
+  v3CertGen.setIssuerDN(dn);
+  v3CertGen.setSubjectDN(dn);
+  v3CertGen.setPublicKey(keyPair.getPublic());
+  v3CertGen.setSignatureAlgorithm("MD5withRSA");
+  final SecureRandom sr=new SecureRandom();
+  v3CertGen.setSerialNumber(BigInteger.ONE);
+  X509Certificate certificate=v3CertGen.generate(keyPair.getPrivate(),sr);
+  final KeyStore keystore=KeyStore.getInstance("JKS");
+  keystore.load(null,null);
+  keystore.setKeyEntry(name,keyPair.getPrivate(),KEYSTORE_PASSWORD.toCharArray(),new java.security.cert.Certificate[]{certificate});
+  if (keystoreFile == null) {
+    keystoreFile=getClientKeystoreFile(name);
+  }
+  final OutputStream ksOut=new FileOutputStream(keystoreFile);
+  keystore.store(ksOut,KEYSTORE_PASSWORD.toCharArray());
+  ksOut.close();
+  if (truststoreFile != null) {
+    final KeyStore truststore;
+    if (truststoreFile.exists()) {
+      truststore=KeyStoreUtil.getKeyStore(truststoreFile,KEYSTORE_PASSWORD.toCharArray());
+    }
+ else {
+      truststore=KeyStore.getInstance("JKS");
+      truststore.load(null,null);
+    }
+    truststore.setCertificateEntry(name,certificate);
+    final OutputStream tsOut=new FileOutputStream(truststoreFile);
+    truststore.store(tsOut,KEYSTORE_PASSWORD.toCharArray());
+    tsOut.close();
+  }
+}
