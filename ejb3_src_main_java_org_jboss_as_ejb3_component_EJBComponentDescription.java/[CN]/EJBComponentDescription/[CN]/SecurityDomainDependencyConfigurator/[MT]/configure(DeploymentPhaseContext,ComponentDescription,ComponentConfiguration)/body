@@ -1,12 +1,25 @@
 {
   configuration.getCreateDependencies().add(new DependencyConfigurator<Service<Component>>(){
     @Override public void configureDependency(    ServiceBuilder<?> serviceBuilder,    Service<Component> service) throws DeploymentUnitProcessingException {
+      final EJBComponentCreateService ejbComponentCreateService=(EJBComponentCreateService)service;
       final String securityDomainName=SecurityDomainDependencyConfigurator.this.ejbComponentDescription.getSecurityDomain();
-      if (securityDomainName != null && !securityDomainName.isEmpty()) {
-        final ServiceName securityDomainServiceName=SecurityDomainService.SERVICE_NAME.append(securityDomainName);
-        serviceBuilder.addDependency(securityDomainServiceName);
+      if (SecurityDomainDependencyConfigurator.this.ejbComponentDescription.isSecurityDomainKnown()) {
+        final DeploymentUnit deploymentUnit=context.getDeploymentUnit();
+        final CapabilityServiceSupport support=deploymentUnit.getAttachment(org.jboss.as.server.deployment.Attachments.CAPABILITY_SERVICE_SUPPORT);
+        if (securityDomainName != null && !securityDomainName.isEmpty()) {
+          serviceBuilder.addDependency(support.getCapabilityServiceName(ApplicationSecurityDomainDefinition.APPLICATION_SECURITY_DOMAIN_CAPABILITY,securityDomainName),ApplicationSecurityDomain.class,ejbComponentCreateService.getApplicationSecurityDomainInjector());
+        }
+        if (SecurityDomainDependencyConfigurator.this.ejbComponentDescription.isOutflowSecurityDomainsConfigured()) {
+          serviceBuilder.addDependency(support.getCapabilityServiceName(IDENTITY_CAPABILITY),Function.class,ejbComponentCreateService.getIdentityOutflowFunctionInjector());
+        }
       }
-      serviceBuilder.addDependency(SecurityDomainService.SERVICE_NAME.append(SecurityConstants.DEFAULT_EJB_APPLICATION_POLICY));
+ else {
+        if (securityDomainName != null && !securityDomainName.isEmpty()) {
+          final ServiceName securityDomainServiceName=SecurityDomainService.SERVICE_NAME.append(securityDomainName);
+          serviceBuilder.addDependency(securityDomainServiceName);
+        }
+        serviceBuilder.addDependency(SecurityDomainService.SERVICE_NAME.append(SecurityConstants.DEFAULT_EJB_APPLICATION_POLICY));
+      }
     }
   }
 );
