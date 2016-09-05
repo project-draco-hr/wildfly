@@ -1,0 +1,52 @@
+{
+  EJBMethodSecurityAttribute ejbMethodSecurityMetaData=permissions.getViewAttribute(ejbViewDescription.getMethodIntf(),viewMethod);
+  final List<EJBMethodSecurityAttribute> allAttributes=new ArrayList<EJBMethodSecurityAttribute>();
+  allAttributes.addAll(permissions.getAllAttributes(ejbViewDescription.getMethodIntf(),viewMethod));
+  if (ejbMethodSecurityMetaData == null) {
+    ejbMethodSecurityMetaData=permissions.getViewAttribute(MethodIntf.BEAN,viewMethod);
+  }
+  allAttributes.addAll(permissions.getAllAttributes(MethodIntf.BEAN,viewMethod));
+  final Method classMethod=ClassReflectionIndexUtil.findMethod(deploymentReflectionIndex,componentConfiguration.getComponentClass(),viewMethod);
+  if (ejbMethodSecurityMetaData == null) {
+    if (classMethod != null) {
+      ejbMethodSecurityMetaData=permissions.getAttribute(ejbViewDescription.getMethodIntf(),classMethod);
+      if (ejbMethodSecurityMetaData == null) {
+        ejbMethodSecurityMetaData=permissions.getAttribute(MethodIntf.BEAN,classMethod);
+      }
+    }
+  }
+  if (classMethod != null) {
+    allAttributes.addAll(permissions.getAllAttributes(ejbViewDescription.getMethodIntf(),classMethod));
+    allAttributes.addAll(permissions.getAllAttributes(MethodIntf.BEAN,classMethod));
+  }
+  if (ejbMethodSecurityMetaData != null) {
+    if (!annotations && !ejbMethodSecurityMetaData.isDenyAll() && !ejbMethodSecurityMetaData.isPermitAll()) {
+      final Set<String> rolesAllowed=new HashSet<String>();
+      for (      EJBMethodSecurityAttribute attr : allAttributes) {
+        rolesAllowed.addAll(attr.getRolesAllowed());
+      }
+      ejbMethodSecurityMetaData=EJBMethodSecurityAttribute.rolesAllowed(rolesAllowed);
+    }
+    if (viewMethodSecurityAttributesServiceBuilder != null) {
+      viewMethodSecurityAttributesServiceBuilder.addMethodSecurityMetadata(viewMethod,ejbMethodSecurityMetaData);
+    }
+    if (ejbMethodSecurityMetaData.isPermitAll()) {
+      return true;
+    }
+    final Interceptor authorizationInterceptor;
+    if (isSecurityDomainKnown) {
+      if (ejbMethodSecurityMetaData.isDenyAll()) {
+        authorizationInterceptor=RolesAllowedInterceptor.DENY_ALL;
+      }
+ else {
+        authorizationInterceptor=new RolesAllowedInterceptor(ejbMethodSecurityMetaData.getRolesAllowed());
+      }
+    }
+ else {
+      authorizationInterceptor=new AuthorizationInterceptor(ejbMethodSecurityMetaData,viewClassName,viewMethod,contextID);
+    }
+    viewConfiguration.addViewInterceptor(viewMethod,new ImmediateInterceptorFactory(authorizationInterceptor),InterceptorOrder.View.EJB_SECURITY_AUTHORIZATION_INTERCEPTOR);
+    return true;
+  }
+  return false;
+}
