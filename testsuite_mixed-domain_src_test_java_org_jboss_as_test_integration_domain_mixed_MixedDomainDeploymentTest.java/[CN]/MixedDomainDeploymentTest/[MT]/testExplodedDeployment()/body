@@ -1,0 +1,39 @@
+{
+  ModelNode composite=createEmptyOperation(COMPOSITE,PathAddress.EMPTY_ADDRESS);
+  ModelNode steps=composite.get(STEPS);
+  ModelNode op=createAddOperation(ROOT_DEPLOYMENT_ADDRESS);
+  op.get(CONTENT).setEmptyList();
+  ModelNode empty=new ModelNode();
+  empty.get(EMPTY).set(true);
+  op.get(CONTENT).add(empty);
+  steps.add(op);
+  op=createEmptyOperation(ADD_CONTENT,ROOT_DEPLOYMENT_ADDRESS);
+  op.get(CONTENT).setEmptyList();
+  ModelNode file=new ModelNode();
+  file.get(TARGET_PATH).set("index.html");
+  file.get(INPUT_STREAM_INDEX).set(0);
+  op.get(CONTENT).add(file);
+  file=new ModelNode();
+  file.get(TARGET_PATH).set("index2.html");
+  file.get(INPUT_STREAM_INDEX).set(1);
+  op.get(CONTENT).add(file);
+  steps.add(op);
+  ModelNode sg=steps.add();
+  sg.set(createAddOperation(OTHER_SERVER_GROUP_DEPLOYMENT_ADDRESS));
+  sg.get(ENABLED).set(true);
+  sg=steps.add();
+  sg.set(createAddOperation(MAIN_SERVER_GROUP_DEPLOYMENT_ADDRESS));
+  sg.get(ENABLED).set(true);
+  ClassLoader tccl=Thread.currentThread().getContextClassLoader();
+  OperationBuilder builder=new OperationBuilder(composite);
+  builder.addInputStream(tccl.getResourceAsStream("helloWorld/index.html"));
+  builder.addInputStream(tccl.getResourceAsStream("helloWorld/index2.html"));
+  if (supportManagedExplodedDeployment()) {
+    executeOnMaster(builder.build());
+    performHttpCall(DomainTestSupport.slaveAddress,8080);
+  }
+ else {
+    ModelNode failure=executeForFailureOnMaster(builder.build());
+    assertTrue(failure.toJSONString(true),failure.toJSONString(true).contains("WFLYCTL0421:"));
+  }
+}
