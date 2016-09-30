@@ -1,33 +1,34 @@
 {
-  Map<PathAddress,ModelNode> operations=new LinkedHashMap<>();
+  Map<PathAddress,ModelNode> stackOperations=new LinkedHashMap<>();
   PathAddress address=PathAddress.pathAddress(JGroupsSubsystemResourceDefinition.PATH);
   ModelNode operation=Util.createAddOperation(address);
-  operations.put(address,operation);
+  stackOperations.put(address,operation);
   if (!this.schema.since(JGroupsSchema.VERSION_3_0)) {
     String defaultStack=require(reader,XMLAttribute.DEFAULT_STACK);
     setAttribute(reader,defaultStack,operation,JGroupsSubsystemResourceDefinition.Attribute.DEFAULT_STACK);
   }
+  Map<PathAddress,ModelNode> channelOperations=new LinkedHashMap<>();
   while (reader.hasNext() && (reader.nextTag() != XMLStreamConstants.END_ELEMENT)) {
     XMLElement element=XMLElement.forName(reader.getLocalName());
 switch (element) {
 case CHANNELS:
 {
         if (this.schema.since(JGroupsSchema.VERSION_3_0)) {
-          this.parseChannels(reader,address,operations);
+          this.parseChannels(reader,address,channelOperations);
           break;
         }
       }
 case STACKS:
 {
       if (this.schema.since(JGroupsSchema.VERSION_3_0)) {
-        this.parseStacks(reader,address,operations);
+        this.parseStacks(reader,address,stackOperations,channelOperations);
         break;
       }
     }
 case STACK:
 {
     if (!this.schema.since(JGroupsSchema.VERSION_3_0)) {
-      this.parseStack(reader,address,operations);
+      this.parseStack(reader,address,stackOperations,channelOperations);
       break;
     }
   }
@@ -38,16 +39,17 @@ default :
 }
 }
 if (!this.schema.since(JGroupsSchema.VERSION_4_0)) {
-ModelNode defaultStack=operation.get(JGroupsSubsystemResourceDefinition.Attribute.DEFAULT_STACK.getDefinition().getName());
-for (Map.Entry<PathAddress,ModelNode> entry : operations.entrySet()) {
+ModelNode defaultStack=operation.get(JGroupsSubsystemResourceDefinition.Attribute.DEFAULT_STACK.getName());
+for (Map.Entry<PathAddress,ModelNode> entry : channelOperations.entrySet()) {
 PathAddress opAddr=entry.getKey();
 if (opAddr.getLastElement().getKey().equals(ChannelResourceDefinition.WILDCARD_PATH.getKey())) {
 ModelNode op=entry.getValue();
-if (!op.hasDefined(ChannelResourceDefinition.Attribute.STACK.getDefinition().getName())) {
-  op.get(ChannelResourceDefinition.Attribute.STACK.getDefinition().getName()).set(defaultStack);
+if (!op.hasDefined(ChannelResourceDefinition.Attribute.STACK.getName())) {
+  op.get(ChannelResourceDefinition.Attribute.STACK.getName()).set(defaultStack);
 }
 }
 }
 }
-result.addAll(operations.values());
+result.addAll(stackOperations.values());
+result.addAll(channelOperations.values());
 }

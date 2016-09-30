@@ -4,14 +4,15 @@
   String name=address.getLastElement().getValue();
   String channel=address.getParent().getLastElement().getValue();
   ServiceTarget target=context.getServiceTarget();
-  new AliasServiceBuilder<>(ChannelServiceName.FACTORY.getServiceName(name),ProtocolStackServiceName.CHANNEL_FACTORY.getServiceName(channel),ChannelFactory.class).build(target).install();
-  new ChannelBuilder(name).build(target).install();
-  new ChannelConnectorBuilder(name).build(target).install();
-  new BinderServiceBuilder<>(JGroupsBindingFactory.createChannelBinding(name),ChannelServiceName.CHANNEL.getServiceName(name),Channel.class).build(target).install();
-  for (  GroupBuilderProvider provider : ServiceLoader.load(DistributedGroupBuilderProvider.class,DistributedGroupBuilderProvider.class.getClassLoader())) {
-    Iterator<Builder<?>> groupBuilders=provider.getBuilders(channel,null).iterator();
-    for (    Builder<?> groupBuilder : provider.getBuilders(name,null)) {
-      new AliasServiceBuilder<>(groupBuilder.getServiceName(),groupBuilders.next().getServiceName(),Object.class).build(target).install();
+  new AliasServiceBuilder<>(FORK_CHANNEL_SOURCE.getServiceName(address),JGroupsRequirement.CHANNEL_FACTORY.getServiceName(context,channel),JGroupsRequirement.CHANNEL_FACTORY.getType()).build(target).install();
+  new AliasServiceBuilder<>(FORK_CHANNEL_MODULE.getServiceName(address),JGroupsRequirement.CHANNEL_MODULE.getServiceName(context,channel),JGroupsRequirement.CHANNEL_MODULE.getType()).build(target).install();
+  new AliasServiceBuilder<>(FORK_CHANNEL_CLUSTER.getServiceName(address),JGroupsRequirement.CHANNEL_CLUSTER.getServiceName(context,channel),JGroupsRequirement.CHANNEL_CLUSTER.getType()).build(target).install();
+  new ChannelBuilder(FORK_CHANNEL.getServiceName(address),name).configure(context,model).build(target).install();
+  new BinderServiceBuilder<>(JGroupsBindingFactory.createChannelBinding(name),JGroupsRequirement.CHANNEL.getServiceName(context,name),JGroupsRequirement.CHANNEL.getType()).build(target).install();
+  new BinderServiceBuilder<>(JGroupsBindingFactory.createChannelFactoryBinding(name),JGroupsRequirement.CHANNEL_FACTORY.getServiceName(context,name),JGroupsRequirement.CHANNEL_FACTORY.getType()).build(target).install();
+  for (  GroupAliasBuilderProvider provider : ServiceLoader.load(GroupAliasBuilderProvider.class,GroupAliasBuilderProvider.class.getClassLoader())) {
+    for (    Builder<?> builder : provider.getBuilders(context.getCapabilityServiceSupport(),name,channel)) {
+      builder.build(target).install();
     }
   }
 }
