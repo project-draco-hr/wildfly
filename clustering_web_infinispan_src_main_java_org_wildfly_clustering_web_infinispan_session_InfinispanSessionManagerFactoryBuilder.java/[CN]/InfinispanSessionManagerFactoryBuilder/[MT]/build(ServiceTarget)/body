@@ -1,11 +1,16 @@
 {
-  ServiceName templateCacheServiceName=getCacheServiceName(this.configuration.getCacheName());
-  String templateCacheName=templateCacheServiceName.getSimpleName();
-  String containerName=templateCacheServiceName.getParent().getSimpleName();
+  ServiceName baseServiceName=ServiceName.JBOSS.append("infinispan");
+  String configCacheName=this.configuration.getCacheName();
+  ServiceName configServiceName=ServiceName.parse((configCacheName != null) ? configCacheName : DEFAULT_CACHE_CONTAINER);
+  if (!baseServiceName.isParentOf(configServiceName)) {
+    configServiceName=baseServiceName.append(configServiceName);
+  }
+  String containerName=((configServiceName.length() > 3) ? configServiceName.getParent() : configServiceName).getSimpleName();
+  String templateCacheName=(configServiceName.length() > 3) ? configServiceName.getSimpleName() : null;
   String cacheName=this.configuration.getDeploymentName();
-  new TemplateConfigurationBuilder(containerName,cacheName,templateCacheName).build(target).install();
-  new CacheBuilder<>(containerName,cacheName).build(target).addAliases(InfinispanRouteLocatorBuilder.getCacheServiceAlias(cacheName)).install();
+  new TemplateConfigurationBuilder(InfinispanCacheRequirement.CONFIGURATION.getServiceName(this.support,containerName,cacheName),containerName,cacheName,templateCacheName).configure(this.support).build(target).install();
+  new CacheBuilder<>(InfinispanCacheRequirement.CACHE.getServiceName(this.support,containerName,cacheName),containerName,cacheName).configure(this.support).build(target).addAliases(InfinispanRouteLocatorBuilder.getCacheServiceAlias(cacheName)).install();
   new AliasServiceBuilder<>(InfinispanRouteLocatorBuilder.getNodeFactoryServiceAlias(cacheName),CacheGroupServiceName.NODE_FACTORY.getServiceName(containerName,RouteCacheGroupBuilderProvider.CACHE_NAME),NodeFactory.class).build(target).install();
   new AliasServiceBuilder<>(InfinispanRouteLocatorBuilder.getRegistryServiceAlias(cacheName),CacheGroupServiceName.REGISTRY.getServiceName(containerName,RouteCacheGroupBuilderProvider.CACHE_NAME),Registry.class).build(target).install();
-  return target.addService(this.getServiceName(),new ValueService<>(this)).addDependency(CacheServiceName.CACHE.getServiceName(containerName,cacheName),Cache.class,this.cache).addDependency(CacheContainerServiceName.AFFINITY.getServiceName(containerName),KeyAffinityServiceFactory.class,this.affinityFactory).addDependency(GroupServiceName.COMMAND_DISPATCHER.getServiceName(containerName),CommandDispatcherFactory.class,this.dispatcherFactory).addDependency(InfinispanRouteLocatorBuilder.getNodeFactoryServiceAlias(cacheName),NodeFactory.class,this.nodeFactory).setInitialMode(ServiceController.Mode.ON_DEMAND);
+  return target.addService(this.getServiceName(),new ValueService<>(this)).addDependency(InfinispanCacheRequirement.CACHE.getServiceName(this.support,containerName,cacheName),Cache.class,this.cache).addDependency(InfinispanRequirement.KEY_AFFINITY_FACTORY.getServiceName(this.support,containerName),KeyAffinityServiceFactory.class,this.affinityFactory).addDependency(GroupServiceName.COMMAND_DISPATCHER.getServiceName(containerName),CommandDispatcherFactory.class,this.dispatcherFactory).addDependency(InfinispanRouteLocatorBuilder.getNodeFactoryServiceAlias(cacheName),NodeFactory.class,this.nodeFactory).setInitialMode(ServiceController.Mode.ON_DEMAND);
 }
